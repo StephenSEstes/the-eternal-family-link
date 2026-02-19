@@ -573,6 +573,40 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
   return Array.from(tenantMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
 }
 
+export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
+  const { headers, rows } = await readTab(USER_ACCESS_TAB);
+  if (headers.length === 0) {
+    return [];
+  }
+
+  const idx = buildHeaderIndex(headers);
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+
+  return rows
+    .map((row) => {
+      const userEmail = getCell(row, idx, "user_email").trim().toLowerCase();
+      if (!userEmail) {
+        return null;
+      }
+
+      const rowTenantKey = getCell(row, idx, "tenant_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+      if (rowTenantKey !== normalizedTenantKey) {
+        return null;
+      }
+
+      return {
+        userEmail,
+        isEnabled: parseBool(getCell(row, idx, "is_enabled")),
+        role: toRole(getCell(row, idx, "role")),
+        personId: getCell(row, idx, "person_id"),
+        tenantKey: rowTenantKey,
+        tenantName: getCell(row, idx, "tenant_name").trim() || DEFAULT_TENANT_NAME,
+      } satisfies UserAccessRecord;
+    })
+    .filter((row): row is UserAccessRecord => Boolean(row))
+    .sort((a, b) => a.userEmail.localeCompare(b.userEmail));
+}
+
 export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promise<UpsertTenantAccessResult> {
   const matrix = await readTab(USER_ACCESS_TAB);
   if (matrix.headers.length === 0) {

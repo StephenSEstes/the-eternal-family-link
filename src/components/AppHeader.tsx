@@ -31,6 +31,11 @@ export async function AppHeader() {
           <Link href={`${basePath}/games`} className="pill-link">
             Games
           </Link>
+          {tenant.role === "ADMIN" ? (
+            <Link href={`${basePath}/settings`} className="pill-link">
+              Settings
+            </Link>
+          ) : null}
           <Link href="/api/auth/signout" className="pill-link">
             Sign out
           </Link>

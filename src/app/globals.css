@@ -335,6 +335,53 @@ main {
   gap: 1rem;
 }
 
+.settings-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.settings-table th,
+.settings-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+.settings-template-title {
+  font-weight: 700;
+  margin: 0.35rem 0;
+}
+
+.settings-template {
+  margin: 0 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.7rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+}
+
+.settings-csv-box {
+  min-height: 180px;
+}
+
 .game-options {
   display: grid;
   grid-template-columns: 1fr;
