@@ -13,16 +13,17 @@ type AccessItem = {
 type SettingsClientProps = {
   tenantKey: string;
   accessItems: AccessItem[];
+  people: { personId: string; displayName: string }[];
 };
 
 const CSV_TEMPLATES: Record<string, string> = {
-  people: "person_id,display_name,phones,address,hobbies,notes,photo_file_id\np-tenant-a-4,Jordan Tenant,555-0104,44 Family Rd,Chess,Imported profile,",
+  people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
   relationships: "rel_id,from_person_id,to_person_id,rel_type\nrel-tenant-a-10,p-tenant-a-1,p-tenant-a-4,sibling",
   family_units: "family_unit_id,partner1_person_id,partner2_person_id\nfu-tenant-a-10,p-tenant-a-2,p-tenant-a-4",
   important_dates: "id,date,title,description,person_id\ntenant-a-date-10,2026-12-24,Holiday Dinner,Family gathering,p-tenant-a-1",
 };
 
-export function SettingsClient({ tenantKey, accessItems }: SettingsClientProps) {
+export function SettingsClient({ tenantKey, accessItems, people }: SettingsClientProps) {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
   const [role, setRole] = useState<"ADMIN" | "USER">("USER");
@@ -33,6 +34,11 @@ export function SettingsClient({ tenantKey, accessItems }: SettingsClientProps) 
   const [target, setTarget] = useState<"people" | "relationships" | "family_units" | "important_dates">("people");
   const [csv, setCsv] = useState(CSV_TEMPLATES.people);
   const [importStatus, setImportStatus] = useState("");
+  const [relationPersonId, setRelationPersonId] = useState("");
+  const [parentIds, setParentIds] = useState<string[]>([]);
+  const [childIds, setChildIds] = useState<string[]>([]);
+  const [spouseId, setSpouseId] = useState("");
+  const [relationStatus, setRelationStatus] = useState("");
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -65,6 +71,32 @@ export function SettingsClient({ tenantKey, accessItems }: SettingsClientProps) 
       return;
     }
     setImportStatus(`Imported. created=${body.created} updated=${body.updated} failed=${body.failed}`);
+  };
+
+  const toggleItem = (items: string[], id: string) => {
+    if (items.includes(id)) {
+      return items.filter((value) => value !== id);
+    }
+    return [...items, id];
+  };
+
+  const saveRelationships = async () => {
+    if (!relationPersonId) {
+      setRelationStatus("Choose a person first.");
+      return;
+    }
+    setRelationStatus("Saving relationships...");
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personId: relationPersonId, parentIds, childIds, spouseId }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setRelationStatus(`Failed: ${res.status} ${JSON.stringify(body)}`);
+      return;
+    }
+    setRelationStatus("Relationships saved.");
   };
 
   return (
@@ -112,6 +144,78 @@ export function SettingsClient({ tenantKey, accessItems }: SettingsClientProps) 
           Save Access
         </button>
         {accessStatus ? <p>{accessStatus}</p> : null}
+      </section>
+
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Relationship Builder</h2>
+        <p className="page-subtitle">Pick a person, then select parents, children, and spouse from existing people.</p>
+        <label className="label">Person</label>
+        <select
+          className="input"
+          value={relationPersonId}
+          onChange={(e) => {
+            setRelationPersonId(e.target.value);
+            setParentIds([]);
+            setChildIds([]);
+            setSpouseId("");
+          }}
+        >
+          <option value="">Select person</option>
+          {people.map((person) => (
+            <option key={person.personId} value={person.personId}>
+              {person.displayName}
+            </option>
+          ))}
+        </select>
+
+        <label className="label">Spouse</label>
+        <select className="input" value={spouseId} onChange={(e) => setSpouseId(e.target.value)}>
+          <option value="">No spouse selected</option>
+          {people
+            .filter((person) => person.personId !== relationPersonId)
+            .map((person) => (
+              <option key={person.personId} value={person.personId}>
+                {person.displayName}
+              </option>
+            ))}
+        </select>
+
+        <label className="label">Parents</label>
+        <div className="settings-chip-list">
+          {people
+            .filter((person) => person.personId !== relationPersonId)
+            .map((person) => (
+              <button
+                key={`parent-${person.personId}`}
+                type="button"
+                className={`button secondary tap-button settings-chip ${parentIds.includes(person.personId) ? "game-option-selected" : ""}`}
+                onClick={() => setParentIds((items) => toggleItem(items, person.personId))}
+              >
+                {person.displayName}
+              </button>
+            ))}
+        </div>
+
+        <label className="label">Children</label>
+        <div className="settings-chip-list">
+          {people
+            .filter((person) => person.personId !== relationPersonId)
+            .map((person) => (
+              <button
+                key={`child-${person.personId}`}
+                type="button"
+                className={`button secondary tap-button settings-chip ${childIds.includes(person.personId) ? "game-option-selected" : ""}`}
+                onClick={() => setChildIds((items) => toggleItem(items, person.personId))}
+              >
+                {person.displayName}
+              </button>
+            ))}
+        </div>
+
+        <button type="button" className="button tap-button" onClick={saveRelationships}>
+          Save Relationships
+        </button>
+        {relationStatus ? <p>{relationStatus}</p> : null}
       </section>
 
       <section className="card">

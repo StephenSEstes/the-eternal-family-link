@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { parseCsvContent } from "@/lib/csv/parse";
+import { buildPersonId } from "@/lib/person/id";
 import { createTableRecord, updateTableRecordById } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
 
@@ -12,7 +13,7 @@ const payloadSchema = z.object({
 
 function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
   if (target === "people") {
-    return { tabName: "People", idColumn: "person_id", required: ["person_id", "display_name"] };
+    return { tabName: "People", idColumn: "person_id", required: ["display_name", "birth_date"] };
   }
   if (target === "relationships") {
     return { tabName: "Relationships", idColumn: "rel_id", required: ["rel_id", "from_person_id", "to_person_id"] };
@@ -63,9 +64,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
   for (let i = 0; i < parsedCsv.rows.length; i += 1) {
     const sourceRow = parsedCsv.rows[i];
-    const recordId = sourceRow[target.idColumn]?.trim();
+    const recordId =
+      target.tabName === "People"
+        ? sourceRow[target.idColumn]?.trim() ||
+          buildPersonId(sourceRow.display_name ?? "", sourceRow.birth_date ?? "")
+        : sourceRow[target.idColumn]?.trim();
     if (!recordId) {
-      errors.push({ row: i + 2, message: `Missing ${target.idColumn}` });
+      errors.push({
+        row: i + 2,
+        message:
+          target.tabName === "People"
+            ? "Missing person_id and could not generate from display_name + birth_date"
+            : `Missing ${target.idColumn}`,
+      });
       continue;
     }
 
@@ -73,6 +84,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     Object.entries(sourceRow).forEach(([key, value]) => {
       payload[key] = value;
     });
+    if (target.tabName === "People" && !payload.person_id) {
+      payload.person_id = recordId;
+    }
     payload.tenant_key = normalizedTenantKey;
 
     try {

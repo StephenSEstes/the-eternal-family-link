@@ -382,6 +382,17 @@ main {
   min-height: 180px;
 }
 
+.settings-chip-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.settings-chip {
+  text-align: left;
+}
+
 .game-options {
   display: grid;
   grid-template-columns: 1fr;
@@ -426,6 +437,10 @@ main {
   }
 
   .game-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-chip-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

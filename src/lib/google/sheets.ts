@@ -505,6 +505,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
   return {
     personId: getCell(row, idx, "person_id"),
     displayName: getCell(row, idx, "display_name"),
+    birthDate: getCell(row, idx, "birth_date"),
     phones: getCell(row, idx, "phones"),
     address: getCell(row, idx, "address"),
     hobbies: getCell(row, idx, "hobbies"),

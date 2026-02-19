@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SettingsClient } from "@/components/SettingsClient";
 import { requireTenantSession } from "@/lib/auth/session";
-import { getTenantUserAccessList } from "@/lib/google/sheets";
+import { getPeople, getTenantUserAccessList } from "@/lib/google/sheets";
 
 type SettingsPageProps = {
   params: Promise<{ tenantKey: string }>;
@@ -24,6 +24,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
   }
 
   const accessItems = await getTenantUserAccessList(tenant.tenantKey);
+  const people = await getPeople(tenant.tenantKey);
 
   return (
     <>
@@ -39,6 +40,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             personId: item.personId,
             isEnabled: item.isEnabled,
           }))}
+          people={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
         />
       </main>
     </>

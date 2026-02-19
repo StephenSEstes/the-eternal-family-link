@@ -19,6 +19,7 @@ export type TenantAccess = {
 export type PersonRecord = {
   personId: string;
   displayName: string;
+  birthDate: string;
   phones: string;
   address: string;
   hobbies: string;
