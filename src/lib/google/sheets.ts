@@ -7,6 +7,7 @@ import { viewerPinHash } from "@/lib/security/pin";
 import type {
   AppRole,
   ImportantDateRecord,
+  PersonAttributeRecord,
   PersonRecord,
   PersonUpdateInput,
   TenantAccess,
@@ -18,6 +19,7 @@ import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 const USER_ACCESS_TAB = "UserAccess";
 export const PEOPLE_TAB = "People";
 const IMPORTANT_DATES_TAB = "ImportantDates";
+export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
 const TENANT_CONFIG_TAB = "TenantConfig";
 const TENANT_TAB_DELIMITER = "__";
 
@@ -158,6 +160,14 @@ function normalizeDate(value: string) {
   }
 
   return parsed.toISOString().slice(0, 10);
+}
+
+function parseNumber(value: string | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const out = Number.parseInt(value, 10);
+  return Number.isFinite(out) ? out : 0;
 }
 
 export async function createSheetsClient(): Promise<sheets_v4.Sheets> {
@@ -517,6 +527,34 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
   };
 }
 
+function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKey: string): PersonAttributeRecord | null {
+  const idx = buildHeaderIndex(headers);
+  const attributeId = getCell(row, idx, "attribute_id").trim();
+  const personId = getCell(row, idx, "person_id").trim();
+  const attributeType = getCell(row, idx, "attribute_type").trim().toLowerCase();
+  const valueText = getCell(row, idx, "value_text").trim();
+
+  if (!attributeId || !personId || !attributeType || !valueText) {
+    return null;
+  }
+
+  return {
+    attributeId,
+    tenantKey: getCell(row, idx, "tenant_key").trim().toLowerCase() || fallbackTenantKey,
+    personId,
+    attributeType,
+    valueText,
+    valueJson: getCell(row, idx, "value_json").trim(),
+    label: getCell(row, idx, "label").trim(),
+    isPrimary: parseBool(getCell(row, idx, "is_primary")),
+    sortOrder: parseNumber(getCell(row, idx, "sort_order")),
+    startDate: normalizeDate(getCell(row, idx, "start_date")),
+    endDate: normalizeDate(getCell(row, idx, "end_date")),
+    visibility: getCell(row, idx, "visibility").trim().toLowerCase() || "family",
+    notes: getCell(row, idx, "notes").trim(),
+  };
+}
+
 export function peopleFromMatrix(matrix: SheetMatrix): PersonRecord[] {
   if (matrix.headers.length === 0) {
     return [];
@@ -526,6 +564,43 @@ export function peopleFromMatrix(matrix: SheetMatrix): PersonRecord[] {
     .map((row) => rowToPerson(matrix.headers, row))
     .filter((person) => person.personId)
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function personAttributesFromMatrix(matrix: SheetMatrix, tenantKey?: string): PersonAttributeRecord[] {
+  if (matrix.headers.length === 0) {
+    return [];
+  }
+
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  const idx = buildHeaderIndex(matrix.headers);
+  const hasTenantColumn = idx.has("tenant_key");
+
+  return matrix.rows
+    .map((row) => {
+      if (hasTenantColumn) {
+        const rowTenant = getCell(row, idx, "tenant_key").trim().toLowerCase();
+        if (rowTenant && rowTenant !== normalizedTenantKey) {
+          return null;
+        }
+      }
+      return rowToPersonAttribute(matrix.headers, row, normalizedTenantKey);
+    })
+    .filter((item): item is PersonAttributeRecord => Boolean(item))
+    .sort((a, b) => {
+      const typeCompare = a.attributeType.localeCompare(b.attributeType);
+      if (typeCompare !== 0) {
+        return typeCompare;
+      }
+      const orderCompare = a.sortOrder - b.sortOrder;
+      if (orderCompare !== 0) {
+        return orderCompare;
+      }
+      const primaryCompare = Number(b.isPrimary) - Number(a.isPrimary);
+      if (primaryCompare !== 0) {
+        return primaryCompare;
+      }
+      return a.valueText.localeCompare(b.valueText);
+    });
 }
 
 export async function getEnabledUserAccess(email: string): Promise<UserAccessRecord | null> {
@@ -809,6 +884,41 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
     .filter((item): item is ImportantDateRecord => Boolean(item));
 
   return items.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function getPersonAttributes(
+  tenantKey?: string,
+  personId?: string,
+): Promise<PersonAttributeRecord[]> {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  let matrix: SheetMatrix;
+
+  try {
+    const tabName = await resolveTenantTabName(PERSON_ATTRIBUTES_TAB, normalizedTenantKey);
+    matrix = await readTab(tabName);
+  } catch {
+    return [];
+  }
+
+  const attributes = personAttributesFromMatrix(matrix, normalizedTenantKey);
+  if (!personId) {
+    return attributes;
+  }
+  return attributes.filter((item) => item.personId === personId);
+}
+
+export async function getPrimaryPhotoFileIdFromAttributes(
+  personId: string,
+  tenantKey?: string,
+): Promise<string | null> {
+  const attributes = await getPersonAttributes(tenantKey, personId);
+  const photos = attributes.filter((item) => item.attributeType === "photo" && item.valueText);
+  if (photos.length === 0) {
+    return null;
+  }
+
+  const primary = photos.find((item) => item.isPrimary);
+  return (primary ?? photos[0]).valueText;
 }
 
 export async function getPersonById(personId: string, tenantKey?: string): Promise<PersonRecord | null> {

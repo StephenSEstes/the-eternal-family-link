@@ -37,6 +37,22 @@ export type PersonUpdateInput = {
   notes: string;
 };
 
+export type PersonAttributeRecord = {
+  attributeId: string;
+  tenantKey: string;
+  personId: string;
+  attributeType: string;
+  valueText: string;
+  valueJson: string;
+  label: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  startDate: string;
+  endDate: string;
+  visibility: string;
+  notes: string;
+};
+
 export type ImportantDateRecord = {
   id: string;
   title: string;

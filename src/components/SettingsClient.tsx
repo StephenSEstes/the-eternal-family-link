@@ -16,11 +16,24 @@ type SettingsClientProps = {
   people: { personId: string; displayName: string }[];
 };
 
+type AttributeItem = {
+  attributeId: string;
+  personId: string;
+  attributeType: string;
+  valueText: string;
+  label: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  visibility: string;
+};
+
 const CSV_TEMPLATES: Record<string, string> = {
   people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
   relationships: "rel_id,from_person_id,to_person_id,rel_type\nrel-tenant-a-10,p-tenant-a-1,p-tenant-a-4,sibling",
   family_units: "family_unit_id,partner1_person_id,partner2_person_id\nfu-tenant-a-10,p-tenant-a-2,p-tenant-a-4",
   important_dates: "id,date,title,description,person_id\ntenant-a-date-10,2026-12-24,Holiday Dinner,Family gathering,p-tenant-a-1",
+  person_attributes:
+    "person_id,attribute_type,value_text,label,is_primary,sort_order,visibility,notes\np-tenant-a-1,photo,1A2B3C-photo-file-id,portrait,TRUE,0,family,Main portrait",
 };
 
 export function SettingsClient({ tenantKey, accessItems, people }: SettingsClientProps) {
@@ -31,7 +44,9 @@ export function SettingsClient({ tenantKey, accessItems, people }: SettingsClien
   const [isEnabled, setIsEnabled] = useState(true);
   const [accessStatus, setAccessStatus] = useState("");
 
-  const [target, setTarget] = useState<"people" | "relationships" | "family_units" | "important_dates">("people");
+  const [target, setTarget] = useState<
+    "people" | "relationships" | "family_units" | "important_dates" | "person_attributes"
+  >("people");
   const [csv, setCsv] = useState(CSV_TEMPLATES.people);
   const [importStatus, setImportStatus] = useState("");
   const [relationPersonId, setRelationPersonId] = useState("");
@@ -39,6 +54,15 @@ export function SettingsClient({ tenantKey, accessItems, people }: SettingsClien
   const [childIds, setChildIds] = useState<string[]>([]);
   const [spouseId, setSpouseId] = useState("");
   const [relationStatus, setRelationStatus] = useState("");
+  const [attributePersonId, setAttributePersonId] = useState("");
+  const [attributeType, setAttributeType] = useState("hobby");
+  const [attributeValue, setAttributeValue] = useState("");
+  const [attributeLabel, setAttributeLabel] = useState("");
+  const [attributeVisibility, setAttributeVisibility] = useState("family");
+  const [attributeSortOrder, setAttributeSortOrder] = useState(0);
+  const [attributePrimary, setAttributePrimary] = useState(false);
+  const [attributeItems, setAttributeItems] = useState<AttributeItem[]>([]);
+  const [attributeStatus, setAttributeStatus] = useState("");
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -97,6 +121,75 @@ export function SettingsClient({ tenantKey, accessItems, people }: SettingsClien
       return;
     }
     setRelationStatus("Relationships saved.");
+  };
+
+  const loadAttributes = async (nextPersonId: string) => {
+    if (!nextPersonId) {
+      setAttributeItems([]);
+      return;
+    }
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(nextPersonId)}/attributes`);
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setAttributeStatus(`Failed to load attributes: ${res.status}`);
+      setAttributeItems([]);
+      return;
+    }
+    setAttributeItems(Array.isArray(body?.attributes) ? body.attributes : []);
+  };
+
+  const createAttribute = async () => {
+    if (!attributePersonId) {
+      setAttributeStatus("Select a person first.");
+      return;
+    }
+    if (!attributeValue.trim()) {
+      setAttributeStatus("Attribute value is required.");
+      return;
+    }
+    setAttributeStatus("Saving attribute...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(attributePersonId)}/attributes`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attributeType,
+          valueText: attributeValue,
+          label: attributeLabel,
+          visibility: attributeVisibility,
+          sortOrder: attributeSortOrder,
+          isPrimary: attributePrimary,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setAttributeStatus(`Failed: ${res.status} ${JSON.stringify(body)}`);
+      return;
+    }
+    setAttributeStatus("Attribute saved.");
+    setAttributeValue("");
+    setAttributeLabel("");
+    setAttributePrimary(false);
+    await loadAttributes(attributePersonId);
+  };
+
+  const deleteAttribute = async (person: string, attributeId: string) => {
+    setAttributeStatus("Deleting attribute...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person)}/attributes/${encodeURIComponent(attributeId)}`,
+      {
+        method: "DELETE",
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text();
+      setAttributeStatus(`Delete failed: ${res.status} ${body.slice(0, 120)}`);
+      return;
+    }
+    setAttributeStatus("Attribute deleted.");
+    await loadAttributes(person);
   };
 
   return (
@@ -219,6 +312,90 @@ export function SettingsClient({ tenantKey, accessItems, people }: SettingsClien
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>Person Attributes</h2>
+        <p className="page-subtitle">One-to-many person details: photos, phones, hobbies, addresses, and history.</p>
+        <label className="label">Person</label>
+        <select
+          className="input"
+          value={attributePersonId}
+          onChange={(e) => {
+            const next = e.target.value;
+            setAttributePersonId(next);
+            void loadAttributes(next);
+          }}
+        >
+          <option value="">Select person</option>
+          {people.map((person) => (
+            <option key={person.personId} value={person.personId}>
+              {person.displayName}
+            </option>
+          ))}
+        </select>
+
+        <label className="label">Attribute Type</label>
+        <select className="input" value={attributeType} onChange={(e) => setAttributeType(e.target.value)}>
+          <option value="hobby">hobby</option>
+          <option value="phone">phone</option>
+          <option value="address">address</option>
+          <option value="photo">photo</option>
+          <option value="history">history</option>
+          <option value="note">note</option>
+          <option value="custom">custom</option>
+        </select>
+
+        <label className="label">Value</label>
+        <input className="input" value={attributeValue} onChange={(e) => setAttributeValue(e.target.value)} />
+        <label className="label">Label (optional)</label>
+        <input className="input" value={attributeLabel} onChange={(e) => setAttributeLabel(e.target.value)} />
+        <label className="label">Visibility</label>
+        <select className="input" value={attributeVisibility} onChange={(e) => setAttributeVisibility(e.target.value)}>
+          <option value="family">family</option>
+          <option value="private">private</option>
+          <option value="public">public</option>
+        </select>
+        <label className="label">Sort Order</label>
+        <input
+          className="input"
+          type="number"
+          min={0}
+          max={9999}
+          value={attributeSortOrder}
+          onChange={(e) => setAttributeSortOrder(Number.parseInt(e.target.value || "0", 10) || 0)}
+        />
+        <label className="label">
+          <input type="checkbox" checked={attributePrimary} onChange={(e) => setAttributePrimary(e.target.checked)} />{" "}
+          Mark as primary
+        </label>
+        <button type="button" className="button tap-button" onClick={createAttribute}>
+          Save Attribute
+        </button>
+        {attributeStatus ? <p>{attributeStatus}</p> : null}
+
+        {attributeItems.length > 0 ? (
+          <div className="settings-attr-list">
+            {attributeItems.map((item) => (
+              <div key={item.attributeId} className="settings-attr-row">
+                <div>
+                  <strong>{item.attributeType}</strong>: {item.valueText}
+                  <div className="settings-attr-meta">
+                    id: {item.attributeId} | label: {item.label || "-"} | primary: {item.isPrimary ? "TRUE" : "FALSE"} |
+                    visibility: {item.visibility} | order: {item.sortOrder}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => deleteAttribute(item.personId, item.attributeId)}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>CSV Import (Paste)</h2>
         <p className="page-subtitle">Initial data load by tenant. CSV header must match exactly.</p>
         <label className="label">Target Table</label>
@@ -235,6 +412,7 @@ export function SettingsClient({ tenantKey, accessItems, people }: SettingsClien
           <option value="relationships">Relationships</option>
           <option value="family_units">FamilyUnits</option>
           <option value="important_dates">ImportantDates</option>
+          <option value="person_attributes">PersonAttributes</option>
         </select>
         <p className="settings-template-title">Required format for `{target}`:</p>
         <pre className="settings-template">{template}</pre>

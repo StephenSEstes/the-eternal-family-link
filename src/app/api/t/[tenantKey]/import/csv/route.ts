@@ -7,7 +7,7 @@ import { createTableRecord, updateTableRecordById } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
 
 const payloadSchema = z.object({
-  target: z.enum(["people", "relationships", "family_units", "important_dates"]),
+  target: z.enum(["people", "relationships", "family_units", "important_dates", "person_attributes"]),
   csv: z.string().min(1),
 });
 
@@ -21,7 +21,21 @@ function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
   if (target === "family_units") {
     return { tabName: "FamilyUnits", idColumn: "family_unit_id", required: ["family_unit_id", "partner1_person_id", "partner2_person_id"] };
   }
+  if (target === "person_attributes") {
+    return { tabName: "PersonAttributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
+  }
   return { tabName: "ImportantDates", idColumn: "id", required: ["id", "date", "title"] };
+}
+
+function buildAttributeId(tenantKey: string, sourceRow: Record<string, string>) {
+  const personId = (sourceRow.person_id ?? "").trim();
+  const attributeType = (sourceRow.attribute_type ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  const valueText = (sourceRow.value_text ?? "").trim();
+  const valueKey = valueText.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 40);
+  if (!personId || !attributeType || !valueKey) {
+    return "";
+  }
+  return `${tenantKey}-${personId}-${attributeType}-${valueKey}`;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
@@ -68,6 +82,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       target.tabName === "People"
         ? sourceRow[target.idColumn]?.trim() ||
           buildPersonId(sourceRow.display_name ?? "", sourceRow.birth_date ?? "")
+        : target.tabName === "PersonAttributes"
+          ? sourceRow[target.idColumn]?.trim() || buildAttributeId(normalizedTenantKey, sourceRow)
         : sourceRow[target.idColumn]?.trim();
     if (!recordId) {
       errors.push({
@@ -86,6 +102,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     });
     if (target.tabName === "People" && !payload.person_id) {
       payload.person_id = recordId;
+    }
+    if (target.tabName === "PersonAttributes" && !payload.attribute_id) {
+      payload.attribute_id = recordId;
     }
     payload.tenant_key = normalizedTenantKey;
 

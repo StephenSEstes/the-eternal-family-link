@@ -393,6 +393,28 @@ main {
   text-align: left;
 }
 
+.settings-attr-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.settings-attr-row {
+  display: grid;
+  gap: 0.7rem;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #f8fbff;
+}
+
+.settings-attr-meta {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .game-options {
   display: grid;
   grid-template-columns: 1fr;
@@ -442,5 +464,9 @@ main {
 
   .settings-chip-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-attr-row {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
