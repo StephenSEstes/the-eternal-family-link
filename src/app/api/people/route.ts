@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import {
-  PEOPLE_TAB,
-  createSheetsClient,
-  lookupTab,
-  peopleFromMatrix,
-  readTabWithClient,
-} from "@/lib/google/sheets";
-
-type SessionWithTenant = {
-  tenantKey?: string;
-};
+import { getPeople } from "@/lib/google/sheets";
+import { getTenantContext } from "@/lib/tenant/context";
 
 class StepFailure extends Error {
   constructor(
@@ -75,33 +66,15 @@ export async function GET() {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    await runStep("tenant resolution", 300, async () => {
-      const tenantKey = (session as SessionWithTenant).tenantKey ?? "default";
-      return tenantKey;
+    const tenant = await runStep("tenant resolution", 300, async () => {
+      return getTenantContext(session);
     });
-
-    const sheets = await runStep("sheets client creation", 1200, async () => createSheetsClient());
-    const hasPeopleTab = await runStep("sheet/tab lookup", 2500, async () => lookupTab(sheets, PEOPLE_TAB, 2200));
-
-    if (!hasPeopleTab) {
-      const durationMs = Date.now() - routeStart;
-      console.error(`[api/people] step=sheet/tab lookup status=error durationMs=${durationMs} message=Tab not found`);
-      return NextResponse.json(
-        {
-          error: "people_fetch_failed",
-          step: "sheet/tab lookup",
-          message: `Tab '${PEOPLE_TAB}' not found`,
-          durationMs,
-        },
-        { status: 500 },
-      );
-    }
-
-    const matrix = await runStep("fetch", 4500, async () => readTabWithClient(sheets, PEOPLE_TAB, 4300));
-    const people = peopleFromMatrix(matrix);
+    const people = await runStep("fetch", 6500, async () => getPeople(tenant.tenantKey));
 
     const durationMs = Date.now() - routeStart;
-    console.log(`[api/people] status=ok durationMs=${durationMs} count=${people.length}`);
+    console.log(
+      `[api/people] status=ok durationMs=${durationMs} count=${people.length} tenant=${tenant.tenantKey}`,
+    );
     return NextResponse.json({ people });
   };
 

@@ -36,7 +36,7 @@ a {
 }
 
 main {
-  width: min(1100px, calc(100% - 2rem));
+  width: min(1100px, calc(100% - 1.25rem));
   margin: 0 auto;
 }
 
@@ -52,12 +52,10 @@ main {
 .app-header-inner {
   width: min(1100px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 0.8rem 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  padding: 0.75rem 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
 }
 
 .app-brand {
@@ -68,11 +66,15 @@ main {
 
 .app-nav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 0.5rem;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
 }
 
 .pill-link {
+  flex: 0 0 auto;
   padding: 0.55rem 0.9rem;
   border: 2px solid var(--line);
   border-radius: 999px;
@@ -139,6 +141,25 @@ main {
 .tile:hover {
   border-color: var(--accent-strong);
   transform: translateY(-1px);
+}
+
+.app-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.tenant-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: 0.15rem 0.55rem;
 }
 
 .people-grid {
@@ -225,6 +246,13 @@ main {
   font-weight: 700;
 }
 
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 @media (max-width: 768px) {
   .app-header-inner {
     padding: 0.65rem 0;
@@ -232,5 +260,22 @@ main {
 
   .pill-link {
     padding: 0.5rem 0.75rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .app-header-inner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .app-nav {
+    overflow-x: visible;
+    flex-wrap: wrap;
+    justify-self: center;
+  }
+
+  .profile-layout {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   }
 }

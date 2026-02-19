@@ -4,9 +4,11 @@ import { google, sheets_v4 } from "googleapis";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
 import type { AppRole, PersonRecord, PersonUpdateInput, UserAccessRecord } from "@/lib/google/types";
+import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 
 const USER_ACCESS_TAB = "UserAccess";
 export const PEOPLE_TAB = "People";
+const TENANT_TAB_DELIMITER = "__";
 
 export type SheetMatrix = {
   headers: string[];
@@ -84,6 +86,21 @@ function setCell(row: string[], indexMap: Map<string, number>, key: string, valu
   row[idx] = value;
 }
 
+function normalizeTenantKey(tenantKey?: string) {
+  const raw = (tenantKey ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
+  const clean = raw.replace(/[^a-z0-9_-]/g, "");
+  return clean || DEFAULT_TENANT_KEY;
+}
+
+function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
+  const cleanKey = normalizeTenantKey(tenantKey);
+  if (cleanKey === DEFAULT_TENANT_KEY) {
+    return [tabName];
+  }
+
+  return [`${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`, tabName];
+}
+
 export async function createSheetsClient(): Promise<sheets_v4.Sheets> {
   const auth = getServiceAccountAuth();
   return google.sheets({ version: "v4", auth });
@@ -148,6 +165,50 @@ export async function listTabs(timeoutMs = 3000): Promise<string[]> {
   );
 }
 
+async function resolveTenantTabNameWithClient(
+  sheets: sheets_v4.Sheets,
+  tabName: string,
+  tenantKey?: string,
+  timeoutMs = 3500,
+): Promise<string | null> {
+  const env = getEnv();
+  const result = await withAbortTimeout(timeoutMs, (signal) =>
+    sheets.spreadsheets.get(
+      {
+        spreadsheetId: env.SHEET_ID,
+        fields: "sheets.properties.title",
+      },
+      { signal },
+    ),
+  );
+
+  const tabs =
+    result.data.sheets
+      ?.map((sheet) => sheet.properties?.title ?? "")
+      .map((title) => title.trim())
+      .filter(Boolean) ?? [];
+  const index = new Map(tabs.map((tab) => [tab.trim().toLowerCase(), tab]));
+  const candidates = buildTenantTabCandidates(tabName, tenantKey);
+
+  for (const candidate of candidates) {
+    const match = index.get(candidate.trim().toLowerCase());
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+async function resolveTenantTabName(tabName: string, tenantKey?: string): Promise<string> {
+  const sheets = await createSheetsClient();
+  const resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
+  if (!resolved) {
+    throw new Error(`Tab '${tabName}' not found for tenant '${normalizeTenantKey(tenantKey)}'.`);
+  }
+  return resolved;
+}
+
 export async function readTabWithClient(
   sheets: sheets_v4.Sheets,
   tabName: string,
@@ -197,8 +258,9 @@ export function matrixToRecords(matrix: SheetMatrix): SheetRecord[] {
   }));
 }
 
-export async function getTableRecords(tabName: string): Promise<SheetRecord[]> {
-  const matrix = await readTab(tabName);
+export async function getTableRecords(tabName: string, tenantKey?: string): Promise<SheetRecord[]> {
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const matrix = await readTab(resolvedTab);
   return matrixToRecords(matrix);
 }
 
@@ -206,8 +268,10 @@ export async function getTableRecordById(
   tabName: string,
   recordId: string,
   idColumn?: string,
+  tenantKey?: string,
 ): Promise<SheetRecord | null> {
-  const matrix = await readTab(tabName);
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
     return null;
   }
@@ -224,8 +288,10 @@ export async function getTableRecordById(
 export async function createTableRecord(
   tabName: string,
   payload: Record<string, string>,
+  tenantKey?: string,
 ): Promise<SheetRecord> {
-  const matrix = await readTab(tabName);
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
     throw new Error("Tab has no header row.");
   }
@@ -245,13 +311,13 @@ export async function createTableRecord(
   const env = getEnv();
   await sheets.spreadsheets.values.append({
     spreadsheetId: env.SHEET_ID,
-    range: `${tabName}!A:ZZ`,
+    range: `${resolvedTab}!A:ZZ`,
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },
   });
 
-  const refreshed = await readTab(tabName);
+  const refreshed = await readTab(resolvedTab);
   const createdData = toRecord(refreshed.headers, row);
   return {
     rowNumber: refreshed.rows.length + 1,
@@ -264,8 +330,10 @@ export async function updateTableRecordById(
   recordId: string,
   payload: Record<string, string>,
   idColumn?: string,
+  tenantKey?: string,
 ): Promise<SheetRecord | null> {
-  const matrix = await readTab(tabName);
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
     return null;
   }
@@ -299,7 +367,7 @@ export async function updateTableRecordById(
   const rowNumber = rowIndex + 2;
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.SHEET_ID,
-    range: `${tabName}!A${rowNumber}:ZZ${rowNumber}`,
+    range: `${resolvedTab}!A${rowNumber}:ZZ${rowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values: [existing] },
   });
@@ -314,8 +382,10 @@ export async function deleteTableRecordById(
   tabName: string,
   recordId: string,
   idColumn?: string,
+  tenantKey?: string,
 ): Promise<boolean> {
-  const matrix = await readTab(tabName);
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
     return false;
   }
@@ -338,7 +408,7 @@ export async function deleteTableRecordById(
     fields: "sheets.properties.sheetId,sheets.properties.title",
   });
   const sheet = metadata.data.sheets?.find(
-    (item) => item.properties?.title?.trim().toLowerCase() === tabName.trim().toLowerCase(),
+    (item) => item.properties?.title?.trim().toLowerCase() === resolvedTab.trim().toLowerCase(),
   );
   const sheetId = sheet?.properties?.sheetId;
   if (sheetId === undefined) {
@@ -412,11 +482,15 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
     const isEnabled = parseBool(getCell(row, idx, "is_enabled"));
 
     if (userEmail === target && isEnabled) {
+      const tenantKey = getCell(row, idx, "tenant_key").trim() || DEFAULT_TENANT_KEY;
+      const tenantName = getCell(row, idx, "tenant_name").trim() || DEFAULT_TENANT_NAME;
       return {
         userEmail,
         isEnabled,
         role: toRole(getCell(row, idx, "role")),
         personId: getCell(row, idx, "person_id"),
+        tenantKey,
+        tenantName,
       };
     }
   }
@@ -424,18 +498,24 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
   return null;
 }
 
-export async function getPeople(): Promise<PersonRecord[]> {
-  const matrix = await readTab(PEOPLE_TAB);
+export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
+  const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
+  const matrix = await readTab(tabName);
   return peopleFromMatrix(matrix);
 }
 
-export async function getPersonById(personId: string): Promise<PersonRecord | null> {
-  const people = await getPeople();
+export async function getPersonById(personId: string, tenantKey?: string): Promise<PersonRecord | null> {
+  const people = await getPeople(tenantKey);
   return people.find((person) => person.personId === personId) ?? null;
 }
 
-export async function updatePerson(personId: string, updates: PersonUpdateInput): Promise<PersonRecord | null> {
-  const { headers, rows } = await readTab(PEOPLE_TAB);
+export async function updatePerson(
+  personId: string,
+  updates: PersonUpdateInput,
+  tenantKey?: string,
+): Promise<PersonRecord | null> {
+  const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
+  const { headers, rows } = await readTab(tabName);
   if (headers.length === 0) {
     return null;
   }
@@ -460,7 +540,7 @@ export async function updatePerson(personId: string, updates: PersonUpdateInput)
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.SHEET_ID,
-    range: `${PEOPLE_TAB}!A${sheetRowNumber}:ZZ${sheetRowNumber}`,
+    range: `${tabName}!A${sheetRowNumber}:ZZ${sheetRowNumber}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [mutableRow],

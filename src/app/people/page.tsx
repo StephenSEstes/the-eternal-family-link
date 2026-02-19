@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { requireSession } from "@/lib/auth/session";
+import { requireTenantSession } from "@/lib/auth/session";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople } from "@/lib/google/sheets";
 
 export default async function PeoplePage() {
-  await requireSession();
-  const people = await getPeople();
+  const { tenant } = await requireTenantSession();
+  const people = await getPeople(tenant.tenantKey);
 
   return (
     <>

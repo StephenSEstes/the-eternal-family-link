@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { deleteTableRecordById, getTableRecordById, updateTableRecordById } from "@/lib/google/sheets";
+import { getTenantContext } from "@/lib/tenant/context";
 
 const tableNameSchema = z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9 _-]+$/);
 const idSchema = z.string().trim().min(1).max(200);
@@ -45,6 +46,7 @@ export async function GET(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const tenant = getTenantContext(session);
 
   const parsed = parseTableAndId(await params);
   if (!parsed) {
@@ -57,7 +59,7 @@ export async function GET(request: Request, { params }: RecordRouteProps) {
   }
 
   try {
-    const record = await getTableRecordById(parsed.table, parsed.recordId, idColumn.idColumn);
+    const record = await getTableRecordById(parsed.table, parsed.recordId, idColumn.idColumn, tenant.tenantKey);
     if (!record) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
@@ -74,6 +76,7 @@ export async function PATCH(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const tenant = getTenantContext(session);
 
   if (!requireAdminRole(session)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -96,7 +99,13 @@ export async function PATCH(request: Request, { params }: RecordRouteProps) {
   }
 
   try {
-    const record = await updateTableRecordById(parsed.table, parsed.recordId, parsedRecord.data, idColumn.idColumn);
+    const record = await updateTableRecordById(
+      parsed.table,
+      parsed.recordId,
+      parsedRecord.data,
+      idColumn.idColumn,
+      tenant.tenantKey,
+    );
     if (!record) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
@@ -113,6 +122,7 @@ export async function DELETE(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const tenant = getTenantContext(session);
 
   if (!requireAdminRole(session)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -129,7 +139,7 @@ export async function DELETE(request: Request, { params }: RecordRouteProps) {
   }
 
   try {
-    const deleted = await deleteTableRecordById(parsed.table, parsed.recordId, idColumn.idColumn);
+    const deleted = await deleteTableRecordById(parsed.table, parsed.recordId, idColumn.idColumn, tenant.tenantKey);
     if (!deleted) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }

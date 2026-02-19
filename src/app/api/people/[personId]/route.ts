@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { getAppSession, requireSession } from "@/lib/auth/session";
+import { getAppSession, requireTenantSession } from "@/lib/auth/session";
 import { getPersonById, updatePerson } from "@/lib/google/sheets";
+import { getTenantContext } from "@/lib/tenant/context";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type PersonRouteProps = {
@@ -9,9 +10,9 @@ type PersonRouteProps = {
 };
 
 export async function GET(_: Request, { params }: PersonRouteProps) {
-  await requireSession();
+  const { tenant } = await requireTenantSession();
   const { personId } = await params;
-  const person = await getPersonById(personId);
+  const person = await getPersonById(personId, tenant.tenantKey);
 
   if (!person) {
     return NextResponse.json({ error: "Person not found" }, { status: 404 });
@@ -25,6 +26,7 @@ export async function POST(request: Request, { params }: PersonRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const tenant = getTenantContext(session);
 
   const { personId } = await params;
   if (!canEditPerson(session, personId)) {
@@ -44,7 +46,7 @@ export async function POST(request: Request, { params }: PersonRouteProps) {
     );
   }
 
-  const person = await updatePerson(personId, parsed.data);
+  const person = await updatePerson(personId, parsed.data, tenant.tenantKey);
   if (!person) {
     return NextResponse.json({ error: "Person not found" }, { status: 404 });
   }

@@ -5,6 +5,8 @@ export type UserAccessRecord = {
   isEnabled: boolean;
   role: AppRole;
   personId: string;
+  tenantKey: string;
+  tenantName: string;
 };
 
 export type PersonRecord = {

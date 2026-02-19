@@ -1,10 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-
-type SessionWithTenant = {
-  tenantKey?: string;
-};
+import { getTenantContext } from "@/lib/tenant/context";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,15 +10,15 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const tenantKey = (session as SessionWithTenant).tenantKey ?? "default";
+  const tenant = getTenantContext(session);
 
   return NextResponse.json({
     tenants: [
       {
-        key: tenantKey,
-        name: "The Eternal Family Link",
+        key: tenant.tenantKey,
+        name: tenant.tenantName,
       },
     ],
-    activeTenantKey: tenantKey,
+    activeTenantKey: tenant.tenantKey,
   });
 }

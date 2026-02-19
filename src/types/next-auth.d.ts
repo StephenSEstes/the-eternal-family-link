@@ -10,6 +10,8 @@ declare module "next-auth" {
       role?: "ADMIN" | "USER";
       person_id?: string;
     };
+    tenantKey?: string;
+    tenantName?: string;
   }
 }
 
@@ -17,5 +19,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: "ADMIN" | "USER";
     person_id?: string;
+    tenantKey?: string;
+    tenantName?: string;
   }
 }

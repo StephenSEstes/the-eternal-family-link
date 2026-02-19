@@ -10,6 +10,7 @@ import {
   readTabWithClient,
   updateTableRecordById,
 } from "@/lib/google/sheets";
+import { getTenantContext } from "@/lib/tenant/context";
 
 const ID_COLUMN_CANDIDATES = ["id", "person_id", "record_id", "user_email"];
 
@@ -96,6 +97,7 @@ export async function POST() {
   if (session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  const tenant = getTenantContext(session);
 
   const tabs = await listTabs();
   const client = await createSheetsClient();
@@ -135,18 +137,18 @@ export async function POST() {
 
       const token = `smoke_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const createPayload = buildCreatePayload(matrix.headers, idColumn, token);
-      const created = await createTableRecord(tab, createPayload);
+      const created = await createTableRecord(tab, createPayload, tenant.tenantKey);
       report.create = { ok: true, recordId: token, rowNumber: created.rowNumber };
 
-      const readBack = await getTableRecordById(tab, token, idColumn);
+      const readBack = await getTableRecordById(tab, token, idColumn, tenant.tenantKey);
       report.read = { ok: true, found: Boolean(readBack) };
 
       const updatePayload = buildUpdatePayload(matrix.headers, token);
-      const updated = await updateTableRecordById(tab, token, updatePayload, idColumn);
+      const updated = await updateTableRecordById(tab, token, updatePayload, idColumn, tenant.tenantKey);
       report.update = { ok: true, updated: Boolean(updated) };
 
-      const deleted = await deleteTableRecordById(tab, token, idColumn);
-      const afterDelete = await getTableRecordById(tab, token, idColumn);
+      const deleted = await deleteTableRecordById(tab, token, idColumn, tenant.tenantKey);
+      const afterDelete = await getTableRecordById(tab, token, idColumn, tenant.tenantKey);
       report.delete = { ok: true, deleted, cleanupConfirmed: afterDelete === null };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { getEnv } from "@/lib/env";
 import { getEnabledUserAccess } from "@/lib/google/sheets";
+import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -31,6 +32,8 @@ export const authOptions: NextAuthOptions = {
 
         token.role = access.role;
         token.person_id = access.personId;
+        token.tenantKey = access.tenantKey;
+        token.tenantName = access.tenantName;
       }
 
       return token;
@@ -40,6 +43,8 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as "ADMIN" | "USER" | undefined;
         session.user.person_id = token.person_id as string | undefined;
       }
+      session.tenantKey = (token.tenantKey as string | undefined) ?? DEFAULT_TENANT_KEY;
+      session.tenantName = (token.tenantName as string | undefined) ?? DEFAULT_TENANT_NAME;
       return session;
     },
   },

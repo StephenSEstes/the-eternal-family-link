@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getAppSession } from "@/lib/auth/session";
+import { getTenantContext } from "@/lib/tenant/context";
 
 export async function AppHeader() {
   const session = await getAppSession();
+  const tenant = getTenantContext(session);
 
   return (
     <header className="app-header">
@@ -32,8 +34,9 @@ export async function AppHeader() {
           </Link>
         </nav>
 
-        <div style={{ color: "var(--text-muted)", fontWeight: 700 }}>
-          {session?.user?.email ? `${session.user.email} (${session.user.role ?? "USER"})` : "Not signed in"}
+        <div className="app-meta">
+          <span className="tenant-chip">{tenant.tenantName}</span>
+          <span>{session?.user?.email ? `${session.user.email} (${session.user.role ?? "USER"})` : "Not signed in"}</span>
         </div>
       </div>
     </header>
