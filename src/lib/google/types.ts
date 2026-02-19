@@ -35,3 +35,18 @@ export type PersonUpdateInput = {
   hobbies: string;
   notes: string;
 };
+
+export type ImportantDateRecord = {
+  id: string;
+  title: string;
+  date: string;
+  description: string;
+  personId: string;
+};
+
+export type TenantConfig = {
+  tenantKey: string;
+  tenantName: string;
+  viewerPinHash: string;
+  photosFolderId: string;
+};

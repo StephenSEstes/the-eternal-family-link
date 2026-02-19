@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
-import { getEnv } from "@/lib/env";
-import { getPeople } from "@/lib/google/sheets";
+import { getPeople, getTenantConfig } from "@/lib/google/sheets";
+import { verifyViewerPin } from "@/lib/security/pin";
 import { normalizeTenantRouteKey } from "@/lib/tenant/context";
 
 type TenantViewerPageProps = {
@@ -19,13 +19,13 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
   const normalizedTenantKey = normalizeTenantRouteKey(tenantKey);
   const routeBase = `/t/${encodeURIComponent(normalizedTenantKey)}/viewer`;
   const accessCookieName = cookieNameForTenant(normalizedTenantKey);
+  const tenantConfig = await getTenantConfig(normalizedTenantKey);
 
   async function unlockViewer(formData: FormData) {
     "use server";
 
     const submittedPin = String(formData.get("pin") ?? "").trim();
-    const env = getEnv();
-    if (submittedPin !== env.VIEWER_PIN) {
+    if (!verifyViewerPin(submittedPin, tenantConfig.viewerPinHash)) {
       redirect(`${routeBase}?error=1`);
     }
 

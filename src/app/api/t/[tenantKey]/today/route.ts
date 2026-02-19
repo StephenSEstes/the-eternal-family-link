@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getPeople } from "@/lib/google/sheets";
-import {
-  getTenantContext,
-  hasTenantAccess,
-  normalizeTenantRouteKey,
-} from "@/lib/tenant/context";
+import { getImportantDates } from "@/lib/google/sheets";
+import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
 
-type TenantPeopleRouteProps = {
+type TenantTodayRouteProps = {
   params: Promise<{ tenantKey: string }>;
 };
 
-export async function GET(_: Request, { params }: TenantPeopleRouteProps) {
+export async function GET(_: Request, { params }: TenantTodayRouteProps) {
   const session = await getAppSession();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -24,6 +20,10 @@ export async function GET(_: Request, { params }: TenantPeopleRouteProps) {
   }
 
   const tenant = getTenantContext(session, normalized);
-  const people = await getPeople(tenant.tenantKey);
-  return NextResponse.json({ tenantKey: tenant.tenantKey, count: people.length, items: people });
+  const dates = await getImportantDates(tenant.tenantKey);
+  return NextResponse.json({
+    tenantKey: tenant.tenantKey,
+    items: dates,
+    count: dates.length,
+  });
 }

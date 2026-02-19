@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPhotoContent } from "@/lib/google/drive";
+import { getTenantConfig } from "@/lib/google/sheets";
 
 type PhotoRouteProps = {
   params: Promise<{ fileId: string }>;
@@ -8,7 +9,8 @@ type PhotoRouteProps = {
 export async function GET(_: Request, { params }: PhotoRouteProps) {
   try {
     const { fileId } = await params;
-    const photo = await getPhotoContent(fileId);
+    const config = await getTenantConfig("default");
+    const photo = await getPhotoContent(fileId, { photosFolderId: config.photosFolderId });
     const blob = new Blob([photo.data], { type: photo.mimeType });
 
     return new NextResponse(blob, {

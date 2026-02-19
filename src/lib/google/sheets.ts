@@ -3,11 +3,22 @@ import "server-only";
 import { google, sheets_v4 } from "googleapis";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
-import type { AppRole, PersonRecord, PersonUpdateInput, TenantAccess, UserAccessRecord } from "@/lib/google/types";
+import { viewerPinHash } from "@/lib/security/pin";
+import type {
+  AppRole,
+  ImportantDateRecord,
+  PersonRecord,
+  PersonUpdateInput,
+  TenantAccess,
+  TenantConfig,
+  UserAccessRecord,
+} from "@/lib/google/types";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 
 const USER_ACCESS_TAB = "UserAccess";
 export const PEOPLE_TAB = "People";
+const IMPORTANT_DATES_TAB = "ImportantDates";
+const TENANT_CONFIG_TAB = "TenantConfig";
 const TENANT_TAB_DELIMITER = "__";
 
 export type SheetMatrix = {
@@ -117,6 +128,36 @@ function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
   }
 
   return [`${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`, tabName];
+}
+
+function defaultTenantConfig(tenantKey?: string): TenantConfig {
+  const env = getEnv();
+  const normalizedKey = normalizeTenantKey(tenantKey);
+  return {
+    tenantKey: normalizedKey,
+    tenantName: normalizedKey === DEFAULT_TENANT_KEY ? DEFAULT_TENANT_NAME : normalizedKey,
+    viewerPinHash: viewerPinHash(env.VIEWER_PIN),
+    photosFolderId: env.PHOTOS_FOLDER_ID,
+  };
+}
+
+function normalizeDate(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return "";
+  }
+
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (iso.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+
+  return parsed.toISOString().slice(0, 10);
 }
 
 export async function createSheetsClient(): Promise<sheets_v4.Sheets> {
@@ -468,7 +509,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
     address: getCell(row, idx, "address"),
     hobbies: getCell(row, idx, "hobbies"),
     notes: getCell(row, idx, "notes"),
-    photoFileId: getCell(row, idx, "photo_file_id"),
+    photoFileId: getCell(row, idx, "photo_file_id") || getCell(row, idx, "primary_photo_file_id"),
     isPinned:
       parseBool(getCell(row, idx, "is_pinned")) || parseBool(getCell(row, idx, "is_pinned_viewer")),
     relationships: toList(getCell(row, idx, "relationships")),
@@ -618,7 +659,121 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
   const matrix = await readTab(tabName);
-  return peopleFromMatrix(matrix);
+  const people = peopleFromMatrix(matrix);
+  if (matrix.headers.length === 0) {
+    return people;
+  }
+
+  const idx = buildHeaderIndex(matrix.headers);
+  const hasTenantColumn = idx.has("tenant_key");
+  if (!hasTenantColumn) {
+    return people;
+  }
+
+  const targetTenant = normalizeTenantKey(tenantKey);
+  return matrix.rows
+    .filter((row) => {
+      const rowTenant = getCell(row, idx, "tenant_key").trim().toLowerCase();
+      return rowTenant === targetTenant;
+    })
+    .map((row) => rowToPerson(matrix.headers, row))
+    .filter((person) => person.personId)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig> {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  let matrix: SheetMatrix | null = null;
+
+  try {
+    const tabName = await resolveTenantTabName(TENANT_CONFIG_TAB, normalizedTenantKey);
+    matrix = await readTab(tabName);
+  } catch {
+    try {
+      matrix = await readTab(TENANT_CONFIG_TAB);
+    } catch {
+      return defaultTenantConfig(normalizedTenantKey);
+    }
+  }
+
+  if (!matrix || matrix.headers.length === 0) {
+    return defaultTenantConfig(normalizedTenantKey);
+  }
+
+  const idx = buildHeaderIndex(matrix.headers);
+  const row =
+    matrix.rows.find((candidate) => {
+      const rowTenantKey = getCell(candidate, idx, "tenant_key").trim().toLowerCase();
+      return rowTenantKey === normalizedTenantKey;
+    }) ??
+    matrix.rows.find((candidate) => {
+      const rowTenantKey = getCell(candidate, idx, "tenant_key").trim().toLowerCase();
+      return !rowTenantKey && normalizedTenantKey === DEFAULT_TENANT_KEY;
+    }) ??
+    matrix.rows[0];
+
+  const fallback = defaultTenantConfig(normalizedTenantKey);
+  const tenantName = getCell(row, idx, "tenant_name").trim() || fallback.tenantName;
+  const viewerPin = getCell(row, idx, "viewer_pin_hash").trim() || fallback.viewerPinHash;
+  const photosFolderId = getCell(row, idx, "photos_folder_id").trim() || fallback.photosFolderId;
+
+  return {
+    tenantKey: normalizedTenantKey,
+    tenantName,
+    viewerPinHash: viewerPin,
+    photosFolderId,
+  };
+}
+
+export async function getImportantDates(tenantKey?: string): Promise<ImportantDateRecord[]> {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  let matrix: SheetMatrix;
+
+  try {
+    const tabName = await resolveTenantTabName(IMPORTANT_DATES_TAB, normalizedTenantKey);
+    matrix = await readTab(tabName);
+  } catch {
+    return [];
+  }
+
+  if (matrix.headers.length === 0) {
+    return [];
+  }
+
+  const idx = buildHeaderIndex(matrix.headers);
+  const hasTenantColumn = idx.has("tenant_key");
+
+  const items = matrix.rows
+    .map((row, i) => {
+      const tenantFilter = getCell(row, idx, "tenant_key").trim().toLowerCase();
+      if (hasTenantColumn && tenantFilter && tenantFilter !== normalizedTenantKey) {
+        return null;
+      }
+
+      const title = getCell(row, idx, "title").trim() || getCell(row, idx, "event_title").trim();
+      const rawDate =
+        getCell(row, idx, "date").trim() ||
+        getCell(row, idx, "event_date").trim() ||
+        getCell(row, idx, "important_date").trim();
+      const personId = getCell(row, idx, "person_id").trim();
+      const description = getCell(row, idx, "description").trim() || getCell(row, idx, "notes").trim();
+      const id = getCell(row, idx, "id").trim() || `${normalizedTenantKey}-${i + 2}`;
+
+      if (!title || !rawDate) {
+        return null;
+      }
+
+      return {
+        id,
+        title,
+        date: normalizeDate(rawDate),
+        description,
+        personId,
+      } satisfies ImportantDateRecord;
+    })
+    .filter((item): item is ImportantDateRecord => Boolean(item));
+
+  return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export async function getPersonById(personId: string, tenantKey?: string): Promise<PersonRecord | null> {
@@ -638,7 +793,17 @@ export async function updatePerson(
   }
 
   const idx = buildHeaderIndex(headers);
-  const rowIndex = rows.findIndex((row) => getCell(row, idx, "person_id") === personId);
+  const targetTenant = normalizeTenantKey(tenantKey);
+  const hasTenantColumn = idx.has("tenant_key");
+  const rowIndex = rows.findIndex((row) => {
+    if (getCell(row, idx, "person_id") !== personId) {
+      return false;
+    }
+    if (!hasTenantColumn) {
+      return true;
+    }
+    return getCell(row, idx, "tenant_key").trim().toLowerCase() === targetTenant;
+  });
 
   if (rowIndex < 0) {
     return null;
