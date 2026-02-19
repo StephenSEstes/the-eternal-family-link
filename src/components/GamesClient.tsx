@@ -118,7 +118,7 @@ export function GamesClient({ people, importantDates }: GamesClientProps) {
                 <button
                   key={option}
                   type="button"
-                  className="button secondary tap-button"
+                  className={`button secondary tap-button ${birthdayChoice === option ? "game-option-selected" : ""}`}
                   onClick={() => setBirthdayChoice(option)}
                 >
                   {option}
@@ -172,7 +172,7 @@ export function GamesClient({ people, importantDates }: GamesClientProps) {
                 <button
                   key={option}
                   type="button"
-                  className="button secondary tap-button"
+                  className={`button secondary tap-button ${hobbyChoice === option ? "game-option-selected" : ""}`}
                   onClick={() => setHobbyChoice(option)}
                 >
                   {option}
