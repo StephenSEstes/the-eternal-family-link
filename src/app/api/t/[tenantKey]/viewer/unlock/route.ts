@@ -20,10 +20,10 @@ export async function POST(request: Request, { params }: ViewerUnlockRouteProps)
 
   const config = await getTenantConfig(normalizedTenantKey);
   if (!verifyViewerPin(submittedPin, config.viewerPinHash)) {
-    return NextResponse.redirect(`${routeBase}?error=1`, { status: 303 });
+    return NextResponse.redirect(new URL(`${routeBase}?error=1`, request.url), { status: 303 });
   }
 
-  const response = NextResponse.redirect(routeBase, { status: 303 });
+  const response = NextResponse.redirect(new URL(routeBase, request.url), { status: 303 });
   response.cookies.set(cookieNameForTenant(normalizedTenantKey), "granted", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
