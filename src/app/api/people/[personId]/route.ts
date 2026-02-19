@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession, requireTenantSession } from "@/lib/auth/session";
 import { getPersonById, updatePerson } from "@/lib/google/sheets";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/tenant/context";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type PersonRouteProps = {
@@ -26,10 +26,10 @@ export async function POST(request: Request, { params }: PersonRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
   const { personId } = await params;
-  if (!canEditPerson(session, personId)) {
+  if (!canEditPerson(session, personId, tenant)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

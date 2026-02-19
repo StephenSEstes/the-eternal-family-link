@@ -6,9 +6,10 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 
 type ViewerPeopleGridProps = {
   people: PersonRecord[];
+  tenantKey?: string;
 };
 
-export function ViewerPeopleGrid({ people }: ViewerPeopleGridProps) {
+export function ViewerPeopleGrid({ people, tenantKey }: ViewerPeopleGridProps) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -37,7 +38,7 @@ export function ViewerPeopleGrid({ people }: ViewerPeopleGridProps) {
         {filtered.map((person) => (
           <div key={person.personId} className="person-card">
             <img
-              src={person.photoFileId ? getPhotoProxyPath(person.photoFileId) : "/globe.svg"}
+              src={person.photoFileId ? getPhotoProxyPath(person.photoFileId, tenantKey) : "/globe.svg"}
               alt={person.displayName}
             />
             <h3>{person.displayName}</h3>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { deleteTableRecordById, getTableRecordById, updateTableRecordById } from "@/lib/google/sheets";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/tenant/context";
 
 const tableNameSchema = z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9 _-]+$/);
 const idSchema = z.string().trim().min(1).max(200);
@@ -17,8 +17,8 @@ type RecordRouteProps = {
   params: Promise<{ table: string; recordId: string }>;
 };
 
-function requireAdminRole(session: Awaited<ReturnType<typeof getAppSession>>) {
-  return session?.user?.role === "ADMIN";
+function requireAdminRole(tenantRole: "ADMIN" | "USER") {
+  return tenantRole === "ADMIN";
 }
 
 function parseTableAndId(input: { table: string; recordId: string }) {
@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
   const parsed = parseTableAndId(await params);
   if (!parsed) {
@@ -76,9 +76,9 @@ export async function PATCH(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
-  if (!requireAdminRole(session)) {
+  if (!requireAdminRole(tenant.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -122,9 +122,9 @@ export async function DELETE(request: Request, { params }: RecordRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
-  if (!requireAdminRole(session)) {
+  if (!requireAdminRole(tenant.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

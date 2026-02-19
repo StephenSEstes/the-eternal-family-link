@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/tenant/context";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
   return NextResponse.json({
     user: {
@@ -18,6 +18,12 @@ export async function GET() {
       email: session.user.email ?? null,
       image: session.user.image ?? null,
     },
-    tenant,
+    tenant: {
+      key: tenant.tenantKey,
+      name: tenant.tenantName,
+      role: tenant.role,
+      personId: tenant.personId,
+    },
+    tenants: tenant.tenants,
   });
 }

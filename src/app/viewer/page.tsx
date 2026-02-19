@@ -65,7 +65,7 @@ export default async function ViewerPage({ searchParams }: ViewerPageProps) {
     <main className="section">
       <h1 className="page-title">Family Viewer</h1>
       <p className="page-subtitle">Read-only mode with large, simple controls.</p>
-      <ViewerPeopleGrid people={pinned.length > 0 ? pinned : people.slice(0, 24)} />
+      <ViewerPeopleGrid people={pinned.length > 0 ? pinned : people.slice(0, 24)} tenantKey="default" />
     </main>
   );
 }

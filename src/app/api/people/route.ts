@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { getPeople } from "@/lib/google/sheets";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/tenant/context";
 
 class StepFailure extends Error {
   constructor(
@@ -67,7 +67,7 @@ export async function GET() {
     }
 
     const tenant = await runStep("tenant resolution", 300, async () => {
-      return getTenantContext(session);
+      return getRequestTenantContext(session);
     });
     const people = await runStep("fetch", 6500, async () => getPeople(tenant.tenantKey));
 

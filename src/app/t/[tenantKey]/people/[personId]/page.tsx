@@ -6,11 +6,11 @@ import { requireTenantSession } from "@/lib/auth/session";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPersonById } from "@/lib/google/sheets";
 
-type PersonPageProps = {
-  params: Promise<{ personId: string }>;
+type TenantPersonPageProps = {
+  params: Promise<{ tenantKey: string; personId: string }>;
 };
 
-export default async function PersonPage({ params }: PersonPageProps) {
+export default async function TenantPersonPage({ params }: TenantPersonPageProps) {
   const { personId } = await params;
   const { session, tenant } = await requireTenantSession();
   const person = await getPersonById(personId, tenant.tenantKey);
@@ -31,7 +31,7 @@ export default async function PersonPage({ params }: PersonPageProps) {
         <div className="profile-layout">
           <section className="card">
             <img
-              src={person.photoFileId ? getPhotoProxyPath(person.photoFileId) : "/globe.svg"}
+              src={person.photoFileId ? getPhotoProxyPath(person.photoFileId, tenant.tenantKey) : "/globe.svg"}
               alt={person.displayName}
               style={{ width: "100%", borderRadius: "12px", border: "2px solid var(--line)" }}
             />

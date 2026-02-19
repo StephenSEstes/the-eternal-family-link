@@ -2,7 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { createTableRecord, getTableRecords } from "@/lib/google/sheets";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/tenant/context";
 
 const tableNameSchema = z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9 _-]+$/);
 const recordSchema = z.record(z.string(), z.string().or(z.number()).or(z.boolean()).or(z.null())).transform((obj) => {
@@ -11,8 +11,8 @@ const recordSchema = z.record(z.string(), z.string().or(z.number()).or(z.boolean
   );
 });
 
-function requireAdminRole(session: Awaited<ReturnType<typeof getAppSession>>) {
-  return session?.user?.role === "ADMIN";
+function requireAdminRole(tenantRole: "ADMIN" | "USER") {
+  return tenantRole === "ADMIN";
 }
 
 type TableRouteProps = {
@@ -24,7 +24,7 @@ export async function GET(_: Request, { params }: TableRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
   const { table } = await params;
   const parsedTable = tableNameSchema.safeParse(decodeURIComponent(table));
@@ -41,9 +41,9 @@ export async function POST(request: Request, { params }: TableRouteProps) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const tenant = getTenantContext(session);
+  const tenant = await getRequestTenantContext(session);
 
-  if (!requireAdminRole(session)) {
+  if (!requireAdminRole(tenant.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

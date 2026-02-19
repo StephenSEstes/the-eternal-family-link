@@ -9,6 +9,13 @@ export type UserAccessRecord = {
   tenantName: string;
 };
 
+export type TenantAccess = {
+  tenantKey: string;
+  tenantName: string;
+  role: AppRole;
+  personId: string;
+};
+
 export type PersonRecord = {
   personId: string;
   displayName: string;

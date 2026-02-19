@@ -9,6 +9,12 @@ declare module "next-auth" {
       image?: string | null;
       role?: "ADMIN" | "USER";
       person_id?: string;
+      tenantAccesses?: {
+        tenantKey: string;
+        tenantName: string;
+        role: "ADMIN" | "USER";
+        personId: string;
+      }[];
     };
     tenantKey?: string;
     tenantName?: string;
@@ -21,5 +27,11 @@ declare module "next-auth/jwt" {
     person_id?: string;
     tenantKey?: string;
     tenantName?: string;
+    tenantAccesses?: {
+      tenantKey: string;
+      tenantName: string;
+      role: "ADMIN" | "USER";
+      personId: string;
+    }[];
   }
 }

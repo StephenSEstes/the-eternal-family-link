@@ -3,7 +3,7 @@ import "server-only";
 import { google, sheets_v4 } from "googleapis";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
-import type { AppRole, PersonRecord, PersonUpdateInput, UserAccessRecord } from "@/lib/google/types";
+import type { AppRole, PersonRecord, PersonUpdateInput, TenantAccess, UserAccessRecord } from "@/lib/google/types";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 
 const USER_ACCESS_TAB = "UserAccess";
@@ -18,6 +18,20 @@ export type SheetMatrix = {
 export type SheetRecord = {
   rowNumber: number;
   data: Record<string, string>;
+};
+
+export type UpsertTenantAccessInput = {
+  userEmail: string;
+  tenantKey: string;
+  tenantName: string;
+  role: AppRole;
+  personId: string;
+  isEnabled: boolean;
+};
+
+export type UpsertTenantAccessResult = {
+  action: "created" | "updated";
+  rowNumber: number;
 };
 
 function normalizeHeader(header: string) {
@@ -84,6 +98,10 @@ function setCell(row: string[], indexMap: Map<string, number>, key: string, valu
     return;
   }
   row[idx] = value;
+}
+
+function toSheetBool(value: boolean) {
+  return value ? "TRUE" : "FALSE";
 }
 
 function normalizeTenantKey(tenantKey?: string) {
@@ -469,13 +487,31 @@ export function peopleFromMatrix(matrix: SheetMatrix): PersonRecord[] {
 }
 
 export async function getEnabledUserAccess(email: string): Promise<UserAccessRecord | null> {
+  const entries = await getEnabledUserAccessList(email);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const primary = entries[0];
+  return {
+    userEmail: email.trim().toLowerCase(),
+    isEnabled: true,
+    role: primary.role,
+    personId: primary.personId,
+    tenantKey: primary.tenantKey,
+    tenantName: primary.tenantName,
+  };
+}
+
+export async function getEnabledUserAccessList(email: string): Promise<TenantAccess[]> {
   const { headers, rows } = await readTab(USER_ACCESS_TAB);
   if (headers.length === 0) {
-    return null;
+    return [];
   }
 
   const idx = buildHeaderIndex(headers);
   const target = email.trim().toLowerCase();
+  const tenantMap = new Map<string, TenantAccess>();
 
   for (const row of rows) {
     const userEmail = getCell(row, idx, "user_email").trim().toLowerCase();
@@ -484,18 +520,99 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
     if (userEmail === target && isEnabled) {
       const tenantKey = getCell(row, idx, "tenant_key").trim() || DEFAULT_TENANT_KEY;
       const tenantName = getCell(row, idx, "tenant_name").trim() || DEFAULT_TENANT_NAME;
-      return {
-        userEmail,
-        isEnabled,
-        role: toRole(getCell(row, idx, "role")),
-        personId: getCell(row, idx, "person_id"),
+      tenantMap.set(tenantKey, {
         tenantKey,
         tenantName,
-      };
+        role: toRole(getCell(row, idx, "role")),
+        personId: getCell(row, idx, "person_id"),
+      });
     }
   }
 
-  return null;
+  return Array.from(tenantMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+}
+
+export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promise<UpsertTenantAccessResult> {
+  const matrix = await readTab(USER_ACCESS_TAB);
+  if (matrix.headers.length === 0) {
+    throw new Error("UserAccess tab has no header row.");
+  }
+
+  const idx = buildHeaderIndex(matrix.headers);
+  if (!idx.has("user_email")) {
+    throw new Error("UserAccess tab missing required 'user_email' column.");
+  }
+
+  const normalizedEmail = input.userEmail.trim().toLowerCase();
+  const normalizedTenantKey = input.tenantKey.trim().toLowerCase() || DEFAULT_TENANT_KEY;
+  const tenantKeyColumnExists = idx.has("tenant_key");
+
+  const rowIndex = matrix.rows.findIndex((row) => {
+    const rowEmail = getCell(row, idx, "user_email").trim().toLowerCase();
+    if (rowEmail !== normalizedEmail) {
+      return false;
+    }
+
+    if (!tenantKeyColumnExists) {
+      return true;
+    }
+
+    const rowTenantKey = getCell(row, idx, "tenant_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+    return rowTenantKey === normalizedTenantKey;
+  });
+
+  const values = {
+    user_email: normalizedEmail,
+    is_enabled: toSheetBool(input.isEnabled),
+    role: input.role,
+    person_id: input.personId,
+    tenant_key: normalizedTenantKey,
+    tenant_name: input.tenantName.trim() || DEFAULT_TENANT_NAME,
+  };
+
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+
+  if (rowIndex >= 0) {
+    const mutableRow = Array.from({ length: matrix.headers.length }, (_, i) => matrix.rows[rowIndex][i] ?? "");
+    setCell(mutableRow, idx, "user_email", values.user_email);
+    setCell(mutableRow, idx, "is_enabled", values.is_enabled);
+    setCell(mutableRow, idx, "role", values.role);
+    setCell(mutableRow, idx, "person_id", values.person_id);
+    setCell(mutableRow, idx, "tenant_key", values.tenant_key);
+    setCell(mutableRow, idx, "tenant_name", values.tenant_name);
+
+    const rowNumber = rowIndex + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.SHEET_ID,
+      range: `${USER_ACCESS_TAB}!A${rowNumber}:ZZ${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [mutableRow] },
+    });
+
+    return { action: "updated", rowNumber };
+  }
+
+  const newRow = matrix.headers.map((header) => {
+    const key = normalizeHeader(header);
+    if (key === "user_email") return values.user_email;
+    if (key === "is_enabled") return values.is_enabled;
+    if (key === "role") return values.role;
+    if (key === "person_id") return values.person_id;
+    if (key === "tenant_key") return values.tenant_key;
+    if (key === "tenant_name") return values.tenant_name;
+    return "";
+  });
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: env.SHEET_ID,
+    range: `${USER_ACCESS_TAB}!A:ZZ`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [newRow] },
+  });
+
+  return { action: "created", rowNumber: matrix.rows.length + 2 };
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
