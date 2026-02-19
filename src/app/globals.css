@@ -1,26 +1,236 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-soft: #e7edf4;
+  --text: #102038;
+  --text-muted: #44556d;
+  --line: #c2cfdd;
+  --accent: #0e4ea8;
+  --accent-strong: #0a3a7f;
+  --ok: #0f7c3b;
+  --warn: #9f2b1d;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: radial-gradient(circle at 100% 0%, #d7e8ff 0%, transparent 35%),
+    linear-gradient(180deg, #f8fbff 0%, #e8eef5 100%);
+  color: var(--text);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+main {
+  width: min(1100px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklab, var(--surface) 88%, white 12%);
+  backdrop-filter: blur(8px);
+}
+
+.app-header-inner {
+  width: min(1100px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 0.8rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.app-brand {
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+  font-weight: 800;
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pill-link {
+  padding: 0.55rem 0.9rem;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-weight: 700;
+  background: var(--surface);
+}
+
+.pill-link:hover {
+  border-color: var(--accent);
+}
+
+.section {
+  margin: 1.1rem 0 2.4rem;
+}
+
+.page-title {
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+.card {
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.tile {
+  display: block;
+  border: 3px solid var(--accent);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+  padding: 1.2rem;
+  min-height: 125px;
+}
+
+.tile strong {
+  display: block;
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  font-size: 1.5rem;
+}
+
+.tile span {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin-top: 0.3rem;
+  display: block;
+}
+
+.tile:hover {
+  border-color: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.person-card {
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  padding: 0.8rem;
+  background: var(--surface);
+}
+
+.person-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--surface-soft);
+  background: var(--surface-soft);
+}
+
+.person-card h3 {
+  margin: 0.7rem 0 0;
+  font-size: 1.1rem;
+}
+
+.label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.input,
+.textarea,
+.button {
+  width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+
+.input,
+.textarea {
+  margin-bottom: 0.9rem;
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.button {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+  border-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--accent-strong);
+}
+
+.button.secondary {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.status-ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.status-warn {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding: 0.65rem 0;
+  }
+
+  .pill-link {
+    padding: 0.5rem 0.75rem;
+  }
 }
