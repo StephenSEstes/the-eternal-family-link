@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
 import { getPeople, getTenantConfig } from "@/lib/google/sheets";
-import { verifyViewerPin } from "@/lib/security/pin";
 import { normalizeTenantRouteKey } from "@/lib/tenant/context";
 
 type TenantViewerPageProps = {
@@ -17,29 +15,8 @@ function cookieNameForTenant(tenantKey: string) {
 export default async function TenantViewerPage({ params, searchParams }: TenantViewerPageProps) {
   const { tenantKey } = await params;
   const normalizedTenantKey = normalizeTenantRouteKey(tenantKey);
-  const routeBase = `/t/${encodeURIComponent(normalizedTenantKey)}/viewer`;
   const accessCookieName = cookieNameForTenant(normalizedTenantKey);
-  const tenantConfig = await getTenantConfig(normalizedTenantKey);
-
-  async function unlockViewer(formData: FormData) {
-    "use server";
-
-    const submittedPin = String(formData.get("pin") ?? "").trim();
-    if (!verifyViewerPin(submittedPin, tenantConfig.viewerPinHash)) {
-      redirect(`${routeBase}?error=1`);
-    }
-
-    const cookieStore = await cookies();
-    cookieStore.set(accessCookieName, "granted", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30,
-      path: "/",
-    });
-
-    redirect(routeBase);
-  }
+  await getTenantConfig(normalizedTenantKey);
 
   const paramsObj = await searchParams;
   const cookieStore = await cookies();
@@ -53,7 +30,7 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
             Family Viewer
           </h1>
           <p className="page-subtitle">Tenant: {normalizedTenantKey}</p>
-          <form action={unlockViewer}>
+          <form method="POST" action={`/api/t/${encodeURIComponent(normalizedTenantKey)}/viewer/unlock`}>
             <label className="label" htmlFor="pin">
               PIN
             </label>
