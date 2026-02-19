@@ -286,6 +286,66 @@ main {
   align-items: start;
 }
 
+.tree-graph-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+  overflow: hidden;
+}
+
+.tree-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tree-line {
+  stroke: color-mix(in oklab, var(--accent) 65%, #fff 35%);
+  stroke-width: 2;
+}
+
+.tree-line-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  text-anchor: middle;
+}
+
+.tree-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 92px;
+  max-width: 130px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.15;
+  padding: 0.45rem 0.55rem;
+}
+
+.games-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.game-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.tap-button {
+  min-height: 44px;
+}
+
 @media (max-width: 768px) {
   .app-header-inner {
     padding: 0.65rem 0;
@@ -310,5 +370,9 @@ main {
 
   .profile-layout {
     grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  }
+
+  .game-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

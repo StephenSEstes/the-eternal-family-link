@@ -50,3 +50,18 @@ export type TenantConfig = {
   viewerPinHash: string;
   photosFolderId: string;
 };
+
+export type RelationshipRecord = {
+  id: string;
+  tenantKey: string;
+  fromPersonId: string;
+  toPersonId: string;
+  relationshipType: string;
+};
+
+export type FamilyUnitRecord = {
+  id: string;
+  tenantKey: string;
+  partner1PersonId: string;
+  partner2PersonId: string;
+};
