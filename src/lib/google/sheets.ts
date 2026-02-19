@@ -1,16 +1,21 @@
 import "server-only";
 
-import { google } from "googleapis";
+import { google, sheets_v4 } from "googleapis";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
 import type { AppRole, PersonRecord, PersonUpdateInput, UserAccessRecord } from "@/lib/google/types";
 
 const USER_ACCESS_TAB = "UserAccess";
-const PEOPLE_TAB = "People";
+export const PEOPLE_TAB = "People";
 
-type SheetMatrix = {
+export type SheetMatrix = {
   headers: string[];
   rows: string[][];
+};
+
+export type SheetRecord = {
+  rowNumber: number;
+  data: Record<string, string>;
 };
 
 function normalizeHeader(header: string) {
@@ -49,6 +54,20 @@ function buildHeaderIndex(headers: string[]) {
   return map;
 }
 
+function toRecord(headers: string[], row: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((header, idx) => {
+    out[header] = row[idx] ?? "";
+  });
+  return out;
+}
+
+function headerKeyMap(headers: string[]) {
+  const map = new Map<string, string>();
+  headers.forEach((header) => map.set(normalizeHeader(header), header));
+  return map;
+}
+
 function getCell(row: string[], indexMap: Map<string, number>, key: string) {
   const idx = indexMap.get(normalizeHeader(key));
   if (idx === undefined) {
@@ -65,18 +84,85 @@ function setCell(row: string[], indexMap: Map<string, number>, key: string, valu
   row[idx] = value;
 }
 
-async function getSheetsClient() {
+export async function createSheetsClient(): Promise<sheets_v4.Sheets> {
   const auth = getServiceAccountAuth();
   return google.sheets({ version: "v4", auth });
 }
 
-async function readTab(tabName: string): Promise<SheetMatrix> {
-  const sheets = await getSheetsClient();
+async function withAbortTimeout<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("google-timeout"), timeoutMs);
+
+  try {
+    return await run(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function lookupTab(
+  sheets: sheets_v4.Sheets,
+  tabName: string,
+  timeoutMs = 3000,
+): Promise<boolean> {
   const env = getEnv();
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.SHEET_ID,
-    range: `${tabName}!A1:ZZ`,
-  });
+  const result = await withAbortTimeout(timeoutMs, (signal) =>
+    sheets.spreadsheets.get(
+      {
+        spreadsheetId: env.SHEET_ID,
+        fields: "sheets.properties.title",
+      },
+      { signal },
+    ),
+  );
+
+  const tabs =
+    result.data.sheets
+      ?.map((sheet) => sheet.properties?.title?.trim().toLowerCase())
+      .filter((title): title is string => Boolean(title)) ?? [];
+
+  return tabs.includes(tabName.trim().toLowerCase());
+}
+
+export async function listTabs(timeoutMs = 3000): Promise<string[]> {
+  const env = getEnv();
+  const sheets = await createSheetsClient();
+  const result = await withAbortTimeout(timeoutMs, (signal) =>
+    sheets.spreadsheets.get(
+      {
+        spreadsheetId: env.SHEET_ID,
+        fields: "sheets.properties.title",
+      },
+      { signal },
+    ),
+  );
+
+  return (
+    result.data.sheets
+      ?.map((sheet) => sheet.properties?.title ?? "")
+      .map((title) => title.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+export async function readTabWithClient(
+  sheets: sheets_v4.Sheets,
+  tabName: string,
+  timeoutMs = 5000,
+): Promise<SheetMatrix> {
+  const env = getEnv();
+  const result = await withAbortTimeout(timeoutMs, (signal) =>
+    sheets.spreadsheets.values.get(
+      {
+        spreadsheetId: env.SHEET_ID,
+        range: `${tabName}!A1:ZZ`,
+      },
+      { signal },
+    ),
+  );
 
   const matrix = (result.data.values ?? []) as string[][];
   if (matrix.length === 0) {
@@ -85,6 +171,204 @@ async function readTab(tabName: string): Promise<SheetMatrix> {
 
   const [headers, ...rows] = matrix;
   return { headers, rows };
+}
+
+function resolveIdColumn(headers: string[], idColumn?: string): string | null {
+  const exactMap = headerKeyMap(headers);
+  if (idColumn) {
+    return exactMap.get(normalizeHeader(idColumn)) ?? null;
+  }
+
+  const fallbacks = ["id", "person_id", "record_id", "user_email"];
+  for (const fallback of fallbacks) {
+    const match = exactMap.get(fallback);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+export function matrixToRecords(matrix: SheetMatrix): SheetRecord[] {
+  return matrix.rows.map((row, idx) => ({
+    rowNumber: idx + 2,
+    data: toRecord(matrix.headers, row),
+  }));
+}
+
+export async function getTableRecords(tabName: string): Promise<SheetRecord[]> {
+  const matrix = await readTab(tabName);
+  return matrixToRecords(matrix);
+}
+
+export async function getTableRecordById(
+  tabName: string,
+  recordId: string,
+  idColumn?: string,
+): Promise<SheetRecord | null> {
+  const matrix = await readTab(tabName);
+  if (matrix.headers.length === 0) {
+    return null;
+  }
+
+  const effectiveIdColumn = resolveIdColumn(matrix.headers, idColumn);
+  if (!effectiveIdColumn) {
+    throw new Error("No id column found. Provide idColumn query parameter.");
+  }
+
+  const records = matrixToRecords(matrix);
+  return records.find((record) => (record.data[effectiveIdColumn] ?? "") === recordId) ?? null;
+}
+
+export async function createTableRecord(
+  tabName: string,
+  payload: Record<string, string>,
+): Promise<SheetRecord> {
+  const matrix = await readTab(tabName);
+  if (matrix.headers.length === 0) {
+    throw new Error("Tab has no header row.");
+  }
+
+  const canonicalHeaders = headerKeyMap(matrix.headers);
+  const normalizedPayload: Record<string, string> = {};
+
+  Object.entries(payload).forEach(([key, value]) => {
+    const canonical = canonicalHeaders.get(normalizeHeader(key));
+    if (canonical) {
+      normalizedPayload[canonical] = value;
+    }
+  });
+
+  const row = matrix.headers.map((header) => normalizedPayload[header] ?? "");
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: env.SHEET_ID,
+    range: `${tabName}!A:ZZ`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  });
+
+  const refreshed = await readTab(tabName);
+  const createdData = toRecord(refreshed.headers, row);
+  return {
+    rowNumber: refreshed.rows.length + 1,
+    data: createdData,
+  };
+}
+
+export async function updateTableRecordById(
+  tabName: string,
+  recordId: string,
+  payload: Record<string, string>,
+  idColumn?: string,
+): Promise<SheetRecord | null> {
+  const matrix = await readTab(tabName);
+  if (matrix.headers.length === 0) {
+    return null;
+  }
+
+  const effectiveIdColumn = resolveIdColumn(matrix.headers, idColumn);
+  if (!effectiveIdColumn) {
+    throw new Error("No id column found. Provide idColumn query parameter.");
+  }
+
+  const idIndex = matrix.headers.findIndex((header) => normalizeHeader(header) === normalizeHeader(effectiveIdColumn));
+  const rowIndex = matrix.rows.findIndex((row) => (row[idIndex] ?? "") === recordId);
+  if (rowIndex < 0) {
+    return null;
+  }
+
+  const canonicalHeaders = headerKeyMap(matrix.headers);
+  const existing = Array.from({ length: matrix.headers.length }, (_, i) => matrix.rows[rowIndex][i] ?? "");
+  Object.entries(payload).forEach(([key, value]) => {
+    const canonical = canonicalHeaders.get(normalizeHeader(key));
+    if (!canonical) {
+      return;
+    }
+    const idx = matrix.headers.findIndex((header) => header === canonical);
+    if (idx >= 0) {
+      existing[idx] = value;
+    }
+  });
+
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+  const rowNumber = rowIndex + 2;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.SHEET_ID,
+    range: `${tabName}!A${rowNumber}:ZZ${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [existing] },
+  });
+
+  return {
+    rowNumber,
+    data: toRecord(matrix.headers, existing),
+  };
+}
+
+export async function deleteTableRecordById(
+  tabName: string,
+  recordId: string,
+  idColumn?: string,
+): Promise<boolean> {
+  const matrix = await readTab(tabName);
+  if (matrix.headers.length === 0) {
+    return false;
+  }
+
+  const effectiveIdColumn = resolveIdColumn(matrix.headers, idColumn);
+  if (!effectiveIdColumn) {
+    throw new Error("No id column found. Provide idColumn query parameter.");
+  }
+
+  const idIndex = matrix.headers.findIndex((header) => normalizeHeader(header) === normalizeHeader(effectiveIdColumn));
+  const rowIndex = matrix.rows.findIndex((row) => (row[idIndex] ?? "") === recordId);
+  if (rowIndex < 0) {
+    return false;
+  }
+
+  const env = getEnv();
+  const sheets = await createSheetsClient();
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: env.SHEET_ID,
+    fields: "sheets.properties.sheetId,sheets.properties.title",
+  });
+  const sheet = metadata.data.sheets?.find(
+    (item) => item.properties?.title?.trim().toLowerCase() === tabName.trim().toLowerCase(),
+  );
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined) {
+    throw new Error("Sheet not found.");
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: env.SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex + 1,
+              endIndex: rowIndex + 2,
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  return true;
+}
+
+async function readTab(tabName: string): Promise<SheetMatrix> {
+  const sheets = await createSheetsClient();
+  return readTabWithClient(sheets, tabName);
 }
 
 function rowToPerson(headers: string[], row: string[]): PersonRecord {
@@ -101,6 +385,17 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
       parseBool(getCell(row, idx, "is_pinned")) || parseBool(getCell(row, idx, "is_pinned_viewer")),
     relationships: toList(getCell(row, idx, "relationships")),
   };
+}
+
+export function peopleFromMatrix(matrix: SheetMatrix): PersonRecord[] {
+  if (matrix.headers.length === 0) {
+    return [];
+  }
+
+  return matrix.rows
+    .map((row) => rowToPerson(matrix.headers, row))
+    .filter((person) => person.personId)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
 export async function getEnabledUserAccess(email: string): Promise<UserAccessRecord | null> {
@@ -130,15 +425,8 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
 }
 
 export async function getPeople(): Promise<PersonRecord[]> {
-  const { headers, rows } = await readTab(PEOPLE_TAB);
-  if (headers.length === 0) {
-    return [];
-  }
-
-  return rows
-    .map((row) => rowToPerson(headers, row))
-    .filter((person) => person.personId)
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const matrix = await readTab(PEOPLE_TAB);
+  return peopleFromMatrix(matrix);
 }
 
 export async function getPersonById(personId: string): Promise<PersonRecord | null> {
@@ -166,7 +454,7 @@ export async function updatePerson(personId: string, updates: PersonUpdateInput)
   setCell(mutableRow, idx, "hobbies", updates.hobbies);
   setCell(mutableRow, idx, "notes", updates.notes);
 
-  const sheets = await getSheetsClient();
+  const sheets = await createSheetsClient();
   const env = getEnv();
   const sheetRowNumber = rowIndex + 2;
 
