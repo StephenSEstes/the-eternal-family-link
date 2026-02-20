@@ -69,6 +69,27 @@ export type TenantConfig = {
   photosFolderId: string;
 };
 
+export type TenantSecurityPolicy = {
+  tenantKey: string;
+  minLength: number;
+  requireNumber: boolean;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  lockoutAttempts: number;
+};
+
+export type LocalUserRecord = {
+  tenantKey: string;
+  username: string;
+  passwordHash: string;
+  role: AppRole;
+  personId: string;
+  isEnabled: boolean;
+  failedAttempts: number;
+  lockedUntil: string;
+  mustChangePassword: boolean;
+};
+
 export type RelationshipRecord = {
   id: string;
   tenantKey: string;

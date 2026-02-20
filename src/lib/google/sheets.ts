@@ -54,6 +54,26 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "visibility",
     "notes",
   ],
+  LocalUsers: [
+    "tenant_key",
+    "username",
+    "password_hash",
+    "role",
+    "person_id",
+    "is_enabled",
+    "failed_attempts",
+    "locked_until",
+    "must_change_password",
+  ],
+  TenantSecurityPolicy: [
+    "tenant_key",
+    "id",
+    "min_length",
+    "require_number",
+    "require_uppercase",
+    "require_lowercase",
+    "lockout_attempts",
+  ],
 };
 
 export type SheetMatrix = {
