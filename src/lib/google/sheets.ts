@@ -956,6 +956,7 @@ export async function updatePerson(
 
   const mutableRow = Array.from({ length: headers.length }, (_, i) => rows[rowIndex][i] ?? "");
   setCell(mutableRow, idx, "display_name", updates.display_name);
+  setCell(mutableRow, idx, "birth_date", updates.birth_date);
   setCell(mutableRow, idx, "phones", updates.phones);
   setCell(mutableRow, idx, "address", updates.address);
   setCell(mutableRow, idx, "hobbies", updates.hobbies);

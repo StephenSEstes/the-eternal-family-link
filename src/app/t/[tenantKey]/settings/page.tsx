@@ -34,6 +34,12 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
         <p className="page-subtitle">Administer tenant users and import data.</p>
         <SettingsClient
           tenantKey={tenant.tenantKey}
+          tenantName={tenant.tenantName}
+          tenantOptions={tenant.tenants.map((option) => ({
+            tenantKey: option.tenantKey,
+            tenantName: option.tenantName,
+            role: option.role,
+          }))}
           accessItems={accessItems.map((item) => ({
             userEmail: item.userEmail,
             role: item.role,

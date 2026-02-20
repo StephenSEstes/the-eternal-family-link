@@ -140,6 +140,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   }
 
   const familyUnits = await getTableRecords("FamilyUnits", normalizedTenantKey);
+  const spouseConflict = spouseId
+    ? familyUnits.find((row) => {
+        const partner1 = readField(row.data, "partner1_person_id");
+        const partner2 = readField(row.data, "partner2_person_id");
+        const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+        if (rowTenantKey !== normalizedTenantKey) {
+          return false;
+        }
+        if (partner1 !== spouseId && partner2 !== spouseId) {
+          return false;
+        }
+        return partner1 !== parsed.data.personId && partner2 !== parsed.data.personId;
+      })
+    : null;
+
+  if (spouseConflict) {
+    const partner1 = readField(spouseConflict.data, "partner1_person_id");
+    const partner2 = readField(spouseConflict.data, "partner2_person_id");
+    const otherPartner = partner1 === spouseId ? partner2 : partner1;
+    return NextResponse.json(
+      {
+        error: "spouse_unavailable",
+        spouseId,
+        currentSpouseId: otherPartner || null,
+      },
+      { status: 409 },
+    );
+  }
+
   for (const row of familyUnits) {
     const unitId = readField(row.data, "family_unit_id");
     const partner1 = readField(row.data, "partner1_person_id");

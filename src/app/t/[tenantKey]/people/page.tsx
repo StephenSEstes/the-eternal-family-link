@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AddPersonCard } from "@/components/AddPersonCard";
 import { AppHeader } from "@/components/AppHeader";
 import { requireTenantSession } from "@/lib/auth/session";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
@@ -21,6 +22,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
       <main className="section">
         <h1 className="page-title">People</h1>
         <p className="page-subtitle">Family members and key details.</p>
+        <AddPersonCard tenantKey={tenant.tenantKey} canManage={tenant.role === "ADMIN"} />
 
         <section className="people-grid">
           {people.map((person) => (

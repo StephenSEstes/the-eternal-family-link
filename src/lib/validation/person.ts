@@ -8,6 +8,7 @@ const textField = z
 export const personUpdateSchema = z
   .object({
     display_name: z.string().trim().min(1, "Display name is required").max(140),
+    birth_date: z.string().trim().max(64),
     phones: textField,
     address: textField,
     hobbies: textField,

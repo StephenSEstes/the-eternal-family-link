@@ -3,8 +3,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { requireTenantSession } from "@/lib/auth/session";
+import { getFamilyUnits, getRelationships } from "@/lib/google/family";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import { getPersonAttributes, getPersonById } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes, getPersonById } from "@/lib/google/sheets";
 
 type TenantPersonPageProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
@@ -13,18 +14,34 @@ type TenantPersonPageProps = {
 export default async function TenantPersonPage({ params }: TenantPersonPageProps) {
   const { personId } = await params;
   const { session, tenant } = await requireTenantSession();
-  const person = await getPersonById(personId, tenant.tenantKey);
+  const [person, people, relationships, familyUnits, initialAttributes] = await Promise.all([
+    getPersonById(personId, tenant.tenantKey),
+    getPeople(tenant.tenantKey),
+    getRelationships(tenant.tenantKey),
+    getFamilyUnits(tenant.tenantKey),
+    getPersonAttributes(tenant.tenantKey, personId),
+  ]);
 
   if (!person) {
     notFound();
   }
 
   const canEdit = canEditPerson(session, person.personId, tenant);
-  const attributes = await getPersonAttributes(tenant.tenantKey, person.personId);
-  const photoAttributes = attributes.filter((item) => item.attributeType === "photo");
+  const photoAttributes = initialAttributes.filter((item) => item.attributeType === "photo");
   const primaryPhoto = photoAttributes.find((item) => item.isPrimary)?.valueText || photoAttributes[0]?.valueText || "";
   const displayPhoto = primaryPhoto || person.photoFileId;
-  const nonPhotoAttributes = attributes.filter((item) => item.attributeType !== "photo");
+  const initialParentIds = relationships
+    .filter((edge) => edge.relationshipType.toLowerCase() === "parent" && edge.toPersonId === person.personId)
+    .map((edge) => edge.fromPersonId);
+  const marriedToByPersonId = familyUnits.reduce<Record<string, string>>((acc, unit) => {
+    acc[unit.partner1PersonId] = unit.partner2PersonId;
+    acc[unit.partner2PersonId] = unit.partner1PersonId;
+    return acc;
+  }, {});
+  const initialSpouseId =
+    familyUnits.find((unit) => unit.partner1PersonId === person.personId)?.partner2PersonId ??
+    familyUnits.find((unit) => unit.partner2PersonId === person.personId)?.partner1PersonId ??
+    "";
 
   return (
     <>
@@ -55,27 +72,18 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
             ) : null}
           </section>
 
-          <div className="games-stack">
-            <ProfileEditor person={person} canEdit={canEdit} />
-            {nonPhotoAttributes.length > 0 ? (
-              <section className="card">
-                <h3 style={{ marginTop: 0 }}>Person Attributes</h3>
-                <div className="settings-attr-list">
-                  {nonPhotoAttributes.map((item) => (
-                    <div key={item.attributeId} className="settings-attr-row">
-                      <div>
-                        <strong>{item.attributeType}</strong>: {item.valueText}
-                        <div className="settings-attr-meta">
-                          {item.label ? `label: ${item.label} | ` : ""}
-                          visibility: {item.visibility}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </div>
+          <ProfileEditor
+            person={person}
+            tenantKey={tenant.tenantKey}
+            people={people.map((item) => ({ personId: item.personId, displayName: item.displayName }))}
+            marriedToByPersonId={marriedToByPersonId}
+            initialParentIds={initialParentIds}
+            initialSpouseId={initialSpouseId}
+            initialAttributes={initialAttributes}
+            tenantOptions={tenant.tenants.map((option) => ({ tenantKey: option.tenantKey, tenantName: option.tenantName }))}
+            canManagePermissions={tenant.role === "ADMIN"}
+            canEdit={canEdit}
+          />
         </div>
       </main>
     </>

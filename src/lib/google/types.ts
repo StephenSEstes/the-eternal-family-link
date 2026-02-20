@@ -31,6 +31,7 @@ export type PersonRecord = {
 
 export type PersonUpdateInput = {
   display_name: string;
+  birth_date: string;
   phones: string;
   address: string;
   hobbies: string;
