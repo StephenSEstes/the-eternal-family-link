@@ -63,6 +63,8 @@ export function ProfileEditor({
   const [attributeStatus, setAttributeStatus] = useState("");
   const [newPhotoFileId, setNewPhotoFileId] = useState("");
   const [newPhotoLabel, setNewPhotoLabel] = useState("gallery");
+  const [newPhotoUpload, setNewPhotoUpload] = useState<File | null>(null);
+  const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
   const [photoStatus, setPhotoStatus] = useState("");
   const [permissionTenantKey, setPermissionTenantKey] = useState(tenantKey);
   const [permissionEmail, setPermissionEmail] = useState("");
@@ -232,6 +234,36 @@ export function ProfileEditor({
     setPhotoStatus("Photo saved.");
     setNewPhotoFileId("");
     setNewPhotoLabel("gallery");
+    await refreshAttributes();
+  };
+
+  const uploadPhoto = async () => {
+    if (!newPhotoUpload) {
+      setPhotoStatus("Choose a file first.");
+      return;
+    }
+    setPhotoStatus("Uploading photo...");
+    const formData = new FormData();
+    formData.set("file", newPhotoUpload);
+    formData.set("label", newPhotoLabel);
+    formData.set("isHeadshot", newPhotoHeadshot ? "true" : "false");
+    const response = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`,
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      setPhotoStatus(`Upload failed: ${response.status} ${JSON.stringify(body)}`);
+      return;
+    }
+    setPhotoStatus("Photo uploaded.");
+    setNewPhotoUpload(null);
+    setNewPhotoFileId("");
+    setNewPhotoLabel("gallery");
+    setNewPhotoHeadshot(false);
     await refreshAttributes();
   };
 
@@ -541,6 +573,25 @@ export function ProfileEditor({
           <p className="page-subtitle">Manage photo IDs for this person. Mark one as headshot.</p>
           {canEdit ? (
             <>
+              <label className="label">Upload Photo File</label>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(event) => setNewPhotoUpload(event.target.files?.[0] ?? null)}
+              />
+              <label className="label">
+                <input
+                  type="checkbox"
+                  checked={newPhotoHeadshot}
+                  onChange={(event) => setNewPhotoHeadshot(event.target.checked)}
+                />{" "}
+                Mark uploaded photo as headshot
+              </label>
+              <button type="button" className="button tap-button" onClick={uploadPhoto}>
+                Upload Photo
+              </button>
+              <hr style={{ border: "none", borderTop: "1px solid var(--line)", margin: "0.8rem 0" }} />
               <label className="label">New Photo File ID</label>
               <input
                 className="input"

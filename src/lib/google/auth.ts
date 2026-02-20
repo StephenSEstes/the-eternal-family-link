@@ -24,7 +24,7 @@ export function getServiceAccountAuth() {
     key: privateKey,
     scopes: [
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/drive",
     ],
   });
 

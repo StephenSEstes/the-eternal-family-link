@@ -2,7 +2,8 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-import { upsertTenantAccess } from "@/lib/google/sheets";
+import { ensureTenantPhotosFolder } from "@/lib/google/drive";
+import { ensureTenantScaffold, upsertTenantAccess } from "@/lib/google/sheets";
 import { getRequestTenantContext } from "@/lib/tenant/context";
 
 const payloadSchema = z.object({
@@ -40,5 +41,12 @@ export async function POST(request: Request) {
     isEnabled: parsed.data.isEnabled,
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  const photosFolderId = await ensureTenantPhotosFolder(parsed.data.tenantKey, parsed.data.tenantName);
+  await ensureTenantScaffold({
+    tenantKey: parsed.data.tenantKey,
+    tenantName: parsed.data.tenantName,
+    photosFolderId,
+  });
+
+  return NextResponse.json({ ok: true, photosFolderId, ...result });
 }

@@ -22,6 +22,39 @@ const IMPORTANT_DATES_TAB = "ImportantDates";
 export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
 const TENANT_CONFIG_TAB = "TenantConfig";
 const TENANT_TAB_DELIMITER = "__";
+const TENANT_TABLE_HEADERS: Record<string, string[]> = {
+  People: [
+    "tenant_key",
+    "person_id",
+    "display_name",
+    "birth_date",
+    "phones",
+    "address",
+    "hobbies",
+    "notes",
+    "photo_file_id",
+    "is_pinned",
+    "relationships",
+  ],
+  Relationships: ["tenant_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
+  FamilyUnits: ["tenant_key", "family_unit_id", "partner1_person_id", "partner2_person_id"],
+  ImportantDates: ["tenant_key", "id", "date", "title", "description", "person_id"],
+  PersonAttributes: [
+    "tenant_key",
+    "attribute_id",
+    "person_id",
+    "attribute_type",
+    "value_text",
+    "value_json",
+    "label",
+    "is_primary",
+    "sort_order",
+    "start_date",
+    "end_date",
+    "visibility",
+    "notes",
+  ],
+};
 
 export type SheetMatrix = {
   headers: string[];
@@ -132,6 +165,14 @@ function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
   return [`${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`, tabName];
 }
 
+function buildTenantScopedTabName(tabName: string, tenantKey?: string) {
+  const cleanKey = normalizeTenantKey(tenantKey);
+  if (cleanKey === DEFAULT_TENANT_KEY) {
+    return tabName;
+  }
+  return `${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`;
+}
+
 function defaultTenantConfig(tenantKey?: string): TenantConfig {
   const env = getEnv();
   const normalizedKey = normalizeTenantKey(tenantKey);
@@ -232,6 +273,65 @@ export async function listTabs(timeoutMs = 3000): Promise<string[]> {
       .map((title) => title.trim())
       .filter(Boolean) ?? []
   );
+}
+
+async function ensureTabWithHeaders(sheets: sheets_v4.Sheets, tabName: string, headers: string[]) {
+  const env = getEnv();
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: env.SHEET_ID,
+    fields: "sheets.properties.title",
+  });
+  const existing =
+    metadata.data.sheets
+      ?.map((sheet) => sheet.properties?.title ?? "")
+      .map((title) => title.trim().toLowerCase())
+      .filter(Boolean) ?? [];
+
+  if (!existing.includes(tabName.trim().toLowerCase())) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: env.SHEET_ID,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: tabName } } }],
+      },
+    });
+  }
+
+  const matrix = await readTabWithClient(sheets, tabName);
+  if (matrix.headers.length === 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.SHEET_ID,
+      range: `${tabName}!A1:ZZ1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers],
+      },
+    });
+  }
+}
+
+export async function ensureTenantScaffold(input: {
+  tenantKey: string;
+  tenantName: string;
+  photosFolderId: string;
+}) {
+  const normalizedTenantKey = normalizeTenantKey(input.tenantKey);
+  const sheets = await createSheetsClient();
+  for (const [tab, headers] of Object.entries(TENANT_TABLE_HEADERS)) {
+    const scopedTab = buildTenantScopedTabName(tab, normalizedTenantKey);
+    await ensureTabWithHeaders(sheets, scopedTab, headers);
+  }
+
+  const configPayload: Record<string, string> = {
+    tenant_key: normalizedTenantKey,
+    tenant_name: input.tenantName.trim() || normalizedTenantKey,
+    viewer_pin_hash: viewerPinHash(getEnv().VIEWER_PIN),
+    photos_folder_id: input.photosFolderId,
+  };
+
+  const updated = await updateTableRecordById(TENANT_CONFIG_TAB, normalizedTenantKey, configPayload, "tenant_key");
+  if (!updated) {
+    await createTableRecord(TENANT_CONFIG_TAB, configPayload);
+  }
 }
 
 async function resolveTenantTabNameWithClient(
