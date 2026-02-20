@@ -31,8 +31,13 @@ yarn-error.log*
 .pnpm-debug.log*
 dev.log
 dev.err
+m2-*.log
+m2-*.err
 crud-smoke-report.json
 scripts/
+backups/
+docs/
+handoff/
 
 # env files (can opt-in for committing if needed)
 .env*
