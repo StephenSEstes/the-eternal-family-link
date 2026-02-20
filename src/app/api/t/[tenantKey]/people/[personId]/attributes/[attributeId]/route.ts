@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { getAppSession } from "@/lib/auth/session";
 import {
   deleteTableRecordById,
   getPersonAttributes,
@@ -8,26 +7,12 @@ import {
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { assertTenantScopedValue, requireTenantAccess } from "@/lib/tenant/guard";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeItemRouteProps = {
   params: Promise<{ tenantKey: string; personId: string; attributeId: string }>;
 };
-
-async function resolveTenantSession(tenantKey: string) {
-  const session = await getAppSession();
-  if (!session?.user?.email) {
-    return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) } as const;
-  }
-
-  const normalized = normalizeTenantRouteKey(tenantKey);
-  if (!hasTenantAccess(session, normalized)) {
-    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
-  }
-
-  return { session, tenant: getTenantContext(session, normalized) } as const;
-}
 
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string, keepAttributeId: string) {
   const current = await getPersonAttributes(tenantKey, personId);
@@ -51,7 +36,7 @@ async function clearPrimaryForType(tenantKey: string, personId: string, attribut
 
 export async function PATCH(request: Request, { params }: PersonAttributeItemRouteProps) {
   const { tenantKey, personId, attributeId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }
@@ -71,6 +56,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  assertTenantScopedValue(existing.tenantKey, resolved.tenant.tenantKey);
 
   const parsed = personAttributeUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -111,7 +97,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
 
 export async function DELETE(_: Request, { params }: PersonAttributeItemRouteProps) {
   const { tenantKey, personId, attributeId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts"
   },
   "dependencies": {
     "googleapis": "^171.4.0",

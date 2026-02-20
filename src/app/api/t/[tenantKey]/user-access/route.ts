@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { getAppSession } from "@/lib/auth/session";
 import { getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/google/sheets";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { requireTenantAdmin } from "@/lib/tenant/guard";
 
 const upsertSchema = z.object({
   userEmail: z.string().email(),
@@ -12,22 +11,11 @@ const upsertSchema = z.object({
 });
 
 async function resolveAdmin(requestedTenantKey: string) {
-  const session = await getAppSession();
-  if (!session?.user?.email) {
-    return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) } as const;
+  const resolved = await requireTenantAdmin(requestedTenantKey);
+  if ("error" in resolved) {
+    return resolved;
   }
-
-  const normalizedTenantKey = normalizeTenantRouteKey(requestedTenantKey);
-  if (!hasTenantAccess(session, normalizedTenantKey)) {
-    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
-  }
-
-  const tenant = getTenantContext(session, normalizedTenantKey);
-  if (tenant.role !== "ADMIN") {
-    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
-  }
-
-  return { tenant } as const;
+  return { tenant: resolved.tenant } as const;
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ tenantKey: string }> }) {

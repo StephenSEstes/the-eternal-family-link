@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { getAppSession } from "@/lib/auth/session";
 import {
   createTableRecord,
   getPersonAttributes,
@@ -8,26 +7,12 @@ import {
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { requireTenantAccess } from "@/lib/tenant/guard";
 import { personAttributeCreateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeRouteProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
 };
-
-async function resolveTenantSession(tenantKey: string) {
-  const session = await getAppSession();
-  if (!session?.user?.email) {
-    return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) } as const;
-  }
-
-  const normalized = normalizeTenantRouteKey(tenantKey);
-  if (!hasTenantAccess(session, normalized)) {
-    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
-  }
-
-  return { session, tenant: getTenantContext(session, normalized) } as const;
-}
 
 function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
   const typeKey = attributeType.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
@@ -54,7 +39,7 @@ async function clearPrimaryForType(tenantKey: string, personId: string, attribut
 
 export async function GET(_: Request, { params }: PersonAttributeRouteProps) {
   const { tenantKey, personId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }
@@ -70,7 +55,7 @@ export async function GET(_: Request, { params }: PersonAttributeRouteProps) {
 
 export async function POST(request: Request, { params }: PersonAttributeRouteProps) {
   const { tenantKey, personId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }

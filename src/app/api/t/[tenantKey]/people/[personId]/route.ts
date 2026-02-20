@@ -1,35 +1,16 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { getAppSession } from "@/lib/auth/session";
 import { getPersonById, updatePerson } from "@/lib/google/sheets";
-import {
-  getTenantContext,
-  hasTenantAccess,
-  normalizeTenantRouteKey,
-} from "@/lib/tenant/context";
+import { requireTenantAccess } from "@/lib/tenant/guard";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type TenantPersonRouteProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
 };
 
-async function resolveTenantSession(tenantKey: string) {
-  const session = await getAppSession();
-  if (!session?.user?.email) {
-    return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) } as const;
-  }
-
-  const normalized = normalizeTenantRouteKey(tenantKey);
-  if (!hasTenantAccess(session, normalized)) {
-    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
-  }
-
-  return { session, tenant: getTenantContext(session, normalized) } as const;
-}
-
 export async function GET(_: Request, { params }: TenantPersonRouteProps) {
   const { tenantKey, personId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }
@@ -44,7 +25,7 @@ export async function GET(_: Request, { params }: TenantPersonRouteProps) {
 
 export async function POST(request: Request, { params }: TenantPersonRouteProps) {
   const { tenantKey, personId } = await params;
-  const resolved = await resolveTenantSession(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }
