@@ -525,39 +525,54 @@ export function ProfileEditor({
             placeholder="YYYY-MM-DD"
           />
 
-          <label className="label">Parent 1</label>
-          <select
-            className="input"
-            value={parent1Id}
-            onChange={(event) => onParentChange(1, event.target.value)}
-            disabled={!canEdit || isInLaw}
-          >
-            <option value="">Not set</option>
-            {parentOptions
-              .filter((option) => option.personId !== parent2Id)
-              .map((option) => (
-                <option key={option.personId} value={option.personId}>
-                  {option.displayName}
-                </option>
-              ))}
-          </select>
+          <label className="label">
+            <input
+              type="checkbox"
+              checked={isInLaw}
+              onChange={(event) => setIsInLaw(event.target.checked)}
+              disabled={!canEdit}
+            />{" "}
+            In-law (do not link parents in this family group)
+          </label>
+          {!isInLaw ? (
+            <>
+              <label className="label">Parent 1</label>
+              <select
+                className="input"
+                value={parent1Id}
+                onChange={(event) => onParentChange(1, event.target.value)}
+                disabled={!canEdit}
+              >
+                <option value="">Not set</option>
+                {parentOptions
+                  .filter((option) => option.personId !== parent2Id)
+                  .map((option) => (
+                    <option key={option.personId} value={option.personId}>
+                      {option.displayName}
+                    </option>
+                  ))}
+              </select>
 
-          <label className="label">Parent 2</label>
-          <select
-            className="input"
-            value={parent2Id}
-            onChange={(event) => onParentChange(2, event.target.value)}
-            disabled={!canEdit || isInLaw}
-          >
-            <option value="">Not set</option>
-            {parentOptions
-              .filter((option) => option.personId !== parent1Id)
-              .map((option) => (
-                <option key={option.personId} value={option.personId}>
-                  {option.displayName}
-                </option>
-              ))}
-          </select>
+              <label className="label">Parent 2</label>
+              <select
+                className="input"
+                value={parent2Id}
+                onChange={(event) => onParentChange(2, event.target.value)}
+                disabled={!canEdit}
+              >
+                <option value="">Not set</option>
+                {parentOptions
+                  .filter((option) => option.personId !== parent1Id)
+                  .map((option) => (
+                    <option key={option.personId} value={option.personId}>
+                      {option.displayName}
+                    </option>
+                  ))}
+              </select>
+            </>
+          ) : (
+            <p className="page-subtitle">Parent links are hidden while in-law is selected.</p>
+          )}
 
           <label className="label">Spouse</label>
           <select
@@ -569,20 +584,10 @@ export function ProfileEditor({
             <option value="">Not married / not set</option>
             {spouseOptions.map((option) => (
               <option key={option.personId} value={option.personId}>
-              {option.displayName}
+                {option.displayName}
               </option>
             ))}
           </select>
-          <label className="label">
-            <input
-              type="checkbox"
-              checked={isInLaw}
-              onChange={(event) => setIsInLaw(event.target.checked)}
-              disabled={!canEdit}
-            />{" "}
-            In-law (do not link parents in this family group)
-          </label>
-          {isInLaw ? <p className="page-subtitle">Parent links are disabled while in-law is selected.</p> : null}
           <p className="page-subtitle">
             Contact and personal details are managed in the Attributes tab.
           </p>

@@ -320,6 +320,12 @@ main {
   stroke-width: 2;
 }
 
+.tree-spouse-cluster {
+  fill: color-mix(in oklab, #d8e7ff 70%, #ffffff 30%);
+  stroke: color-mix(in oklab, var(--accent) 42%, #ffffff 58%);
+  stroke-width: 1.5;
+}
+
 .tree-line-label {
   font-size: 11px;
   fill: var(--text-muted);

@@ -21,48 +21,134 @@ type TreeGraphProps = {
 };
 
 export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
-  const width = 840;
-  const height = 440;
-  const cx = width / 2;
-  const cy = height / 2;
-  const radius = Math.min(width, height) * 0.33;
-
   const partnerMap = new Map<string, string>();
+  const spousePairIds = new Set<string>();
+  const parentEdges = edges.filter((edge) => edge.label.trim().toLowerCase() === "parent");
+
+  const parentIdsByChild = new Map<string, Set<string>>();
+  const childIdsByParent = new Map<string, Set<string>>();
+  nodes.forEach((node) => {
+    parentIdsByChild.set(node.personId, new Set());
+    childIdsByParent.set(node.personId, new Set());
+  });
+
+  parentEdges.forEach((edge) => {
+    parentIdsByChild.get(edge.toPersonId)?.add(edge.fromPersonId);
+    childIdsByParent.get(edge.fromPersonId)?.add(edge.toPersonId);
+  });
+
   edges.forEach((edge) => {
     if (edge.label.trim().toLowerCase() !== "family") {
       return;
     }
     partnerMap.set(edge.fromPersonId, edge.toPersonId);
     partnerMap.set(edge.toPersonId, edge.fromPersonId);
+    const pairKey = [edge.fromPersonId, edge.toPersonId].sort().join("::");
+    spousePairIds.add(pairKey);
+  });
+
+  const levels = new Map<string, number>();
+  nodes.forEach((node) => levels.set(node.personId, 0));
+
+  const queue = nodes
+    .filter((node) => (parentIdsByChild.get(node.personId)?.size ?? 0) === 0)
+    .map((node) => node.personId);
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (!currentId || visited.has(currentId)) {
+      continue;
+    }
+    visited.add(currentId);
+    const currentLevel = levels.get(currentId) ?? 0;
+    const children = Array.from(childIdsByParent.get(currentId) ?? []);
+    children.forEach((childId) => {
+      const next = Math.max(levels.get(childId) ?? 0, currentLevel + 1);
+      levels.set(childId, next);
+      queue.push(childId);
+    });
+  }
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    parentEdges.forEach((edge) => {
+      const parentLevel = levels.get(edge.fromPersonId) ?? 0;
+      const childLevel = levels.get(edge.toPersonId) ?? 0;
+      if (childLevel < parentLevel + 1) {
+        levels.set(edge.toPersonId, parentLevel + 1);
+      }
+    });
+  }
+
+  const grouped = new Map<number, PersonNode[]>();
+  nodes.forEach((node) => {
+    const level = levels.get(node.personId) ?? 0;
+    const bucket = grouped.get(level) ?? [];
+    bucket.push(node);
+    grouped.set(level, bucket);
   });
 
   const nodeMap = new Map(nodes.map((node) => [node.personId, node]));
-  const sortedNodes = [...nodes].sort((a, b) => a.displayName.localeCompare(b.displayName));
-  const ordered: PersonNode[] = [];
-  const seen = new Set<string>();
-  sortedNodes.forEach((node) => {
-    if (seen.has(node.personId)) {
-      return;
-    }
-    ordered.push(node);
-    seen.add(node.personId);
-    const partnerId = partnerMap.get(node.personId);
-    const partner = partnerId ? nodeMap.get(partnerId) : undefined;
-    if (partner && !seen.has(partner.personId)) {
-      ordered.push(partner);
-      seen.add(partner.personId);
-    }
+  const levelsSorted = Array.from(grouped.keys()).sort((a, b) => a - b);
+  const orderedByLevel = new Map<number, PersonNode[]>();
+  levelsSorted.forEach((level) => {
+    const sorted = (grouped.get(level) ?? []).slice().sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const ordered: PersonNode[] = [];
+    const seen = new Set<string>();
+    sorted.forEach((node) => {
+      if (seen.has(node.personId)) {
+        return;
+      }
+      ordered.push(node);
+      seen.add(node.personId);
+      const partnerId = partnerMap.get(node.personId);
+      const partner = partnerId ? nodeMap.get(partnerId) : undefined;
+      if (partner && (levels.get(partner.personId) ?? 0) === level && !seen.has(partner.personId)) {
+        ordered.push(partner);
+        seen.add(partner.personId);
+      }
+    });
+    orderedByLevel.set(level, ordered);
   });
 
+  const maxCols = Math.max(orderedByLevel.size > 0 ? 1 : 0, ...Array.from(orderedByLevel.values()).map((row) => row.length));
+  const rowGap = 130;
+  const colGap = 150;
+  const xPadding = 90;
+  const yPadding = 70;
+  const width = Math.max(840, xPadding * 2 + Math.max(0, maxCols - 1) * colGap);
+  const height = Math.max(440, yPadding * 2 + Math.max(0, levelsSorted.length - 1) * rowGap);
+
   const positions = new Map<string, { x: number; y: number }>();
-  ordered.forEach((node, index) => {
-    const angle = (Math.PI * 2 * index) / Math.max(nodes.length, 1) - Math.PI / 2;
-    positions.set(node.personId, { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
+  levelsSorted.forEach((level, levelIndex) => {
+    const row = orderedByLevel.get(level) ?? [];
+    const rowWidth = Math.max(0, (row.length - 1) * colGap);
+    const startX = (width - rowWidth) / 2;
+    const y = yPadding + levelIndex * rowGap;
+    row.forEach((node, index) => {
+      positions.set(node.personId, { x: startX + index * colGap, y });
+    });
   });
 
   return (
     <div className="tree-graph-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} className="tree-lines" aria-label="Family tree graph">
+        {Array.from(spousePairIds).map((pairKey) => {
+          const [leftId, rightId] = pairKey.split("::");
+          const a = positions.get(leftId);
+          const b = positions.get(rightId);
+          if (!a || !b) {
+            return null;
+          }
+
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+          const distance = Math.hypot(a.x - b.x, a.y - b.y);
+          const rx = Math.max(58, distance / 2 + 18);
+          const ry = 34;
+
+          return <ellipse key={`cluster-${pairKey}`} cx={midX} cy={midY} rx={rx} ry={ry} className="tree-spouse-cluster" />;
+        })}
         {edges.map((edge) => {
           const from = positions.get(edge.fromPersonId);
           const to = positions.get(edge.toPersonId);
@@ -71,12 +157,15 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
           }
           const midX = (from.x + to.x) / 2;
           const midY = (from.y + to.y) / 2;
+          const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
           return (
             <g key={edge.id}>
               <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
-              <text x={midX} y={midY} className="tree-line-label">
-                {edge.label}
-              </text>
+              {!isFamilyEdge ? (
+                <text x={midX} y={midY} className="tree-line-label">
+                  {edge.label}
+                </text>
+              ) : null}
             </g>
           );
         })}
