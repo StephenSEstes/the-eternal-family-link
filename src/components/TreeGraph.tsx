@@ -183,10 +183,11 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
           const midX = (from.x + to.x) / 2;
           const midY = (from.y + to.y) / 2;
           const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
+          const isParentEdge = edge.label.trim().toLowerCase() === "parent";
           return (
             <g key={edge.id}>
               <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
-              {!isFamilyEdge ? (
+              {!isFamilyEdge && !isParentEdge ? (
                 <text x={midX} y={midY} className="tree-line-label">
                   {edge.label}
                 </text>

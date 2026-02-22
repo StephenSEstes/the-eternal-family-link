@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { getTenantSecurityPolicy, patchLocalUser } from "@/lib/auth/local-users";
+import { deleteLocalUser, getTenantSecurityPolicy, patchLocalUser, renameLocalUser } from "@/lib/auth/local-users";
 import { requireTenantAdmin } from "@/lib/tenant/guard";
 import { validatePasswordComplexity } from "@/lib/security/password";
 
 const patchSchema = z
   .object({
-    action: z.enum(["set_enabled", "unlock", "reset_password", "update_role"]),
+    action: z.enum(["set_enabled", "unlock", "reset_password", "update_role", "rename_username"]),
     isEnabled: z.boolean().optional(),
     password: z.string().optional(),
     role: z.enum(["ADMIN", "USER"]).optional(),
+    nextUsername: z.string().trim().min(3).max(80).optional(),
   })
   .strict();
 
@@ -52,6 +53,21 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   }
 
+  if (parsed.data.action === "rename_username") {
+    if (!parsed.data.nextUsername) {
+      return NextResponse.json({ error: "invalid_payload", message: "nextUsername required" }, { status: 400 });
+    }
+    try {
+      await renameLocalUser(resolved.tenant.tenantKey, username, parsed.data.nextUsername);
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      return NextResponse.json(
+        { error: "rename_failed", message: error instanceof Error ? error.message : "Rename failed" },
+        { status: 400 },
+      );
+    }
+  }
+
   if (!parsed.data.password) {
     return NextResponse.json({ error: "invalid_payload", message: "password required" }, { status: 400 });
   }
@@ -66,5 +82,23 @@ export async function PATCH(
     lockedUntil: "",
     mustChangePassword: false,
   });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ tenantKey: string; username: string }> },
+) {
+  const { tenantKey, username } = await params;
+  const resolved = await requireTenantAdmin(tenantKey);
+  if ("error" in resolved) {
+    return resolved.error;
+  }
+
+  const deleted = await deleteLocalUser(resolved.tenant.tenantKey, username);
+  if (!deleted) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   return NextResponse.json({ ok: true });
 }

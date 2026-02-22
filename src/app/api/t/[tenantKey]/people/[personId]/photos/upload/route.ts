@@ -35,10 +35,11 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
   }
 
   const formData = await request.formData().catch(() => null);
-  const file = formData?.get("file");
-  if (!(file instanceof File)) {
+  const fileField = formData?.get("file");
+  if (!fileField || typeof fileField === "string" || typeof (fileField as Blob).arrayBuffer !== "function") {
     return NextResponse.json({ error: "invalid_payload", message: "file is required" }, { status: 400 });
   }
+  const file = fileField as Blob & { name?: string; type?: string };
 
   const label = String(formData?.get("label") ?? "gallery").trim() || "gallery";
   const requestedHeadshot = String(formData?.get("isHeadshot") ?? "").trim().toLowerCase() === "true";

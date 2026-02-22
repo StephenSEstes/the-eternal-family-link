@@ -247,29 +247,33 @@ export function ProfileEditor({
       setPhotoStatus("Choose a file first.");
       return;
     }
-    setPhotoStatus("Uploading photo...");
-    const formData = new FormData();
-    formData.set("file", newPhotoUpload);
-    formData.set("label", newPhotoLabel);
-    formData.set("isHeadshot", newPhotoHeadshot ? "true" : "false");
-    const response = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`,
-      {
-        method: "POST",
-        body: formData,
-      },
-    );
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      setPhotoStatus(`Upload failed: ${response.status} ${JSON.stringify(body)}`);
-      return;
+    try {
+      setPhotoStatus("Uploading photo...");
+      const formData = new FormData();
+      formData.set("file", newPhotoUpload);
+      formData.set("label", newPhotoLabel);
+      formData.set("isHeadshot", newPhotoHeadshot ? "true" : "false");
+      const response = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setPhotoStatus(`Upload failed: ${response.status} ${JSON.stringify(body)}`);
+        return;
+      }
+      setPhotoStatus("Photo uploaded.");
+      setNewPhotoUpload(null);
+      setNewPhotoFileId("");
+      setNewPhotoLabel("gallery");
+      setNewPhotoHeadshot(false);
+      await refreshAttributes();
+    } catch {
+      setPhotoStatus("Upload failed due to a network or server error.");
     }
-    setPhotoStatus("Photo uploaded.");
-    setNewPhotoUpload(null);
-    setNewPhotoFileId("");
-    setNewPhotoLabel("gallery");
-    setNewPhotoHeadshot(false);
-    await refreshAttributes();
   };
 
   const setHeadshot = async (attributeId: string) => {

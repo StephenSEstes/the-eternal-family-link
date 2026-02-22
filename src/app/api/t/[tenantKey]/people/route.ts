@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createTableRecord, getPeople } from "@/lib/google/sheets";
+import { createTableRecord, getPeople, PERSON_ATTRIBUTES_TAB } from "@/lib/google/sheets";
 import { requireTenantAccess } from "@/lib/tenant/guard";
 import { buildPersonId } from "@/lib/person/id";
 
@@ -67,6 +67,26 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       photo_file_id: "",
       is_pinned: "FALSE",
       relationships: "",
+    },
+    resolved.tenant.tenantKey,
+  );
+
+  await createTableRecord(
+    PERSON_ATTRIBUTES_TAB,
+    {
+      attribute_id: `${resolved.tenant.tenantKey}-${personId}-birthday`,
+      tenant_key: resolved.tenant.tenantKey,
+      person_id: personId,
+      attribute_type: "birthday",
+      value_text: parsed.data.birth_date,
+      value_json: "",
+      label: "Birthday",
+      is_primary: "TRUE",
+      sort_order: "0",
+      start_date: "",
+      end_date: "",
+      visibility: "family",
+      notes: "",
     },
     resolved.tenant.tenantKey,
   );

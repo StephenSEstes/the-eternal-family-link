@@ -1,5 +1,12 @@
 import type { AppRole, LocalUserRecord, TenantSecurityPolicy } from "@/lib/google/types";
-import { ensureTenantScaffold, getTableRecords, getTenantConfig, updateTableRecordById, createTableRecord } from "@/lib/google/sheets";
+import {
+  ensureTenantScaffold,
+  deleteTableRecordById,
+  getTableRecords,
+  getTenantConfig,
+  updateTableRecordById,
+  createTableRecord,
+} from "@/lib/google/sheets";
 import { hashPassword } from "@/lib/security/password";
 
 const LOCAL_USERS_TAB = "LocalUsers";
@@ -177,4 +184,31 @@ export async function patchLocalUser(
   if (patch.lockedUntil !== undefined) payload.locked_until = patch.lockedUntil;
   if (patch.mustChangePassword !== undefined) payload.must_change_password = patch.mustChangePassword ? "TRUE" : "FALSE";
   return updateTableRecordById(LOCAL_USERS_TAB, normalized, payload, "username", tenantKey);
+}
+
+export async function renameLocalUser(tenantKey: string, username: string, nextUsername: string) {
+  const current = normalizeUsername(username);
+  const next = normalizeUsername(nextUsername);
+  if (!next || next.length < 3) {
+    throw new Error("Username must be at least 3 characters.");
+  }
+  if (current === next) {
+    return;
+  }
+
+  const users = await getLocalUsers(tenantKey);
+  const existing = users.find((user) => user.username === current);
+  if (!existing) {
+    throw new Error("Local user not found.");
+  }
+  if (users.some((user) => user.username === next)) {
+    throw new Error("Target username already exists.");
+  }
+
+  await updateTableRecordById(LOCAL_USERS_TAB, current, { username: next }, "username", tenantKey);
+}
+
+export async function deleteLocalUser(tenantKey: string, username: string) {
+  const normalized = normalizeUsername(username);
+  return deleteTableRecordById(LOCAL_USERS_TAB, normalized, "username", tenantKey);
 }
