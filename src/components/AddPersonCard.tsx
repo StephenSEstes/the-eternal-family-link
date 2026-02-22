@@ -13,10 +13,6 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [phones, setPhones] = useState("");
-  const [address, setAddress] = useState("");
-  const [hobbies, setHobbies] = useState("");
-  const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -37,10 +33,6 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
       body: JSON.stringify({
         display_name: displayName,
         birth_date: birthDate,
-        phones,
-        address,
-        hobbies,
-        notes,
       }),
     });
     const body = await response.json().catch(() => null);
@@ -52,10 +44,6 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
     setStatus("Person created.");
     setDisplayName("");
     setBirthDate("");
-    setPhones("");
-    setAddress("");
-    setHobbies("");
-    setNotes("");
     setOpen(false);
     setIsSaving(false);
     router.refresh();
@@ -72,14 +60,9 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
           <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="label">Birthday (YYYY-MM-DD)</label>
           <input className="input" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-          <label className="label">Phones</label>
-          <textarea className="textarea" value={phones} onChange={(e) => setPhones(e.target.value)} />
-          <label className="label">Address</label>
-          <textarea className="textarea" value={address} onChange={(e) => setAddress(e.target.value)} />
-          <label className="label">Hobbies</label>
-          <textarea className="textarea" value={hobbies} onChange={(e) => setHobbies(e.target.value)} />
-          <label className="label">Notes</label>
-          <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+            Add details like phone, address, hobbies, and notes later as attributes.
+          </p>
           <button type="button" className="button tap-button" onClick={submit} disabled={isSaving}>
             {isSaving ? "Saving..." : "Create Person"}
           </button>

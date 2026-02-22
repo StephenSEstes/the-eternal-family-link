@@ -43,16 +43,21 @@ export function ProfileEditor({
   canManagePermissions,
   canEdit,
 }: ProfileEditorProps) {
+  const initialInLaw = useMemo(() => {
+    const marker = initialAttributes.find((item) => item.attributeType.toLowerCase() === "in_law");
+    if (!marker) {
+      return false;
+    }
+    const normalized = marker.valueText.trim().toLowerCase();
+    return normalized === "true" || normalized === "yes" || normalized === "1";
+  }, [initialAttributes]);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [displayName, setDisplayName] = useState(person.displayName);
   const [birthDate, setBirthDate] = useState(person.birthDate);
-  const [phones, setPhones] = useState(person.phones);
-  const [address, setAddress] = useState(person.address);
-  const [hobbies, setHobbies] = useState(person.hobbies);
-  const [notes, setNotes] = useState(person.notes);
   const [parent1Id, setParent1Id] = useState(initialParentIds[0] ?? "");
   const [parent2Id, setParent2Id] = useState(initialParentIds[1] ?? "");
   const [spouseId, setSpouseId] = useState(initialSpouseId);
+  const [isInLaw, setIsInLaw] = useState(initialInLaw);
   const [relationStatus, setRelationStatus] = useState("");
   const [attributeType, setAttributeType] = useState("hobby");
   const [attributeValue, setAttributeValue] = useState("");
@@ -80,12 +85,12 @@ export function ProfileEditor({
     () => ({
       display_name: displayName,
       birth_date: birthDate,
-      phones,
-      address,
-      hobbies,
-      notes,
+      phones: person.phones,
+      address: person.address,
+      hobbies: person.hobbies,
+      notes: person.notes,
     }),
-    [address, birthDate, displayName, hobbies, notes, phones],
+    [birthDate, displayName, person.address, person.hobbies, person.notes, person.phones],
   );
 
   const parentOptions = useMemo(
@@ -308,9 +313,7 @@ export function ProfileEditor({
     await refreshAttributes();
   };
 
-  const saveRelationships = async () => {
-    setRelationStatus("Saving relationships...");
-    const parentIds = Array.from(new Set([parent1Id, parent2Id].filter(Boolean)));
+  const saveRelationships = async (parentIds: string[]) => {
     const response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -319,13 +322,60 @@ export function ProfileEditor({
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       if (response.status === 409 && body?.error === "spouse_unavailable") {
-        setRelationStatus("Selected spouse is already married. Dissociate them first.");
+        return { ok: false, message: "Selected spouse is already married. Dissociate them first." };
       } else {
-        setRelationStatus(`Failed: ${response.status} ${JSON.stringify(body)}`);
+        return { ok: false, message: `Failed: ${response.status} ${JSON.stringify(body)}` };
       }
-      return;
     }
-    setRelationStatus("Relationships saved.");
+    return { ok: true, message: "Relationships saved." };
+  };
+
+  const syncInLawAttribute = async (enabled: boolean) => {
+    const current = attributes.find((item) => item.attributeType.toLowerCase() === "in_law");
+    if (enabled) {
+      if (current) {
+        const result = await saveAttributePatch(current.attributeId, {
+          valueText: "TRUE",
+          label: "in-law",
+          visibility: "family",
+        });
+        return result.ok ? { ok: true, message: "" } : { ok: false, message: result.message };
+      }
+      const response = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            attributeType: "in_law",
+            valueText: "TRUE",
+            label: "in-law",
+            visibility: "family",
+            sortOrder: 0,
+            isPrimary: false,
+          }),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        return { ok: false, message: `Failed: ${response.status} ${JSON.stringify(body)}` };
+      }
+      return { ok: true, message: "" };
+    }
+
+    if (!current) {
+      return { ok: true, message: "" };
+    }
+
+    const response = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(current.attributeId)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      const body = await response.text();
+      return { ok: false, message: `Delete failed: ${response.status} ${body.slice(0, 120)}` };
+    }
+    return { ok: true, message: "" };
   };
 
   const onParentChange = (slot: 1 | 2, value: string) => {
@@ -351,22 +401,40 @@ export function ProfileEditor({
   const handleSaveProfile = async () => {
     setIsSaving(true);
     setStatus({ type: "idle" });
+    setRelationStatus("Saving profile...");
 
     try {
-      const response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!response.ok) {
         const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(errorBody?.error ?? "Could not save profile");
       }
 
-      setStatus({ type: "success", message: "Saved successfully." });
+      const parentIds = isInLaw ? [] : Array.from(new Set([parent1Id, parent2Id].filter(Boolean)));
+      const relationResult = await saveRelationships(parentIds);
+      if (!relationResult.ok) {
+        throw new Error(relationResult.message);
+      }
+
+      const inLawResult = await syncInLawAttribute(isInLaw);
+      if (!inLawResult.ok) {
+        throw new Error(inLawResult.message);
+      }
+
+      await refreshAttributes();
+      setStatus({ type: "success", message: "Profile and relationships saved." });
+      setRelationStatus("Saved.");
     } catch (error) {
       setStatus({ type: "error", message: error instanceof Error ? error.message : "Save failed" });
+      setRelationStatus("");
     } finally {
       setIsSaving(false);
     }
@@ -462,7 +530,7 @@ export function ProfileEditor({
             className="input"
             value={parent1Id}
             onChange={(event) => onParentChange(1, event.target.value)}
-            disabled={!canEdit}
+            disabled={!canEdit || isInLaw}
           >
             <option value="">Not set</option>
             {parentOptions
@@ -479,7 +547,7 @@ export function ProfileEditor({
             className="input"
             value={parent2Id}
             onChange={(event) => onParentChange(2, event.target.value)}
-            disabled={!canEdit}
+            disabled={!canEdit || isInLaw}
           >
             <option value="">Not set</option>
             {parentOptions
@@ -501,62 +569,28 @@ export function ProfileEditor({
             <option value="">Not married / not set</option>
             {spouseOptions.map((option) => (
               <option key={option.personId} value={option.personId}>
-                {option.displayName}
+              {option.displayName}
               </option>
             ))}
           </select>
-
-          <label className="label" htmlFor="phones">
-            Phones
+          <label className="label">
+            <input
+              type="checkbox"
+              checked={isInLaw}
+              onChange={(event) => setIsInLaw(event.target.checked)}
+              disabled={!canEdit}
+            />{" "}
+            In-law (do not link parents in this family group)
           </label>
-          <textarea
-            id="phones"
-            className="textarea"
-            value={phones}
-            onChange={(event) => setPhones(event.target.value)}
-            readOnly={!canEdit}
-          />
-
-          <label className="label" htmlFor="address">
-            Address
-          </label>
-          <textarea
-            id="address"
-            className="textarea"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            readOnly={!canEdit}
-          />
-
-          <label className="label" htmlFor="hobbies">
-            Hobbies
-          </label>
-          <textarea
-            id="hobbies"
-            className="textarea"
-            value={hobbies}
-            onChange={(event) => setHobbies(event.target.value)}
-            readOnly={!canEdit}
-          />
-
-          <label className="label" htmlFor="notes">
-            Notes
-          </label>
-          <textarea
-            id="notes"
-            className="textarea"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            readOnly={!canEdit}
-          />
+          {isInLaw ? <p className="page-subtitle">Parent links are disabled while in-law is selected.</p> : null}
+          <p className="page-subtitle">
+            Contact and personal details are managed in the Attributes tab.
+          </p>
 
           {canEdit ? (
             <>
               <button type="button" className="button tap-button" disabled={isSaving} onClick={handleSaveProfile}>
                 {isSaving ? "Saving..." : "Save Profile"}
-              </button>
-              <button type="button" className="button tap-button" onClick={saveRelationships}>
-                Save Relationships
               </button>
             </>
           ) : (

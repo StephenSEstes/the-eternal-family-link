@@ -11,9 +11,25 @@ export async function AppHeader() {
   return (
     <header className="app-header">
       <div className="app-header-inner">
-        <Link href={basePath || "/"} className="app-brand">
-          The Eternal Family Link
-        </Link>
+        <div className="app-header-top">
+          <Link href={basePath || "/"} className="app-brand">
+            The Eternal Family Link
+          </Link>
+
+          <div className="app-meta">
+            <span>Family group:</span>
+            <span className="tenant-chip">{tenant.tenantName}</span>
+            <TenantSwitcher
+              activeTenantKey={tenant.tenantKey}
+              tenants={tenant.tenants.map((item) => ({
+                tenantKey: item.tenantKey,
+                tenantName: item.tenantName,
+                role: item.role,
+              }))}
+            />
+            <span>{session?.user?.email ? `${session.user.email} (${session.user.role ?? "USER"})` : "Not signed in"}</span>
+          </div>
+        </div>
 
         <nav className="app-nav">
           <Link href={basePath || "/"} className="pill-link">
@@ -40,20 +56,6 @@ export async function AppHeader() {
             Sign out
           </Link>
         </nav>
-
-        <div className="app-meta">
-          <span>Family group:</span>
-          <span className="tenant-chip">{tenant.tenantName}</span>
-          <TenantSwitcher
-            activeTenantKey={tenant.tenantKey}
-            tenants={tenant.tenants.map((item) => ({
-              tenantKey: item.tenantKey,
-              tenantName: item.tenantName,
-              role: item.role,
-            }))}
-          />
-          <span>{session?.user?.email ? `${session.user.email} (${session.user.role ?? "USER"})` : "Not signed in"}</span>
-        </div>
       </div>
     </header>
   );

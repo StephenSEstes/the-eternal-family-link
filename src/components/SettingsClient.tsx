@@ -42,6 +42,8 @@ type SettingsClientProps = {
   people: { personId: string; displayName: string }[];
 };
 
+type SettingsTab = "family_groups" | "users" | "local_security" | "import";
+
 const CSV_TEMPLATES: Record<string, string> = {
   people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
   relationships: "rel_id,from_person_id,to_person_id,rel_type\nrel-tenant-a-10,p-tenant-a-1,p-tenant-a-4,sibling",
@@ -67,6 +69,7 @@ export function SettingsClient({
   people,
 }: SettingsClientProps) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("users");
   const [selectedTenantKey, setSelectedTenantKey] = useState(tenantKey);
   const [visibleAccessItems, setVisibleAccessItems] = useState<AccessItem[]>(accessItems);
   const [userEmail, setUserEmail] = useState("");
@@ -262,7 +265,39 @@ export function SettingsClient({
 
   return (
     <div className="settings-stack">
-      <section className="card">
+      <div className="settings-chip-list">
+        <button
+          type="button"
+          className={`button secondary tap-button ${activeTab === "users" ? "game-option-selected" : ""}`}
+          onClick={() => setActiveTab("users")}
+        >
+          Users & Rights
+        </button>
+        <button
+          type="button"
+          className={`button secondary tap-button ${activeTab === "local_security" ? "game-option-selected" : ""}`}
+          onClick={() => setActiveTab("local_security")}
+        >
+          Local Login Security
+        </button>
+        <button
+          type="button"
+          className={`button secondary tap-button ${activeTab === "family_groups" ? "game-option-selected" : ""}`}
+          onClick={() => setActiveTab("family_groups")}
+        >
+          Family Groups
+        </button>
+        <button
+          type="button"
+          className={`button secondary tap-button ${activeTab === "import" ? "game-option-selected" : ""}`}
+          onClick={() => setActiveTab("import")}
+        >
+          CSV Import
+        </button>
+      </div>
+
+      {activeTab === "family_groups" ? (
+        <section className="card">
         <h2 style={{ marginTop: 0 }}>Family Groups</h2>
         <p className="page-subtitle">Current family group: {tenantName}. Create a new family group and seed first admin.</p>
         <label className="label">New Family Group Key</label>
@@ -284,9 +319,11 @@ export function SettingsClient({
           Create Family Group
         </button>
         {newTenantStatus ? <p>{newTenantStatus}</p> : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card">
+      {activeTab === "users" ? (
+        <section className="card">
         <h2 style={{ marginTop: 0 }}>Family Group Users & Rights</h2>
         <label className="label">Target Family Group</label>
         <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
@@ -327,9 +364,11 @@ export function SettingsClient({
         <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Enabled</label>
         <button type="button" className="button tap-button" onClick={upsertAccess}>Save Google User Access</button>
         {accessStatus ? <p>{accessStatus}</p> : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card">
+      {activeTab === "local_security" ? (
+        <section className="card">
         <h2 style={{ marginTop: 0 }}>Local Login Security</h2>
         <p className="page-subtitle">Configure password complexity, lockout rules, and local username/password users.</p>
         <label className="label">Minimum Password Length</label>
@@ -434,9 +473,11 @@ export function SettingsClient({
           </table>
         </div>
         {localUserStatus ? <p>{localUserStatus}</p> : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card">
+      {activeTab === "import" ? (
+        <section className="card">
         <h2 style={{ marginTop: 0 }}>CSV Import (Paste)</h2>
         <p className="page-subtitle">Initial data load into selected family group. CSV header must match exactly.</p>
         <label className="label">Target Family Group</label>
@@ -467,7 +508,8 @@ export function SettingsClient({
         <textarea className="textarea settings-csv-box" value={csv} onChange={(e) => setCsv(e.target.value)} />
         <button type="button" className="button tap-button" onClick={importCsv}>Import CSV</button>
         {importStatus ? <p>{importStatus}</p> : null}
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
