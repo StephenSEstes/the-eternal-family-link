@@ -158,10 +158,21 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
           const midX = (a.x + b.x) / 2;
           const midY = (a.y + b.y) / 2;
           const distance = Math.hypot(a.x - b.x, a.y - b.y);
-          const rx = Math.max(90, distance / 2 + NODE_HALF_WIDTH + 14);
-          const ry = NODE_HALF_HEIGHT + 16;
+          const halfWidth = Math.max(90, distance / 2 + NODE_HALF_WIDTH + 14);
+          const halfHeight = NODE_HALF_HEIGHT + 16;
 
-          return <ellipse key={`cluster-${pairKey}`} cx={midX} cy={midY} rx={rx} ry={ry} className="tree-spouse-cluster" />;
+          return (
+            <rect
+              key={`cluster-${pairKey}`}
+              x={midX - halfWidth}
+              y={midY - halfHeight}
+              width={halfWidth * 2}
+              height={halfHeight * 2}
+              rx={22}
+              ry={22}
+              className="tree-spouse-cluster"
+            />
+          );
         })}
         {edges.map((edge) => {
           const from = positions.get(edge.fromPersonId);
