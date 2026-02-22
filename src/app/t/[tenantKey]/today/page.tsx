@@ -26,7 +26,7 @@ export default async function TenantTodayPage({ params }: TenantTodayPageProps) 
         <p className="page-subtitle">{date}</p>
         <section className="card">
           <p style={{ marginTop: 0, fontSize: "1.1rem" }}>
-            Tenant: {tenant.tenantName}
+            Family group: {tenant.tenantName}
           </p>
           <h2 style={{ margin: "0.6rem 0 0.35rem" }}>Important Dates</h2>
           {items.length === 0 ? (

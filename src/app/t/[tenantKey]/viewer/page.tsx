@@ -29,7 +29,7 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
           <h1 className="page-title" style={{ fontSize: "2rem" }}>
             Family Viewer
           </h1>
-          <p className="page-subtitle">Tenant: {normalizedTenantKey}</p>
+          <p className="page-subtitle">Family group: {normalizedTenantKey}</p>
           <form method="POST" action={`/api/t/${encodeURIComponent(normalizedTenantKey)}/viewer/unlock`}>
             <label className="label" htmlFor="pin">
               PIN
@@ -61,7 +61,7 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
   return (
     <main className="section">
       <h1 className="page-title">Family Viewer</h1>
-      <p className="page-subtitle">Tenant-scoped read-only mode.</p>
+      <p className="page-subtitle">Family-group read-only mode.</p>
       <ViewerPeopleGrid
         people={pinned.length > 0 ? pinned : people.slice(0, 24)}
         tenantKey={normalizedTenantKey}

@@ -25,7 +25,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
       <AppHeader />
       <main className="section">
         <h1 className="page-title">{tenant.tenantName}</h1>
-        <p className="page-subtitle">Tenant workspace.</p>
+        <p className="page-subtitle">Family group workspace.</p>
 
         <section className="tile-grid">
           {tiles.map((tile) => (

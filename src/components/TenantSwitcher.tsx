@@ -40,7 +40,7 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
       });
 
       if (!response.ok) {
-        setError("Could not switch tenant.");
+        setError("Could not switch family group.");
         return;
       }
 
@@ -54,7 +54,7 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
         className="tenant-select"
         value={selected}
         onChange={(event) => setSelected(event.target.value)}
-        aria-label="Active tenant"
+        aria-label="Active family group"
       >
         {tenants.map((tenant) => (
           <option key={tenant.tenantKey} value={tenant.tenantKey}>
@@ -63,7 +63,7 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
         ))}
       </select>
       <button type="button" className="tenant-switch-button" onClick={handleSwitch} disabled={isPending}>
-        {isPending ? "Switching..." : "Switch"}
+        {isPending ? "Switching..." : "Open family group"}
       </button>
       {error ? <span className="status-warn">{error}</span> : null}
     </div>

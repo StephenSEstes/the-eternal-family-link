@@ -42,6 +42,7 @@ export async function AppHeader() {
         </nav>
 
         <div className="app-meta">
+          <span>Family group:</span>
           <span className="tenant-chip">{tenant.tenantName}</span>
           <TenantSwitcher
             activeTenantKey={tenant.tenantKey}

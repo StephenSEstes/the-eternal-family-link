@@ -31,7 +31,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
       <AppHeader />
       <main className="section">
         <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Administer tenant users and import data.</p>
+        <p className="page-subtitle">Administer family-group users and import data.</p>
         <SettingsClient
           tenantKey={tenant.tenantKey}
           tenantName={tenant.tenantName}

@@ -735,9 +735,9 @@ export function ProfileEditor({
       {activeTab === "permissions" && canManagePermissions ? (
         <>
           <p className="page-subtitle">
-            Grant login to this family member using their Google account email. Default tenant is current family group.
+            Grant login to this family member using their Google account email. Default family group is the current one.
           </p>
-          <label className="label">Tenant</label>
+          <label className="label">Family Group</label>
           <select
             className="input"
             value={permissionTenantKey}

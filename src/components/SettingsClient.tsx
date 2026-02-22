@@ -182,7 +182,7 @@ export function SettingsClient({
       setNewTenantStatus(`Failed: ${res.status} ${body.slice(0, 160)}`);
       return;
     }
-    setNewTenantStatus("Family group created. Switch tenant from header after session refresh.");
+    setNewTenantStatus("Family group created. Switch family group from header after session refresh.");
     router.refresh();
   };
 
@@ -263,11 +263,11 @@ export function SettingsClient({
   return (
     <div className="settings-stack">
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>Family Groups (Tenants)</h2>
-        <p className="page-subtitle">Current tenant: {tenantName}. Create a new family group and seed first admin.</p>
-        <label className="label">New Tenant Key</label>
+        <h2 style={{ marginTop: 0 }}>Family Groups</h2>
+        <p className="page-subtitle">Current family group: {tenantName}. Create a new family group and seed first admin.</p>
+        <label className="label">New Family Group Key</label>
         <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="smith-family" />
-        <label className="label">New Tenant Name</label>
+        <label className="label">New Family Group Name</label>
         <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
         <label className="label">First Admin Email</label>
         <input className="input" value={newTenantAdminEmail} onChange={(e) => setNewTenantAdminEmail(e.target.value)} />
@@ -287,8 +287,8 @@ export function SettingsClient({
       </section>
 
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>Tenant Users & Rights</h2>
-        <label className="label">Target Tenant</label>
+        <h2 style={{ marginTop: 0 }}>Family Group Users & Rights</h2>
+        <label className="label">Target Family Group</label>
         <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
           {tenantOptions.map((option) => (
             <option key={option.tenantKey} value={option.tenantKey}>
@@ -438,8 +438,8 @@ export function SettingsClient({
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>CSV Import (Paste)</h2>
-        <p className="page-subtitle">Initial data load into selected tenant. CSV header must match exactly.</p>
-        <label className="label">Target Tenant</label>
+        <p className="page-subtitle">Initial data load into selected family group. CSV header must match exactly.</p>
+        <label className="label">Target Family Group</label>
         <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
           {tenantOptions.map((option) => (
             <option key={option.tenantKey} value={option.tenantKey}>{option.tenantName}</option>
