@@ -27,8 +27,35 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.33;
 
+  const partnerMap = new Map<string, string>();
+  edges.forEach((edge) => {
+    if (edge.label.trim().toLowerCase() !== "family") {
+      return;
+    }
+    partnerMap.set(edge.fromPersonId, edge.toPersonId);
+    partnerMap.set(edge.toPersonId, edge.fromPersonId);
+  });
+
+  const nodeMap = new Map(nodes.map((node) => [node.personId, node]));
+  const sortedNodes = [...nodes].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const ordered: PersonNode[] = [];
+  const seen = new Set<string>();
+  sortedNodes.forEach((node) => {
+    if (seen.has(node.personId)) {
+      return;
+    }
+    ordered.push(node);
+    seen.add(node.personId);
+    const partnerId = partnerMap.get(node.personId);
+    const partner = partnerId ? nodeMap.get(partnerId) : undefined;
+    if (partner && !seen.has(partner.personId)) {
+      ordered.push(partner);
+      seen.add(partner.personId);
+    }
+  });
+
   const positions = new Map<string, { x: number; y: number }>();
-  nodes.forEach((node, index) => {
+  ordered.forEach((node, index) => {
     const angle = (Math.PI * 2 * index) / Math.max(nodes.length, 1) - Math.PI / 2;
     positions.set(node.personId, { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
   });
