@@ -431,6 +431,22 @@ main {
   color: var(--text-muted);
 }
 
+.settings-inline-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: end;
+  margin-bottom: 0.9rem;
+}
+
+.settings-inline-action .input {
+  margin-bottom: 0;
+}
+
+.settings-inline-action .button {
+  margin-bottom: 0;
+}
+
 .game-options {
   display: grid;
   grid-template-columns: 1fr;
@@ -477,6 +493,10 @@ main {
   }
 
   .settings-attr-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .settings-inline-action {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }

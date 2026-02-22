@@ -100,6 +100,7 @@ export function SettingsClient({
   const [manageRole, setManageRole] = useState<"ADMIN" | "USER">("USER");
   const [manageNextUsername, setManageNextUsername] = useState("");
   const [managePassword, setManagePassword] = useState("");
+  const [showDoneButton, setShowDoneButton] = useState(false);
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -251,6 +252,7 @@ export function SettingsClient({
     }
     await loadTenantAdminData(selectedTenantKey);
     setLocalUserStatus("Local user updated.");
+    setShowDoneButton(true);
     if (typeof payload.action === "string" && payload.action === "rename_username") {
       const next = typeof payload.nextUsername === "string" ? payload.nextUsername.trim().toLowerCase() : "";
       if (next) {
@@ -265,25 +267,20 @@ export function SettingsClient({
     if (!selectedLocalUsername) {
       return;
     }
-    const confirmed = window.confirm(`Delete local user "${selectedLocalUsername}"? This cannot be undone.`);
+    const confirmed = window.confirm(
+      `Mark "${selectedLocalUsername}" as inactive? They will not be able to sign in until re-enabled.`,
+    );
     if (!confirmed) {
       return;
     }
-    setLocalUserStatus(`Deleting ${selectedLocalUsername}...`);
-    const res = await fetch(
-      `/api/t/${encodeURIComponent(selectedTenantKey)}/local-users/${encodeURIComponent(selectedLocalUsername)}`,
-      { method: "DELETE" },
-    );
-    const body = await res.text();
-    if (!res.ok) {
-      setLocalUserStatus(`Failed: ${res.status} ${body.slice(0, 200)}`);
-      return;
-    }
-    setLocalUserStatus("Local user deleted.");
+    await patchLocalUser(selectedLocalUsername, { action: "set_enabled", isEnabled: false });
+  };
+
+  const closeLocalUserEditor = () => {
     setSelectedLocalUsername("");
     setManageNextUsername("");
     setManagePassword("");
-    await loadTenantAdminData(selectedTenantKey);
+    setShowDoneButton(false);
   };
 
   const importCsv = async () => {
@@ -306,6 +303,9 @@ export function SettingsClient({
       if (selectedLocalUsername) {
         setSelectedLocalUsername("");
       }
+      if (showDoneButton) {
+        setShowDoneButton(false);
+      }
       return;
     }
     if (!selectedLocalUsername) {
@@ -314,10 +314,11 @@ export function SettingsClient({
     const selected = localUsers.find((user) => user.username === selectedLocalUsername);
     if (!selected) {
       setSelectedLocalUsername("");
+      setShowDoneButton(false);
       return;
     }
     setManageRole(selected.role);
-  }, [localUsers, selectedLocalUsername]);
+  }, [localUsers, selectedLocalUsername, showDoneButton]);
 
   const selectedLocalUser = localUsers.find((user) => user.username === selectedLocalUsername) ?? null;
 
@@ -488,7 +489,14 @@ export function SettingsClient({
                   <td>{user.failedAttempts}</td>
                   <td>{user.lockedUntil || "-"}</td>
                   <td>
-                    <button type="button" className="button secondary tap-button" onClick={() => setSelectedLocalUsername(user.username)}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        setSelectedLocalUsername(user.username);
+                        setShowDoneButton(false);
+                      }}
+                    >
                       {selectedLocalUsername === user.username ? "Selected" : "Manage"}
                     </button>
                   </td>
@@ -506,52 +514,68 @@ export function SettingsClient({
             <div className="settings-chip-list">
               <button
                 type="button"
-                className="button secondary tap-button"
+                className="button tap-button"
                 onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "set_enabled", isEnabled: !selectedLocalUser.isEnabled })}
               >
                 {selectedLocalUser.isEnabled ? "Disable" : "Enable"}
               </button>
-              <button type="button" className="button secondary tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
+              <button type="button" className="button tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
                 Unlock
               </button>
+              {showDoneButton ? (
+                <button type="button" className="button tap-button" onClick={closeLocalUserEditor}>
+                  Done
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button tap-button"
+                  style={{ background: "var(--warn)", borderColor: "var(--warn)" }}
+                  onClick={deleteSelectedLocalUser}
+                >
+                  Delete User
+                </button>
+              )}
             </div>
 
             <label className="label">Role</label>
-            <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
-              <option value="USER">USER</option>
-              <option value="ADMIN">ADMIN</option>
-            </select>
-            <button
-              type="button"
-              className="button secondary tap-button"
-              onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
-            >
-              Change Role
-            </button>
+            <div className="settings-inline-action">
+              <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
+                <option value="USER">USER</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
+              >
+                Change Role
+              </button>
+            </div>
 
             <label className="label">New Username</label>
-            <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
-            <button
-              type="button"
-              className="button secondary tap-button"
-              onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
-            >
-              Change Username
-            </button>
+            <div className="settings-inline-action">
+              <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
+              >
+                Change Username
+              </button>
+            </div>
 
             <label className="label">New Password</label>
-            <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
-            <button
-              type="button"
-              className="button secondary tap-button"
-              onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
-            >
-              Reset Password
-            </button>
-
-            <button type="button" className="button tap-button" style={{ marginTop: "0.5rem", background: "var(--warn)", borderColor: "var(--warn)" }} onClick={deleteSelectedLocalUser}>
-              Delete User
-            </button>
+            <div className="settings-inline-action">
+              <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
+              >
+                Reset Password
+              </button>
+            </div>
           </div>
         ) : (
           <p className="page-subtitle">Select a local user above to manage role, username, password, lock state, or deletion.</p>
