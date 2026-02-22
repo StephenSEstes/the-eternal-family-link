@@ -2,12 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const [tenantKey, setTenantKey] = useState("default");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
+  const callbackUrl = `/t/${encodeURIComponent((tenantKey || "default").toLowerCase())}`;
+  const authError = searchParams.get("error");
 
   const onCredentialsLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -17,13 +21,13 @@ export default function LoginPage() {
       tenantKey,
       username,
       password,
-      callbackUrl: `/t/${encodeURIComponent((tenantKey || "default").toLowerCase())}`,
+      callbackUrl,
     });
     if (!response?.ok) {
       setStatus("Sign in failed. Check username, password, and tenant.");
       return;
     }
-    window.location.href = response.url ?? `/t/${encodeURIComponent((tenantKey || "default").toLowerCase())}`;
+    window.location.href = response.url ?? callbackUrl;
   };
 
   return (
@@ -32,7 +36,11 @@ export default function LoginPage() {
         <h1 className="page-title">Sign In</h1>
         <p className="page-subtitle">Use Google or tenant username/password.</p>
 
-        <button type="button" className="button tap-button" onClick={() => signIn("google")}>
+        <button
+          type="button"
+          className="button tap-button"
+          onClick={() => signIn("google", { callbackUrl })}
+        >
           Continue with Google
         </button>
 
@@ -55,6 +63,7 @@ export default function LoginPage() {
         </form>
 
         {status ? <p>{status}</p> : null}
+        {authError ? <p>Google sign-in failed: {authError}</p> : null}
       </section>
     </main>
   );
