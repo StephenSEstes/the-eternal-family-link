@@ -32,7 +32,7 @@ export async function AppHeader() {
             Games
           </Link>
           {tenant.role === "ADMIN" ? (
-            <Link href={`${basePath}/settings`} className="pill-link">
+            <Link href={`/t/${encodeURIComponent(tenant.tenantKey)}/settings`} className="pill-link">
               Settings
             </Link>
           ) : null}
