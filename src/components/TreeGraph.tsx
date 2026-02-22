@@ -21,6 +21,9 @@ type TreeGraphProps = {
 };
 
 export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
+  const NODE_HALF_WIDTH = 72;
+  const NODE_HALF_HEIGHT = 24;
+
   const partnerMap = new Map<string, string>();
   const spousePairIds = new Set<string>();
   const parentEdges = edges.filter((edge) => edge.label.trim().toLowerCase() === "parent");
@@ -77,6 +80,17 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
       if (childLevel < parentLevel + 1) {
         levels.set(edge.toPersonId, parentLevel + 1);
       }
+    });
+  }
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    spousePairIds.forEach((pairKey) => {
+      const [aId, bId] = pairKey.split("::");
+      const aLevel = levels.get(aId) ?? 0;
+      const bLevel = levels.get(bId) ?? 0;
+      const sameLevel = Math.max(aLevel, bLevel);
+      levels.set(aId, sameLevel);
+      levels.set(bId, sameLevel);
     });
   }
 
@@ -144,8 +158,8 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
           const midX = (a.x + b.x) / 2;
           const midY = (a.y + b.y) / 2;
           const distance = Math.hypot(a.x - b.x, a.y - b.y);
-          const rx = Math.max(58, distance / 2 + 18);
-          const ry = 34;
+          const rx = Math.max(90, distance / 2 + NODE_HALF_WIDTH + 14);
+          const ry = NODE_HALF_HEIGHT + 16;
 
           return <ellipse key={`cluster-${pairKey}`} cx={midX} cy={midY} rx={rx} ry={ry} className="tree-spouse-cluster" />;
         })}
