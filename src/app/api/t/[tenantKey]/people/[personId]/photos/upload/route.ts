@@ -6,6 +6,7 @@ import {
   getPersonAttributes,
   getPersonById,
   getTenantConfig,
+  PEOPLE_TAB,
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
@@ -99,6 +100,16 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       },
       resolved.tenant.tenantKey,
     );
+
+    if (shouldBePrimary) {
+      await updateTableRecordById(
+        PEOPLE_TAB,
+        personId,
+        { photo_file_id: uploaded.fileId },
+        "person_id",
+        resolved.tenant.tenantKey,
+      );
+    }
 
     return NextResponse.json({
       ok: true,
