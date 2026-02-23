@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import {
   deleteTableRecordById,
+  getPrimaryPhotoFileIdFromAttributes,
   getPersonAttributes,
   getPersonById,
+  PEOPLE_TAB,
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
@@ -92,6 +94,17 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  if (existing.attributeType === "photo" || nextType === "photo") {
+    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+    await updateTableRecordById(
+      PEOPLE_TAB,
+      personId,
+      { photo_file_id: primaryPhotoFileId },
+      "person_id",
+      resolved.tenant.tenantKey,
+    );
+  }
+
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: updated.data });
 }
 
@@ -106,6 +119,14 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  const existing = (await getPersonAttributes(resolved.tenant.tenantKey, personId)).find(
+    (item) => item.attributeId === attributeId,
+  );
+  if (!existing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  assertTenantScopedValue(existing.tenantKey, resolved.tenant.tenantKey);
+
   const deleted = await deleteTableRecordById(
     PERSON_ATTRIBUTES_TAB,
     attributeId,
@@ -114,6 +135,17 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
   );
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  if (existing.attributeType === "photo") {
+    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+    await updateTableRecordById(
+      PEOPLE_TAB,
+      personId,
+      { photo_file_id: primaryPhotoFileId },
+      "person_id",
+      resolved.tenant.tenantKey,
+    );
   }
 
   return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey, personId, attributeId });

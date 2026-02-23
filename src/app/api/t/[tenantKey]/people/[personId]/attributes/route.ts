@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import {
   createTableRecord,
+  getPrimaryPhotoFileIdFromAttributes,
   getPersonAttributes,
   getPersonById,
+  PEOPLE_TAB,
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
@@ -98,6 +100,17 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     },
     resolved.tenant.tenantKey,
   );
+
+  if (parsed.data.attributeType.toLowerCase() === "photo") {
+    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+    await updateTableRecordById(
+      PEOPLE_TAB,
+      personId,
+      { photo_file_id: primaryPhotoFileId },
+      "person_id",
+      resolved.tenant.tenantKey,
+    );
+  }
 
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: record.data }, { status: 201 });
 }
