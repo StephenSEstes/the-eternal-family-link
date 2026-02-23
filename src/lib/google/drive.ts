@@ -1,6 +1,7 @@
 import "server-only";
 
 import { google } from "googleapis";
+import { Readable } from "node:stream";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
 
@@ -58,7 +59,7 @@ export async function uploadPhotoToFolder(input: {
     },
     media: {
       mimeType: input.mimeType,
-      body: Buffer.from(input.data),
+      body: Readable.from(input.data),
     },
     fields: "id",
     supportsAllDrives: true,
