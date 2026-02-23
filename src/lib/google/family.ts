@@ -43,6 +43,8 @@ export async function getFamilyUnits(tenantKey: string): Promise<FamilyUnitRecor
         tenantKey: rowTenant,
         partner1PersonId: readCell(data, "partner1_person_id", "partner_1_person_id", "parent1_person_id"),
         partner2PersonId: readCell(data, "partner2_person_id", "partner_2_person_id", "parent2_person_id"),
+        label: readCell(data, "family_label", "label", "family_name"),
+        notes: readCell(data, "notes", "family_notes"),
       } satisfies FamilyUnitRecord;
     })
     .filter((row) => row.partner1PersonId && row.partner2PersonId)

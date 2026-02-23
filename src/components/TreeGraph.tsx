@@ -14,18 +14,28 @@ type GraphEdge = {
   label: string;
 };
 
+type FamilyUnitLink = {
+  id: string;
+  partner1PersonId: string;
+  partner2PersonId: string;
+  label?: string;
+  notes?: string;
+};
+
 type TreeGraphProps = {
   basePath: string;
   nodes: PersonNode[];
   edges: GraphEdge[];
+  familyUnits?: FamilyUnitLink[];
 };
 
-export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
+export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGraphProps) {
   const NODE_HALF_WIDTH = 72;
   const NODE_HALF_HEIGHT = 24;
 
   const partnerMap = new Map<string, string>();
   const spousePairIds = new Set<string>();
+  const spousePairMeta = new Map<string, { leftId: string; rightId: string; label: string }>();
   const parentEdges = edges.filter((edge) => edge.label.trim().toLowerCase() === "parent");
 
   const parentIdsByChild = new Map<string, Set<string>>();
@@ -40,6 +50,19 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
     childIdsByParent.get(edge.fromPersonId)?.add(edge.toPersonId);
   });
 
+  familyUnits.forEach((unit) => {
+    const leftId = unit.partner1PersonId;
+    const rightId = unit.partner2PersonId;
+    if (!leftId || !rightId) {
+      return;
+    }
+    partnerMap.set(leftId, rightId);
+    partnerMap.set(rightId, leftId);
+    const pairKey = [leftId, rightId].sort().join("::");
+    spousePairIds.add(pairKey);
+    spousePairMeta.set(pairKey, { leftId, rightId, label: unit.label?.trim() ?? "" });
+  });
+
   edges.forEach((edge) => {
     if (edge.label.trim().toLowerCase() !== "family") {
       return;
@@ -48,6 +71,51 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
     partnerMap.set(edge.toPersonId, edge.fromPersonId);
     const pairKey = [edge.fromPersonId, edge.toPersonId].sort().join("::");
     spousePairIds.add(pairKey);
+    if (!spousePairMeta.has(pairKey)) {
+      spousePairMeta.set(pairKey, {
+        leftId: edge.fromPersonId,
+        rightId: edge.toPersonId,
+        label: "",
+      });
+    }
+  });
+
+  const hiddenParentEdgeIds = new Set<string>();
+  const familyChildConnectors: Array<{ pairKey: string; childId: string }> = [];
+  parentIdsByChild.forEach((parentIds, childId) => {
+    const parentList = Array.from(parentIds);
+    if (parentList.length < 2) {
+      return;
+    }
+
+    let matchedPairKey = "";
+    let matchedParentIds: [string, string] | null = null;
+    for (let i = 0; i < parentList.length && !matchedPairKey; i += 1) {
+      for (let j = i + 1; j < parentList.length; j += 1) {
+        const candidatePair = [parentList[i], parentList[j]] as [string, string];
+        const pairKey = candidatePair.slice().sort().join("::");
+        if (spousePairIds.has(pairKey)) {
+          matchedPairKey = pairKey;
+          matchedParentIds = candidatePair;
+          break;
+        }
+      }
+    }
+
+    if (!matchedPairKey || !matchedParentIds) {
+      return;
+    }
+
+    familyChildConnectors.push({ pairKey: matchedPairKey, childId });
+    edges.forEach((edge) => {
+      const isParent = edge.label.trim().toLowerCase() === "parent";
+      if (!isParent || edge.toPersonId !== childId) {
+        return;
+      }
+      if (edge.fromPersonId === matchedParentIds[0] || edge.fromPersonId === matchedParentIds[1]) {
+        hiddenParentEdgeIds.add(edge.id);
+      }
+    });
   });
 
   const levels = new Map<string, number>();
@@ -148,7 +216,11 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
     <div className="tree-graph-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} className="tree-lines" aria-label="Family tree graph">
         {Array.from(spousePairIds).map((pairKey) => {
-          const [leftId, rightId] = pairKey.split("::");
+          const pair = spousePairMeta.get(pairKey);
+          if (!pair) {
+            return null;
+          }
+          const { leftId, rightId, label } = pair;
           const a = positions.get(leftId);
           const b = positions.get(rightId);
           if (!a || !b) {
@@ -162,19 +234,28 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
           const halfHeight = NODE_HALF_HEIGHT + 16;
 
           return (
-            <rect
-              key={`cluster-${pairKey}`}
-              x={midX - halfWidth}
-              y={midY - halfHeight}
-              width={halfWidth * 2}
-              height={halfHeight * 2}
-              rx={22}
-              ry={22}
-              className="tree-spouse-cluster"
-            />
+            <g key={`cluster-${pairKey}`}>
+              <rect
+                x={midX - halfWidth}
+                y={midY - halfHeight}
+                width={halfWidth * 2}
+                height={halfHeight * 2}
+                rx={22}
+                ry={22}
+                className="tree-spouse-cluster"
+              />
+              {label ? (
+                <text x={midX} y={midY + 4} className="tree-family-label">
+                  {label}
+                </text>
+              ) : null}
+            </g>
           );
         })}
         {edges.map((edge) => {
+          if (hiddenParentEdgeIds.has(edge.id)) {
+            return null;
+          }
           const from = positions.get(edge.fromPersonId);
           const to = positions.get(edge.toPersonId);
           if (!from || !to) {
@@ -193,6 +274,32 @@ export function TreeGraph({ basePath, nodes, edges }: TreeGraphProps) {
                 </text>
               ) : null}
             </g>
+          );
+        })}
+        {familyChildConnectors.map((connector) => {
+          const pair = spousePairMeta.get(connector.pairKey);
+          if (!pair) {
+            return null;
+          }
+          const a = positions.get(pair.leftId);
+          const b = positions.get(pair.rightId);
+          const child = positions.get(connector.childId);
+          if (!a || !b || !child) {
+            return null;
+          }
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+          const startY = midY + NODE_HALF_HEIGHT + 16;
+          const endY = child.y - NODE_HALF_HEIGHT;
+          return (
+            <line
+              key={`family-child-${connector.pairKey}-${connector.childId}`}
+              x1={midX}
+              y1={startY}
+              x2={child.x}
+              y2={endY}
+              className="tree-line"
+            />
           );
         })}
       </svg>

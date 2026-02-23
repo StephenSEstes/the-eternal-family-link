@@ -41,6 +41,13 @@ export default async function TreePage() {
               basePath={basePath}
               nodes={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
               edges={edges}
+              familyUnits={familyUnits.map((unit) => ({
+                id: unit.id,
+                partner1PersonId: unit.partner1PersonId,
+                partner2PersonId: unit.partner2PersonId,
+                label: unit.label,
+                notes: unit.notes,
+              }))}
             />
           ) : (
             <p>No graph data yet. Add people plus relationship/family unit rows.</p>

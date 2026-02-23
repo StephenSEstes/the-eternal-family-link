@@ -332,6 +332,12 @@ main {
   text-anchor: middle;
 }
 
+.tree-family-label {
+  font-size: 11px;
+  fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
+  text-anchor: middle;
+}
+
 .tree-node {
   position: absolute;
   transform: translate(-50%, -50%);

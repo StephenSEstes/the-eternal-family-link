@@ -103,4 +103,6 @@ export type FamilyUnitRecord = {
   tenantKey: string;
   partner1PersonId: string;
   partner2PersonId: string;
+  label?: string;
+  notes?: string;
 };
