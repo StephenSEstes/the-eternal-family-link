@@ -308,11 +308,28 @@ main {
   overflow: hidden;
 }
 
+.tree-map {
+  touch-action: none;
+  cursor: grab;
+}
+
+.tree-panning {
+  cursor: grabbing;
+}
+
+.tree-map-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
 .tree-lines {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
 }
 
 .tree-line {
@@ -350,6 +367,20 @@ main {
   font-size: 0.82rem;
   line-height: 1.15;
   padding: 0.45rem 0.55rem;
+}
+
+.tree-map-controls {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  gap: 0.45rem;
+  z-index: 2;
+}
+
+.tree-map-controls .button {
+  font-size: 0.78rem;
+  padding: 0.38rem 0.55rem;
 }
 
 .games-stack {

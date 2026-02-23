@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type PersonNode = {
   personId: string;
@@ -32,6 +33,8 @@ type TreeGraphProps = {
 export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGraphProps) {
   const NODE_HALF_WIDTH = 72;
   const NODE_HALF_HEIGHT = 24;
+  const MIN_SCALE = 0.35;
+  const MAX_SCALE = 2.8;
 
   const partnerMap = new Map<string, string>();
   const spousePairIds = new Set<string>();
@@ -212,9 +215,141 @@ export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGrap
     });
   });
 
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+
+  const clampScale = useCallback((value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)), []);
+
+  const fitToView = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const fitScale = clampScale(Math.min(rect.width / width, rect.height / height) * 0.94);
+    const nextX = (rect.width - width * fitScale) / 2;
+    const nextY = (rect.height - height * fitScale) / 2;
+    setScale(fitScale);
+    setOffset({ x: nextX, y: nextY });
+  }, [clampScale, height, width]);
+
+  useEffect(() => {
+    fitToView();
+  }, [fitToView]);
+
+  const zoomAtPoint = useCallback(
+    (clientX: number, clientY: number, factor: number) => {
+      const el = viewportRef.current;
+      if (!el) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const nextScale = clampScale(scale * factor);
+      if (nextScale === scale) {
+        return;
+      }
+
+      const pointX = clientX - rect.left;
+      const pointY = clientY - rect.top;
+      const worldX = (pointX - offset.x) / scale;
+      const worldY = (pointY - offset.y) / scale;
+      setScale(nextScale);
+      setOffset({
+        x: pointX - worldX * nextScale,
+        y: pointY - worldY * nextScale,
+      });
+    },
+    [clampScale, offset.x, offset.y, scale],
+  );
+
+  const zoomFromCenter = useCallback(
+    (factor: number) => {
+      const el = viewportRef.current;
+      if (!el) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      zoomAtPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+    },
+    [zoomAtPoint],
+  );
+
   return (
-    <div className="tree-graph-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="tree-lines" aria-label="Family tree graph">
+    <div
+      ref={viewportRef}
+      className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}`}
+      onWheel={(event) => {
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? 1.1 : 0.9;
+        zoomAtPoint(event.clientX, event.clientY, factor);
+      }}
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch" && event.button !== 0) {
+          return;
+        }
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          originX: offset.x,
+          originY: offset.y,
+        };
+        setIsPanning(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
+          return;
+        }
+        const dx = event.clientX - dragRef.current.startX;
+        const dy = event.clientY - dragRef.current.startY;
+        setOffset({
+          x: dragRef.current.originX + dx,
+          y: dragRef.current.originY + dy,
+        });
+      }}
+      onPointerUp={(event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
+          return;
+        }
+        dragRef.current = null;
+        setIsPanning(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={(event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
+          return;
+        }
+        dragRef.current = null;
+        setIsPanning(false);
+      }}
+    >
+      <div
+        className="tree-map-layer"
+        style={{
+          width: `${width}px`,
+          height: `${height}px`,
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+        }}
+      >
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="tree-lines"
+        aria-label="Family tree graph"
+        style={{ width: `${width}px`, height: `${height}px` }}
+      >
         {Array.from(spousePairIds).map((pairKey) => {
           const pair = spousePairMeta.get(pairKey);
           if (!pair) {
@@ -314,12 +449,24 @@ export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGrap
             key={node.personId}
             href={`${basePath}/people/${encodeURIComponent(node.personId)}`}
             className="tree-node"
-            style={{ left: `${(pos.x / width) * 100}%`, top: `${(pos.y / height) * 100}%` }}
+            style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
           >
             {node.displayName}
           </Link>
         );
       })}
+      </div>
+      <div className="tree-map-controls">
+        <button type="button" className="button secondary tap-button" onClick={() => zoomFromCenter(1.15)}>
+          Zoom In
+        </button>
+        <button type="button" className="button secondary tap-button" onClick={() => zoomFromCenter(0.87)}>
+          Zoom Out
+        </button>
+        <button type="button" className="button secondary tap-button" onClick={fitToView}>
+          Reset View
+        </button>
+      </div>
     </div>
   );
 }
