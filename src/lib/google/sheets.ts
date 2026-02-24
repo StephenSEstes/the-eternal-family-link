@@ -7,6 +7,7 @@ import { viewerPinHash } from "@/lib/security/pin";
 import type {
   AppRole,
   ImportantDateRecord,
+  LocalUserRecord,
   PersonAttributeRecord,
   PersonRecord,
   PersonUpdateInput,
@@ -17,6 +18,30 @@ import type {
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
 
 const USER_ACCESS_TAB = "UserAccess";
+const USER_FAMILY_GROUPS_TAB = "UserFamilyGroups";
+const USER_FAMILY_GROUPS_HEADERS = [
+  "user_email",
+  "user_id",
+  "family_group_key",
+  "family_group_name",
+  "role",
+  "person_id",
+  "is_enabled",
+];
+const USER_ACCESS_HEADERS = [
+  "person_id",
+  "role",
+  "user_email",
+  "username",
+  "google_access",
+  "local_access",
+  "is_enabled",
+  "password_hash",
+  "failed_attempts",
+  "locked_until",
+  "must_change_password",
+  "user_id",
+];
 export const PEOPLE_TAB = "People";
 const IMPORTANT_DATES_TAB = "ImportantDates";
 export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
@@ -53,17 +78,6 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "end_date",
     "visibility",
     "notes",
-  ],
-  LocalUsers: [
-    "tenant_key",
-    "username",
-    "password_hash",
-    "role",
-    "person_id",
-    "is_enabled",
-    "failed_attempts",
-    "locked_until",
-    "must_change_password",
   ],
   TenantSecurityPolicy: [
     "tenant_key",
@@ -630,6 +644,70 @@ async function readTab(tabName: string): Promise<SheetMatrix> {
   return readTabWithClient(sheets, tabName);
 }
 
+async function ensureUserAccessTabSchema(): Promise<SheetMatrix> {
+  const sheets = await createSheetsClient();
+  await ensureTabWithHeaders(sheets, USER_ACCESS_TAB, USER_ACCESS_HEADERS);
+  const matrix = await readTabWithClient(sheets, USER_ACCESS_TAB);
+  const existing = new Set(matrix.headers.map((header) => normalizeHeader(header)));
+  const missing = USER_ACCESS_HEADERS.filter((header) => !existing.has(normalizeHeader(header)));
+  if (missing.length === 0) {
+    return matrix;
+  }
+
+  const env = getEnv();
+  const nextHeaders = [...matrix.headers, ...missing];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.SHEET_ID,
+    range: `${USER_ACCESS_TAB}!A1:ZZ1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [nextHeaders],
+    },
+  });
+
+  return { headers: nextHeaders, rows: matrix.rows };
+}
+
+async function ensureUserFamilyGroupsTabSchema(): Promise<SheetMatrix> {
+  const sheets = await createSheetsClient();
+  await ensureTabWithHeaders(sheets, USER_FAMILY_GROUPS_TAB, USER_FAMILY_GROUPS_HEADERS);
+  const matrix = await readTabWithClient(sheets, USER_FAMILY_GROUPS_TAB);
+  const existing = new Set(matrix.headers.map((header) => normalizeHeader(header)));
+  const missing = USER_FAMILY_GROUPS_HEADERS.filter((header) => !existing.has(normalizeHeader(header)));
+  if (missing.length === 0) {
+    return matrix;
+  }
+
+  const env = getEnv();
+  const nextHeaders = [...matrix.headers, ...missing];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.SHEET_ID,
+    range: `${USER_FAMILY_GROUPS_TAB}!A1:ZZ1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [nextHeaders],
+    },
+  });
+
+  return { headers: nextHeaders, rows: matrix.rows };
+}
+
+function hasGoogleAccess(row: string[], idx: Map<string, number>) {
+  const explicit = getCell(row, idx, "google_access");
+  if (explicit.trim()) {
+    return parseBool(explicit);
+  }
+  return parseBool(getCell(row, idx, "is_enabled"));
+}
+
+function hasLocalAccess(row: string[], idx: Map<string, number>) {
+  const explicit = getCell(row, idx, "local_access");
+  if (explicit.trim()) {
+    return parseBool(explicit);
+  }
+  return Boolean(getCell(row, idx, "username").trim());
+}
+
 function rowToPerson(headers: string[], row: string[]): PersonRecord {
   const idx = buildHeaderIndex(headers);
   return {
@@ -741,62 +819,55 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
 }
 
 export async function getEnabledUserAccessList(email: string): Promise<TenantAccess[]> {
-  const { headers, rows } = await readTab(USER_ACCESS_TAB);
-  if (headers.length === 0) {
+  const target = email.trim().toLowerCase();
+  const links = await ensureUserFamilyGroupsTabSchema();
+  if (links.headers.length === 0) {
     return [];
   }
-
-  const idx = buildHeaderIndex(headers);
-  const target = email.trim().toLowerCase();
-  const tenantMap = new Map<string, TenantAccess>();
-
-  for (const row of rows) {
+  const idx = buildHeaderIndex(links.headers);
+  const familyMap = new Map<string, TenantAccess>();
+  for (const row of links.rows) {
     const userEmail = getCell(row, idx, "user_email").trim().toLowerCase();
     const isEnabled = parseBool(getCell(row, idx, "is_enabled"));
-
-    if (userEmail === target && isEnabled) {
-      const tenantKey = getCell(row, idx, "tenant_key").trim() || DEFAULT_TENANT_KEY;
-      const tenantName = getCell(row, idx, "tenant_name").trim() || DEFAULT_TENANT_NAME;
-      tenantMap.set(tenantKey, {
-        tenantKey,
-        tenantName,
-        role: toRole(getCell(row, idx, "role")),
-        personId: getCell(row, idx, "person_id"),
-      });
+    if (userEmail !== target || !isEnabled) {
+      continue;
     }
+    const tenantKey = getCell(row, idx, "family_group_key").trim() || DEFAULT_TENANT_KEY;
+    const tenantName = getCell(row, idx, "family_group_name").trim() || DEFAULT_TENANT_NAME;
+    familyMap.set(tenantKey, {
+      tenantKey,
+      tenantName,
+      role: toRole(getCell(row, idx, "role")),
+      personId: getCell(row, idx, "person_id"),
+    });
   }
-
-  return Array.from(tenantMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+  return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
 }
 
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
-  const { headers, rows } = await readTab(USER_ACCESS_TAB);
-  if (headers.length === 0) {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  const links = await ensureUserFamilyGroupsTabSchema();
+  if (links.headers.length === 0) {
     return [];
   }
-
-  const idx = buildHeaderIndex(headers);
-  const normalizedTenantKey = normalizeTenantKey(tenantKey);
-
-  return rows
+  const idx = buildHeaderIndex(links.headers);
+  return links.rows
     .map((row) => {
+      const rowTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+      if (rowTenantKey !== normalizedTenantKey) {
+        return null;
+      }
       const userEmail = getCell(row, idx, "user_email").trim().toLowerCase();
       if (!userEmail) {
         return null;
       }
-
-      const rowTenantKey = getCell(row, idx, "tenant_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-      if (rowTenantKey !== normalizedTenantKey) {
-        return null;
-      }
-
       return {
         userEmail,
         isEnabled: parseBool(getCell(row, idx, "is_enabled")),
         role: toRole(getCell(row, idx, "role")),
         personId: getCell(row, idx, "person_id"),
         tenantKey: rowTenantKey,
-        tenantName: getCell(row, idx, "tenant_name").trim() || DEFAULT_TENANT_NAME,
+        tenantName: getCell(row, idx, "family_group_name").trim() || DEFAULT_TENANT_NAME,
       } satisfies UserAccessRecord;
     })
     .filter((row): row is UserAccessRecord => Boolean(row))
@@ -804,7 +875,63 @@ export async function getTenantUserAccessList(tenantKey: string): Promise<UserAc
 }
 
 export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promise<UpsertTenantAccessResult> {
-  const matrix = await readTab(USER_ACCESS_TAB);
+  const familyGroups = await ensureUserFamilyGroupsTabSchema();
+  const familyIdx = buildHeaderIndex(familyGroups.headers);
+  const normalizedEmail = input.userEmail.trim().toLowerCase();
+  const normalizedTenantKey = input.tenantKey.trim().toLowerCase() || DEFAULT_TENANT_KEY;
+  const familyRowIndex = familyGroups.rows.findIndex((row) => {
+    const rowEmail = getCell(row, familyIdx, "user_email").trim().toLowerCase();
+    const rowTenantKey = getCell(row, familyIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+    return rowEmail === normalizedEmail && rowTenantKey === normalizedTenantKey;
+  });
+  const familyValues = {
+    user_email: normalizedEmail,
+    user_id: `${normalizedTenantKey}:email:${normalizedEmail}`,
+    family_group_key: normalizedTenantKey,
+    family_group_name: input.tenantName.trim() || DEFAULT_TENANT_NAME,
+    role: input.role,
+    person_id: input.personId,
+    is_enabled: toSheetBool(input.isEnabled),
+  };
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+  if (familyRowIndex >= 0) {
+    const mutable = Array.from({ length: familyGroups.headers.length }, (_, i) => familyGroups.rows[familyRowIndex][i] ?? "");
+    setCell(mutable, familyIdx, "user_email", familyValues.user_email);
+    setCell(mutable, familyIdx, "user_id", familyValues.user_id);
+    setCell(mutable, familyIdx, "family_group_key", familyValues.family_group_key);
+    setCell(mutable, familyIdx, "family_group_name", familyValues.family_group_name);
+    setCell(mutable, familyIdx, "role", familyValues.role);
+    setCell(mutable, familyIdx, "person_id", familyValues.person_id);
+    setCell(mutable, familyIdx, "is_enabled", familyValues.is_enabled);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.SHEET_ID,
+      range: `${USER_FAMILY_GROUPS_TAB}!A${familyRowIndex + 2}:ZZ${familyRowIndex + 2}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [mutable] },
+    });
+  } else {
+    const newFamilyRow = familyGroups.headers.map((header) => {
+      const key = normalizeHeader(header);
+      if (key === "user_email") return familyValues.user_email;
+      if (key === "user_id") return familyValues.user_id;
+      if (key === "family_group_key") return familyValues.family_group_key;
+      if (key === "family_group_name") return familyValues.family_group_name;
+      if (key === "role") return familyValues.role;
+      if (key === "person_id") return familyValues.person_id;
+      if (key === "is_enabled") return familyValues.is_enabled;
+      return "";
+    });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: env.SHEET_ID,
+      range: `${USER_FAMILY_GROUPS_TAB}!A:ZZ`,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [newFamilyRow] },
+    });
+  }
+
+  const matrix = await ensureUserAccessTabSchema();
   if (matrix.headers.length === 0) {
     throw new Error("UserAccess tab has no header row.");
   }
@@ -814,44 +941,34 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     throw new Error("UserAccess tab missing required 'user_email' column.");
   }
 
-  const normalizedEmail = input.userEmail.trim().toLowerCase();
-  const normalizedTenantKey = input.tenantKey.trim().toLowerCase() || DEFAULT_TENANT_KEY;
-  const tenantKeyColumnExists = idx.has("tenant_key");
+  const normalizedPersonId = input.personId.trim();
 
   const rowIndex = matrix.rows.findIndex((row) => {
+    if (normalizedPersonId) {
+      const rowPersonId = getCell(row, idx, "person_id").trim();
+      if (rowPersonId && rowPersonId === normalizedPersonId) {
+        return true;
+      }
+    }
     const rowEmail = getCell(row, idx, "user_email").trim().toLowerCase();
-    if (rowEmail !== normalizedEmail) {
-      return false;
-    }
-
-    if (!tenantKeyColumnExists) {
-      return true;
-    }
-
-    const rowTenantKey = getCell(row, idx, "tenant_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-    return rowTenantKey === normalizedTenantKey;
+    return rowEmail === normalizedEmail;
   });
 
   const values = {
     user_email: normalizedEmail,
-    is_enabled: toSheetBool(input.isEnabled),
+    google_access: toSheetBool(input.isEnabled),
     role: input.role,
     person_id: input.personId,
-    tenant_key: normalizedTenantKey,
-    tenant_name: input.tenantName.trim() || DEFAULT_TENANT_NAME,
+    user_id: normalizedPersonId || `email:${normalizedEmail}`,
   };
-
-  const sheets = await createSheetsClient();
-  const env = getEnv();
 
   if (rowIndex >= 0) {
     const mutableRow = Array.from({ length: matrix.headers.length }, (_, i) => matrix.rows[rowIndex][i] ?? "");
     setCell(mutableRow, idx, "user_email", values.user_email);
-    setCell(mutableRow, idx, "is_enabled", values.is_enabled);
+    setCell(mutableRow, idx, "google_access", values.google_access);
     setCell(mutableRow, idx, "role", values.role);
     setCell(mutableRow, idx, "person_id", values.person_id);
-    setCell(mutableRow, idx, "tenant_key", values.tenant_key);
-    setCell(mutableRow, idx, "tenant_name", values.tenant_name);
+    setCell(mutableRow, idx, "user_id", values.user_id);
 
     const rowNumber = rowIndex + 2;
     await sheets.spreadsheets.values.update({
@@ -867,11 +984,14 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
   const newRow = matrix.headers.map((header) => {
     const key = normalizeHeader(header);
     if (key === "user_email") return values.user_email;
-    if (key === "is_enabled") return values.is_enabled;
+    if (key === "google_access") return values.google_access;
+    if (key === "local_access") return "FALSE";
+    if (key === "is_enabled") return "TRUE";
+    if (key === "failed_attempts") return "0";
+    if (key === "must_change_password") return "FALSE";
     if (key === "role") return values.role;
     if (key === "person_id") return values.person_id;
-    if (key === "tenant_key") return values.tenant_key;
-    if (key === "tenant_name") return values.tenant_name;
+    if (key === "user_id") return values.user_id;
     return "";
   });
 
@@ -884,6 +1004,55 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
   });
 
   return { action: "created", rowNumber: matrix.rows.length + 2 };
+}
+
+export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
+  const { headers, rows } = await ensureUserAccessTabSchema();
+  if (headers.length === 0) {
+    return [];
+  }
+
+  const links = await ensureUserFamilyGroupsTabSchema();
+  const linkIdx = buildHeaderIndex(links.headers);
+  const idx = buildHeaderIndex(headers);
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  const allowedPersonIds = new Set(
+    links.rows
+      .filter((row) => {
+        const rowTenantKey = getCell(row, linkIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+        return rowTenantKey === normalizedTenantKey && parseBool(getCell(row, linkIdx, "is_enabled"));
+      })
+      .map((row) => getCell(row, linkIdx, "person_id").trim())
+      .filter(Boolean),
+  );
+
+  return rows
+    .map((row) => {
+      if (!hasLocalAccess(row, idx)) {
+        return null;
+      }
+      const personId = getCell(row, idx, "person_id").trim();
+      if (!personId || !allowedPersonIds.has(personId)) {
+        return null;
+      }
+      const username = getCell(row, idx, "username").trim().toLowerCase();
+      if (!username) {
+        return null;
+      }
+      return {
+        tenantKey: normalizedTenantKey,
+        username,
+        passwordHash: getCell(row, idx, "password_hash"),
+        role: toRole(getCell(row, idx, "role")),
+        personId,
+        isEnabled: parseBool(getCell(row, idx, "is_enabled")),
+        failedAttempts: Number.parseInt(getCell(row, idx, "failed_attempts") || "0", 10) || 0,
+        lockedUntil: getCell(row, idx, "locked_until"),
+        mustChangePassword: parseBool(getCell(row, idx, "must_change_password")),
+      } satisfies LocalUserRecord;
+    })
+    .filter((row): row is LocalUserRecord => Boolean(row))
+    .sort((a, b) => a.username.localeCompare(b.username));
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {

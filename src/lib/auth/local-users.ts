@@ -1,15 +1,15 @@
 import type { AppRole, LocalUserRecord, TenantSecurityPolicy } from "@/lib/google/types";
 import {
+  createTableRecord,
   ensureTenantScaffold,
-  deleteTableRecordById,
   getTableRecords,
   getTenantConfig,
+  getTenantLocalAccessList,
   updateTableRecordById,
-  createTableRecord,
 } from "@/lib/google/sheets";
 import { hashPassword } from "@/lib/security/password";
 
-const LOCAL_USERS_TAB = "LocalUsers";
+const USERS_TAB = "UserAccess";
 const POLICY_TAB = "TenantSecurityPolicy";
 
 function readField(record: Record<string, string>, ...keys: string[]) {
@@ -38,6 +38,10 @@ function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
 }
 
+function localUserId(username: string) {
+  return `local:${normalizeUsername(username)}`;
+}
+
 export function defaultTenantSecurityPolicy(tenantKey: string): TenantSecurityPolicy {
   return {
     tenantKey,
@@ -56,6 +60,41 @@ async function ensureLocalAuthScaffold(tenantKey: string) {
     tenantName: config.tenantName,
     photosFolderId: config.photosFolderId,
   });
+  await getTenantLocalAccessList(tenantKey);
+}
+
+async function upsertDirectoryLocalRecord(input: {
+  username: string;
+  passwordHash: string;
+  role: AppRole;
+  personId: string;
+  isEnabled: boolean;
+  failedAttempts: number;
+  lockedUntil: string;
+  mustChangePassword: boolean;
+}) {
+  const username = normalizeUsername(input.username);
+  const userId = localUserId(username);
+  const payload: Record<string, string> = {
+    user_id: userId,
+    username,
+    password_hash: input.passwordHash,
+    role: input.role,
+    person_id: input.personId,
+    local_access: "TRUE",
+    is_enabled: input.isEnabled ? "TRUE" : "FALSE",
+    failed_attempts: String(input.failedAttempts),
+    locked_until: input.lockedUntil,
+    must_change_password: input.mustChangePassword ? "TRUE" : "FALSE",
+  };
+
+  let updated = await updateTableRecordById(USERS_TAB, userId, payload, "user_id");
+  if (!updated && input.personId) {
+    updated = await updateTableRecordById(USERS_TAB, input.personId, payload, "person_id");
+  }
+  if (!updated) {
+    await createTableRecord(USERS_TAB, payload);
+  }
 }
 
 export async function getTenantSecurityPolicy(tenantKey: string): Promise<TenantSecurityPolicy> {
@@ -96,34 +135,8 @@ export async function upsertTenantSecurityPolicy(tenantKey: string, policy: Tena
   }
 }
 
-function rowToLocalUser(tenantKey: string, row: Record<string, string>): LocalUserRecord | null {
-  const username = normalizeUsername(readField(row, "username"));
-  if (!username) {
-    return null;
-  }
-  return {
-    tenantKey,
-    username,
-    passwordHash: readField(row, "password_hash"),
-    role: readField(row, "role").toUpperCase() === "ADMIN" ? "ADMIN" : "USER",
-    personId: readField(row, "person_id"),
-    isEnabled: parseBool(readField(row, "is_enabled")),
-    failedAttempts: parseIntSafe(readField(row, "failed_attempts"), 0),
-    lockedUntil: readField(row, "locked_until"),
-    mustChangePassword: parseBool(readField(row, "must_change_password")),
-  };
-}
-
 export async function getLocalUsers(tenantKey: string) {
-  try {
-    const rows = await getTableRecords(LOCAL_USERS_TAB, tenantKey);
-    return rows
-      .map((row) => rowToLocalUser(tenantKey, row.data))
-      .filter((row): row is LocalUserRecord => Boolean(row))
-      .sort((a, b) => a.username.localeCompare(b.username));
-  } catch {
-    return [] as LocalUserRecord[];
-  }
+  return getTenantLocalAccessList(tenantKey);
 }
 
 export async function getLocalUserByUsername(tenantKey: string, username: string) {
@@ -143,22 +156,16 @@ type UpsertLocalUserInput = {
 
 export async function upsertLocalUser(input: UpsertLocalUserInput) {
   await ensureLocalAuthScaffold(input.tenantKey);
-  const username = normalizeUsername(input.username);
-  const payload: Record<string, string> = {
-    tenant_key: input.tenantKey,
-    username,
-    password_hash: hashPassword(input.password),
+  await upsertDirectoryLocalRecord({
+    username: input.username,
+    passwordHash: hashPassword(input.password),
     role: input.role,
-    person_id: input.personId,
-    is_enabled: input.isEnabled ? "TRUE" : "FALSE",
-    failed_attempts: "0",
-    locked_until: "",
-    must_change_password: "TRUE",
-  };
-  const updated = await updateTableRecordById(LOCAL_USERS_TAB, username, payload, "username", input.tenantKey);
-  if (!updated) {
-    await createTableRecord(LOCAL_USERS_TAB, payload, input.tenantKey);
-  }
+    personId: input.personId,
+    isEnabled: input.isEnabled,
+    failedAttempts: 0,
+    lockedUntil: "",
+    mustChangePassword: true,
+  });
 }
 
 export async function patchLocalUser(
@@ -174,8 +181,12 @@ export async function patchLocalUser(
     mustChangePassword: boolean;
   }>,
 ) {
-  const normalized = normalizeUsername(username);
-  const payload: Record<string, string> = {};
+  const current = await getLocalUserByUsername(tenantKey, username);
+  if (!current) {
+    return false;
+  }
+
+  const payload: Record<string, string> = { local_access: "TRUE" };
   if (patch.password !== undefined) payload.password_hash = hashPassword(patch.password);
   if (patch.isEnabled !== undefined) payload.is_enabled = patch.isEnabled ? "TRUE" : "FALSE";
   if (patch.role !== undefined) payload.role = patch.role;
@@ -183,7 +194,13 @@ export async function patchLocalUser(
   if (patch.failedAttempts !== undefined) payload.failed_attempts = String(patch.failedAttempts);
   if (patch.lockedUntil !== undefined) payload.locked_until = patch.lockedUntil;
   if (patch.mustChangePassword !== undefined) payload.must_change_password = patch.mustChangePassword ? "TRUE" : "FALSE";
-  return updateTableRecordById(LOCAL_USERS_TAB, normalized, payload, "username", tenantKey);
+
+  const userId = localUserId(current.username);
+  let updated = await updateTableRecordById(USERS_TAB, userId, payload, "user_id");
+  if (!updated && current.personId) {
+    updated = await updateTableRecordById(USERS_TAB, current.personId, payload, "person_id");
+  }
+  return updated;
 }
 
 export async function renameLocalUser(tenantKey: string, username: string, nextUsername: string) {
@@ -205,10 +222,46 @@ export async function renameLocalUser(tenantKey: string, username: string, nextU
     throw new Error("Target username already exists.");
   }
 
-  await updateTableRecordById(LOCAL_USERS_TAB, current, { username: next }, "username", tenantKey);
+  const oldUserId = localUserId(current);
+  const nextUserId = localUserId(next);
+  let updated = await updateTableRecordById(
+    USERS_TAB,
+    oldUserId,
+    { username: next, user_id: nextUserId, local_access: "TRUE" },
+    "user_id",
+  );
+  if (!updated && existing.personId) {
+    updated = await updateTableRecordById(
+      USERS_TAB,
+      existing.personId,
+      { username: next, user_id: nextUserId, local_access: "TRUE" },
+      "person_id",
+    );
+  }
+  if (!updated) {
+    throw new Error("Local user not found.");
+  }
 }
 
 export async function deleteLocalUser(tenantKey: string, username: string) {
-  const normalized = normalizeUsername(username);
-  return deleteTableRecordById(LOCAL_USERS_TAB, normalized, "username", tenantKey);
+  const existing = await getLocalUserByUsername(tenantKey, username);
+  if (!existing) {
+    return false;
+  }
+
+  const payload: Record<string, string> = {
+    local_access: "FALSE",
+    is_enabled: "FALSE",
+    password_hash: "",
+    failed_attempts: "0",
+    locked_until: "",
+    must_change_password: "FALSE",
+  };
+
+  const userId = localUserId(existing.username);
+  let updated = await updateTableRecordById(USERS_TAB, userId, payload, "user_id");
+  if (!updated && existing.personId) {
+    updated = await updateTableRecordById(USERS_TAB, existing.personId, payload, "person_id");
+  }
+  return updated;
 }
