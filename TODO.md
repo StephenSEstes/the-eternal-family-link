@@ -13,6 +13,18 @@ I will update this list as we add, complete, or remove work.
 - [ ] Workflow for adding new attributes
   Est date: 2026-03-05
   Desc: Design a guided admin workflow to add additional attributes quickly, including field type, validation rules, defaults, and visibility options.
+- [ ] AI summary of person profile
+  Est date: 2026-03-10
+  Desc: Generate an AI-written summary for each person using profile fields, relationships, notes, and key dates with admin review before publish.
+- [ ] AI game generation with point system
+  Est date: 2026-03-14
+  Desc: Generate replayable AI-driven family games and score rules, including points, streaks, and leaderboard tracking.
+- [ ] Improve multi-family group switching for shared users
+  Est date: 2026-03-17
+  Desc: Make switching between family groups seamless for users who belong to multiple groups, with clear active-group context and quick switching controls.
+- [ ] Import related contacts when creating/migrating a family group
+  Est date: 2026-03-21
+  Desc: Add relationship-aware import rules so selected members bring related contacts into the target group automatically; 3rd gen child import includes parents, and 2nd gen import includes spouse plus in-law children.
 
 ## Backlog
 - [ ] Add test coverage goals by area
