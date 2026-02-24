@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getFamilyUnits, getRelationships } from "@/lib/google/family";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople, getPersonAttributes, getPersonById } from "@/lib/google/sheets";
@@ -13,7 +13,7 @@ type PersonPageProps = {
 
 export default async function PersonPage({ params }: PersonPageProps) {
   const { personId } = await params;
-  const { session, tenant } = await requireTenantSession();
+  const { session, tenant } = await requireFamilyGroupSession();
   const [person, people, relationships, familyUnits, attributes] = await Promise.all([
     getPersonById(personId, tenant.tenantKey),
     getPeople(tenant.tenantKey),

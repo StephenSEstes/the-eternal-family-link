@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SettingsClient } from "@/components/SettingsClient";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getPeople, getTenantUserAccessList } from "@/lib/google/sheets";
 
 type SettingsPageProps = {
@@ -9,7 +9,7 @@ type SettingsPageProps = {
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
   await params;
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
 
   if (tenant.role !== "ADMIN") {
     return (

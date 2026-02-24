@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createTableRecord, getPeople, PERSON_ATTRIBUTES_TAB } from "@/lib/google/sheets";
-import { requireTenantAccess } from "@/lib/tenant/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildPersonId } from "@/lib/person/id";
 
 type TenantPeopleRouteProps = {

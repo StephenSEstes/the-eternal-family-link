@@ -2,7 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { createTableRecord, getTableRecords } from "@/lib/google/sheets";
-import { getRequestTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/family-group/context";
 
 const tableNameSchema = z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9 _-]+$/);
 const recordSchema = z.record(z.string(), z.string().or(z.number()).or(z.boolean()).or(z.null())).transform((obj) => {

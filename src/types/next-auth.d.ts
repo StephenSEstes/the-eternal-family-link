@@ -12,12 +12,16 @@ declare module "next-auth" {
       tenantAccesses?: {
         tenantKey: string;
         tenantName: string;
+        familyGroupKey?: string;
+        familyGroupName?: string;
         role: "ADMIN" | "USER";
         personId: string;
       }[];
     };
     tenantKey?: string;
     tenantName?: string;
+    familyGroupKey?: string;
+    familyGroupName?: string;
   }
 }
 
@@ -27,9 +31,13 @@ declare module "next-auth/jwt" {
     person_id?: string;
     tenantKey?: string;
     tenantName?: string;
+    familyGroupKey?: string;
+    familyGroupName?: string;
     tenantAccesses?: {
       tenantKey: string;
       tenantName: string;
+      familyGroupKey?: string;
+      familyGroupName?: string;
       role: "ADMIN" | "USER";
       personId: string;
     }[];

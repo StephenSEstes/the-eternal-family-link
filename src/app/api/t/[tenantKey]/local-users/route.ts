@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getLocalUsers, getTenantSecurityPolicy, upsertLocalUser } from "@/lib/auth/local-users";
-import { requireTenantAdmin } from "@/lib/tenant/guard";
+import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { validatePasswordComplexity } from "@/lib/security/password";
 
 const createUserSchema = z.object({

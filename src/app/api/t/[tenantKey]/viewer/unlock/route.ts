@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTenantConfig } from "@/lib/google/sheets";
 import { verifyViewerPin } from "@/lib/security/pin";
-import { normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type ViewerUnlockRouteProps = {
   params: Promise<{ tenantKey: string }>;

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { listTabs } from "@/lib/google/sheets";
-import { DEFAULT_TENANT_KEY } from "@/lib/tenant/context";
-import { getRequestTenantContext } from "@/lib/tenant/context";
+import { DEFAULT_TENANT_KEY } from "@/lib/family-group/context";
+import { getRequestTenantContext } from "@/lib/family-group/context";
 
 export async function GET() {
   const session = await getAppSession();
@@ -21,3 +21,4 @@ export async function GET() {
 
   return NextResponse.json({ tables: filtered });
 }
+

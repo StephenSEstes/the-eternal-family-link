@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
-import { requireTenantSession } from "@/lib/auth/session";
-import { getTenantBasePath } from "@/lib/tenant/context";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
+import { getTenantBasePath } from "@/lib/family-group/context";
 
 type TenantHomeProps = {
   params: Promise<{ tenantKey: string }>;
@@ -9,7 +9,7 @@ type TenantHomeProps = {
 
 export default async function TenantHomePage({ params }: TenantHomeProps) {
   await params;
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const basePath = getTenantBasePath(tenant.tenantKey);
 
   const tiles = [

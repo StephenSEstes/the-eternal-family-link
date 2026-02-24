@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/google/sheets";
-import { requireTenantAdmin } from "@/lib/tenant/guard";
+import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const upsertSchema = z.object({
   userEmail: z.string().email(),
   role: z.enum(["ADMIN", "USER"]),
-  personId: z.string().optional().default(""),
+  personId: z.string().trim().min(1),
   isEnabled: z.boolean().optional().default(true),
 });
 
@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     tenantKey: resolved.tenant.tenantKey,
     tenantName: config.tenantName,
     role: parsed.data.role,
-    personId: parsed.data.personId ?? "",
+    personId: parsed.data.personId,
     isEnabled: parsed.data.isEnabled ?? true,
   });
 

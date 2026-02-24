@@ -8,7 +8,7 @@ import {
   patchLocalUser,
 } from "@/lib/auth/local-users";
 import { getEnabledUserAccess, getEnabledUserAccessList } from "@/lib/google/sheets";
-import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
+import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 import { verifyPassword } from "@/lib/security/password";
 
 function normalizeTenantKey(value?: string) {
@@ -156,3 +156,4 @@ export const authOptions: NextAuthOptions = {
   },
   secret: getEnv().NEXTAUTH_SECRET,
 };
+

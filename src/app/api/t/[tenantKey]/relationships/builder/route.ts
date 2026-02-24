@@ -7,7 +7,7 @@ import {
   getTableRecords,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({
   personId: z.string().trim().min(1),

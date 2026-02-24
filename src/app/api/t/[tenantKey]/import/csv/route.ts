@@ -4,7 +4,7 @@ import { getAppSession } from "@/lib/auth/session";
 import { parseCsvContent } from "@/lib/csv/parse";
 import { buildPersonId } from "@/lib/person/id";
 import { createTableRecord, updateTableRecordById } from "@/lib/google/sheets";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({
   target: z.enum(["people", "relationships", "family_units", "important_dates", "person_attributes"]),

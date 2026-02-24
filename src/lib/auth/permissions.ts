@@ -1,5 +1,5 @@
 import type { Session } from "next-auth";
-import type { TenantContext } from "@/lib/tenant/context";
+import type { TenantContext } from "@/lib/family-group/context";
 
 export function canEditPerson(session: Session | null, personId: string, tenant?: TenantContext) {
   if (!session?.user && !tenant) {
@@ -12,3 +12,4 @@ export function canEditPerson(session: Session | null, personId: string, tenant?
 
   return session?.user?.role === "ADMIN" || session?.user?.person_id === personId;
 }
+

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
-import { getTenantAccesses, getTenantContext } from "@/lib/tenant/context";
+import { getTenantAccesses, getTenantContext } from "@/lib/family-group/context";
 
 function isProductionLikeRuntime() {
   return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL_URL);
@@ -101,3 +101,4 @@ export async function GET() {
     );
   }
 }
+

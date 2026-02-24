@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { GamesClient } from "@/components/GamesClient";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getImportantDates, getPeople } from "@/lib/google/sheets";
 
 type TenantGamesPageProps = {
@@ -9,7 +9,7 @@ type TenantGamesPageProps = {
 
 export default async function TenantGamesPage({ params }: TenantGamesPageProps) {
   await params;
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const people = await getPeople(tenant.tenantKey);
   const importantDates = await getImportantDates(tenant.tenantKey);
 

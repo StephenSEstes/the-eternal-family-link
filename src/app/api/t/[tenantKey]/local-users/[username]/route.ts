@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { deleteLocalUser, getTenantSecurityPolicy, patchLocalUser, renameLocalUser } from "@/lib/auth/local-users";
-import { requireTenantAdmin } from "@/lib/tenant/guard";
+import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { validatePasswordComplexity } from "@/lib/security/password";
 
 const patchSchema = z

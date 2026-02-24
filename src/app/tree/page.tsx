@@ -1,12 +1,12 @@
 import { AppHeader } from "@/components/AppHeader";
 import { TreeGraph } from "@/components/TreeGraph";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getFamilyUnits, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/google/sheets";
-import { getTenantBasePath } from "@/lib/tenant/context";
+import { getTenantBasePath } from "@/lib/family-group/context";
 
 export default async function TreePage() {
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const basePath = getTenantBasePath(tenant.tenantKey);
   const people = await getPeople(tenant.tenantKey);
   const relationships = await getRelationships(tenant.tenantKey);
@@ -57,3 +57,4 @@ export default async function TreePage() {
     </>
   );
 }
+

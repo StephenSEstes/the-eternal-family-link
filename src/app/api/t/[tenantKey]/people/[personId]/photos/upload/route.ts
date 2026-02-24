@@ -10,7 +10,7 @@ import {
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { requireTenantAccess } from "@/lib/tenant/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 
 type UploadRouteProps = {
   params: Promise<{ tenantKey: string; personId: string }>;

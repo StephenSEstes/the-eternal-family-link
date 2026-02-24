@@ -8,7 +8,7 @@ import {
   updatePerson,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { requireTenantAccess } from "@/lib/tenant/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type TenantPersonRouteProps = {

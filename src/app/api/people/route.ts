@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { getPeople } from "@/lib/google/sheets";
-import { getRequestTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/family-group/context";
 
 class StepFailure extends Error {
   constructor(
@@ -132,3 +132,4 @@ export async function GET() {
     }
   }
 }
+

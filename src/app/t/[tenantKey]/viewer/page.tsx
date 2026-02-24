@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
 import { getPeople, getPersonAttributes, getTenantConfig } from "@/lib/google/sheets";
-import { normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantViewerPageProps = {
   params: Promise<{ tenantKey: string }>;

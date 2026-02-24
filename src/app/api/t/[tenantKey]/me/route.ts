@@ -4,7 +4,7 @@ import {
   getTenantContext,
   hasTenantAccess,
   normalizeTenantRouteKey,
-} from "@/lib/tenant/context";
+} from "@/lib/family-group/context";
 
 type TenantMeRouteProps = {
   params: Promise<{ tenantKey: string }>;

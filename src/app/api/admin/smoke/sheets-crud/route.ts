@@ -10,7 +10,7 @@ import {
   readTabWithClient,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getTenantContext } from "@/lib/family-group/context";
 
 const ID_COLUMN_CANDIDATES = ["id", "person_id", "record_id", "user_email"];
 
@@ -180,3 +180,4 @@ export async function POST() {
     reports,
   });
 }
+

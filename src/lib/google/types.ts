@@ -1,5 +1,12 @@
 export type AppRole = "ADMIN" | "USER";
 
+export type FamilyGroupAccess = {
+  familyGroupKey: string;
+  familyGroupName: string;
+  role: AppRole;
+  personId: string;
+};
+
 export type UserAccessRecord = {
   userEmail: string;
   isEnabled: boolean;
@@ -14,6 +21,21 @@ export type TenantAccess = {
   tenantName: string;
   role: AppRole;
   personId: string;
+};
+export type FamilyGroupConfig = {
+  familyGroupKey: string;
+  familyGroupName: string;
+  viewerPinHash: string;
+  photosFolderId: string;
+};
+
+export type FamilyGroupSecurityPolicy = {
+  familyGroupKey: string;
+  minLength: number;
+  requireNumber: boolean;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  lockoutAttempts: number;
 };
 
 export type PersonRecord = {
@@ -77,6 +99,9 @@ export type TenantSecurityPolicy = {
   requireLowercase: boolean;
   lockoutAttempts: number;
 };
+export type TenantAccessLegacy = TenantAccess;
+export type TenantConfigLegacy = TenantConfig;
+export type TenantSecurityPolicyLegacy = TenantSecurityPolicy;
 
 export type LocalUserRecord = {
   tenantKey: string;

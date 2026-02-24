@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPhotoContent } from "@/lib/google/drive";
 import { getTenantConfig } from "@/lib/google/sheets";
-import { normalizeTenantRouteKey } from "@/lib/tenant/context";
+import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantPhotoRouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;

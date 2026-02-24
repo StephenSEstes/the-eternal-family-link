@@ -19,7 +19,7 @@ export async function getRelationships(tenantKey: string): Promise<RelationshipR
   return rows
     .map((row, idx) => {
       const data = row.data;
-      const rowTenant = readCell(data, "tenant_key") || tenantKey;
+      const rowTenant = readCell(data, "family_group_key", "tenant_key") || tenantKey;
       return {
         id: readCell(data, "rel_id", "relationship_id", "id") || `rel-${idx + 2}`,
         tenantKey: rowTenant,
@@ -37,7 +37,7 @@ export async function getFamilyUnits(tenantKey: string): Promise<FamilyUnitRecor
   return rows
     .map((row, idx) => {
       const data = row.data;
-      const rowTenant = readCell(data, "tenant_key") || tenantKey;
+      const rowTenant = readCell(data, "family_group_key", "tenant_key") || tenantKey;
       return {
         id: readCell(data, "family_unit_id", "id") || `fu-${idx + 2}`,
         tenantKey: rowTenant,

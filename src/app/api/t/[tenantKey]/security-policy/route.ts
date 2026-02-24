@@ -5,7 +5,7 @@ import {
   getTenantSecurityPolicy,
   upsertTenantSecurityPolicy,
 } from "@/lib/auth/local-users";
-import { requireTenantAdmin } from "@/lib/tenant/guard";
+import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const policySchema = z.object({
   minLength: z.number().int().min(4).max(128),

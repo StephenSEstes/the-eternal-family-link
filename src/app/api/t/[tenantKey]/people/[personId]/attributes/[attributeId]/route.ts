@@ -9,7 +9,7 @@ import {
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { assertTenantScopedValue, requireTenantAccess } from "@/lib/tenant/guard";
+import { assertTenantScopedValue, requireTenantAccess } from "@/lib/family-group/guard";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeItemRouteProps = {

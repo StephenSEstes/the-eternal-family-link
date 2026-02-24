@@ -1,5 +1,5 @@
 import { AppHeader } from "@/components/AppHeader";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getImportantDates } from "@/lib/google/sheets";
 
 type TenantTodayPageProps = {
@@ -8,7 +8,7 @@ type TenantTodayPageProps = {
 
 export default async function TenantTodayPage({ params }: TenantTodayPageProps) {
   await params;
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const items = await getImportantDates(tenant.tenantKey);
 
   const date = new Date().toLocaleDateString(undefined, {

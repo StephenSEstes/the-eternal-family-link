@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AddPersonCard } from "@/components/AddPersonCard";
 import { AppHeader } from "@/components/AppHeader";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
-import { getTenantBasePath } from "@/lib/tenant/context";
+import { getTenantBasePath } from "@/lib/family-group/context";
 
 type TenantPeoplePageProps = {
   params: Promise<{ tenantKey: string }>;
@@ -12,7 +12,7 @@ type TenantPeoplePageProps = {
 
 export default async function TenantPeoplePage({ params }: TenantPeoplePageProps) {
   await params;
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const people = await getPeople(tenant.tenantKey);
   const attributes = await getPersonAttributes(tenant.tenantKey);
   const photoByPersonId = attributes

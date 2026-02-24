@@ -5,6 +5,9 @@ import type { TenantAccess } from "@/lib/google/types";
 export const DEFAULT_TENANT_KEY = "default";
 export const DEFAULT_TENANT_NAME = "The Eternal Family Link";
 export const ACTIVE_TENANT_COOKIE = "active_tenant";
+export const DEFAULT_FAMILY_GROUP_KEY = DEFAULT_TENANT_KEY;
+export const DEFAULT_FAMILY_GROUP_NAME = DEFAULT_TENANT_NAME;
+export const ACTIVE_FAMILY_GROUP_COOKIE = "active_family_group";
 
 type SessionTenantShape = Session & {
   tenantKey?: string;
@@ -33,7 +36,15 @@ export function normalizeTenantRouteKey(tenantKey?: string) {
 
 export function getTenantBasePath(tenantKey?: string) {
   const key = normalizeTenantKey(tenantKey);
-  return key === DEFAULT_TENANT_KEY ? "" : `/t/${encodeURIComponent(key)}`;
+  return key === DEFAULT_TENANT_KEY ? "" : `/f/${encodeURIComponent(key)}`;
+}
+
+export function normalizeFamilyGroupRouteKey(familyGroupKey?: string) {
+  return normalizeTenantRouteKey(familyGroupKey);
+}
+
+export function getFamilyGroupBasePath(familyGroupKey?: string) {
+  return getTenantBasePath(familyGroupKey);
 }
 
 export function getTenantAccesses(session: Session | null): TenantAccess[] {
@@ -53,6 +64,8 @@ export function getTenantAccesses(session: Session | null): TenantAccess[] {
   ];
 }
 
+export const getFamilyGroupAccesses = getTenantAccesses;
+
 export function getTenantContext(session: Session | null, requestedTenantKey?: string): TenantContext {
   const tenantSession = session as SessionTenantShape | null;
   const tenants = getTenantAccesses(session);
@@ -68,13 +81,19 @@ export function getTenantContext(session: Session | null, requestedTenantKey?: s
   };
 }
 
+export const getFamilyGroupContext = getTenantContext;
+
 export function hasTenantAccess(session: Session | null, tenantKey?: string) {
   const key = normalizeTenantKey(tenantKey);
   return getTenantAccesses(session).some((entry) => normalizeTenantKey(entry.tenantKey) === key);
 }
 
+export const hasFamilyGroupAccess = hasTenantAccess;
+
 export async function getRequestTenantContext(session: Session | null) {
   const cookieStore = await cookies();
-  const requested = cookieStore.get(ACTIVE_TENANT_COOKIE)?.value;
+  const requested = cookieStore.get(ACTIVE_FAMILY_GROUP_COOKIE)?.value ?? cookieStore.get(ACTIVE_TENANT_COOKIE)?.value;
   return getTenantContext(session, requested);
 }
+
+export const getRequestFamilyGroupContext = getRequestTenantContext;

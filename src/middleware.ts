@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 const ACTIVE_TENANT_COOKIE = "active_tenant";
+const ACTIVE_FAMILY_GROUP_COOKIE = "active_family_group";
 
 function isBypassPath(pathname: string) {
   return (
@@ -15,11 +16,12 @@ function isBypassPath(pathname: string) {
 
 function parseTenantPath(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
-  if (parts[0] !== "t" || !parts[1]) {
+  if ((parts[0] !== "t" && parts[0] !== "f") || !parts[1]) {
     return null;
   }
 
   return {
+    routePrefix: parts[0],
     tenantKey: decodeURIComponent(parts[1]).trim().toLowerCase(),
     subPath: parts.slice(2),
   };
@@ -42,8 +44,20 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next();
+  const rewrittenPath =
+    tenantPath.routePrefix === "f"
+      ? `/t/${encodeURIComponent(tenantPath.tenantKey)}${tenantPath.subPath.length ? `/${tenantPath.subPath.join("/")}` : ""}`
+      : pathname;
+  const response =
+    rewrittenPath === pathname ? NextResponse.next() : NextResponse.rewrite(new URL(rewrittenPath, request.url));
   response.cookies.set(ACTIVE_TENANT_COOKIE, tenantPath.tenantKey, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+  response.cookies.set(ACTIVE_FAMILY_GROUP_COOKIE, tenantPath.tenantKey, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -69,5 +83,5 @@ export default async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/t/:path*"],
+  matcher: ["/t/:path*", "/f/:path*"],
 };

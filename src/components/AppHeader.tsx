@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getAppSession } from "@/lib/auth/session";
-import { TenantSwitcher } from "@/components/TenantSwitcher";
-import { getRequestTenantContext, getTenantBasePath } from "@/lib/tenant/context";
+import { FamilyGroupSwitcher } from "@/components/FamilyGroupSwitcher";
+import { getFamilyGroupBasePath, getRequestFamilyGroupContext } from "@/lib/family-group/context";
 
 export async function AppHeader() {
   const session = await getAppSession();
-  const tenant = await getRequestTenantContext(session);
-  const basePath = getTenantBasePath(tenant.tenantKey);
+  const tenant = await getRequestFamilyGroupContext(session);
+  const basePath = getFamilyGroupBasePath(tenant.tenantKey);
 
   return (
     <header className="app-header">
@@ -19,11 +19,11 @@ export async function AppHeader() {
           <div className="app-meta">
             <span>Family group:</span>
             <span className="tenant-chip">{tenant.tenantName}</span>
-            <TenantSwitcher
-              activeTenantKey={tenant.tenantKey}
-              tenants={tenant.tenants.map((item) => ({
-                tenantKey: item.tenantKey,
-                tenantName: item.tenantName,
+            <FamilyGroupSwitcher
+              activeFamilyGroupKey={tenant.tenantKey}
+              familyGroups={tenant.tenants.map((item) => ({
+                familyGroupKey: item.tenantKey,
+                familyGroupName: item.tenantName,
                 role: item.role,
               }))}
             />
@@ -48,7 +48,7 @@ export async function AppHeader() {
             Games
           </Link>
           {tenant.role === "ADMIN" ? (
-            <Link href={`/t/${encodeURIComponent(tenant.tenantKey)}/settings`} className="pill-link">
+            <Link href={`${basePath}/settings`} className="pill-link">
               Settings
             </Link>
           ) : null}

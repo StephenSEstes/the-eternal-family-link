@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { getAppSession, requireTenantSession } from "@/lib/auth/session";
+import { getAppSession, requireFamilyGroupSession } from "@/lib/auth/session";
 import { getPersonById, updatePerson } from "@/lib/google/sheets";
-import { getRequestTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/family-group/context";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type PersonRouteProps = {
@@ -10,7 +10,7 @@ type PersonRouteProps = {
 };
 
 export async function GET(_: Request, { params }: PersonRouteProps) {
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const { personId } = await params;
   const person = await getPersonById(personId, tenant.tenantKey);
 

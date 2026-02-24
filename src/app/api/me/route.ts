@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-import { getRequestTenantContext } from "@/lib/tenant/context";
+import { getRequestTenantContext } from "@/lib/family-group/context";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -27,3 +27,4 @@ export async function GET() {
     tenants: tenant.tenants,
   });
 }
+

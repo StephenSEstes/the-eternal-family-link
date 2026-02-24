@@ -31,12 +31,12 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
 
     startTransition(async () => {
       setError(null);
-      const response = await fetch("/api/tenants/active", {
+      const response = await fetch("/api/family-groups/active", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ tenantKey: selected }),
+        body: JSON.stringify({ familyGroupKey: selected }),
       });
 
       if (!response.ok) {

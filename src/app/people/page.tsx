@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { AddPersonCard } from "@/components/AddPersonCard";
 import { AppHeader } from "@/components/AppHeader";
-import { requireTenantSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
 
 export default async function PeoplePage() {
-  const { tenant } = await requireTenantSession();
+  const { tenant } = await requireFamilyGroupSession();
   const people = await getPeople(tenant.tenantKey);
   const attributes = await getPersonAttributes(tenant.tenantKey);
   const photoByPersonId = attributes

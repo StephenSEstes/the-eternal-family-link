@@ -1,14 +1,14 @@
 import type { Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey, type TenantContext } from "@/lib/tenant/context";
+import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey, type TenantContext } from "@/lib/family-group/context";
 export {
   TENANT_GUARD_CHECKLIST,
   buildTenantGuardChecklistState,
   isTenantGuardChecklistPassing,
   isTenantScopedValueAllowed,
   assertTenantScopedValue,
-} from "@/lib/tenant/guard-core";
+} from "@/lib/family-group/guard-core";
 
 function normalizeTenant(value?: string) {
   return normalizeTenantRouteKey(value);
@@ -42,3 +42,4 @@ export async function requireTenantAdmin(tenantKey: string): Promise<TenantAcces
   }
   return resolved;
 }
+

@@ -15,13 +15,12 @@ import type {
   TenantConfig,
   UserAccessRecord,
 } from "@/lib/google/types";
-import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/tenant/context";
+import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 
 const USER_ACCESS_TAB = "UserAccess";
 const USER_FAMILY_GROUPS_TAB = "UserFamilyGroups";
 const USER_FAMILY_GROUPS_HEADERS = [
   "user_email",
-  "user_id",
   "family_group_key",
   "family_group_name",
   "role",
@@ -40,16 +39,17 @@ const USER_ACCESS_HEADERS = [
   "failed_attempts",
   "locked_until",
   "must_change_password",
-  "user_id",
 ];
 export const PEOPLE_TAB = "People";
 const IMPORTANT_DATES_TAB = "ImportantDates";
 export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
-const TENANT_CONFIG_TAB = "TenantConfig";
+const FAMILY_CONFIG_TAB = "FamilyConfig";
+const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
+const FAMILY_SECURITY_POLICY_TAB = "FamilySecurityPolicy";
 const TENANT_TAB_DELIMITER = "__";
 const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   People: [
-    "tenant_key",
+    "family_group_key",
     "person_id",
     "display_name",
     "birth_date",
@@ -61,11 +61,11 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "is_pinned",
     "relationships",
   ],
-  Relationships: ["tenant_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
-  FamilyUnits: ["tenant_key", "family_unit_id", "partner1_person_id", "partner2_person_id"],
-  ImportantDates: ["tenant_key", "id", "date", "title", "description", "person_id"],
+  Relationships: ["family_group_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
+  FamilyUnits: ["family_group_key", "family_unit_id", "partner1_person_id", "partner2_person_id"],
+  ImportantDates: ["family_group_key", "id", "date", "title", "description", "person_id"],
   PersonAttributes: [
-    "tenant_key",
+    "family_group_key",
     "attribute_id",
     "person_id",
     "attribute_type",
@@ -79,8 +79,8 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "visibility",
     "notes",
   ],
-  TenantSecurityPolicy: [
-    "tenant_key",
+  [FAMILY_SECURITY_POLICY_TAB]: [
+    "family_group_key",
     "id",
     "min_length",
     "require_number",
@@ -115,7 +115,14 @@ export type UpsertTenantAccessResult = {
 };
 
 function normalizeHeader(header: string) {
-  return header.trim().toLowerCase();
+  const normalized = header.trim().toLowerCase();
+  if (normalized === "tenant_key") {
+    return "family_group_key";
+  }
+  if (normalized === "tenant_name") {
+    return "family_group_name";
+  }
+  return normalized;
 }
 
 function parseBool(value: string | undefined) {
@@ -197,6 +204,22 @@ function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
   }
 
   return [`${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`, tabName];
+}
+
+function buildMultiTenantTabCandidates(tabNames: string | string[], tenantKey?: string) {
+  const names = Array.isArray(tabNames) ? tabNames : [tabNames];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    for (const candidate of buildTenantTabCandidates(name, tenantKey)) {
+      const normalized = candidate.trim().toLowerCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        out.push(candidate);
+      }
+    }
+  }
+  return out;
 }
 
 function buildTenantScopedTabName(tabName: string, tenantKey?: string) {
@@ -356,21 +379,26 @@ export async function ensureTenantScaffold(input: {
   }
 
   const configPayload: Record<string, string> = {
-    tenant_key: normalizedTenantKey,
-    tenant_name: input.tenantName.trim() || normalizedTenantKey,
+    family_group_key: normalizedTenantKey,
+    family_group_name: input.tenantName.trim() || normalizedTenantKey,
     viewer_pin_hash: viewerPinHash(getEnv().VIEWER_PIN),
     photos_folder_id: input.photosFolderId,
   };
 
-  const updated = await updateTableRecordById(TENANT_CONFIG_TAB, normalizedTenantKey, configPayload, "tenant_key");
+  const updated = await updateTableRecordById(
+    [FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB],
+    normalizedTenantKey,
+    configPayload,
+    "family_group_key",
+  );
   if (!updated) {
-    await createTableRecord(TENANT_CONFIG_TAB, configPayload);
+    await createTableRecord(FAMILY_CONFIG_TAB, configPayload);
   }
 }
 
 async function resolveTenantTabNameWithClient(
   sheets: sheets_v4.Sheets,
-  tabName: string,
+  tabName: string | string[],
   tenantKey?: string,
   timeoutMs = 3500,
 ): Promise<string | null> {
@@ -391,7 +419,7 @@ async function resolveTenantTabNameWithClient(
       .map((title) => title.trim())
       .filter(Boolean) ?? [];
   const index = new Map(tabs.map((tab) => [tab.trim().toLowerCase(), tab]));
-  const candidates = buildTenantTabCandidates(tabName, tenantKey);
+  const candidates = buildMultiTenantTabCandidates(tabName, tenantKey);
 
   for (const candidate of candidates) {
     const match = index.get(candidate.trim().toLowerCase());
@@ -403,11 +431,12 @@ async function resolveTenantTabNameWithClient(
   return null;
 }
 
-async function resolveTenantTabName(tabName: string, tenantKey?: string): Promise<string> {
+async function resolveTenantTabName(tabName: string | string[], tenantKey?: string): Promise<string> {
   const sheets = await createSheetsClient();
   const resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
   if (!resolved) {
-    throw new Error(`Tab '${tabName}' not found for tenant '${normalizeTenantKey(tenantKey)}'.`);
+    const tabLabel = Array.isArray(tabName) ? tabName.join("' or '") : tabName;
+    throw new Error(`Tab '${tabLabel}' not found for tenant '${normalizeTenantKey(tenantKey)}'.`);
   }
   return resolved;
 }
@@ -461,14 +490,14 @@ export function matrixToRecords(matrix: SheetMatrix): SheetRecord[] {
   }));
 }
 
-export async function getTableRecords(tabName: string, tenantKey?: string): Promise<SheetRecord[]> {
+export async function getTableRecords(tabName: string | string[], tenantKey?: string): Promise<SheetRecord[]> {
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   return matrixToRecords(matrix);
 }
 
 export async function getTableRecordById(
-  tabName: string,
+  tabName: string | string[],
   recordId: string,
   idColumn?: string,
   tenantKey?: string,
@@ -489,7 +518,7 @@ export async function getTableRecordById(
 }
 
 export async function createTableRecord(
-  tabName: string,
+  tabName: string | string[],
   payload: Record<string, string>,
   tenantKey?: string,
 ): Promise<SheetRecord> {
@@ -529,7 +558,7 @@ export async function createTableRecord(
 }
 
 export async function updateTableRecordById(
-  tabName: string,
+  tabName: string | string[],
   recordId: string,
   payload: Record<string, string>,
   idColumn?: string,
@@ -582,7 +611,7 @@ export async function updateTableRecordById(
 }
 
 export async function deleteTableRecordById(
-  tabName: string,
+  tabName: string | string[],
   recordId: string,
   idColumn?: string,
   tenantKey?: string,
@@ -738,7 +767,7 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
 
   return {
     attributeId,
-    tenantKey: getCell(row, idx, "tenant_key").trim().toLowerCase() || fallbackTenantKey,
+    tenantKey: getCell(row, idx, "family_group_key").trim().toLowerCase() || fallbackTenantKey,
     personId,
     attributeType,
     valueText,
@@ -771,12 +800,12 @@ export function personAttributesFromMatrix(matrix: SheetMatrix, tenantKey?: stri
 
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("tenant_key");
+  const hasTenantColumn = idx.has("family_group_key");
 
   return matrix.rows
     .map((row) => {
       if (hasTenantColumn) {
-        const rowTenant = getCell(row, idx, "tenant_key").trim().toLowerCase();
+        const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
         if (rowTenant && rowTenant !== normalizedTenantKey) {
           return null;
         }
@@ -879,14 +908,21 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
   const familyIdx = buildHeaderIndex(familyGroups.headers);
   const normalizedEmail = input.userEmail.trim().toLowerCase();
   const normalizedTenantKey = input.tenantKey.trim().toLowerCase() || DEFAULT_TENANT_KEY;
+  const normalizedPersonId = input.personId.trim();
   const familyRowIndex = familyGroups.rows.findIndex((row) => {
     const rowEmail = getCell(row, familyIdx, "user_email").trim().toLowerCase();
     const rowTenantKey = getCell(row, familyIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-    return rowEmail === normalizedEmail && rowTenantKey === normalizedTenantKey;
+    if (rowTenantKey !== normalizedTenantKey) {
+      return false;
+    }
+    const rowPersonId = getCell(row, familyIdx, "person_id").trim();
+    if (normalizedPersonId && rowPersonId && rowPersonId === normalizedPersonId) {
+      return true;
+    }
+    return rowEmail === normalizedEmail;
   });
   const familyValues = {
     user_email: normalizedEmail,
-    user_id: `${normalizedTenantKey}:email:${normalizedEmail}`,
     family_group_key: normalizedTenantKey,
     family_group_name: input.tenantName.trim() || DEFAULT_TENANT_NAME,
     role: input.role,
@@ -898,7 +934,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
   if (familyRowIndex >= 0) {
     const mutable = Array.from({ length: familyGroups.headers.length }, (_, i) => familyGroups.rows[familyRowIndex][i] ?? "");
     setCell(mutable, familyIdx, "user_email", familyValues.user_email);
-    setCell(mutable, familyIdx, "user_id", familyValues.user_id);
     setCell(mutable, familyIdx, "family_group_key", familyValues.family_group_key);
     setCell(mutable, familyIdx, "family_group_name", familyValues.family_group_name);
     setCell(mutable, familyIdx, "role", familyValues.role);
@@ -914,7 +949,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     const newFamilyRow = familyGroups.headers.map((header) => {
       const key = normalizeHeader(header);
       if (key === "user_email") return familyValues.user_email;
-      if (key === "user_id") return familyValues.user_id;
       if (key === "family_group_key") return familyValues.family_group_key;
       if (key === "family_group_name") return familyValues.family_group_name;
       if (key === "role") return familyValues.role;
@@ -941,8 +975,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     throw new Error("UserAccess tab missing required 'user_email' column.");
   }
 
-  const normalizedPersonId = input.personId.trim();
-
   const rowIndex = matrix.rows.findIndex((row) => {
     if (normalizedPersonId) {
       const rowPersonId = getCell(row, idx, "person_id").trim();
@@ -959,7 +991,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     google_access: toSheetBool(input.isEnabled),
     role: input.role,
     person_id: input.personId,
-    user_id: normalizedPersonId || `email:${normalizedEmail}`,
   };
 
   if (rowIndex >= 0) {
@@ -968,7 +999,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     setCell(mutableRow, idx, "google_access", values.google_access);
     setCell(mutableRow, idx, "role", values.role);
     setCell(mutableRow, idx, "person_id", values.person_id);
-    setCell(mutableRow, idx, "user_id", values.user_id);
 
     const rowNumber = rowIndex + 2;
     await sheets.spreadsheets.values.update({
@@ -991,7 +1021,6 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
     if (key === "must_change_password") return "FALSE";
     if (key === "role") return values.role;
     if (key === "person_id") return values.person_id;
-    if (key === "user_id") return values.user_id;
     return "";
   });
 
@@ -1064,7 +1093,7 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   }
 
   const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("tenant_key");
+  const hasTenantColumn = idx.has("family_group_key");
   if (!hasTenantColumn) {
     return people;
   }
@@ -1072,7 +1101,7 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   const targetTenant = normalizeTenantKey(tenantKey);
   return matrix.rows
     .filter((row) => {
-      const rowTenant = getCell(row, idx, "tenant_key").trim().toLowerCase();
+      const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
       return rowTenant === targetTenant;
     })
     .map((row) => rowToPerson(matrix.headers, row))
@@ -1085,11 +1114,11 @@ export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig>
   let matrix: SheetMatrix | null = null;
 
   try {
-    const tabName = await resolveTenantTabName(TENANT_CONFIG_TAB, normalizedTenantKey);
+    const tabName = await resolveTenantTabName([FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB], normalizedTenantKey);
     matrix = await readTab(tabName);
   } catch {
     try {
-      matrix = await readTab(TENANT_CONFIG_TAB);
+      matrix = await readTab(LEGACY_TENANT_CONFIG_TAB);
     } catch {
       return defaultTenantConfig(normalizedTenantKey);
     }
@@ -1102,17 +1131,17 @@ export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig>
   const idx = buildHeaderIndex(matrix.headers);
   const row =
     matrix.rows.find((candidate) => {
-      const rowTenantKey = getCell(candidate, idx, "tenant_key").trim().toLowerCase();
+      const rowTenantKey = getCell(candidate, idx, "family_group_key").trim().toLowerCase();
       return rowTenantKey === normalizedTenantKey;
     }) ??
     matrix.rows.find((candidate) => {
-      const rowTenantKey = getCell(candidate, idx, "tenant_key").trim().toLowerCase();
+      const rowTenantKey = getCell(candidate, idx, "family_group_key").trim().toLowerCase();
       return !rowTenantKey && normalizedTenantKey === DEFAULT_TENANT_KEY;
     }) ??
     matrix.rows[0];
 
   const fallback = defaultTenantConfig(normalizedTenantKey);
-  const tenantName = getCell(row, idx, "tenant_name").trim() || fallback.tenantName;
+  const tenantName = getCell(row, idx, "family_group_name").trim() || fallback.tenantName;
   const viewerPin = getCell(row, idx, "viewer_pin_hash").trim() || fallback.viewerPinHash;
   const photosFolderId = getCell(row, idx, "photos_folder_id").trim() || fallback.photosFolderId;
 
@@ -1140,11 +1169,11 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
   }
 
   const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("tenant_key");
+  const hasTenantColumn = idx.has("family_group_key");
 
   const items = matrix.rows
     .map((row, i) => {
-      const tenantFilter = getCell(row, idx, "tenant_key").trim().toLowerCase();
+      const tenantFilter = getCell(row, idx, "family_group_key").trim().toLowerCase();
       if (hasTenantColumn && tenantFilter && tenantFilter !== normalizedTenantKey) {
         return null;
       }
@@ -1228,7 +1257,7 @@ export async function updatePerson(
 
   const idx = buildHeaderIndex(headers);
   const targetTenant = normalizeTenantKey(tenantKey);
-  const hasTenantColumn = idx.has("tenant_key");
+  const hasTenantColumn = idx.has("family_group_key");
   const rowIndex = rows.findIndex((row) => {
     if (getCell(row, idx, "person_id") !== personId) {
       return false;
@@ -1236,7 +1265,7 @@ export async function updatePerson(
     if (!hasTenantColumn) {
       return true;
     }
-    return getCell(row, idx, "tenant_key").trim().toLowerCase() === targetTenant;
+    return getCell(row, idx, "family_group_key").trim().toLowerCase() === targetTenant;
   });
 
   if (rowIndex < 0) {
@@ -1266,3 +1295,4 @@ export async function updatePerson(
 
   return rowToPerson(headers, mutableRow);
 }
+
