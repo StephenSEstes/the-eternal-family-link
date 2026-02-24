@@ -43,7 +43,7 @@ type SettingsClientProps = {
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "import";
-type UserAdminSubTab = "directory" | "google_access" | "local_access";
+type UserAdminSubTab = "directory" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
 
@@ -108,6 +108,7 @@ export function SettingsClient({
   const [familyGroupsSubTab, setFamilyGroupsSubTab] = useState<FamilyGroupsSubTab>("overview");
   const [importSubTab, setImportSubTab] = useState<ImportSubTab>("target");
   const [selectedDirectoryPersonId, setSelectedDirectoryPersonId] = useState("");
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -364,6 +365,25 @@ export function SettingsClient({
     setLocalPersonId(selectedDirectoryPersonId);
   }, [selectedDirectoryPersonId]);
 
+  const createDirectoryUser = async () => {
+    if (!localPersonId) {
+      setLocalUserStatus("Select a person before creating a user.");
+      return;
+    }
+    await createLocalUser();
+    if (userEmail.trim()) {
+      setPersonId(localPersonId);
+      await upsertAccess();
+    }
+  };
+
+  const selectedPersonGoogleAccess = selectedDirectoryPersonId
+    ? visibleAccessItems.filter((item) => item.personId === selectedDirectoryPersonId)
+    : [];
+  const selectedPersonLocalUsers = selectedDirectoryPersonId
+    ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId)
+    : [];
+
   return (
     <div className="settings-stack">
       <div className="settings-chip-list">
@@ -441,7 +461,7 @@ export function SettingsClient({
       {activeTab === "user_admin" ? (
         <section className="card">
         <h2 style={{ marginTop: 0 }}>User Administration</h2>
-        <p className="page-subtitle">Manage Google and Local access from one shared user directory.</p>
+        <p className="page-subtitle">Manage users from one directory with local and optional Google access.</p>
         <label className="label">Target Family Group</label>
         <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
           {tenantOptions.map((option) => (
@@ -461,174 +481,289 @@ export function SettingsClient({
           </button>
           <button
             type="button"
-            className={`button secondary tap-button ${userAdminSubTab === "google_access" ? "game-option-selected" : ""}`}
-            onClick={() => setUserAdminSubTab("google_access")}
+            className={`button secondary tap-button ${userAdminSubTab === "password_policy" ? "game-option-selected" : ""}`}
+            onClick={() => setUserAdminSubTab("password_policy")}
           >
-            Google Access
-          </button>
-          <button
-            type="button"
-            className={`button secondary tap-button ${userAdminSubTab === "local_access" ? "game-option-selected" : ""}`}
-            onClick={() => setUserAdminSubTab("local_access")}
-          >
-            Local Access
+            Password Policy
           </button>
         </div>
 
         {userAdminSubTab === "directory" ? (
-          <div className="settings-table-wrap">
-            <table className="settings-table">
-              <thead>
-                <tr><th>Person</th><th>Google Access</th><th>Local Access</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {people.map((person) => {
-                  const personGoogle = googleAccessByPersonId.get(person.personId) ?? [];
-                  const personLocal = localAccessByPersonId.get(person.personId) ?? [];
-                  const hasGoogle = personGoogle.some((entry) => entry.isEnabled);
-                  const hasLocal = personLocal.some((entry) => entry.isEnabled);
-                  return (
-                    <tr key={person.personId}>
-                      <td>{person.displayName}</td>
-                      <td>{hasGoogle ? "TRUE" : "FALSE"}</td>
-                      <td>{hasLocal ? "TRUE" : "FALSE"}</td>
-                      <td>
-                        <div className="settings-chip-list">
+          <>
+            <div className="settings-chip-list">
+              <button type="button" className="button tap-button" onClick={() => setShowAddUserForm((v) => !v)}>
+                {showAddUserForm ? "Hide Add User" : "Add User"}
+              </button>
+            </div>
+
+            {showAddUserForm ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h3 style={{ marginTop: 0 }}>Add User To Directory</h3>
+                <label className="label">Person</label>
+                <select
+                  className="input"
+                  value={localPersonId}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setLocalPersonId(next);
+                    setPersonId(next);
+                  }}
+                >
+                  <option value="">Select person</option>
+                  {people.map((person) => (
+                    <option key={person.personId} value={person.personId}>{person.displayName}</option>
+                  ))}
+                </select>
+                <label className="label">Local Username</label>
+                <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
+                <label className="label">Temporary Password</label>
+                <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
+                <label className="label">Role</label>
+                <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
+                  <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
+                </select>
+                <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
+                <label className="label">Google Email (optional)</label>
+                <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="name@gmail.com" />
+                <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
+                <button type="button" className="button tap-button" onClick={createDirectoryUser}>Create User</button>
+                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                  Google access supports Gmail and Google Workspace accounts.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Person</th><th>Google Access</th><th>Local Access</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {people.map((person) => {
+                    const personGoogle = googleAccessByPersonId.get(person.personId) ?? [];
+                    const personLocal = localAccessByPersonId.get(person.personId) ?? [];
+                    const hasGoogle = personGoogle.some((entry) => entry.isEnabled);
+                    const hasLocal = personLocal.some((entry) => entry.isEnabled);
+                    return (
+                      <tr key={person.personId}>
+                        <td>{person.displayName}</td>
+                        <td>{hasGoogle ? "TRUE" : "FALSE"}</td>
+                        <td>{hasLocal ? "TRUE" : "FALSE"}</td>
+                        <td>
                           <button
                             type="button"
                             className="button secondary tap-button"
                             onClick={() => {
                               setSelectedDirectoryPersonId(person.personId);
-                              setUserAdminSubTab("google_access");
+                              setLocalPersonId(person.personId);
+                              setPersonId(person.personId);
                               const firstGoogle = personGoogle[0];
                               if (firstGoogle) {
                                 setUserEmail(firstGoogle.userEmail);
                                 setRole(firstGoogle.role);
                                 setIsEnabled(firstGoogle.isEnabled);
                               }
-                            }}
-                          >
-                            Manage Google
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setSelectedDirectoryPersonId(person.personId);
-                              setUserAdminSubTab("local_access");
                               const firstLocal = personLocal[0];
                               if (firstLocal) {
                                 setSelectedLocalUsername(firstLocal.username);
                                 setManageRole(firstLocal.role);
+                              } else {
+                                setSelectedLocalUsername("");
                               }
                             }}
                           >
-                            Manage Local
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-
-        {userAdminSubTab === "google_access" ? (
-          <>
-            <h3 style={{ marginBottom: "0.45rem" }}>Create/Manage Google Access</h3>
-            <label className="label">Person</label>
-            <select
-              className="input"
-              value={personId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setPersonId(next);
-                setSelectedDirectoryPersonId(next);
-              }}
-            >
-              <option value="">Select person</option>
-              {people.map((person) => (
-                <option key={person.personId} value={person.personId}>{person.displayName}</option>
-              ))}
-            </select>
-            <label className="label">Google Email</label>
-            <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
-            <label className="label">Role</label>
-            <select className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "USER")}>
-              <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
-            </select>
-            <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
-            <button type="button" className="button tap-button" onClick={upsertAccess}>Save Google Access</button>
-
-            <div className="settings-table-wrap" style={{ marginTop: "1rem" }}>
-              <table className="settings-table">
-                <thead>
-                  <tr><th>Email</th><th>Role</th><th>Person</th><th>Enabled</th><th>Select</th></tr>
-                </thead>
-                <tbody>
-                  {visibleAccessItems
-                    .filter((item) => (personId ? item.personId === personId : true))
-                    .map((item) => (
-                      <tr key={`${item.userEmail}-${item.personId}-${item.role}`}>
-                        <td>{item.userEmail}</td>
-                        <td>{item.role}</td>
-                        <td>{item.personId || "-"}</td>
-                        <td>{item.isEnabled ? "TRUE" : "FALSE"}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setUserEmail(item.userEmail);
-                              setRole(item.role);
-                              setPersonId(item.personId);
-                              setIsEnabled(item.isEnabled);
-                              setSelectedDirectoryPersonId(item.personId);
-                            }}
-                          >
-                            Manage
+                            Manage User
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+
+            {selectedDirectoryPersonId ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h3 style={{ marginTop: 0 }}>Manage User Details</h3>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Person ID: {selectedDirectoryPersonId}
+                </p>
+
+                <h4 style={{ marginBottom: "0.5rem" }}>Local Access</h4>
+                <label className="label">Username</label>
+                <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
+                <label className="label">Temporary Password</label>
+                <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
+                <label className="label">Role</label>
+                <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
+                  <option value="USER">USER</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+                <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={() => {
+                    setLocalPersonId(selectedDirectoryPersonId);
+                    void createLocalUser();
+                  }}
+                >
+                  Save Local Access
+                </button>
+
+                <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                  <table className="settings-table">
+                    <thead>
+                      <tr><th>Username</th><th>Role</th><th>Enabled</th><th>Select</th></tr>
+                    </thead>
+                    <tbody>
+                      {selectedPersonLocalUsers.map((user) => (
+                        <tr key={user.username}>
+                          <td>{user.username}</td>
+                          <td>{user.role}</td>
+                          <td>{user.isEnabled ? "TRUE" : "FALSE"}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="button secondary tap-button"
+                              onClick={() => {
+                                setSelectedLocalUsername(user.username);
+                                setShowDoneButton(false);
+                                setManageRole(user.role);
+                              }}
+                            >
+                              {selectedLocalUsername === user.username ? "Selected" : "Manage"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {selectedLocalUser && selectedLocalUser.personId === selectedDirectoryPersonId ? (
+                  <>
+                    <div className="settings-chip-list">
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "set_enabled", isEnabled: !selectedLocalUser.isEnabled })}
+                      >
+                        {selectedLocalUser.isEnabled ? "Disable" : "Enable"}
+                      </button>
+                      <button type="button" className="button tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
+                        Unlock
+                      </button>
+                      {showDoneButton ? (
+                        <button type="button" className="button tap-button" onClick={closeLocalUserEditor}>
+                          Done
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button tap-button"
+                          style={{ background: "var(--warn)", borderColor: "var(--warn)" }}
+                          onClick={deleteSelectedLocalUser}
+                        >
+                          Delete User
+                        </button>
+                      )}
+                    </div>
+                    <label className="label">Role</label>
+                    <div className="settings-inline-action">
+                      <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
+                        <option value="USER">USER</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
+                      >
+                        Change Role
+                      </button>
+                    </div>
+                    <label className="label">New Username</label>
+                    <div className="settings-inline-action">
+                      <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
+                      >
+                        Change Username
+                      </button>
+                    </div>
+                    <label className="label">New Password</label>
+                    <div className="settings-inline-action">
+                      <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
+                      >
+                        Reset Password
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                <hr style={{ border: "none", borderTop: "1px solid var(--line)", margin: "1rem 0" }} />
+                <h4 style={{ marginBottom: "0.5rem" }}>Google Access</h4>
+                <label className="label">Google Email</label>
+                <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+                <label className="label">Role</label>
+                <select className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "USER")}>
+                  <option value="USER">USER</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+                <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={() => {
+                    setPersonId(selectedDirectoryPersonId);
+                    void upsertAccess();
+                  }}
+                >
+                  Save Google Access
+                </button>
+                <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                  <table className="settings-table">
+                    <thead>
+                      <tr><th>Email</th><th>Role</th><th>Enabled</th><th>Select</th></tr>
+                    </thead>
+                    <tbody>
+                      {selectedPersonGoogleAccess.map((item) => (
+                        <tr key={`${item.userEmail}-${item.personId}-${item.role}`}>
+                          <td>{item.userEmail}</td>
+                          <td>{item.role}</td>
+                          <td>{item.isEnabled ? "TRUE" : "FALSE"}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="button secondary tap-button"
+                              onClick={() => {
+                                setUserEmail(item.userEmail);
+                                setRole(item.role);
+                                setIsEnabled(item.isEnabled);
+                              }}
+                            >
+                              Manage
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
 
-        {userAdminSubTab === "local_access" ? (
+        {userAdminSubTab === "password_policy" ? (
           <>
-            <h3 style={{ marginBottom: "0.45rem" }}>Create/Manage Local Access</h3>
-            <label className="label">Person</label>
-            <select
-              className="input"
-              value={localPersonId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setLocalPersonId(next);
-                setSelectedDirectoryPersonId(next);
-              }}
-            >
-              <option value="">Select person</option>
-              {people.map((person) => (
-                <option key={person.personId} value={person.personId}>{person.displayName}</option>
-              ))}
-            </select>
-            <label className="label">Username</label>
-            <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
-            <label className="label">Temporary Password</label>
-            <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
-            <label className="label">Role</label>
-            <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
-              <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
-            </select>
-            <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
-            <button type="button" className="button tap-button" onClick={createLocalUser}>Save Local Access</button>
-
-            <hr style={{ border: "none", borderTop: "1px solid var(--line)", margin: "1rem 0" }} />
             <h3 style={{ marginTop: 0 }}>Local Password Policy</h3>
             <label className="label">Minimum Password Length</label>
             <input
@@ -652,112 +787,6 @@ export function SettingsClient({
               onChange={(e) => setPolicy((p) => ({ ...p, lockoutAttempts: Number.parseInt(e.target.value || "5", 10) || 5 }))}
             />
             <button type="button" className="button tap-button" onClick={savePolicy}>Save Security Policy</button>
-
-            <div className="settings-table-wrap" style={{ marginTop: "1rem" }}>
-              <table className="settings-table">
-                <thead>
-                  <tr><th>Username</th><th>Role</th><th>Person</th><th>Active</th><th>Failed</th><th>Locked Until</th><th>Select</th></tr>
-                </thead>
-                <tbody>
-                  {localUsers
-                    .filter((user) => (localPersonId ? user.personId === localPersonId : true))
-                    .map((user) => (
-                      <tr key={user.username}>
-                        <td>{user.username}</td>
-                        <td>{user.role}</td>
-                        <td>{user.personId}</td>
-                        <td>{user.isEnabled ? "TRUE" : "FALSE"}</td>
-                        <td>{user.failedAttempts}</td>
-                        <td>{user.lockedUntil || "-"}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setSelectedLocalUsername(user.username);
-                              setShowDoneButton(false);
-                              setLocalPersonId(user.personId);
-                              setSelectedDirectoryPersonId(user.personId);
-                            }}
-                          >
-                            {selectedLocalUsername === user.username ? "Selected" : "Manage"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            {selectedLocalUser ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Manage User: {selectedLocalUser.username}</h3>
-                <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  Active: {selectedLocalUser.isEnabled ? "TRUE" : "FALSE"} | Failed attempts: {selectedLocalUser.failedAttempts}
-                </p>
-                <div className="settings-chip-list">
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "set_enabled", isEnabled: !selectedLocalUser.isEnabled })}
-                  >
-                    {selectedLocalUser.isEnabled ? "Disable" : "Enable"}
-                  </button>
-                  <button type="button" className="button tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
-                    Unlock
-                  </button>
-                  {showDoneButton ? (
-                    <button type="button" className="button tap-button" onClick={closeLocalUserEditor}>
-                      Done
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="button tap-button"
-                      style={{ background: "var(--warn)", borderColor: "var(--warn)" }}
-                      onClick={deleteSelectedLocalUser}
-                    >
-                      Delete User
-                    </button>
-                  )}
-                </div>
-                <label className="label">Role</label>
-                <div className="settings-inline-action">
-                  <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
-                    <option value="USER">USER</option>
-                    <option value="ADMIN">ADMIN</option>
-                  </select>
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
-                  >
-                    Change Role
-                  </button>
-                </div>
-                <label className="label">New Username</label>
-                <div className="settings-inline-action">
-                  <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
-                  >
-                    Change Username
-                  </button>
-                </div>
-                <label className="label">New Password</label>
-                <div className="settings-inline-action">
-                  <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
-                  >
-                    Reset Password
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
         {accessStatus ? <p>{accessStatus}</p> : null}
