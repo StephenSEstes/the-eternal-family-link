@@ -39,6 +39,7 @@ export function assertTenantScopedValue(
 }
 
 function normalizeTenant(value?: string) {
-  const raw = (value ?? "default").trim().toLowerCase();
-  return raw || "default";
+  const raw = (value ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
+  return raw || DEFAULT_TENANT_KEY;
 }
+import { DEFAULT_TENANT_KEY } from "@/lib/family-group/context";

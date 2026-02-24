@@ -482,7 +482,7 @@ export function SettingsClient({
         {familyGroupsSubTab === "create_group" ? (
           <>
             <label className="label">New Family Group Key</label>
-            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="smith-family" />
+            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="SnowEstes" />
             <label className="label">New Family Group Name</label>
             <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
             <label className="label">First Admin Email</label>

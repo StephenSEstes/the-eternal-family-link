@@ -17,6 +17,10 @@ const payloadSchema = z.object({
   isEnabled: z.boolean().default(true),
 });
 
+function normalizeFamilyGroupKey(value: string) {
+  return value.trim().replace(/[^a-zA-Z]/g, "").toLowerCase();
+}
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -34,11 +38,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const familyGroupKey = parsed.data.familyGroupKey ?? parsed.data.tenantKey;
+  const rawFamilyGroupKey = parsed.data.familyGroupKey ?? parsed.data.tenantKey;
   const familyGroupName = parsed.data.familyGroupName ?? parsed.data.tenantName;
-  if (!familyGroupKey || !familyGroupName) {
+  if (!rawFamilyGroupKey || !familyGroupName) {
     return NextResponse.json(
       { error: "invalid_payload", issues: "familyGroupKey and familyGroupName are required." },
+      { status: 400 },
+    );
+  }
+  const familyGroupKey = normalizeFamilyGroupKey(rawFamilyGroupKey);
+  if (familyGroupKey.length < 4) {
+    return NextResponse.json(
+      {
+        error: "invalid_family_group_key",
+        issues: "Family group key must follow maiden+partner-last-name pattern, letters only (example: SnowEstes).",
+      },
       { status: 400 },
     );
   }

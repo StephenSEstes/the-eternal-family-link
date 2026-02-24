@@ -1,13 +1,16 @@
 import type { Session } from "next-auth";
 import { cookies } from "next/headers";
 import type { TenantAccess } from "@/lib/google/types";
+import {
+  ACTIVE_FAMILY_GROUP_COOKIE,
+  ACTIVE_TENANT_COOKIE,
+  DEFAULT_FAMILY_GROUP_KEY,
+  DEFAULT_FAMILY_GROUP_NAME,
+} from "@/lib/family-group/constants";
 
-export const DEFAULT_TENANT_KEY = "default";
-export const DEFAULT_TENANT_NAME = "The Eternal Family Link";
-export const ACTIVE_TENANT_COOKIE = "active_tenant";
-export const DEFAULT_FAMILY_GROUP_KEY = DEFAULT_TENANT_KEY;
-export const DEFAULT_FAMILY_GROUP_NAME = DEFAULT_TENANT_NAME;
-export const ACTIVE_FAMILY_GROUP_COOKIE = "active_family_group";
+export const DEFAULT_TENANT_KEY = DEFAULT_FAMILY_GROUP_KEY;
+export const DEFAULT_TENANT_NAME = DEFAULT_FAMILY_GROUP_NAME;
+export { ACTIVE_TENANT_COOKIE, DEFAULT_FAMILY_GROUP_KEY, DEFAULT_FAMILY_GROUP_NAME, ACTIVE_FAMILY_GROUP_COOKIE };
 
 type SessionTenantShape = Session & {
   tenantKey?: string;

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -9,7 +10,7 @@ export default function LoginPage() {
   const [status, setStatus] = useState("");
   const [authError, setAuthError] = useState("");
   const callbackUrl = "/";
-  const defaultTenantKey = "default";
+  const defaultTenantKey = DEFAULT_FAMILY_GROUP_KEY;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
