@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
-import { getTenantContext } from "@/lib/tenant/context";
+import { getTenantAccesses, getTenantContext } from "@/lib/tenant/context";
 
 function isProductionLikeRuntime() {
   return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL_URL);
@@ -47,7 +47,10 @@ export async function GET() {
   }
 
   const tenant = getTenantContext(session);
-  if (tenant.role !== "ADMIN") {
+  const sessionRole = (session.user.role ?? "USER").toUpperCase();
+  const hasAdminAccess =
+    sessionRole === "ADMIN" || getTenantAccesses(session).some((entry) => entry.role === "ADMIN");
+  if (!hasAdminAccess) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -98,4 +101,3 @@ export async function GET() {
     );
   }
 }
-

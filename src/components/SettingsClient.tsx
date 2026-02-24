@@ -43,6 +43,10 @@ type SettingsClientProps = {
 };
 
 type SettingsTab = "family_groups" | "users" | "local_security" | "import";
+type UsersSubTab = "directory" | "google_access";
+type LocalSecuritySubTab = "password_policy" | "create_users" | "manage_users";
+type FamilyGroupsSubTab = "overview" | "create_group";
+type ImportSubTab = "target" | "csv";
 
 const CSV_TEMPLATES: Record<string, string> = {
   people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
@@ -101,6 +105,10 @@ export function SettingsClient({
   const [manageNextUsername, setManageNextUsername] = useState("");
   const [managePassword, setManagePassword] = useState("");
   const [showDoneButton, setShowDoneButton] = useState(false);
+  const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("directory");
+  const [localSecuritySubTab, setLocalSecuritySubTab] = useState<LocalSecuritySubTab>("password_policy");
+  const [familyGroupsSubTab, setFamilyGroupsSubTab] = useState<FamilyGroupsSubTab>("overview");
+  const [importSubTab, setImportSubTab] = useState<ImportSubTab>("target");
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -358,25 +366,47 @@ export function SettingsClient({
       {activeTab === "family_groups" ? (
         <section className="card">
         <h2 style={{ marginTop: 0 }}>Family Groups</h2>
-        <p className="page-subtitle">Current family group: {tenantName}. Create a new family group and seed first admin.</p>
-        <label className="label">New Family Group Key</label>
-        <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="smith-family" />
-        <label className="label">New Family Group Name</label>
-        <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
-        <label className="label">First Admin Email</label>
-        <input className="input" value={newTenantAdminEmail} onChange={(e) => setNewTenantAdminEmail(e.target.value)} />
-        <label className="label">Link Admin To Person</label>
-        <select className="input" value={newTenantPersonId} onChange={(e) => setNewTenantPersonId(e.target.value)}>
-          <option value="">Select person</option>
-          {people.map((person) => (
-            <option key={person.personId} value={person.personId}>
-              {person.displayName}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="button tap-button" onClick={createTenant}>
-          Create Family Group
-        </button>
+        <div className="settings-chip-list">
+          <button
+            type="button"
+            className={`button secondary tap-button ${familyGroupsSubTab === "overview" ? "game-option-selected" : ""}`}
+            onClick={() => setFamilyGroupsSubTab("overview")}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${familyGroupsSubTab === "create_group" ? "game-option-selected" : ""}`}
+            onClick={() => setFamilyGroupsSubTab("create_group")}
+          >
+            Create Group
+          </button>
+        </div>
+        {familyGroupsSubTab === "overview" ? (
+          <p className="page-subtitle">Current family group: {tenantName}. Create a new family group and seed first admin.</p>
+        ) : null}
+        {familyGroupsSubTab === "create_group" ? (
+          <>
+            <label className="label">New Family Group Key</label>
+            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="smith-family" />
+            <label className="label">New Family Group Name</label>
+            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
+            <label className="label">First Admin Email</label>
+            <input className="input" value={newTenantAdminEmail} onChange={(e) => setNewTenantAdminEmail(e.target.value)} />
+            <label className="label">Link Admin To Person</label>
+            <select className="input" value={newTenantPersonId} onChange={(e) => setNewTenantPersonId(e.target.value)}>
+              <option value="">Select person</option>
+              {people.map((person) => (
+                <option key={person.personId} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="button tap-button" onClick={createTenant}>
+              Create Family Group
+            </button>
+          </>
+        ) : null}
         {newTenantStatus ? <p>{newTenantStatus}</p> : null}
         </section>
       ) : null}
@@ -384,6 +414,22 @@ export function SettingsClient({
       {activeTab === "users" ? (
         <section className="card">
         <h2 style={{ marginTop: 0 }}>Family Group Users & Rights</h2>
+        <div className="settings-chip-list">
+          <button
+            type="button"
+            className={`button secondary tap-button ${usersSubTab === "directory" ? "game-option-selected" : ""}`}
+            onClick={() => setUsersSubTab("directory")}
+          >
+            User Directory
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${usersSubTab === "google_access" ? "game-option-selected" : ""}`}
+            onClick={() => setUsersSubTab("google_access")}
+          >
+            Google Access
+          </button>
+        </div>
         <label className="label">Target Family Group</label>
         <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
           {tenantOptions.map((option) => (
@@ -392,36 +438,42 @@ export function SettingsClient({
             </option>
           ))}
         </select>
-        <div className="settings-table-wrap">
-          <table className="settings-table">
-            <thead>
-              <tr><th>Email</th><th>Role</th><th>Person ID</th><th>Enabled</th></tr>
-            </thead>
-            <tbody>
-              {visibleAccessItems.map((item) => (
-                <tr key={`${item.userEmail}-${item.personId}-${item.role}`}>
-                  <td>{item.userEmail}</td><td>{item.role}</td><td>{item.personId || "-"}</td><td>{item.isEnabled ? "TRUE" : "FALSE"}</td>
-                </tr>
+        {usersSubTab === "directory" ? (
+          <div className="settings-table-wrap">
+            <table className="settings-table">
+              <thead>
+                <tr><th>Email</th><th>Role</th><th>Person ID</th><th>Enabled</th></tr>
+              </thead>
+              <tbody>
+                {visibleAccessItems.map((item) => (
+                  <tr key={`${item.userEmail}-${item.personId}-${item.role}`}>
+                    <td>{item.userEmail}</td><td>{item.role}</td><td>{item.personId || "-"}</td><td>{item.isEnabled ? "TRUE" : "FALSE"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        {usersSubTab === "google_access" ? (
+          <>
+            <h3 style={{ marginBottom: "0.45rem" }}>Add/Update Google User</h3>
+            <label className="label">Google Email</label>
+            <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+            <label className="label">Role</label>
+            <select className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "USER")}>
+              <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
+            </select>
+            <label className="label">Linked Person</label>
+            <select className="input" value={personId} onChange={(e) => setPersonId(e.target.value)}>
+              <option value="">Select person</option>
+              {people.map((person) => (
+                <option key={person.personId} value={person.personId}>{person.displayName}</option>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <h3 style={{ marginBottom: "0.45rem" }}>Add/Update Google User</h3>
-        <label className="label">Google Email</label>
-        <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
-        <label className="label">Role</label>
-        <select className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "USER")}>
-          <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
-        </select>
-        <label className="label">Linked Person</label>
-        <select className="input" value={personId} onChange={(e) => setPersonId(e.target.value)}>
-          <option value="">Select person</option>
-          {people.map((person) => (
-            <option key={person.personId} value={person.personId}>{person.displayName}</option>
-          ))}
-        </select>
-        <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Enabled</label>
-        <button type="button" className="button tap-button" onClick={upsertAccess}>Save Google User Access</button>
+            </select>
+            <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Enabled</label>
+            <button type="button" className="button tap-button" onClick={upsertAccess}>Save Google User Access</button>
+          </>
+        ) : null}
         {accessStatus ? <p>{accessStatus}</p> : null}
         </section>
       ) : null}
@@ -430,156 +482,191 @@ export function SettingsClient({
         <section className="card">
         <h2 style={{ marginTop: 0 }}>Local Login Security</h2>
         <p className="page-subtitle">Configure password complexity, lockout rules, and local username/password users.</p>
-        <label className="label">Minimum Password Length</label>
-        <input
-          className="input"
-          type="number"
-          min={4}
-          max={128}
-          value={policy.minLength}
-          onChange={(e) => setPolicy((p) => ({ ...p, minLength: Number.parseInt(e.target.value || "8", 10) || 8 }))}
-        />
-        <label className="label"><input type="checkbox" checked={policy.requireNumber} onChange={(e) => setPolicy((p) => ({ ...p, requireNumber: e.target.checked }))} /> Require number</label>
-        <label className="label"><input type="checkbox" checked={policy.requireUppercase} onChange={(e) => setPolicy((p) => ({ ...p, requireUppercase: e.target.checked }))} /> Require uppercase</label>
-        <label className="label"><input type="checkbox" checked={policy.requireLowercase} onChange={(e) => setPolicy((p) => ({ ...p, requireLowercase: e.target.checked }))} /> Require lowercase</label>
-        <label className="label">Lockout After Failed Attempts</label>
-        <input
-          className="input"
-          type="number"
-          min={1}
-          max={50}
-          value={policy.lockoutAttempts}
-          onChange={(e) => setPolicy((p) => ({ ...p, lockoutAttempts: Number.parseInt(e.target.value || "5", 10) || 5 }))}
-        />
-        <button type="button" className="button tap-button" onClick={savePolicy}>Save Security Policy</button>
-        {policyStatus ? <p>{policyStatus}</p> : null}
+        <div className="settings-chip-list">
+          <button
+            type="button"
+            className={`button secondary tap-button ${localSecuritySubTab === "password_policy" ? "game-option-selected" : ""}`}
+            onClick={() => setLocalSecuritySubTab("password_policy")}
+          >
+            Password Policy
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${localSecuritySubTab === "create_users" ? "game-option-selected" : ""}`}
+            onClick={() => setLocalSecuritySubTab("create_users")}
+          >
+            Create Users
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${localSecuritySubTab === "manage_users" ? "game-option-selected" : ""}`}
+            onClick={() => setLocalSecuritySubTab("manage_users")}
+          >
+            Manage Users
+          </button>
+        </div>
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--line)", margin: "1rem 0" }} />
-        <h3 style={{ marginTop: 0 }}>Create User</h3>
-        <label className="label">Username</label>
-        <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
-        <label className="label">Temporary Password</label>
-        <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
-        <label className="label">Role</label>
-        <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
-          <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
-        </select>
-        <label className="label">Linked Person</label>
-        <select className="input" value={localPersonId} onChange={(e) => setLocalPersonId(e.target.value)}>
-          <option value="">Select person</option>
-          {people.map((person) => (
-            <option key={person.personId} value={person.personId}>{person.displayName}</option>
-          ))}
-        </select>
-        <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Active</label>
-        <button type="button" className="button tap-button" onClick={createLocalUser}>Create User</button>
+        {localSecuritySubTab === "password_policy" ? (
+          <>
+            <label className="label">Minimum Password Length</label>
+            <input
+              className="input"
+              type="number"
+              min={4}
+              max={128}
+              value={policy.minLength}
+              onChange={(e) => setPolicy((p) => ({ ...p, minLength: Number.parseInt(e.target.value || "8", 10) || 8 }))}
+            />
+            <label className="label"><input type="checkbox" checked={policy.requireNumber} onChange={(e) => setPolicy((p) => ({ ...p, requireNumber: e.target.checked }))} /> Require number</label>
+            <label className="label"><input type="checkbox" checked={policy.requireUppercase} onChange={(e) => setPolicy((p) => ({ ...p, requireUppercase: e.target.checked }))} /> Require uppercase</label>
+            <label className="label"><input type="checkbox" checked={policy.requireLowercase} onChange={(e) => setPolicy((p) => ({ ...p, requireLowercase: e.target.checked }))} /> Require lowercase</label>
+            <label className="label">Lockout After Failed Attempts</label>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={50}
+              value={policy.lockoutAttempts}
+              onChange={(e) => setPolicy((p) => ({ ...p, lockoutAttempts: Number.parseInt(e.target.value || "5", 10) || 5 }))}
+            />
+            <button type="button" className="button tap-button" onClick={savePolicy}>Save Security Policy</button>
+          </>
+        ) : null}
 
-        <div className="settings-table-wrap" style={{ marginTop: "1rem" }}>
-          <table className="settings-table">
-            <thead>
-              <tr><th>Username</th><th>Role</th><th>Person</th><th>Active</th><th>Failed</th><th>Locked Until</th><th>Select</th></tr>
-            </thead>
-            <tbody>
-              {localUsers.map((user) => (
-                <tr key={user.username}>
-                  <td>{user.username}</td>
-                  <td>{user.role}</td>
-                  <td>{user.personId}</td>
-                  <td>{user.isEnabled ? "TRUE" : "FALSE"}</td>
-                  <td>{user.failedAttempts}</td>
-                  <td>{user.lockedUntil || "-"}</td>
-                  <td>
+        {localSecuritySubTab === "create_users" ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>Create User</h3>
+            <label className="label">Username</label>
+            <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
+            <label className="label">Temporary Password</label>
+            <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
+            <label className="label">Role</label>
+            <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
+              <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
+            </select>
+            <label className="label">Linked Person</label>
+            <select className="input" value={localPersonId} onChange={(e) => setLocalPersonId(e.target.value)}>
+              <option value="">Select person</option>
+              {people.map((person) => (
+                <option key={person.personId} value={person.personId}>{person.displayName}</option>
+              ))}
+            </select>
+            <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Active</label>
+            <button type="button" className="button tap-button" onClick={createLocalUser}>Create User</button>
+          </>
+        ) : null}
+
+        {localSecuritySubTab === "manage_users" ? (
+          <>
+            <div className="settings-table-wrap" style={{ marginTop: "1rem" }}>
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Username</th><th>Role</th><th>Person</th><th>Active</th><th>Failed</th><th>Locked Until</th><th>Select</th></tr>
+                </thead>
+                <tbody>
+                  {localUsers.map((user) => (
+                    <tr key={user.username}>
+                      <td>{user.username}</td>
+                      <td>{user.role}</td>
+                      <td>{user.personId}</td>
+                      <td>{user.isEnabled ? "TRUE" : "FALSE"}</td>
+                      <td>{user.failedAttempts}</td>
+                      <td>{user.lockedUntil || "-"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => {
+                            setSelectedLocalUsername(user.username);
+                            setShowDoneButton(false);
+                          }}
+                        >
+                          {selectedLocalUsername === user.username ? "Selected" : "Manage"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {selectedLocalUser ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Manage User: {selectedLocalUser.username}</h3>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Active: {selectedLocalUser.isEnabled ? "TRUE" : "FALSE"} | Failed attempts: {selectedLocalUser.failedAttempts}
+                </p>
+                <div className="settings-chip-list">
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "set_enabled", isEnabled: !selectedLocalUser.isEnabled })}
+                  >
+                    {selectedLocalUser.isEnabled ? "Disable" : "Enable"}
+                  </button>
+                  <button type="button" className="button tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
+                    Unlock
+                  </button>
+                  {showDoneButton ? (
+                    <button type="button" className="button tap-button" onClick={closeLocalUserEditor}>
+                      Done
+                    </button>
+                  ) : (
                     <button
                       type="button"
-                      className="button secondary tap-button"
-                      onClick={() => {
-                        setSelectedLocalUsername(user.username);
-                        setShowDoneButton(false);
-                      }}
+                      className="button tap-button"
+                      style={{ background: "var(--warn)", borderColor: "var(--warn)" }}
+                      onClick={deleteSelectedLocalUser}
                     >
-                      {selectedLocalUsername === user.username ? "Selected" : "Manage"}
+                      Delete User
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {selectedLocalUser ? (
-          <div className="card" style={{ marginTop: "0.75rem" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Manage User: {selectedLocalUser.username}</h3>
-            <p className="page-subtitle" style={{ marginTop: 0 }}>
-              Active: {selectedLocalUser.isEnabled ? "TRUE" : "FALSE"} | Failed attempts: {selectedLocalUser.failedAttempts}
-            </p>
-            <div className="settings-chip-list">
-              <button
-                type="button"
-                className="button tap-button"
-                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "set_enabled", isEnabled: !selectedLocalUser.isEnabled })}
-              >
-                {selectedLocalUser.isEnabled ? "Disable" : "Enable"}
-              </button>
-              <button type="button" className="button tap-button" onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "unlock" })}>
-                Unlock
-              </button>
-              {showDoneButton ? (
-                <button type="button" className="button tap-button" onClick={closeLocalUserEditor}>
-                  Done
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="button tap-button"
-                  style={{ background: "var(--warn)", borderColor: "var(--warn)" }}
-                  onClick={deleteSelectedLocalUser}
-                >
-                  Delete User
-                </button>
-              )}
-            </div>
+                  )}
+                </div>
 
-            <label className="label">Role</label>
-            <div className="settings-inline-action">
-              <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
-                <option value="USER">USER</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-              <button
-                type="button"
-                className="button tap-button"
-                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
-              >
-                Change Role
-              </button>
-            </div>
+                <label className="label">Role</label>
+                <div className="settings-inline-action">
+                  <select className="input" value={manageRole} onChange={(e) => setManageRole(e.target.value as "ADMIN" | "USER")}>
+                    <option value="USER">USER</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "update_role", role: manageRole })}
+                  >
+                    Change Role
+                  </button>
+                </div>
 
-            <label className="label">New Username</label>
-            <div className="settings-inline-action">
-              <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
-              <button
-                type="button"
-                className="button tap-button"
-                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
-              >
-                Change Username
-              </button>
-            </div>
+                <label className="label">New Username</label>
+                <div className="settings-inline-action">
+                  <input className="input" value={manageNextUsername} onChange={(e) => setManageNextUsername(e.target.value)} />
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "rename_username", nextUsername: manageNextUsername })}
+                  >
+                    Change Username
+                  </button>
+                </div>
 
-            <label className="label">New Password</label>
-            <div className="settings-inline-action">
-              <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
-              <button
-                type="button"
-                className="button tap-button"
-                onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
-              >
-                Reset Password
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="page-subtitle">Select a local user above to manage role, username, password, lock state, or deletion.</p>
-        )}
+                <label className="label">New Password</label>
+                <div className="settings-inline-action">
+                  <input className="input" type="password" value={managePassword} onChange={(e) => setManagePassword(e.target.value)} />
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    onClick={() => void patchLocalUser(selectedLocalUser.username, { action: "reset_password", password: managePassword })}
+                  >
+                    Reset Password
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="page-subtitle">Select a local user above to manage role, username, password, lock state, or deletion.</p>
+            )}
+          </>
+        ) : null}
+        {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
         </section>
       ) : null}
@@ -588,33 +675,57 @@ export function SettingsClient({
         <section className="card">
         <h2 style={{ marginTop: 0 }}>CSV Import (Paste)</h2>
         <p className="page-subtitle">Initial data load into selected family group. CSV header must match exactly.</p>
-        <label className="label">Target Family Group</label>
-        <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
-          {tenantOptions.map((option) => (
-            <option key={option.tenantKey} value={option.tenantKey}>{option.tenantName}</option>
-          ))}
-        </select>
-        <label className="label">Target Table</label>
-        <select
-          className="input"
-          value={target}
-          onChange={(e) => {
-            const next = e.target.value as typeof target;
-            setTarget(next);
-            setCsv(CSV_TEMPLATES[next]);
-          }}
-        >
-          <option value="people">People</option>
-          <option value="relationships">Relationships</option>
-          <option value="family_units">FamilyUnits</option>
-          <option value="important_dates">ImportantDates</option>
-          <option value="person_attributes">PersonAttributes</option>
-        </select>
-        <p className="settings-template-title">Required format for `{target}`:</p>
-        <pre className="settings-template">{template}</pre>
-        <label className="label">Paste CSV Content</label>
-        <textarea className="textarea settings-csv-box" value={csv} onChange={(e) => setCsv(e.target.value)} />
-        <button type="button" className="button tap-button" onClick={importCsv}>Import CSV</button>
+        <div className="settings-chip-list">
+          <button
+            type="button"
+            className={`button secondary tap-button ${importSubTab === "target" ? "game-option-selected" : ""}`}
+            onClick={() => setImportSubTab("target")}
+          >
+            Target & Format
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${importSubTab === "csv" ? "game-option-selected" : ""}`}
+            onClick={() => setImportSubTab("csv")}
+          >
+            Paste CSV
+          </button>
+        </div>
+        {importSubTab === "target" ? (
+          <>
+            <label className="label">Target Family Group</label>
+            <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
+              {tenantOptions.map((option) => (
+                <option key={option.tenantKey} value={option.tenantKey}>{option.tenantName}</option>
+              ))}
+            </select>
+            <label className="label">Target Table</label>
+            <select
+              className="input"
+              value={target}
+              onChange={(e) => {
+                const next = e.target.value as typeof target;
+                setTarget(next);
+                setCsv(CSV_TEMPLATES[next]);
+              }}
+            >
+              <option value="people">People</option>
+              <option value="relationships">Relationships</option>
+              <option value="family_units">FamilyUnits</option>
+              <option value="important_dates">ImportantDates</option>
+              <option value="person_attributes">PersonAttributes</option>
+            </select>
+            <p className="settings-template-title">Required format for `{target}`:</p>
+            <pre className="settings-template">{template}</pre>
+          </>
+        ) : null}
+        {importSubTab === "csv" ? (
+          <>
+            <label className="label">Paste CSV Content</label>
+            <textarea className="textarea settings-csv-box" value={csv} onChange={(e) => setCsv(e.target.value)} />
+            <button type="button" className="button tap-button" onClick={importCsv}>Import CSV</button>
+          </>
+        ) : null}
         {importStatus ? <p>{importStatus}</p> : null}
         </section>
       ) : null}
