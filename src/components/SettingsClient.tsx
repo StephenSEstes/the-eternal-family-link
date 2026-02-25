@@ -122,6 +122,8 @@ export function SettingsClient({
   const [newMatriarchMaidenName, setNewMatriarchMaidenName] = useState("");
   const [newInitialAdminPersonId, setNewInitialAdminPersonId] = useState("");
   const [newMemberPersonIds, setNewMemberPersonIds] = useState<string[]>([]);
+  const [importMemberPersonIds, setImportMemberPersonIds] = useState<string[]>([]);
+  const [importMembersStatus, setImportMembersStatus] = useState("");
   const [newTenantStatus, setNewTenantStatus] = useState("");
   const [policy, setPolicy] = useState<SecurityPolicy>(DEFAULT_POLICY);
   const [policyStatus, setPolicyStatus] = useState("");
@@ -321,6 +323,44 @@ export function SettingsClient({
       }
       return [...current, personIdToToggle];
     });
+  };
+
+  const toggleImportMemberPersonId = (personIdToToggle: string) => {
+    setImportMemberPersonIds((current) => {
+      if (current.includes(personIdToToggle)) {
+        return current.filter((value) => value !== personIdToToggle);
+      }
+      return [...current, personIdToToggle];
+    });
+  };
+
+  const importMembersNow = async () => {
+    if (importMemberPersonIds.length === 0) {
+      setImportMembersStatus("Select at least one person to import.");
+      return;
+    }
+    setImportMembersStatus("Importing selected members...");
+    const res = await fetch(`/api/family-groups/${encodeURIComponent(selectedTenantKey)}/import-members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberPersonIds: importMemberPersonIds }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setImportMembersStatus(`Failed: ${res.status} ${text.slice(0, 200)}`);
+      return;
+    }
+    const missingText =
+      Array.isArray(body.missingPersonIds) && body.missingPersonIds.length > 0
+        ? ` Missing: ${body.missingPersonIds.slice(0, 5).join(", ")}`
+        : "";
+    setImportMembersStatus(
+      `Imported people: ${Number(body.importedPeopleCount ?? 0)}, imported access links: ${Number(body.importedAccessCount ?? 0)}.${missingText}`,
+    );
+    setImportMemberPersonIds([]);
+    await loadTenantAdminData(selectedTenantKey);
+    router.refresh();
   };
 
   const savePolicy = async () => {
@@ -553,6 +593,9 @@ export function SettingsClient({
     ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId)
     : [];
   const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
+  const importMemberCandidates = existingPeopleOptions.filter(
+    (person) => person.sourceTenantKey.trim().toLowerCase() !== selectedTenantKey.trim().toLowerCase(),
+  );
 
   return (
     <div className="settings-stack">
@@ -615,9 +658,46 @@ export function SettingsClient({
           </button>
         </div>
         {familyGroupsSubTab === "overview" ? (
-          <p className="page-subtitle">
-            Current family group: {selectedTenantOption?.tenantName ?? tenantName}. Create a new family group and seed first admin.
-          </p>
+          <>
+            <p className="page-subtitle">
+              Current family group: {selectedTenantOption?.tenantName ?? tenantName}. Create a new family group and seed first admin.
+            </p>
+            <h3 style={{ marginBottom: "0.5rem" }}>Import Existing Members Now</h3>
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              Copy selected people from other family groups into this family group, including existing login access links.
+            </p>
+            <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Add</th><th>Person</th><th>Source Family Group</th></tr>
+                </thead>
+                <tbody>
+                  {importMemberCandidates.map((person) => (
+                    <tr key={`${person.personId}-${person.sourceTenantKey}-quick-import`}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={importMemberPersonIds.includes(person.personId)}
+                          onChange={() => toggleImportMemberPersonId(person.personId)}
+                        />
+                      </td>
+                      <td>{person.displayName}</td>
+                      <td>{person.sourceTenantName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {importMemberCandidates.length === 0 ? (
+              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                No import candidates found from other family groups.
+              </p>
+            ) : null}
+            <button type="button" className="button tap-button" onClick={importMembersNow}>
+              Import Selected Members Now
+            </button>
+            {importMembersStatus ? <p>{importMembersStatus}</p> : null}
+          </>
         ) : null}
         {familyGroupsSubTab === "create_group" ? (
           <>
