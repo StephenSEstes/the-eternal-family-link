@@ -41,7 +41,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
 
         <section className="card">
           <h2 style={{ marginTop: 0 }}>Interactive Family Graph</h2>
-          {people.length > 0 && edges.length > 0 ? (
+          {people.length > 0 ? (
             <TreeGraph
               basePath={basePath}
               nodes={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
@@ -55,7 +55,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
               }))}
             />
           ) : (
-            <p>No graph data yet. Add people plus relationship/family unit rows.</p>
+            <p>No people yet. Add people first, then relationships/family units to build the graph.</p>
           )}
         </section>
       </main>
