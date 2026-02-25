@@ -510,6 +510,7 @@ export function SettingsClient({
   const selectedPersonLocalUsers = selectedDirectoryPersonId
     ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId)
     : [];
+  const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
 
   return (
     <div className="settings-stack">
@@ -540,6 +541,14 @@ export function SettingsClient({
       {activeTab === "family_groups" ? (
         <section className="card">
         <h2 style={{ marginTop: 0 }}>Family Groups</h2>
+        <label className="label">Target Family Group</label>
+        <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
+          {tenantOptions.map((option) => (
+            <option key={option.tenantKey} value={option.tenantKey}>
+              {option.tenantName} ({option.role})
+            </option>
+          ))}
+        </select>
         <div className="settings-chip-list">
           <button
             type="button"
@@ -557,7 +566,9 @@ export function SettingsClient({
           </button>
         </div>
         {familyGroupsSubTab === "overview" ? (
-          <p className="page-subtitle">Current family group: {tenantName}. Create a new family group and seed first admin.</p>
+          <p className="page-subtitle">
+            Current family group: {selectedTenantOption?.tenantName ?? tenantName}. Create a new family group and seed first admin.
+          </p>
         ) : null}
         {familyGroupsSubTab === "create_group" ? (
           <>
