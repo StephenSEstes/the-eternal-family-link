@@ -144,6 +144,7 @@ export function SettingsClient({
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [integrityStatus, setIntegrityStatus] = useState("");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
+  const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
   const adminLoadSeq = useRef(0);
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
 
@@ -413,6 +414,7 @@ export function SettingsClient({
 
   const runIntegrityCheck = async () => {
     setIntegrityStatus("Running integrity check...");
+    setIntegrityRepairStatus("");
     const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/integrity`);
     const body = await res.json().catch(() => null);
     if (!res.ok || !body) {
@@ -431,6 +433,30 @@ export function SettingsClient({
       return;
     }
     setIntegrityStatus("Integrity check found errors.");
+  };
+
+  const repairIntegrityIssues = async () => {
+    const confirmed = window.confirm(
+      "Run automatic repair for duplicate access rows, missing links, and legacy local-users rows?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setIntegrityRepairStatus("Repairing integrity issues...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/integrity`, {
+      method: "POST",
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setIntegrityRepairStatus(`Failed: ${res.status} ${text.slice(0, 200)}`);
+      return;
+    }
+    const repaired = body?.repaired ?? {};
+    setIntegrityRepairStatus(
+      `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}, removed legacy LocalUsers: ${Number(repaired.deletedLegacyLocalUsersRows ?? 0)}.`,
+    );
+    await runIntegrityCheck();
   };
 
   useEffect(() => {
@@ -643,10 +669,16 @@ export function SettingsClient({
           <p className="page-subtitle" style={{ marginTop: 0 }}>
             Check for duplicates, orphans, missing links, and legacy data.
           </p>
-          <button type="button" className="button tap-button" onClick={runIntegrityCheck}>
-            Run Integrity Check
-          </button>
+          <div className="settings-chip-list">
+            <button type="button" className="button tap-button" onClick={runIntegrityCheck}>
+              Run Integrity Check
+            </button>
+            <button type="button" className="button tap-button" onClick={repairIntegrityIssues}>
+              Repair Integrity Issues
+            </button>
+          </div>
           {integrityStatus ? <p>{integrityStatus}</p> : null}
+          {integrityRepairStatus ? <p>{integrityRepairStatus}</p> : null}
           {integrityReport ? (
             <div className="settings-table-wrap">
               <table className="settings-table">
@@ -692,27 +724,37 @@ export function SettingsClient({
           <button
             type="button"
             className={`button secondary tap-button ${userAdminSubTab === "directory" ? "game-option-selected" : ""}`}
-            onClick={() => setUserAdminSubTab("directory")}
+            onClick={() => {
+              setUserAdminSubTab("directory");
+              setShowAddUserForm(false);
+            }}
           >
             User Directory
           </button>
           <button
             type="button"
             className={`button secondary tap-button ${userAdminSubTab === "password_policy" ? "game-option-selected" : ""}`}
-            onClick={() => setUserAdminSubTab("password_policy")}
+            onClick={() => {
+              setUserAdminSubTab("password_policy");
+              setShowAddUserForm(false);
+            }}
           >
             Password Policy
+          </button>
+          <button
+            type="button"
+            className={`button secondary tap-button ${showAddUserForm ? "game-option-selected" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("directory");
+              setShowAddUserForm((v) => !v);
+            }}
+          >
+            {showAddUserForm ? "Hide Add User" : "Add User"}
           </button>
         </div>
 
         {userAdminSubTab === "directory" ? (
           <>
-            <div className="settings-chip-list">
-              <button type="button" className="button tap-button" onClick={() => setShowAddUserForm((v) => !v)}>
-                {showAddUserForm ? "Hide Add User" : "Add User"}
-              </button>
-            </div>
-
             {showAddUserForm ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
                 <h3 style={{ marginTop: 0 }}>Add User To Directory</h3>
