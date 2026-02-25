@@ -147,15 +147,17 @@ export function SettingsClient({
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
   const adminLoadSeq = useRef(0);
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
+  const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(people);
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
   const loadTenantAdminData = async (tenantKeyToLoad: string) => {
     const loadSeq = ++adminLoadSeq.current;
-    const [accessRes, policyRes, usersRes] = await Promise.all([
+    const [accessRes, policyRes, usersRes, peopleRes] = await Promise.all([
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/user-access`),
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/security-policy`),
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/local-users`),
+      fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/people`),
     ]);
     if (loadSeq !== adminLoadSeq.current) {
       return;
@@ -163,6 +165,7 @@ export function SettingsClient({
     const accessBody = await accessRes.json().catch(() => null);
     const policyBody = await policyRes.json().catch(() => null);
     const usersBody = await usersRes.json().catch(() => null);
+    const peopleBody = await peopleRes.json().catch(() => null);
 
     if (accessRes.ok && Array.isArray(accessBody?.items)) {
       setVisibleAccessItems(accessBody.items);
@@ -186,6 +189,19 @@ export function SettingsClient({
       setLocalUsers(usersBody.users);
     } else {
       setLocalUsers([]);
+    }
+
+    if (peopleRes.ok && Array.isArray(peopleBody?.items)) {
+      setDirectoryPeople(
+        peopleBody.items
+          .filter((item: { personId?: string }) => Boolean(item?.personId))
+          .map((item: { personId: string; displayName?: string }) => ({
+            personId: item.personId,
+            displayName: item.displayName?.trim() || item.personId,
+          })),
+      );
+    } else {
+      setDirectoryPeople([]);
     }
   };
 
@@ -720,7 +736,7 @@ export function SettingsClient({
                   }}
                 >
                   <option value="">Select person</option>
-                  {people.map((person) => (
+                  {directoryPeople.map((person) => (
                     <option key={person.personId} value={person.personId}>{person.displayName}</option>
                   ))}
                 </select>
@@ -749,7 +765,7 @@ export function SettingsClient({
                   <tr><th>Person</th><th>Google Access</th><th>Local Access</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
-                  {people.map((person) => {
+                  {directoryPeople.map((person) => {
                     const personGoogle = googleAccessByPersonId.get(person.personId) ?? [];
                     const personLocal = localAccessByPersonId.get(person.personId) ?? [];
                     const hasGoogle = personGoogle.some((entry) => entry.isEnabled);
@@ -791,6 +807,11 @@ export function SettingsClient({
                 </tbody>
               </table>
             </div>
+            {directoryPeople.length === 0 ? (
+              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                No people found in this family group. Add or import people first, then assign user access.
+              </p>
+            ) : null}
 
             {selectedDirectoryPersonId ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
