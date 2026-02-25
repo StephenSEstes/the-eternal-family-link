@@ -1,3 +1,5 @@
+import { DEFAULT_TENANT_KEY } from "@/lib/family-group/context";
+
 export const TENANT_GUARD_CHECKLIST = [
   "session_required",
   "tenant_membership_required",
@@ -42,4 +44,3 @@ function normalizeTenant(value?: string) {
   const raw = (value ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
   return raw || DEFAULT_TENANT_KEY;
 }
-import { DEFAULT_TENANT_KEY } from "@/lib/family-group/context";
