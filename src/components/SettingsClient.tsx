@@ -72,7 +72,7 @@ type ExistingPersonOption = {
   sourceTenantName: string;
 };
 
-type SettingsTab = "family_groups" | "user_admin" | "import";
+type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
 type UserAdminSubTab = "directory" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
@@ -562,6 +562,13 @@ export function SettingsClient({
         >
           CSV Import
         </button>
+        <button
+          type="button"
+          className={`button secondary tap-button ${activeTab === "integrity" ? "game-option-selected" : ""}`}
+          onClick={() => setActiveTab("integrity")}
+        >
+          Integrity Checker
+        </button>
       </div>
 
       {activeTab === "family_groups" ? (
@@ -664,62 +671,6 @@ export function SettingsClient({
             </option>
           ))}
         </select>
-        <div className="card" style={{ marginTop: "0.75rem" }}>
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Table Integrity</h3>
-          <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Check for duplicates, orphans, missing links, and legacy data.
-          </p>
-          <div className="settings-chip-list">
-            <button type="button" className="button tap-button" onClick={runIntegrityCheck}>
-              Run Integrity Check
-            </button>
-            <button type="button" className="button tap-button" onClick={repairIntegrityIssues}>
-              Repair Integrity Issues
-            </button>
-          </div>
-          {integrityStatus ? <p>{integrityStatus}</p> : null}
-          {integrityRepairStatus ? <p>{integrityRepairStatus}</p> : null}
-          {integrityReport ? (
-            <div className="settings-table-wrap">
-              <table className="settings-table">
-                <thead>
-                  <tr><th>Status</th><th>Errors</th><th>Warnings</th><th>People</th><th>UserAccess</th><th>UserFamilyGroups</th><th>Legacy LocalUsers</th></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{integrityReport.summary.status.toUpperCase()}</td>
-                    <td>{integrityReport.summary.errorCount}</td>
-                    <td>{integrityReport.summary.warnCount}</td>
-                    <td>{integrityReport.summary.peopleCount}</td>
-                    <td>{integrityReport.summary.userAccessCount}</td>
-                    <td>{integrityReport.summary.userFamilyGroupCount}</td>
-                    <td>{integrityReport.summary.legacyLocalUsersCount}</td>
-                  </tr>
-                </tbody>
-              </table>
-              {integrityReport.findings.length > 0 ? (
-                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
-                  <thead>
-                    <tr><th>Severity</th><th>Issue</th><th>Count</th><th>Sample</th></tr>
-                  </thead>
-                  <tbody>
-                    {integrityReport.findings.map((finding) => (
-                      <tr key={`${finding.code}-${finding.severity}`}>
-                        <td>{finding.severity.toUpperCase()}</td>
-                        <td>{finding.message}</td>
-                        <td>{finding.count}</td>
-                        <td>{finding.sample.join(", ") || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="page-subtitle">No integrity issues found.</p>
-              )}
-            </div>
-          ) : null}
-        </div>
-
         <div className="settings-chip-list">
           <button
             type="button"
@@ -1051,6 +1002,70 @@ export function SettingsClient({
         {accessStatus ? <p>{accessStatus}</p> : null}
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
+        </section>
+      ) : null}
+
+      {activeTab === "integrity" ? (
+        <section className="card">
+        <h2 style={{ marginTop: 0 }}>Integrity Checker</h2>
+        <p className="page-subtitle">Run diagnostics and repair common worksheet integrity issues.</p>
+        <label className="label">Target Family Group</label>
+        <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
+          {tenantOptions.map((option) => (
+            <option key={option.tenantKey} value={option.tenantKey}>
+              {option.tenantName} ({option.role})
+            </option>
+          ))}
+        </select>
+        <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+          <button type="button" className="button tap-button" onClick={runIntegrityCheck}>
+            Run Integrity Check
+          </button>
+          <button type="button" className="button tap-button" onClick={repairIntegrityIssues}>
+            Repair Integrity Issues
+          </button>
+        </div>
+        {integrityStatus ? <p>{integrityStatus}</p> : null}
+        {integrityRepairStatus ? <p>{integrityRepairStatus}</p> : null}
+        {integrityReport ? (
+          <div className="settings-table-wrap">
+            <table className="settings-table">
+              <thead>
+                <tr><th>Status</th><th>Errors</th><th>Warnings</th><th>People</th><th>UserAccess</th><th>UserFamilyGroups</th><th>Legacy LocalUsers</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{integrityReport.summary.status.toUpperCase()}</td>
+                  <td>{integrityReport.summary.errorCount}</td>
+                  <td>{integrityReport.summary.warnCount}</td>
+                  <td>{integrityReport.summary.peopleCount}</td>
+                  <td>{integrityReport.summary.userAccessCount}</td>
+                  <td>{integrityReport.summary.userFamilyGroupCount}</td>
+                  <td>{integrityReport.summary.legacyLocalUsersCount}</td>
+                </tr>
+              </tbody>
+            </table>
+            {integrityReport.findings.length > 0 ? (
+              <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                <thead>
+                  <tr><th>Severity</th><th>Issue</th><th>Count</th><th>Sample</th></tr>
+                </thead>
+                <tbody>
+                  {integrityReport.findings.map((finding) => (
+                    <tr key={`${finding.code}-${finding.severity}`}>
+                      <td>{finding.severity.toUpperCase()}</td>
+                      <td>{finding.message}</td>
+                      <td>{finding.count}</td>
+                      <td>{finding.sample.join(", ") || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="page-subtitle">No integrity issues found.</p>
+            )}
+          </div>
+        ) : null}
         </section>
       ) : null}
 
