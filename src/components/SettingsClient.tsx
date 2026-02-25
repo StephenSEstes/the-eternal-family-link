@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type AccessItem = {
@@ -65,6 +65,13 @@ type SettingsClientProps = {
   people: { personId: string; displayName: string }[];
 };
 
+type ExistingPersonOption = {
+  personId: string;
+  displayName: string;
+  sourceTenantKey: string;
+  sourceTenantName: string;
+};
+
 type SettingsTab = "family_groups" | "user_admin" | "import";
 type UserAdminSubTab = "directory" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
@@ -110,8 +117,11 @@ export function SettingsClient({
   const [importStatus, setImportStatus] = useState("");
   const [newTenantKey, setNewTenantKey] = useState("");
   const [newTenantName, setNewTenantName] = useState("");
-  const [newTenantAdminEmail, setNewTenantAdminEmail] = useState("");
-  const [newTenantPersonId, setNewTenantPersonId] = useState("");
+  const [newPatriarchFullName, setNewPatriarchFullName] = useState("");
+  const [newMatriarchFullName, setNewMatriarchFullName] = useState("");
+  const [newMatriarchMaidenName, setNewMatriarchMaidenName] = useState("");
+  const [newInitialAdminPersonId, setNewInitialAdminPersonId] = useState("");
+  const [newMemberPersonIds, setNewMemberPersonIds] = useState<string[]>([]);
   const [newTenantStatus, setNewTenantStatus] = useState("");
   const [policy, setPolicy] = useState<SecurityPolicy>(DEFAULT_POLICY);
   const [policyStatus, setPolicyStatus] = useState("");
@@ -134,15 +144,21 @@ export function SettingsClient({
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [integrityStatus, setIntegrityStatus] = useState("");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
+  const adminLoadSeq = useRef(0);
+  const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
   const loadTenantAdminData = async (tenantKeyToLoad: string) => {
+    const loadSeq = ++adminLoadSeq.current;
     const [accessRes, policyRes, usersRes] = await Promise.all([
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/user-access`),
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/security-policy`),
       fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/local-users`),
     ]);
+    if (loadSeq !== adminLoadSeq.current) {
+      return;
+    }
     const accessBody = await accessRes.json().catch(() => null);
     const policyBody = await policyRes.json().catch(() => null);
     const usersBody = await usersRes.json().catch(() => null);
@@ -175,6 +191,9 @@ export function SettingsClient({
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
+      setSelectedDirectoryPersonId("");
+      setSelectedLocalUsername("");
+      setShowDoneButton(false);
       await loadTenantAdminData(selectedTenantKey);
       if (cancelled) {
         return;
@@ -185,6 +204,45 @@ export function SettingsClient({
       cancelled = true;
     };
   }, [selectedTenantKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const responses = await Promise.all(
+        tenantOptions.map(async (option) => {
+          const res = await fetch(`/api/t/${encodeURIComponent(option.tenantKey)}/people`);
+          const body = await res.json().catch(() => null);
+          if (!res.ok || !Array.isArray(body?.items)) {
+            return [] as ExistingPersonOption[];
+          }
+          return body.items
+            .filter((item: { personId?: string; displayName?: string }) => Boolean(item?.personId))
+            .map((item: { personId: string; displayName?: string }) => ({
+              personId: item.personId,
+              displayName: item.displayName?.trim() || item.personId,
+              sourceTenantKey: option.tenantKey,
+              sourceTenantName: option.tenantName,
+            }));
+        }),
+      );
+      if (cancelled) {
+        return;
+      }
+      const dedupe = new Map<string, ExistingPersonOption>();
+      for (const group of responses) {
+        for (const row of group) {
+          if (!dedupe.has(row.personId)) {
+            dedupe.set(row.personId, row);
+          }
+        }
+      }
+      setExistingPeopleOptions(Array.from(dedupe.values()).sort((a, b) => a.displayName.localeCompare(b.displayName)));
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantOptions]);
 
   const upsertAccess = async () => {
     setAccessStatus("Saving...");
@@ -205,15 +263,21 @@ export function SettingsClient({
 
   const createTenant = async () => {
     setNewTenantStatus("Creating family group...");
+    if (!newInitialAdminPersonId) {
+      setNewTenantStatus("Select an existing person to be initial admin.");
+      return;
+    }
     const res = await fetch("/api/family-groups/provision", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userEmail: newTenantAdminEmail,
         familyGroupKey: newTenantKey,
         familyGroupName: newTenantName,
-        role: "ADMIN",
-        personId: newTenantPersonId,
+        patriarchFullName: newPatriarchFullName,
+        matriarchFullName: newMatriarchFullName,
+        matriarchMaidenName: newMatriarchMaidenName,
+        initialAdminPersonId: newInitialAdminPersonId,
+        memberPersonIds: newMemberPersonIds,
         isEnabled: true,
       }),
     });
@@ -223,7 +287,23 @@ export function SettingsClient({
       return;
     }
     setNewTenantStatus("Family group created. Switch family group from header after session refresh.");
+    setNewTenantKey("");
+    setNewTenantName("");
+    setNewPatriarchFullName("");
+    setNewMatriarchFullName("");
+    setNewMatriarchMaidenName("");
+    setNewInitialAdminPersonId("");
+    setNewMemberPersonIds([]);
     router.refresh();
+  };
+
+  const toggleNewMemberPersonId = (personIdToToggle: string) => {
+    setNewMemberPersonIds((current) => {
+      if (current.includes(personIdToToggle)) {
+        return current.filter((value) => value !== personIdToToggle);
+      }
+      return [...current, personIdToToggle];
+    });
   };
 
   const savePolicy = async () => {
@@ -485,17 +565,47 @@ export function SettingsClient({
             <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="SnowEstes" />
             <label className="label">New Family Group Name</label>
             <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
-            <label className="label">First Admin Email</label>
-            <input className="input" value={newTenantAdminEmail} onChange={(e) => setNewTenantAdminEmail(e.target.value)} />
-            <label className="label">Link Admin To Person</label>
-            <select className="input" value={newTenantPersonId} onChange={(e) => setNewTenantPersonId(e.target.value)}>
-              <option value="">Select person</option>
-              {people.map((person) => (
-                <option key={person.personId} value={person.personId}>
-                  {person.displayName}
+            <label className="label">Top-Level Patriarch (full name)</label>
+            <input className="input" value={newPatriarchFullName} onChange={(e) => setNewPatriarchFullName(e.target.value)} placeholder="Brenton Dale Estes" />
+            <label className="label">Top-Level Matriarch (full name)</label>
+            <input className="input" value={newMatriarchFullName} onChange={(e) => setNewMatriarchFullName(e.target.value)} placeholder="Ruth Snow Estes" />
+            <label className="label">Matriarch Maiden Name</label>
+            <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} placeholder="Snow" />
+            <label className="label">Initial Admin (existing person)</label>
+            <select className="input" value={newInitialAdminPersonId} onChange={(e) => setNewInitialAdminPersonId(e.target.value)}>
+              <option value="">Select existing person</option>
+              {existingPeopleOptions.map((person) => (
+                <option key={`${person.personId}-${person.sourceTenantKey}`} value={person.personId}>
+                  {person.displayName} ({person.sourceTenantName})
                 </option>
               ))}
             </select>
+            <label className="label">Import Existing Members (optional)</label>
+            <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Add</th><th>Person</th><th>Source Family Group</th></tr>
+                </thead>
+                <tbody>
+                  {existingPeopleOptions.map((person) => (
+                    <tr key={`${person.personId}-${person.sourceTenantKey}-import`}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={newMemberPersonIds.includes(person.personId)}
+                          onChange={() => toggleNewMemberPersonId(person.personId)}
+                        />
+                      </td>
+                      <td>{person.displayName}</td>
+                      <td>{person.sourceTenantName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+              Imported members carry existing login access into this new family group when credentials already exist.
+            </p>
             <button type="button" className="button tap-button" onClick={createTenant}>
               Create Family Group
             </button>
