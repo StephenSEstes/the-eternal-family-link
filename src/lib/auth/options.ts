@@ -13,6 +13,9 @@ import { verifyPassword } from "@/lib/security/password";
 
 function normalizeTenantKey(value?: string) {
   const raw = (value ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
+  if (raw === "default") {
+    return DEFAULT_TENANT_KEY;
+  }
   return raw || DEFAULT_TENANT_KEY;
 }
 

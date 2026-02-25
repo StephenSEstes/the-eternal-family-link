@@ -193,6 +193,9 @@ function toSheetBool(value: boolean) {
 
 function normalizeTenantKey(tenantKey?: string) {
   const raw = (tenantKey ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
+  if (raw === "default") {
+    return DEFAULT_TENANT_KEY;
+  }
   const clean = raw.replace(/[^a-z0-9_-]/g, "");
   return clean || DEFAULT_TENANT_KEY;
 }

@@ -30,6 +30,9 @@ export type TenantContext = {
 
 function normalizeTenantKey(tenantKey?: string) {
   const raw = (tenantKey ?? DEFAULT_TENANT_KEY).trim().toLowerCase();
+  if (raw === "default") {
+    return DEFAULT_TENANT_KEY;
+  }
   return raw || DEFAULT_TENANT_KEY;
 }
 
@@ -39,7 +42,7 @@ export function normalizeTenantRouteKey(tenantKey?: string) {
 
 export function getTenantBasePath(tenantKey?: string) {
   const key = normalizeTenantKey(tenantKey);
-  return key === DEFAULT_TENANT_KEY ? "" : `/f/${encodeURIComponent(key)}`;
+  return key === DEFAULT_TENANT_KEY ? "" : `/t/${encodeURIComponent(key)}`;
 }
 
 export function normalizeFamilyGroupRouteKey(familyGroupKey?: string) {
