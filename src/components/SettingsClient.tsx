@@ -94,6 +94,37 @@ const DEFAULT_POLICY: SecurityPolicy = {
   lockoutAttempts: 5,
 };
 
+function buildDirectoryPeople(
+  accessItems: AccessItem[],
+  localUsers: LocalUserItem[],
+  people: { personId: string; displayName: string }[],
+) {
+  const peopleNameById = new Map(
+    people
+      .filter((item) => item.personId?.trim())
+      .map((item) => [item.personId.trim(), item.displayName?.trim() || item.personId.trim()]),
+  );
+  const ids = new Set<string>();
+  for (const item of accessItems) {
+    const personId = item.personId?.trim();
+    if (personId) {
+      ids.add(personId);
+    }
+  }
+  for (const item of localUsers) {
+    const personId = item.personId?.trim();
+    if (personId) {
+      ids.add(personId);
+    }
+  }
+  return Array.from(ids)
+    .map((personId) => ({
+      personId,
+      displayName: peopleNameById.get(personId) ?? personId,
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
 export function SettingsClient({
   tenantKey,
   tenantName,
@@ -149,7 +180,9 @@ export function SettingsClient({
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
   const adminLoadSeq = useRef(0);
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
-  const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(people);
+  const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
+    buildDirectoryPeople(accessItems, [], people),
+  );
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
 
@@ -169,11 +202,9 @@ export function SettingsClient({
     const usersBody = await usersRes.json().catch(() => null);
     const peopleBody = await peopleRes.json().catch(() => null);
 
-    if (accessRes.ok && Array.isArray(accessBody?.items)) {
-      setVisibleAccessItems(accessBody.items);
-    } else {
-      setVisibleAccessItems([]);
-    }
+    const nextAccessItems: AccessItem[] =
+      accessRes.ok && Array.isArray(accessBody?.items) ? (accessBody.items as AccessItem[]) : [];
+    setVisibleAccessItems(nextAccessItems);
 
     if (policyRes.ok && policyBody?.policy) {
       setPolicy({
@@ -187,24 +218,20 @@ export function SettingsClient({
       setPolicy(DEFAULT_POLICY);
     }
 
-    if (usersRes.ok && Array.isArray(usersBody?.users)) {
-      setLocalUsers(usersBody.users);
-    } else {
-      setLocalUsers([]);
-    }
+    const nextLocalUsers: LocalUserItem[] =
+      usersRes.ok && Array.isArray(usersBody?.users) ? (usersBody.users as LocalUserItem[]) : [];
+    setLocalUsers(nextLocalUsers);
 
-    if (peopleRes.ok && Array.isArray(peopleBody?.items)) {
-      setDirectoryPeople(
-        peopleBody.items
-          .filter((item: { personId?: string }) => Boolean(item?.personId))
-          .map((item: { personId: string; displayName?: string }) => ({
-            personId: item.personId,
-            displayName: item.displayName?.trim() || item.personId,
-          })),
-      );
-    } else {
-      setDirectoryPeople([]);
-    }
+    const nextPeople: { personId: string; displayName: string }[] =
+      peopleRes.ok && Array.isArray(peopleBody?.items)
+        ? peopleBody.items
+            .filter((item: { personId?: string }) => Boolean(item?.personId))
+            .map((item: { personId: string; displayName?: string }) => ({
+              personId: item.personId,
+              displayName: item.displayName?.trim() || item.personId,
+            }))
+        : [];
+    setDirectoryPeople(buildDirectoryPeople(nextAccessItems, nextLocalUsers, nextPeople));
   };
 
   useEffect(() => {
@@ -889,7 +916,7 @@ export function SettingsClient({
             </div>
             {directoryPeople.length === 0 ? (
               <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                No people found in this family group. Add or import people first, then assign user access.
+                No users found for this family group. Add user access for a person in this family to populate the directory.
               </p>
             ) : null}
 
