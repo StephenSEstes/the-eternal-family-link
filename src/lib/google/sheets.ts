@@ -874,10 +874,18 @@ export function peopleFromMatrix(matrix: SheetMatrix): PersonRecord[] {
     return [];
   }
 
-  return matrix.rows
-    .map((row) => rowToPerson(matrix.headers, row))
-    .filter((person) => person.personId)
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const deduped = new Map<string, PersonRecord>();
+  for (const row of matrix.rows) {
+    const person = rowToPerson(matrix.headers, row);
+    if (!person.personId) {
+      continue;
+    }
+    if (!deduped.has(person.personId)) {
+      deduped.set(person.personId, person);
+    }
+  }
+
+  return Array.from(deduped.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
 export function personAttributesFromMatrix(matrix: SheetMatrix, tenantKey?: string): PersonAttributeRecord[] {
@@ -968,17 +976,15 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
 
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const [links, users, people] = await Promise.all([
+  const [links, users] = await Promise.all([
     ensureUserFamilyGroupsTabSchema(),
     ensureUserAccessTabSchema(),
-    getPeople(normalizedTenantKey).catch(() => []),
   ]);
   if (links.headers.length === 0 || users.headers.length === 0) {
     return [];
   }
   const linkIdx = buildHeaderIndex(links.headers);
   const userIdx = buildHeaderIndex(users.headers);
-  const peopleInGroup = new Set(people.map((person) => person.personId.trim()).filter(Boolean));
 
   const userByPersonId = new Map<string, string[]>();
   for (const row of users.rows) {
@@ -999,9 +1005,6 @@ export async function getTenantUserAccessList(tenantKey: string): Promise<UserAc
     }
     const personId = getCell(row, linkIdx, "person_id").trim();
     if (!personId || seenPersonIds.has(personId)) {
-      continue;
-    }
-    if (peopleInGroup.size > 0 && !peopleInGroup.has(personId)) {
       continue;
     }
     seenPersonIds.add(personId);
@@ -1303,14 +1306,35 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
-  const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
-  const matrix = await readTab(tabName);
-  const people = peopleFromMatrix(matrix);
-  if (matrix.headers.length === 0 || !tenantKey) {
-    return people;
+  const sheets = await createSheetsClient();
+
+  const readPeopleFromTab = async (tabName: string) => {
+    const matrix = await readTabWithClient(sheets, tabName).catch(() => ({ headers: [], rows: [] } as SheetMatrix));
+    return peopleFromMatrix(matrix);
+  };
+
+  const sharedTabName = await resolveTenantTabNameWithClient(sheets, PEOPLE_TAB);
+  const sharedPeople = sharedTabName ? await readPeopleFromTab(sharedTabName) : [];
+
+  if (!tenantKey) {
+    return sharedPeople;
   }
 
   const targetTenant = normalizeTenantKey(tenantKey);
+  const scopedTabName = targetTenant === DEFAULT_TENANT_KEY ? "" : `${targetTenant}${TENANT_TAB_DELIMITER}${PEOPLE_TAB}`;
+  const hasScopedTab = scopedTabName ? await lookupTab(sheets, scopedTabName).catch(() => false) : false;
+  const scopedPeople = hasScopedTab ? await readPeopleFromTab(scopedTabName) : [];
+
+  const peopleById = new Map<string, PersonRecord>();
+  for (const person of sharedPeople) {
+    peopleById.set(person.personId, person);
+  }
+  for (const person of scopedPeople) {
+    if (!peopleById.has(person.personId)) {
+      peopleById.set(person.personId, person);
+    }
+  }
+
   const resolveAllowedPersonIds = async () => {
     const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
     if (!memberships || memberships.headers.length === 0) {
@@ -1337,12 +1361,17 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
     await backfillPersonMembershipsFromUserFamilyGroups(targetTenant);
     allowedPersonIds = await resolveAllowedPersonIds();
   }
-  if (allowedPersonIds.size > 0) {
-    return people
-      .filter((person) => allowedPersonIds.has(person.personId))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  for (const person of scopedPeople) {
+    allowedPersonIds.add(person.personId);
   }
-  return [];
+  if (allowedPersonIds.size === 0) {
+    return [];
+  }
+
+  return Array.from(allowedPersonIds)
+    .map((personId) => peopleById.get(personId))
+    .filter((person): person is PersonRecord => Boolean(person))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
 export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig> {
