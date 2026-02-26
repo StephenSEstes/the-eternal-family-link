@@ -71,7 +71,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "relationships",
   ],
   Relationships: ["family_group_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
-  FamilyUnits: ["family_group_key", "family_unit_id", "partner1_person_id", "partner2_person_id"],
+  Households: ["family_group_key", "household_id", "partner1_person_id", "partner2_person_id"],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
     "attribute_id",
@@ -1364,7 +1364,7 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
 
   const [relationshipRows, familyUnitRows] = await Promise.all([
     getTableRecords("Relationships", targetTenant).catch(() => [] as SheetRecord[]),
-    getTableRecords("FamilyUnits", targetTenant).catch(() => [] as SheetRecord[]),
+    getTableRecords("Households", targetTenant).catch(() => [] as SheetRecord[]),
   ]);
   for (const row of relationshipRows) {
     const fromPersonId = (row.data.from_person_id ?? "").trim();

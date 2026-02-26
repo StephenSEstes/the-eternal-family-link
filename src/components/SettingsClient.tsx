@@ -85,7 +85,7 @@ type ImportSubTab = "target" | "csv";
 const CSV_TEMPLATES: Record<string, string> = {
   people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
   relationships: "rel_id,from_person_id,to_person_id,rel_type\nrel-tenant-a-10,p-tenant-a-1,p-tenant-a-4,sibling",
-  family_units: "family_unit_id,partner1_person_id,partner2_person_id\nfu-tenant-a-10,p-tenant-a-2,p-tenant-a-4",
+  households: "household_id,partner1_person_id,partner2_person_id\nfu-tenant-a-10,p-tenant-a-2,p-tenant-a-4",
   important_dates: "id,date,title,description,person_id\ntenant-a-date-10,2026-12-24,Holiday Dinner,Family gathering,p-tenant-a-1",
   person_attributes:
     "person_id,attribute_type,value_text,label,is_primary,sort_order,visibility,notes\np-tenant-a-1,photo,1A2B3C-photo-file-id,portrait,TRUE,0,family,Main portrait",
@@ -168,7 +168,7 @@ export function SettingsClient({
   const [isEnabled, setIsEnabled] = useState(true);
   const [accessStatus, setAccessStatus] = useState("");
   const [target, setTarget] = useState<
-    "people" | "relationships" | "family_units" | "important_dates" | "person_attributes"
+    "people" | "relationships" | "households" | "important_dates" | "person_attributes"
   >("people");
   const [csv, setCsv] = useState(CSV_TEMPLATES.people);
   const [importStatus, setImportStatus] = useState("");
@@ -1484,7 +1484,7 @@ export function SettingsClient({
             >
               <option value="people">People</option>
               <option value="relationships">Relationships</option>
-              <option value="family_units">FamilyUnits</option>
+              <option value="households">Households</option>
               <option value="important_dates">ImportantDates</option>
               <option value="person_attributes">PersonAttributes</option>
             </select>

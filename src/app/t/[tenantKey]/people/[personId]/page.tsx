@@ -3,7 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getFamilyUnits, getRelationships } from "@/lib/google/family";
+import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople, getPersonAttributes, getPersonById } from "@/lib/google/sheets";
 
@@ -14,11 +14,11 @@ type TenantPersonPageProps = {
 export default async function TenantPersonPage({ params }: TenantPersonPageProps) {
   const { personId } = await params;
   const { session, tenant } = await requireFamilyGroupSession();
-  const [person, people, relationships, familyUnits, initialAttributes] = await Promise.all([
+  const [person, people, relationships, households, initialAttributes] = await Promise.all([
     getPersonById(personId, tenant.tenantKey),
     getPeople(tenant.tenantKey),
     getRelationships(tenant.tenantKey),
-    getFamilyUnits(tenant.tenantKey),
+    getHouseholds(tenant.tenantKey),
     getPersonAttributes(tenant.tenantKey, personId),
   ]);
 
@@ -33,14 +33,14 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
   const initialParentIds = relationships
     .filter((edge) => edge.relationshipType.toLowerCase() === "parent" && edge.toPersonId === person.personId)
     .map((edge) => edge.fromPersonId);
-  const marriedToByPersonId = familyUnits.reduce<Record<string, string>>((acc, unit) => {
+  const marriedToByPersonId = households.reduce<Record<string, string>>((acc, unit) => {
     acc[unit.partner1PersonId] = unit.partner2PersonId;
     acc[unit.partner2PersonId] = unit.partner1PersonId;
     return acc;
   }, {});
   const initialSpouseId =
-    familyUnits.find((unit) => unit.partner1PersonId === person.personId)?.partner2PersonId ??
-    familyUnits.find((unit) => unit.partner2PersonId === person.personId)?.partner1PersonId ??
+    households.find((unit) => unit.partner1PersonId === person.personId)?.partner2PersonId ??
+    households.find((unit) => unit.partner2PersonId === person.personId)?.partner1PersonId ??
     "";
 
   return (

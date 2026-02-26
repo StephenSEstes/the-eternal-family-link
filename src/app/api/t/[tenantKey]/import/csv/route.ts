@@ -7,7 +7,7 @@ import { createTableRecord, updateTableRecordById } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({
-  target: z.enum(["people", "relationships", "family_units", "important_dates", "person_attributes"]),
+  target: z.enum(["people", "relationships", "households", "important_dates", "person_attributes"]),
   csv: z.string().min(1),
 });
 
@@ -18,8 +18,8 @@ function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
   if (target === "relationships") {
     return { tabName: "Relationships", idColumn: "rel_id", required: ["rel_id", "from_person_id", "to_person_id"] };
   }
-  if (target === "family_units") {
-    return { tabName: "FamilyUnits", idColumn: "family_unit_id", required: ["family_unit_id", "partner1_person_id", "partner2_person_id"] };
+  if (target === "households") {
+    return { tabName: "Households", idColumn: "household_id", required: ["household_id", "partner1_person_id", "partner2_person_id"] };
   }
   if (target === "person_attributes") {
     return { tabName: "PersonAttributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };

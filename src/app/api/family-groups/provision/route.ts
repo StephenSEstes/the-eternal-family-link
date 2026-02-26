@@ -125,13 +125,13 @@ async function upsertFamilyUnit(
   const [partner1, partner2] = [personA, personB].sort();
   const payload: Record<string, string> = {
     family_group_key: familyGroupKey,
-    family_unit_id: familyUnitId,
+    household_id: familyUnitId,
     partner1_person_id: partner1,
     partner2_person_id: partner2,
   };
-  const updated = await updateTableRecordById("FamilyUnits", familyUnitId, payload, "family_unit_id", familyGroupKey);
+  const updated = await updateTableRecordById("Households", familyUnitId, payload, "household_id", familyGroupKey);
   if (!updated) {
-    await createTableRecord("FamilyUnits", payload, familyGroupKey);
+    await createTableRecord("Households", payload, familyGroupKey);
   }
 }
 
@@ -343,10 +343,10 @@ export async function POST(request: Request) {
 
   let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
   if (parsed.data.includeHouseholdCandidates) {
-    const familyUnits = await getTableRecords("FamilyUnits", sourceFamilyGroupKey).catch(() => []);
+    const households = await getTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
     const relationships = await getTableRecords("Relationships", sourceFamilyGroupKey).catch(() => []);
     const candidateIds = new Set<string>();
-    for (const row of familyUnits) {
+    for (const row of households) {
       const partner1 = readValue(row.data, "partner1_person_id");
       const partner2 = readValue(row.data, "partner2_person_id");
       if (partner1 === parsed.data.initialAdminPersonId && partner2) {

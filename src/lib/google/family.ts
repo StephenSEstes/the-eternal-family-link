@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { FamilyUnitRecord, RelationshipRecord } from "@/lib/google/types";
+import type { HouseholdRecord, RelationshipRecord } from "@/lib/google/types";
 import { getTableRecords } from "@/lib/google/sheets";
 
 function readCell(record: Record<string, string>, ...keys: string[]) {
@@ -32,20 +32,20 @@ export async function getRelationships(tenantKey: string): Promise<RelationshipR
     .filter((row) => row.tenantKey.toLowerCase() === tenantKey.toLowerCase());
 }
 
-export async function getFamilyUnits(tenantKey: string): Promise<FamilyUnitRecord[]> {
-  const rows = await getTableRecords("FamilyUnits", tenantKey);
+export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[]> {
+  const rows = await getTableRecords("Households", tenantKey);
   return rows
     .map((row, idx) => {
       const data = row.data;
       const rowTenant = readCell(data, "family_group_key", "tenant_key") || tenantKey;
       return {
-        id: readCell(data, "family_unit_id", "id") || `fu-${idx + 2}`,
+        id: readCell(data, "household_id", "id") || `fu-${idx + 2}`,
         tenantKey: rowTenant,
         partner1PersonId: readCell(data, "partner1_person_id", "partner_1_person_id", "parent1_person_id"),
         partner2PersonId: readCell(data, "partner2_person_id", "partner_2_person_id", "parent2_person_id"),
         label: readCell(data, "family_label", "label", "family_name"),
         notes: readCell(data, "notes", "family_notes"),
-      } satisfies FamilyUnitRecord;
+      } satisfies HouseholdRecord;
     })
     .filter((row) => row.partner1PersonId && row.partner2PersonId)
     .filter((row) => row.tenantKey.toLowerCase() === tenantKey.toLowerCase());

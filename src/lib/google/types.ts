@@ -125,7 +125,7 @@ export type RelationshipRecord = {
   relationshipType: string;
 };
 
-export type FamilyUnitRecord = {
+export type HouseholdRecord = {
   id: string;
   tenantKey: string;
   partner1PersonId: string;

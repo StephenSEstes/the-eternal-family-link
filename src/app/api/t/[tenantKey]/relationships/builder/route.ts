@@ -63,15 +63,15 @@ async function upsertFamilyUnit(tenantKey: string, personA: string, personB: str
   const familyUnitId = makeFamilyUnitId(tenantKey, personA, personB);
   const [partner1, partner2] = [personA, personB].sort();
   const payload: Record<string, string> = {
-    family_unit_id: familyUnitId,
+    household_id: familyUnitId,
     partner1_person_id: partner1,
     partner2_person_id: partner2,
     tenant_key: tenantKey,
   };
 
-  const updated = await updateTableRecordById("FamilyUnits", familyUnitId, payload, "family_unit_id", tenantKey);
+  const updated = await updateTableRecordById("Households", familyUnitId, payload, "household_id", tenantKey);
   if (!updated) {
-    await createTableRecord("FamilyUnits", payload, tenantKey);
+    await createTableRecord("Households", payload, tenantKey);
   }
 }
 
@@ -139,9 +139,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     await upsertRelation(normalizedTenantKey, parsed.data.personId, childId, "parent");
   }
 
-  const familyUnits = await getTableRecords("FamilyUnits", normalizedTenantKey);
+  const households = await getTableRecords("Households", normalizedTenantKey);
   const spouseConflict = spouseId
-    ? familyUnits.find((row) => {
+    ? households.find((row) => {
         const partner1 = readField(row.data, "partner1_person_id");
         const partner2 = readField(row.data, "partner2_person_id");
         const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
@@ -169,8 +169,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     );
   }
 
-  for (const row of familyUnits) {
-    const unitId = readField(row.data, "family_unit_id");
+  for (const row of households) {
+    const unitId = readField(row.data, "household_id");
     const partner1 = readField(row.data, "partner1_person_id");
     const partner2 = readField(row.data, "partner2_person_id");
     const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
@@ -183,7 +183,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     if (spouseId && ((partner1 === parsed.data.personId && partner2 === spouseId) || (partner2 === parsed.data.personId && partner1 === spouseId))) {
       continue;
     }
-    await deleteTableRecordById("FamilyUnits", unitId, "family_unit_id", normalizedTenantKey);
+    await deleteTableRecordById("Households", unitId, "household_id", normalizedTenantKey);
   }
 
   if (spouseId) {

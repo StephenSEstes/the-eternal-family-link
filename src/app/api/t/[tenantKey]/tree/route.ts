@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getFamilyUnits, getRelationships } from "@/lib/google/family";
+import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
@@ -21,19 +21,19 @@ export async function GET(_: Request, { params }: TenantTreeRouteProps) {
   }
 
   const tenant = getTenantContext(session, normalized);
-  const [people, relationships, familyUnits] = await Promise.all([
+  const [people, relationships, households] = await Promise.all([
     getPeople(tenant.tenantKey),
     getRelationships(tenant.tenantKey),
-    getFamilyUnits(tenant.tenantKey),
+    getHouseholds(tenant.tenantKey),
   ]);
 
   return NextResponse.json({
     tenantKey: tenant.tenantKey,
     peopleCount: people.length,
     relationshipsCount: relationships.length,
-    familyUnitsCount: familyUnits.length,
+    householdsCount: households.length,
     people,
     relationships,
-    familyUnits,
+    households,
   });
 }

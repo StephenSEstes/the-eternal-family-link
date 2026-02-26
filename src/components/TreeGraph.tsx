@@ -15,7 +15,7 @@ type GraphEdge = {
   label: string;
 };
 
-type FamilyUnitLink = {
+type HouseholdLink = {
   id: string;
   partner1PersonId: string;
   partner2PersonId: string;
@@ -27,10 +27,10 @@ type TreeGraphProps = {
   basePath: string;
   nodes: PersonNode[];
   edges: GraphEdge[];
-  familyUnits?: FamilyUnitLink[];
+  households?: HouseholdLink[];
 };
 
-export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGraphProps) {
+export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraphProps) {
   const NODE_HALF_WIDTH = 72;
   const NODE_HALF_HEIGHT = 24;
   const MIN_SCALE = 0.35;
@@ -53,7 +53,7 @@ export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGrap
     childIdsByParent.get(edge.fromPersonId)?.add(edge.toPersonId);
   });
 
-  familyUnits.forEach((unit) => {
+  households.forEach((unit) => {
     const leftId = unit.partner1PersonId;
     const rightId = unit.partner2PersonId;
     if (!leftId || !rightId) {
