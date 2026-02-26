@@ -613,8 +613,47 @@ export function SettingsClient({
     }
   };
 
+  const selectDirectoryPerson = (nextPersonId: string) => {
+    setSelectedDirectoryPersonId(nextPersonId);
+    setLocalPersonId(nextPersonId);
+    setPersonId(nextPersonId);
+    setShowDoneButton(false);
+    setManageNextUsername("");
+    setManagePassword("");
+    setLocalPassword("");
+
+    const personGoogle = (googleAccessByPersonId.get(nextPersonId) ?? []).filter((entry) => entry.userEmail.trim());
+    const personLocal = localAccessByPersonId.get(nextPersonId) ?? [];
+
+    const firstGoogle = personGoogle[0];
+    if (firstGoogle) {
+      setUserEmail(firstGoogle.userEmail);
+      setRole(firstGoogle.role);
+      setIsEnabled(firstGoogle.isEnabled);
+    } else {
+      setUserEmail("");
+      setRole("USER");
+      setIsEnabled(false);
+    }
+
+    const firstLocal = personLocal[0];
+    if (firstLocal) {
+      setLocalUsername(firstLocal.username);
+      setLocalRole(firstLocal.role);
+      setLocalEnabled(firstLocal.isEnabled);
+      setSelectedLocalUsername(firstLocal.username);
+      setManageRole(firstLocal.role);
+    } else {
+      setLocalUsername("");
+      setLocalRole("USER");
+      setLocalEnabled(true);
+      setSelectedLocalUsername("");
+      setManageRole("USER");
+    }
+  };
+
   const selectedPersonGoogleAccess = selectedDirectoryPersonId
-    ? visibleAccessItems.filter((item) => item.personId === selectedDirectoryPersonId)
+    ? visibleAccessItems.filter((item) => item.personId === selectedDirectoryPersonId && item.userEmail.trim())
     : [];
   const selectedPersonLocalUsers = selectedDirectoryPersonId
     ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId)
@@ -883,28 +922,7 @@ export function SettingsClient({
                         <td>{hasGoogle ? "TRUE" : "FALSE"}</td>
                         <td>{hasLocal ? "TRUE" : "FALSE"}</td>
                         <td>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setSelectedDirectoryPersonId(person.personId);
-                              setLocalPersonId(person.personId);
-                              setPersonId(person.personId);
-                              const firstGoogle = personGoogle[0];
-                              if (firstGoogle) {
-                                setUserEmail(firstGoogle.userEmail);
-                                setRole(firstGoogle.role);
-                                setIsEnabled(firstGoogle.isEnabled);
-                              }
-                              const firstLocal = personLocal[0];
-                              if (firstLocal) {
-                                setSelectedLocalUsername(firstLocal.username);
-                                setManageRole(firstLocal.role);
-                              } else {
-                                setSelectedLocalUsername("");
-                              }
-                            }}
-                          >
+                          <button type="button" className="button secondary tap-button" onClick={() => selectDirectoryPerson(person.personId)}>
                             Manage User
                           </button>
                         </td>
@@ -946,7 +964,7 @@ export function SettingsClient({
                     void createLocalUser();
                   }}
                 >
-                  Save Local Access
+                  Save Local Access For Selected User
                 </button>
 
                 <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
@@ -978,6 +996,11 @@ export function SettingsClient({
                     </tbody>
                   </table>
                 </div>
+                {selectedPersonLocalUsers.length === 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    No local account exists for this user yet.
+                  </p>
+                ) : null}
 
                 {selectedLocalUser && selectedLocalUser.personId === selectedDirectoryPersonId ? (
                   <>
@@ -1066,6 +1089,21 @@ export function SettingsClient({
                 >
                   Save Google Access
                 </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    if (!userEmail.trim()) {
+                      setAccessStatus("Set a Google email before changing Google access.");
+                      return;
+                    }
+                    setPersonId(selectedDirectoryPersonId);
+                    setIsEnabled(false);
+                    void upsertAccess();
+                  }}
+                >
+                  Disable Google Access
+                </button>
                 <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
                   <table className="settings-table">
                     <thead>
@@ -1085,9 +1123,10 @@ export function SettingsClient({
                                 setUserEmail(item.userEmail);
                                 setRole(item.role);
                                 setIsEnabled(item.isEnabled);
+                                setAccessStatus(`Loaded Google access for ${item.userEmail}.`);
                               }}
                             >
-                              Manage
+                              Load
                             </button>
                           </td>
                         </tr>
@@ -1095,6 +1134,11 @@ export function SettingsClient({
                     </tbody>
                   </table>
                 </div>
+                {selectedPersonGoogleAccess.length === 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    No Google access record exists for this user.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </>
