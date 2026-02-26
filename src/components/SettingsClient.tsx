@@ -177,6 +177,7 @@ export function SettingsClient({
   const adminLoadSeq = useRef(0);
   const managedPersonSyncRef = useRef("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
+  const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string }[]>(people);
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
     buildDirectoryPeople(accessItems, [], people),
   );
@@ -228,6 +229,7 @@ export function SettingsClient({
               displayName: item.displayName?.trim() || item.personId,
             }))
         : [];
+    setFamilyPeople(nextPeople);
     setDirectoryPeople(buildDirectoryPeople(nextAccessItems, nextLocalUsers, nextPeople));
   };
 
@@ -661,6 +663,12 @@ export function SettingsClient({
   const importMemberCandidates = existingPeopleOptions.filter(
     (person) => person.sourceTenantKey.trim().toLowerCase() !== selectedTenantKey.trim().toLowerCase(),
   );
+  const addUserCandidatePeople = useMemo(() => {
+    const existingUserPersonIds = new Set(visibleAccessItems.map((item) => item.personId.trim()).filter(Boolean));
+    return familyPeople
+      .filter((person) => !existingUserPersonIds.has(person.personId.trim()))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [familyPeople, visibleAccessItems]);
 
   return (
     <div className="settings-stack">
@@ -881,10 +889,15 @@ export function SettingsClient({
                   }}
                 >
                   <option value="">Select person</option>
-                  {directoryPeople.map((person) => (
+                  {addUserCandidatePeople.map((person) => (
                     <option key={person.personId} value={person.personId}>{person.displayName}</option>
                   ))}
                 </select>
+                {addUserCandidatePeople.length === 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    No available people to add. Everyone in this family already has a user record.
+                  </p>
+                ) : null}
                 <label className="label">Local Username</label>
                 <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
                 <label className="label">Temporary Password</label>
