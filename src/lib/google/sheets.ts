@@ -1361,6 +1361,32 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
     await backfillPersonMembershipsFromUserFamilyGroups(targetTenant);
     allowedPersonIds = await resolveAllowedPersonIds();
   }
+
+  const [relationshipRows, familyUnitRows] = await Promise.all([
+    getTableRecords("Relationships", targetTenant).catch(() => [] as SheetRecord[]),
+    getTableRecords("FamilyUnits", targetTenant).catch(() => [] as SheetRecord[]),
+  ]);
+  for (const row of relationshipRows) {
+    const fromPersonId = (row.data.from_person_id ?? "").trim();
+    const toPersonId = (row.data.to_person_id ?? "").trim();
+    if (fromPersonId) {
+      allowedPersonIds.add(fromPersonId);
+    }
+    if (toPersonId) {
+      allowedPersonIds.add(toPersonId);
+    }
+  }
+  for (const row of familyUnitRows) {
+    const partner1 = (row.data.partner1_person_id ?? "").trim();
+    const partner2 = (row.data.partner2_person_id ?? "").trim();
+    if (partner1) {
+      allowedPersonIds.add(partner1);
+    }
+    if (partner2) {
+      allowedPersonIds.add(partner2);
+    }
+  }
+
   for (const person of scopedPeople) {
     allowedPersonIds.add(person.personId);
   }
