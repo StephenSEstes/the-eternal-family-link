@@ -85,7 +85,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       PERSON_ATTRIBUTES_TAB,
       {
         attribute_id: attributeId,
-        tenant_key: resolved.tenant.tenantKey,
         person_id: personId,
         attribute_type: "photo",
         value_text: uploaded.fileId,
@@ -96,6 +95,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         start_date: "",
         end_date: "",
         visibility: "family",
+        share_scope: "both_families",
+        share_family_group_key: "",
         notes: "",
       },
       resolved.tenant.tenantKey,

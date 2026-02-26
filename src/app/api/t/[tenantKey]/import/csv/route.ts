@@ -106,7 +106,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     if (target.tabName === "PersonAttributes" && !payload.attribute_id) {
       payload.attribute_id = recordId;
     }
-    payload.tenant_key = normalizedTenantKey;
+    if (target.tabName !== "People" && target.tabName !== "PersonAttributes" && target.tabName !== "ImportantDates") {
+      payload.tenant_key = normalizedTenantKey;
+    }
+    if (target.tabName === "PersonAttributes") {
+      payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";
+      if (payload.share_scope === "one_family" && !payload.share_family_group_key?.trim()) {
+        payload.share_family_group_key = normalizedTenantKey;
+      }
+      if (payload.share_scope !== "one_family") {
+        payload.share_family_group_key = "";
+      }
+    }
+    if (target.tabName === "ImportantDates") {
+      payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";
+      if (payload.share_scope === "one_family" && !payload.share_family_group_key?.trim()) {
+        payload.share_family_group_key = normalizedTenantKey;
+      }
+      if (payload.share_scope !== "one_family") {
+        payload.share_family_group_key = "";
+      }
+    }
 
     try {
       const updatedRow = await updateTableRecordById(

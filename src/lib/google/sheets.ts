@@ -49,9 +49,16 @@ const FAMILY_CONFIG_TAB = "FamilyConfig";
 const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
 const FAMILY_SECURITY_POLICY_TAB = "FamilySecurityPolicy";
 const TENANT_TAB_DELIMITER = "__";
+const GLOBAL_SHARED_TABS = new Set<string>([
+  USER_ACCESS_TAB.toLowerCase(),
+  USER_FAMILY_GROUPS_TAB.toLowerCase(),
+  PERSON_FAMILY_GROUPS_TAB.toLowerCase(),
+  PEOPLE_TAB.toLowerCase(),
+  IMPORTANT_DATES_TAB.toLowerCase(),
+  PERSON_ATTRIBUTES_TAB.toLowerCase(),
+]);
 const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   People: [
-    "family_group_key",
     "person_id",
     "display_name",
     "birth_date",
@@ -65,9 +72,8 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   ],
   Relationships: ["family_group_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
   FamilyUnits: ["family_group_key", "family_unit_id", "partner1_person_id", "partner2_person_id"],
-  ImportantDates: ["family_group_key", "id", "date", "title", "description", "person_id"],
+  ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
-    "family_group_key",
     "attribute_id",
     "person_id",
     "attribute_type",
@@ -205,6 +211,9 @@ function normalizeTenantKey(tenantKey?: string) {
 }
 
 function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
+  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
+    return [tabName];
+  }
   const cleanKey = normalizeTenantKey(tenantKey);
   if (cleanKey === DEFAULT_TENANT_KEY) {
     return [tabName];
@@ -230,6 +239,9 @@ function buildMultiTenantTabCandidates(tabNames: string | string[], tenantKey?: 
 }
 
 function buildTenantScopedTabName(tabName: string, tenantKey?: string) {
+  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
+    return tabName;
+  }
   const cleanKey = normalizeTenantKey(tenantKey);
   if (cleanKey === DEFAULT_TENANT_KEY) {
     return tabName;
@@ -817,7 +829,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
   };
 }
 
-function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKey: string): PersonAttributeRecord | null {
+function rowToPersonAttribute(headers: string[], row: string[], tenantKey: string): PersonAttributeRecord | null {
   const idx = buildHeaderIndex(headers);
   const attributeId = getCell(row, idx, "attribute_id").trim();
   const personId = getCell(row, idx, "person_id").trim();
@@ -830,7 +842,6 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
 
   const shareScopeRaw = getCell(row, idx, "share_scope").trim().toLowerCase();
   const shareFamilyGroupKey = getCell(row, idx, "share_family_group_key").trim().toLowerCase();
-  const legacyTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase() || fallbackTenantKey;
   const shareScope: "both_families" | "one_family" =
     shareScopeRaw === "one_family" || shareScopeRaw === "single_family"
       ? "one_family"
@@ -838,7 +849,7 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
 
   return {
     attributeId,
-    tenantKey: legacyTenantKey,
+    tenantKey,
     personId,
     attributeType,
     valueText,
@@ -851,7 +862,7 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
     visibility: getCell(row, idx, "visibility").trim().toLowerCase() || "family",
     notes: getCell(row, idx, "notes").trim(),
     shareScope,
-    shareFamilyGroupKey: shareScope === "one_family" ? (shareFamilyGroupKey || legacyTenantKey) : "",
+    shareFamilyGroupKey: shareScope === "one_family" ? shareFamilyGroupKey : "",
   };
 }
 
@@ -1283,20 +1294,7 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
     }
   }
-
-  const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("family_group_key");
-  if (!hasTenantColumn) {
-    return [];
-  }
-  return matrix.rows
-    .filter((row) => {
-      const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
-      return rowTenant === targetTenant;
-    })
-    .map((row) => rowToPerson(matrix.headers, row))
-    .filter((person) => person.personId)
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return [];
 }
 
 export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig> {
@@ -1367,12 +1365,10 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
       const shareScope =
         shareScopeRaw === "one_family" || shareScopeRaw === "single_family" ? "one_family" : "both_families";
       const shareFamilyGroupKey = getCell(row, idx, "share_family_group_key").trim().toLowerCase();
-      const legacyTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase();
       if (normalizedTenantKey) {
         const isVisibleForFamily =
           shareScope === "both_families" ||
-          shareFamilyGroupKey === normalizedTenantKey ||
-          (!shareFamilyGroupKey && legacyTenantKey === normalizedTenantKey);
+          shareFamilyGroupKey === normalizedTenantKey;
         if (!isVisibleForFamily) {
           return null;
         }
@@ -1461,18 +1457,7 @@ export async function updatePerson(
   }
 
   const idx = buildHeaderIndex(headers);
-  const targetTenant = normalizeTenantKey(tenantKey);
-  const hasTenantColumn = idx.has("family_group_key");
-  const rowIndex = rows.findIndex((row) => {
-    if (getCell(row, idx, "person_id") !== personId) {
-      return false;
-    }
-    if (!hasTenantColumn) {
-      return true;
-    }
-    const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
-    return !rowTenant || rowTenant === targetTenant;
-  });
+  const rowIndex = rows.findIndex((row) => getCell(row, idx, "person_id") === personId);
 
   if (rowIndex < 0) {
     return null;
