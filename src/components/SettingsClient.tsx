@@ -993,6 +993,20 @@ export function SettingsClient({
                                   </label>
                                 </div>
 
+                                <label className="label">Role</label>
+                                <select
+                                  className="input"
+                                  value={role}
+                                  onChange={(e) => {
+                                    const nextRole = e.target.value as "ADMIN" | "USER";
+                                    setRole(nextRole);
+                                    setLocalRole(nextRole);
+                                  }}
+                                >
+                                  <option value="USER">USER</option>
+                                  <option value="ADMIN">ADMIN</option>
+                                </select>
+
                                 <h5 style={{ marginBottom: "0.5rem" }}>Google Access</h5>
                                 <label className="label">Google Email</label>
                                 <input
@@ -1001,42 +1015,6 @@ export function SettingsClient({
                                   onChange={(e) => setUserEmail(e.target.value)}
                                   placeholder="name@gmail.com"
                                 />
-                                <label className="label">Role</label>
-                                <select className="input" value={role} onChange={(e) => setRole(e.target.value as "ADMIN" | "USER")}>
-                                  <option value="USER">USER</option>
-                                  <option value="ADMIN">ADMIN</option>
-                                </select>
-                                <div className="settings-chip-list">
-                                  <button
-                                    type="button"
-                                    className="button tap-button"
-                                    onClick={() => {
-                                      if (!userEmail.trim()) {
-                                        setAccessStatus("Google email is required to save Google access.");
-                                        return;
-                                      }
-                                      setPersonId(person.personId);
-                                      void upsertAccess();
-                                    }}
-                                  >
-                                    Save Google Access
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button secondary tap-button"
-                                    onClick={() => {
-                                      if (!userEmail.trim()) {
-                                        setAccessStatus("Google email is required to disable Google access.");
-                                        return;
-                                      }
-                                      setPersonId(person.personId);
-                                      setIsEnabled(false);
-                                      void upsertAccess();
-                                    }}
-                                  >
-                                    Disable Google Access
-                                  </button>
-                                </div>
 
                                 <h5 style={{ marginBottom: "0.5rem", marginTop: "1rem" }}>Local Access</h5>
                                 <label className="label">Username</label>
@@ -1046,11 +1024,6 @@ export function SettingsClient({
                                   onChange={(e) => setLocalUsername(e.target.value)}
                                   placeholder="local username"
                                 />
-                                <label className="label">Role</label>
-                                <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
-                                  <option value="USER">USER</option>
-                                  <option value="ADMIN">ADMIN</option>
-                                </select>
                                 <label className="label">Set / Change Password</label>
                                 <input
                                   className="input"
@@ -1063,54 +1036,105 @@ export function SettingsClient({
                                   <button
                                     type="button"
                                     className="button tap-button"
-                                    onClick={() => {
-                                      if (personLocalSelected) {
-                                        void patchLocalUser(personLocalSelected.username, {
-                                          action: "set_enabled",
-                                          isEnabled: localEnabled,
+                                    onClick={() =>
+                                      void (async () => {
+                                        setPersonId(person.personId);
+                                        setLocalPersonId(person.personId);
+
+                                        if (isEnabled) {
+                                          if (!userEmail.trim()) {
+                                            setAccessStatus("Google email is required when Google Access is enabled.");
+                                            return;
+                                          }
+                                          await upsertAccess();
+                                        } else if (selectedPersonGoogleAccess.length > 0) {
+                                          const existing = selectedPersonGoogleAccess[0];
+                                          setUserEmail(existing.userEmail);
+                                          await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                              userEmail: existing.userEmail,
+                                              role,
+                                              personId: person.personId,
+                                              isEnabled: false,
+                                            }),
+                                          });
+                                          await loadTenantAdminData(selectedTenantKey);
+                                        }
+
+                                        if (localEnabled) {
+                                          if (personLocalSelected) {
+                                            if (
+                                              localUsername.trim() &&
+                                              localUsername.trim().toLowerCase() !== personLocalSelected.username
+                                            ) {
+                                              const renamed = await patchLocalUser(personLocalSelected.username, {
+                                                action: "rename_username",
+                                                nextUsername: localUsername.trim(),
+                                              });
+                                              if (!renamed) return;
+                                            }
+                                            const activeUsername = (
+                                              localUsername.trim().toLowerCase() || personLocalSelected.username
+                                            ).trim();
+                                            if (activeUsername) {
+                                              const roleOk = await patchLocalUser(activeUsername, {
+                                                action: "update_role",
+                                                role,
+                                              });
+                                              if (!roleOk) return;
+                                              await patchLocalUser(activeUsername, {
+                                                action: "set_enabled",
+                                                isEnabled: true,
+                                              });
+                                            }
+                                          } else {
+                                            if (!localUsername.trim() || !localPassword.trim()) {
+                                              setLocalUserStatus(
+                                                "Local username and password are required when enabling Local Access for a new user.",
+                                              );
+                                              return;
+                                            }
+                                            await createLocalUser();
+                                          }
+                                        } else if (personLocalSelected) {
+                                          await patchLocalUser(personLocalSelected.username, {
+                                            action: "set_enabled",
+                                            isEnabled: false,
+                                          });
+                                        }
+
+                                        setLocalUserStatus("User updated.");
+                                        await loadTenantAdminData(selectedTenantKey);
+                                        router.refresh();
+                                      })()
+                                    }
+                                  >
+                                    Update User
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button tap-button"
+                                    onClick={() =>
+                                      void (async () => {
+                                        if (!personLocalSelected) {
+                                          setLocalUserStatus("No local user exists to update password.");
+                                          return;
+                                        }
+                                        if (!localPassword.trim()) {
+                                          setLocalUserStatus("Enter a password first.");
+                                          return;
+                                        }
+                                        const ok = await patchLocalUser(personLocalSelected.username, {
+                                          action: "reset_password",
+                                          password: localPassword,
                                         });
-                                        return;
-                                      }
-                                      if (!localEnabled) {
-                                        setLocalUserStatus("Enable Local Access to create a local user.");
-                                        return;
-                                      }
-                                      setLocalPersonId(person.personId);
-                                      void createLocalUser();
-                                    }}
-                                  >
-                                    Save Local Access
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button secondary tap-button"
-                                    onClick={() => {
-                                      if (!personLocalSelected) {
-                                        setLocalUserStatus("No local user exists to disable.");
-                                        return;
-                                      }
-                                      void patchLocalUser(personLocalSelected.username, { action: "set_enabled", isEnabled: false });
-                                    }}
-                                  >
-                                    Disable Local Access
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button secondary tap-button"
-                                    onClick={() => {
-                                      if (!personLocalSelected) {
-                                        setLocalUserStatus("No local user exists to reset password.");
-                                        return;
-                                      }
-                                      if (!localPassword.trim()) {
-                                        setLocalUserStatus("Enter a password to reset.");
-                                        return;
-                                      }
-                                      void patchLocalUser(personLocalSelected.username, {
-                                        action: "reset_password",
-                                        password: localPassword,
-                                      });
-                                    }}
+                                        if (!ok) return;
+                                        setLocalUserStatus("Password updated.");
+                                        setLocalPassword("");
+                                      })()
+                                    }
                                   >
                                     Update Password
                                   </button>
