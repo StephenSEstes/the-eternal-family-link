@@ -370,6 +370,7 @@ export function TreeGraph({ basePath, nodes, edges, familyUnits = [] }: TreeGrap
 
           return (
             <g key={`cluster-${pairKey}`}>
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
               <rect
                 x={midX - halfWidth}
                 y={midY - halfHeight}
