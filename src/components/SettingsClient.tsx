@@ -866,7 +866,21 @@ export function SettingsClient({
             className={`button secondary tap-button ${showAddUserForm ? "game-option-selected" : ""}`}
             onClick={() => {
               setUserAdminSubTab("directory");
-              setShowAddUserForm((v) => !v);
+              const next = !showAddUserForm;
+              setShowAddUserForm(next);
+              if (next) {
+                setSelectedDirectoryPersonId("");
+                setSelectedLocalUsername("");
+                setLocalPersonId("");
+                setPersonId("");
+                setLocalUsername("");
+                setLocalPassword("");
+                setLocalRole("USER");
+                setLocalEnabled(true);
+                setUserEmail("");
+                setRole("USER");
+                setIsEnabled(false);
+              }
             }}
           >
             {showAddUserForm ? "Hide Add User" : "Add User"}
