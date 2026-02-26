@@ -310,6 +310,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
   const config = await getTenantConfig(familyGroupKey);
 
   let deletedDuplicateUserAccessRows = 0;
+  let deletedOrphanUserFamilyGroupRows = 0;
   const duplicateUserAccessRowNumbers: number[] = [];
   for (const rows of before.userAccessByPerson.values()) {
     if (rows.length <= 1) {
@@ -330,6 +331,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     deletedDuplicateUserAccessRows = await deleteRowsByNumber("UserAccess", duplicateUserAccessRowNumbers);
   }
 
+  const orphanUserFamilyGroupRowNumbers = before.filteredLinks
+    .filter((row) => {
+      const personId = normalize(readField(row.data, "person_id"));
+      return personId && !before.peopleIds.has(personId);
+    })
+    .map((row) => row.rowNumber);
+  if (orphanUserFamilyGroupRowNumbers.length > 0) {
+    deletedOrphanUserFamilyGroupRows = await deleteRowsByNumber("UserFamilyGroups", orphanUserFamilyGroupRowNumbers);
+  }
+
   let createdMissingLinks = 0;
   const missingLinksForPeopleWithAccess = Array.from(before.peopleIds).filter((personId) => {
     const hasAccess = (before.userAccessByPerson.get(personId) ?? []).length > 0;
@@ -342,9 +353,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       continue;
     }
     const preferred = [...accessRows].sort((a, b) => scoreUserAccessRow(b.data) - scoreUserAccessRow(a.data))[0];
-    const email =
-      readField(preferred.data, "user_email").toLowerCase() ||
-      `${readField(preferred.data, "username").toLowerCase() || personId}@local`;
+    const email = readField(preferred.data, "user_email").toLowerCase();
     const role = readField(preferred.data, "role").toUpperCase() === "ADMIN" ? "ADMIN" : "USER";
     const enabled =
       parseBool(readField(preferred.data, "is_enabled")) ||
@@ -379,6 +388,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     repairedAt: new Date().toISOString(),
     repaired: {
       deletedDuplicateUserAccessRows,
+      deletedOrphanUserFamilyGroupRows,
       createdMissingLinks,
       deletedLegacyLocalUsersRows,
     },

@@ -878,12 +878,17 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
 
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const [links, users] = await Promise.all([ensureUserFamilyGroupsTabSchema(), ensureUserAccessTabSchema()]);
+  const [links, users, people] = await Promise.all([
+    ensureUserFamilyGroupsTabSchema(),
+    ensureUserAccessTabSchema(),
+    getPeople(normalizedTenantKey).catch(() => []),
+  ]);
   if (links.headers.length === 0 || users.headers.length === 0) {
     return [];
   }
   const linkIdx = buildHeaderIndex(links.headers);
   const userIdx = buildHeaderIndex(users.headers);
+  const peopleInGroup = new Set(people.map((person) => person.personId.trim()).filter(Boolean));
 
   const userByPersonId = new Map<string, string[]>();
   for (const row of users.rows) {
@@ -904,6 +909,9 @@ export async function getTenantUserAccessList(tenantKey: string): Promise<UserAc
     }
     const personId = getCell(row, linkIdx, "person_id").trim();
     if (!personId || seenPersonIds.has(personId)) {
+      continue;
+    }
+    if (peopleInGroup.size > 0 && !peopleInGroup.has(personId)) {
       continue;
     }
     seenPersonIds.add(personId);
