@@ -72,6 +72,11 @@ type ExistingPersonOption = {
   sourceTenantName: string;
 };
 
+type HouseholdImportCandidate = {
+  personId: string;
+  displayName: string;
+};
+
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
 type UserAdminSubTab = "directory" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
@@ -125,6 +130,27 @@ function buildDirectoryPeople(
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+function normalizeFamilyKeyPart(value: string) {
+  return value.trim().replace(/[^a-zA-Z]/g, "").toLowerCase();
+}
+
+function extractLastName(fullName: string) {
+  const parts = fullName
+    .trim()
+    .split(/\s+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return "";
+  }
+  return parts[parts.length - 1] ?? "";
+}
+
+function titleCaseWord(value: string) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
 export function SettingsClient({
   tenantKey,
   tenantName,
@@ -152,7 +178,12 @@ export function SettingsClient({
   const [newMatriarchFullName, setNewMatriarchFullName] = useState("");
   const [newMatriarchMaidenName, setNewMatriarchMaidenName] = useState("");
   const [newInitialAdminPersonId, setNewInitialAdminPersonId] = useState("");
-  const [newMemberPersonIds, setNewMemberPersonIds] = useState<string[]>([]);
+  const [newParentsAreInitialAdminParents, setNewParentsAreInitialAdminParents] = useState(false);
+  const [newIncludeHouseholdCandidates, setNewIncludeHouseholdCandidates] = useState(true);
+  const [postCreateTargetFamilyKey, setPostCreateTargetFamilyKey] = useState("");
+  const [postCreateHouseholdCandidates, setPostCreateHouseholdCandidates] = useState<HouseholdImportCandidate[]>([]);
+  const [postCreateMemberPersonIds, setPostCreateMemberPersonIds] = useState<string[]>([]);
+  const [postCreateImportStatus, setPostCreateImportStatus] = useState("");
   const [importMemberPersonIds, setImportMemberPersonIds] = useState<string[]>([]);
   const [importMembersStatus, setImportMembersStatus] = useState("");
   const [newTenantStatus, setNewTenantStatus] = useState("");
@@ -183,6 +214,19 @@ export function SettingsClient({
   );
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
+  const generatedFamilyGroupKey = useMemo(() => {
+    const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
+    const partner = normalizeFamilyKeyPart(extractLastName(newPatriarchFullName));
+    return `${maiden}${partner}`;
+  }, [newMatriarchMaidenName, newPatriarchFullName]);
+  const generatedFamilyGroupName = useMemo(() => {
+    const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
+    const partner = normalizeFamilyKeyPart(extractLastName(newPatriarchFullName));
+    if (!maiden || !partner) {
+      return "";
+    }
+    return `${titleCaseWord(maiden)}${titleCaseWord(partner)} Family`;
+  }, [newMatriarchMaidenName, newPatriarchFullName]);
 
   const loadTenantAdminData = async (tenantKeyToLoad: string) => {
     const loadSeq = ++adminLoadSeq.current;
@@ -307,42 +351,62 @@ export function SettingsClient({
 
   const createTenant = async () => {
     setNewTenantStatus("Creating family group...");
+    setPostCreateImportStatus("");
+    setPostCreateTargetFamilyKey("");
+    setPostCreateHouseholdCandidates([]);
+    setPostCreateMemberPersonIds([]);
     if (!newInitialAdminPersonId) {
       setNewTenantStatus("Select an existing person to be initial admin.");
+      return;
+    }
+    if (!generatedFamilyGroupKey || !generatedFamilyGroupName) {
+      setNewTenantStatus("Enter matriarch maiden name and patriarch full name to generate family key and name.");
       return;
     }
     const res = await fetch("/api/family-groups/provision", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        familyGroupKey: newTenantKey,
-        familyGroupName: newTenantName,
+        sourceFamilyGroupKey: selectedTenantKey,
+        familyGroupKey: newTenantKey.trim() || generatedFamilyGroupKey,
+        familyGroupName: newTenantName.trim() || generatedFamilyGroupName,
         patriarchFullName: newPatriarchFullName,
         matriarchFullName: newMatriarchFullName,
         matriarchMaidenName: newMatriarchMaidenName,
         initialAdminPersonId: newInitialAdminPersonId,
-        memberPersonIds: newMemberPersonIds,
+        memberPersonIds: [],
+        parentsAreInitialAdminParents: newParentsAreInitialAdminParents,
+        includeHouseholdCandidates: newIncludeHouseholdCandidates,
         isEnabled: true,
       }),
     });
-    const body = await res.text();
-    if (!res.ok) {
-      setNewTenantStatus(`Failed: ${res.status} ${body.slice(0, 160)}`);
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setNewTenantStatus(`Failed: ${res.status} ${text.slice(0, 160)}`);
       return;
     }
-    setNewTenantStatus("Family group created. Switch family group from header after session refresh.");
+    const targetKey = String(body.familyGroupKey ?? "").trim().toLowerCase();
+    const candidates = Array.isArray(body.householdImportCandidates)
+      ? (body.householdImportCandidates as HouseholdImportCandidate[])
+      : [];
+    setPostCreateTargetFamilyKey(targetKey);
+    setPostCreateHouseholdCandidates(candidates);
+    setPostCreateMemberPersonIds(candidates.map((item) => item.personId));
+    setNewTenantStatus("Family group created. Review household imports below, then import selected members.");
     setNewTenantKey("");
     setNewTenantName("");
     setNewPatriarchFullName("");
     setNewMatriarchFullName("");
     setNewMatriarchMaidenName("");
     setNewInitialAdminPersonId("");
-    setNewMemberPersonIds([]);
+    setNewParentsAreInitialAdminParents(false);
+    setNewIncludeHouseholdCandidates(true);
     router.refresh();
   };
 
-  const toggleNewMemberPersonId = (personIdToToggle: string) => {
-    setNewMemberPersonIds((current) => {
+  const toggleImportMemberPersonId = (personIdToToggle: string) => {
+    setImportMemberPersonIds((current) => {
       if (current.includes(personIdToToggle)) {
         return current.filter((value) => value !== personIdToToggle);
       }
@@ -350,8 +414,8 @@ export function SettingsClient({
     });
   };
 
-  const toggleImportMemberPersonId = (personIdToToggle: string) => {
-    setImportMemberPersonIds((current) => {
+  const togglePostCreateMemberPersonId = (personIdToToggle: string) => {
+    setPostCreateMemberPersonIds((current) => {
       if (current.includes(personIdToToggle)) {
         return current.filter((value) => value !== personIdToToggle);
       }
@@ -384,6 +448,39 @@ export function SettingsClient({
       `Imported people: ${Number(body.importedPeopleCount ?? 0)}, imported access links: ${Number(body.importedAccessCount ?? 0)}.${missingText}`,
     );
     setImportMemberPersonIds([]);
+    await loadTenantAdminData(selectedTenantKey);
+    router.refresh();
+  };
+
+  const importPostCreateMembers = async () => {
+    if (!postCreateTargetFamilyKey) {
+      setPostCreateImportStatus("No target family group found from creation step.");
+      return;
+    }
+    if (postCreateMemberPersonIds.length === 0) {
+      setPostCreateImportStatus("Select at least one person to import.");
+      return;
+    }
+    setPostCreateImportStatus("Importing selected members...");
+    const res = await fetch(`/api/family-groups/${encodeURIComponent(postCreateTargetFamilyKey)}/import-members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberPersonIds: postCreateMemberPersonIds }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setPostCreateImportStatus(`Failed: ${res.status} ${text.slice(0, 200)}`);
+      return;
+    }
+    const missingText =
+      Array.isArray(body.missingPersonIds) && body.missingPersonIds.length > 0
+        ? ` Missing: ${body.missingPersonIds.slice(0, 5).join(", ")}`
+        : "";
+    setPostCreateImportStatus(
+      `Imported people: ${Number(body.importedPeopleCount ?? 0)}, imported access links: ${Number(body.importedAccessCount ?? 0)}.${missingText}`,
+    );
+    setPostCreateMemberPersonIds([]);
     await loadTenantAdminData(selectedTenantKey);
     router.refresh();
   };
@@ -702,6 +799,10 @@ export function SettingsClient({
       .filter((person) => !existingUserPersonIds.has(person.personId.trim()))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }, [familyPeople, visibleAccessItems]);
+  const createGroupInitialAdminOptions = useMemo(
+    () => [...familyPeople].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [familyPeople],
+  );
 
   return (
     <div className="settings-stack">
@@ -807,54 +908,89 @@ export function SettingsClient({
         ) : null}
         {familyGroupsSubTab === "create_group" ? (
           <>
-            <label className="label">New Family Group Key</label>
-            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder="SnowEstes" />
-            <label className="label">New Family Group Name</label>
-            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder="Smith Family" />
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              Select the initial admin from the active source family group. Family key and name are generated from matriarch maiden name + patriarch last name.
+            </p>
             <label className="label">Top-Level Patriarch (full name)</label>
             <input className="input" value={newPatriarchFullName} onChange={(e) => setNewPatriarchFullName(e.target.value)} placeholder="Brenton Dale Estes" />
             <label className="label">Top-Level Matriarch (full name)</label>
             <input className="input" value={newMatriarchFullName} onChange={(e) => setNewMatriarchFullName(e.target.value)} placeholder="Ruth Snow Estes" />
             <label className="label">Matriarch Maiden Name</label>
             <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} placeholder="Snow" />
+            <label className="label">Generated Family Group Key</label>
+            <input className="input" value={generatedFamilyGroupKey} readOnly placeholder="snowestes" />
+            <label className="label">Generated Family Group Name</label>
+            <input className="input" value={generatedFamilyGroupName} readOnly placeholder="SnowEstes Family" />
+            <label className="label">Optional Override Key (advanced)</label>
+            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder={generatedFamilyGroupKey || "snowestes"} />
+            <label className="label">Optional Override Name (advanced)</label>
+            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder={generatedFamilyGroupName || "SnowEstes Family"} />
             <label className="label">Initial Admin (existing person)</label>
             <select className="input" value={newInitialAdminPersonId} onChange={(e) => setNewInitialAdminPersonId(e.target.value)}>
               <option value="">Select existing person</option>
-              {existingPeopleOptions.map((person) => (
-                <option key={`${person.personId}-${person.sourceTenantKey}`} value={person.personId}>
-                  {person.displayName} ({person.sourceTenantName})
+              {createGroupInitialAdminOptions.map((person) => (
+                <option key={person.personId} value={person.personId}>
+                  {person.displayName}
                 </option>
               ))}
             </select>
-            <label className="label">Import Existing Members (optional)</label>
-            <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
-              <table className="settings-table">
-                <thead>
-                  <tr><th>Add</th><th>Person</th><th>Source Family Group</th></tr>
-                </thead>
-                <tbody>
-                  {existingPeopleOptions.map((person) => (
-                    <tr key={`${person.personId}-${person.sourceTenantKey}-import`}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={newMemberPersonIds.includes(person.personId)}
-                          onChange={() => toggleNewMemberPersonId(person.personId)}
-                        />
-                      </td>
-                      <td>{person.displayName}</td>
-                      <td>{person.sourceTenantName}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-              Imported members carry existing login access into this new family group when credentials already exist.
-            </p>
+            {createGroupInitialAdminOptions.length === 0 ? (
+              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                No people found in this source family group. Add people first before creating a new family group.
+              </p>
+            ) : null}
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={newParentsAreInitialAdminParents}
+                onChange={(e) => setNewParentsAreInitialAdminParents(e.target.checked)}
+              />{" "}
+              Patriarch and matriarch are parents of the initial admin
+            </label>
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={newIncludeHouseholdCandidates}
+                onChange={(e) => setNewIncludeHouseholdCandidates(e.target.checked)}
+              />{" "}
+              Suggest spouse and children of initial admin for import after creation
+            </label>
             <button type="button" className="button tap-button" onClick={createTenant}>
               Create Family Group
             </button>
+            {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h3 style={{ marginTop: 0 }}>Import Household To New Family</h3>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Review suggested spouse/children. Uncheck anyone you do not want to import.
+                </p>
+                <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
+                  <table className="settings-table">
+                    <thead>
+                      <tr><th>Import</th><th>Person</th></tr>
+                    </thead>
+                    <tbody>
+                      {postCreateHouseholdCandidates.map((person) => (
+                        <tr key={`post-create-${person.personId}`}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={postCreateMemberPersonIds.includes(person.personId)}
+                              onChange={() => togglePostCreateMemberPersonId(person.personId)}
+                            />
+                          </td>
+                          <td>{person.displayName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
+                  Import To New Family
+                </button>
+                {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
+              </div>
+            ) : null}
           </>
         ) : null}
         {newTenantStatus ? <p>{newTenantStatus}</p> : null}

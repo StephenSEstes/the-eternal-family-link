@@ -7,6 +7,7 @@ import {
   createTableRecord,
   ensureTenantScaffold,
   getTableRecords,
+  updateTableRecordById,
   upsertTenantAccess,
 } from "@/lib/google/sheets";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
@@ -19,8 +20,11 @@ const payloadSchema = z.object({
   patriarchFullName: z.string().trim().min(1).max(160),
   matriarchFullName: z.string().trim().min(1).max(160),
   matriarchMaidenName: z.string().trim().min(1).max(120),
+  sourceFamilyGroupKey: z.string().trim().min(1).max(80).optional(),
   initialAdminPersonId: z.string().trim().min(1).max(120),
   memberPersonIds: z.array(z.string().trim().min(1).max(120)).max(500).optional().default([]),
+  parentsAreInitialAdminParents: z.boolean().optional().default(false),
+  includeHouseholdCandidates: z.boolean().optional().default(false),
   isEnabled: z.boolean().default(true),
 });
 
@@ -36,6 +40,28 @@ function normalizeNameSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeFamilyNamePart(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z]/g, "")
+    .toLowerCase();
+}
+
+function titleCaseWord(value: string) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function extractLastName(fullName: string) {
+  const parts = fullName
+    .trim()
+    .split(/\s+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+  return parts[parts.length - 1] ?? "";
+}
+
 function buildSeedPersonId(familyGroupKey: string, role: "patriarch" | "matriarch", fullName: string) {
   const slug = normalizeNameSlug(fullName) || role;
   return `fg-${familyGroupKey}-${role}-${slug}`;
@@ -45,6 +71,66 @@ function isTrueLike(value: string | undefined) {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function readValue(record: Record<string, string>, ...keys: string[]) {
+  const lowered = new Map(Object.entries(record).map(([key, value]) => [key.trim().toLowerCase(), value]));
+  for (const key of keys) {
+    const out = lowered.get(key.trim().toLowerCase());
+    if (out !== undefined) {
+      return out.trim();
+    }
+  }
+  return "";
+}
+
+function makeRelationId(familyGroupKey: string, fromPersonId: string, toPersonId: string, relType: string) {
+  const raw = `${familyGroupKey}-${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
+  return raw.replace(/[^a-z0-9_-]+/g, "-");
+}
+
+function makeFamilyUnitId(familyGroupKey: string, personA: string, personB: string) {
+  const pair = [personA, personB].sort().join("-");
+  const raw = `${familyGroupKey}-fu-${pair}`.toLowerCase();
+  return raw.replace(/[^a-z0-9_-]+/g, "-");
+}
+
+async function upsertParentRelation(
+  familyGroupKey: string,
+  fromPersonId: string,
+  toPersonId: string,
+) {
+  const relId = makeRelationId(familyGroupKey, fromPersonId, toPersonId, "parent");
+  const payload: Record<string, string> = {
+    family_group_key: familyGroupKey,
+    rel_id: relId,
+    from_person_id: fromPersonId,
+    to_person_id: toPersonId,
+    rel_type: "parent",
+  };
+  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id", familyGroupKey);
+  if (!updated) {
+    await createTableRecord("Relationships", payload, familyGroupKey);
+  }
+}
+
+async function upsertFamilyUnit(
+  familyGroupKey: string,
+  personA: string,
+  personB: string,
+) {
+  const familyUnitId = makeFamilyUnitId(familyGroupKey, personA, personB);
+  const [partner1, partner2] = [personA, personB].sort();
+  const payload: Record<string, string> = {
+    family_group_key: familyGroupKey,
+    family_unit_id: familyUnitId,
+    partner1_person_id: partner1,
+    partner2_person_id: partner2,
+  };
+  const updated = await updateTableRecordById("FamilyUnits", familyUnitId, payload, "family_unit_id", familyGroupKey);
+  if (!updated) {
+    await createTableRecord("FamilyUnits", payload, familyGroupKey);
+  }
 }
 
 export async function POST(request: Request) {
@@ -64,15 +150,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const rawFamilyGroupKey = parsed.data.familyGroupKey ?? parsed.data.tenantKey;
-  const familyGroupName = parsed.data.familyGroupName ?? parsed.data.tenantName;
-  if (!rawFamilyGroupKey || !familyGroupName) {
-    return NextResponse.json(
-      { error: "invalid_payload", issues: "familyGroupKey and familyGroupName are required." },
-      { status: 400 },
-    );
+  const maidenPart = normalizeFamilyNamePart(parsed.data.matriarchMaidenName);
+  const patriarchLastName = normalizeFamilyNamePart(extractLastName(parsed.data.patriarchFullName));
+  const generatedFamilyGroupKey = `${maidenPart}${patriarchLastName}`;
+  const familyGroupKey = normalizeFamilyGroupKey(parsed.data.familyGroupKey ?? parsed.data.tenantKey ?? generatedFamilyGroupKey);
+  const familyGroupName =
+    parsed.data.familyGroupName ??
+    parsed.data.tenantName ??
+    `${titleCaseWord(maidenPart)}${titleCaseWord(patriarchLastName)} Family`;
+  if (!familyGroupName.trim()) {
+    return NextResponse.json({ error: "invalid_payload", issues: "familyGroupName could not be generated." }, { status: 400 });
   }
-  const familyGroupKey = normalizeFamilyGroupKey(rawFamilyGroupKey);
   if (familyGroupKey.length < 4) {
     return NextResponse.json(
       {
@@ -137,17 +225,28 @@ export async function POST(request: Request) {
     existingInTarget.add(matriarchPersonId);
   }
 
-  const sourceTenantKeys = Array.from(new Set(context.tenants.map((entry) => entry.tenantKey)));
+  const sourceFamilyGroupKey = (parsed.data.sourceFamilyGroupKey ?? context.tenantKey).trim().toLowerCase();
+  const sourceAccess = context.tenants.find((entry) => entry.tenantKey.trim().toLowerCase() === sourceFamilyGroupKey);
+  if (!sourceAccess) {
+    return NextResponse.json(
+      { error: "invalid_source_family", issues: "You do not have access to the selected source family group." },
+      { status: 403 },
+    );
+  }
+  if (sourceAccess.role !== "ADMIN") {
+    return NextResponse.json(
+      { error: "forbidden", issues: "Only admins can create a new family group from this source family." },
+      { status: 403 },
+    );
+  }
+  const sourcePeopleRows = await getTableRecords("People", sourceFamilyGroupKey).catch(() => []);
   const sourcePeopleById = new Map<string, Record<string, string>>();
-  for (const sourceTenantKey of sourceTenantKeys) {
-    const rows = await getTableRecords("People", sourceTenantKey).catch(() => []);
-    for (const row of rows) {
-      const personId = (row.data.person_id ?? "").trim();
-      if (!personId || sourcePeopleById.has(personId)) {
-        continue;
-      }
-      sourcePeopleById.set(personId, row.data);
+  for (const row of sourcePeopleRows) {
+    const personId = (row.data.person_id ?? "").trim();
+    if (!personId || sourcePeopleById.has(personId)) {
+      continue;
     }
+    sourcePeopleById.set(personId, row.data);
   }
 
   const requestedMemberIds = Array.from(
@@ -155,7 +254,7 @@ export async function POST(request: Request) {
   );
   if (!sourcePeopleById.has(parsed.data.initialAdminPersonId)) {
     return NextResponse.json(
-      { error: "invalid_initial_admin", issues: "Initial admin must be an existing person from one of your current family groups." },
+      { error: "invalid_initial_admin", issues: "Initial admin must be an existing person from the selected source family group." },
       { status: 400 },
     );
   }
@@ -196,7 +295,11 @@ export async function POST(request: Request) {
   for (const row of accessRows) {
     const personId = (row.data.person_id ?? "").trim();
     const userEmail = (row.data.user_email ?? "").trim().toLowerCase();
+    const rowFamilyGroupKey = readValue(row.data, "family_group_key", "tenant_key").toLowerCase();
     if (!personId || !userEmail || !requestedMemberIds.includes(personId)) {
+      continue;
+    }
+    if (rowFamilyGroupKey !== sourceFamilyGroupKey) {
       continue;
     }
     if (!isTrueLike(row.data.is_enabled)) {
@@ -218,16 +321,64 @@ export async function POST(request: Request) {
     importedAccessCount += 1;
   }
 
+  await upsertFamilyUnit(familyGroupKey, patriarchPersonId, matriarchPersonId);
+  if (parsed.data.parentsAreInitialAdminParents) {
+    await upsertParentRelation(familyGroupKey, patriarchPersonId, parsed.data.initialAdminPersonId);
+    await upsertParentRelation(familyGroupKey, matriarchPersonId, parsed.data.initialAdminPersonId);
+  }
+
+  let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
+  if (parsed.data.includeHouseholdCandidates) {
+    const familyUnits = await getTableRecords("FamilyUnits", sourceFamilyGroupKey).catch(() => []);
+    const relationships = await getTableRecords("Relationships", sourceFamilyGroupKey).catch(() => []);
+    const candidateIds = new Set<string>();
+    for (const row of familyUnits) {
+      const partner1 = readValue(row.data, "partner1_person_id");
+      const partner2 = readValue(row.data, "partner2_person_id");
+      if (partner1 === parsed.data.initialAdminPersonId && partner2) {
+        candidateIds.add(partner2);
+      }
+      if (partner2 === parsed.data.initialAdminPersonId && partner1) {
+        candidateIds.add(partner1);
+      }
+    }
+    for (const row of relationships) {
+      const relType = readValue(row.data, "rel_type").toLowerCase();
+      const fromPersonId = readValue(row.data, "from_person_id");
+      const toPersonId = readValue(row.data, "to_person_id");
+      if (relType === "parent" && fromPersonId === parsed.data.initialAdminPersonId && toPersonId) {
+        candidateIds.add(toPersonId);
+      }
+    }
+    candidateIds.delete(parsed.data.initialAdminPersonId);
+    candidateIds.delete(patriarchPersonId);
+    candidateIds.delete(matriarchPersonId);
+    householdImportCandidates = Array.from(candidateIds)
+      .map((personId) => {
+        const source = sourcePeopleById.get(personId);
+        if (!source) return null;
+        return {
+          personId,
+          displayName: (source.display_name ?? "").trim() || personId,
+        };
+      })
+      .filter((item): item is { personId: string; displayName: string } => Boolean(item))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
   return NextResponse.json({
     ok: true,
     photosFolderId,
     familyGroupKey,
     familyGroupName,
+    sourceFamilyGroupKey,
     createdPeople: {
       patriarchPersonId,
       matriarchPersonId,
       importedExistingPeopleCount: copiedPeopleCount,
     },
+    parentsLinkedToInitialAdmin: parsed.data.parentsAreInitialAdminParents,
+    householdImportCandidates,
     importedAccessCount,
   });
 }
