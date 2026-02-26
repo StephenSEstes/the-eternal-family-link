@@ -232,12 +232,16 @@ async function runIntegrityAudit(tenantKey: string) {
     Array.from(new Set(linksMissingAccess)),
   );
 
-  const peopleMissingLinks = Array.from(peopleIds).filter((personId) => !linkByPerson.has(personId));
+  const peopleMissingLinks = Array.from(peopleIds).filter((personId) => {
+    const hasAccess = (userAccessByPerson.get(personId) ?? []).length > 0;
+    const hasLink = linkByPerson.has(personId);
+    return hasAccess && !hasLink;
+  });
   pushFinding(
     findings,
     "warn",
     "people_missing_userfamilygroups_link",
-    "People rows with no UserFamilyGroups link for this family group.",
+    "People with UserAccess rows but no UserFamilyGroups link for this family group.",
     peopleMissingLinks,
   );
 
