@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { createSheetsClient, createTableRecord, getTableRecords, getTenantConfig } from "@/lib/google/sheets";
+import { createSheetsClient, createTableRecord, getPeople, getTableRecords, getTenantConfig } from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type IntegritySeverity = "error" | "warn";
@@ -128,15 +128,22 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
 
 async function runIntegrityAudit(tenantKey: string) {
   const familyGroupKey = normalize(tenantKey);
-  const [peopleRows, userAccessRows, userGroupRows, legacyLocalRows] = await Promise.all([
-    getTableRecords("People", tenantKey).catch(() => []),
+  const [people, peopleRowsGlobal, userAccessRows, userGroupRows, legacyLocalRows] = await Promise.all([
+    getPeople(tenantKey).catch(() => []),
+    getTableRecords("People").catch(() => []),
     getTableRecords("UserAccess").catch(() => []),
     getTableRecords("UserFamilyGroups").catch(() => []),
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
   ]);
 
   const peopleIds = new Set(
-    peopleRows
+    people
+      .map((row) => row.personId)
+      .filter(Boolean)
+      .map((id) => normalize(id)),
+  );
+  const allPeopleIds = new Set(
+    peopleRowsGlobal
       .map((row) => readField(row.data, "person_id"))
       .filter(Boolean)
       .map((id) => normalize(id)),
@@ -211,7 +218,7 @@ async function runIntegrityAudit(tenantKey: string) {
   const orphanLinks = filteredLinks
     .map((row) => normalize(readField(row.data, "person_id")))
     .filter(Boolean)
-    .filter((personId) => !peopleIds.has(personId));
+    .filter((personId) => !allPeopleIds.has(personId));
   pushFinding(
     findings,
     "warn",
@@ -261,7 +268,7 @@ async function runIntegrityAudit(tenantKey: string) {
     status: errorCount > 0 ? "error" : warnCount > 0 ? "warn" : "ok",
     errorCount,
     warnCount,
-    peopleCount: peopleRows.length,
+    peopleCount: people.length,
     userAccessCount: userAccessRows.length,
     userFamilyGroupCount: filteredLinks.length,
     legacyLocalUsersCount: legacyLocalRows.length,
@@ -269,7 +276,8 @@ async function runIntegrityAudit(tenantKey: string) {
 
   return {
     familyGroupKey,
-    peopleRows,
+    peopleRows: peopleRowsGlobal,
+    people,
     userAccessRows,
     userGroupRows,
     legacyLocalRows,

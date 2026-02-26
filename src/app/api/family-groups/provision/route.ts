@@ -5,7 +5,9 @@ import { authOptions } from "@/lib/auth/options";
 import { ensureTenantPhotosFolder } from "@/lib/google/drive";
 import {
   createTableRecord,
+  ensurePersonFamilyGroupMembership,
   ensureTenantScaffold,
+  getPeople,
   getTableRecords,
   updateTableRecordById,
   upsertTenantAccess,
@@ -186,7 +188,6 @@ export async function POST(request: Request) {
     await createTableRecord(
       "People",
       {
-        family_group_key: familyGroupKey,
         person_id: patriarchPersonId,
         display_name: parsed.data.patriarchFullName,
         birth_date: "",
@@ -202,13 +203,13 @@ export async function POST(request: Request) {
     );
     existingInTarget.add(patriarchPersonId);
   }
+  await ensurePersonFamilyGroupMembership(patriarchPersonId, familyGroupKey, true);
 
   const matriarchPersonId = buildSeedPersonId(familyGroupKey, "matriarch", parsed.data.matriarchFullName);
   if (!existingInTarget.has(matriarchPersonId)) {
     await createTableRecord(
       "People",
       {
-        family_group_key: familyGroupKey,
         person_id: matriarchPersonId,
         display_name: parsed.data.matriarchFullName,
         birth_date: "",
@@ -224,6 +225,7 @@ export async function POST(request: Request) {
     );
     existingInTarget.add(matriarchPersonId);
   }
+  await ensurePersonFamilyGroupMembership(matriarchPersonId, familyGroupKey, true);
 
   const sourceFamilyGroupKey = (parsed.data.sourceFamilyGroupKey ?? context.tenantKey).trim().toLowerCase();
   const sourceAccess = context.tenants.find((entry) => entry.tenantKey.trim().toLowerCase() === sourceFamilyGroupKey);
@@ -239,14 +241,25 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  const sourcePeopleRows = await getTableRecords("People", sourceFamilyGroupKey).catch(() => []);
+  const sourcePeopleRows = await getPeople(sourceFamilyGroupKey).catch(() => []);
   const sourcePeopleById = new Map<string, Record<string, string>>();
   for (const row of sourcePeopleRows) {
-    const personId = (row.data.person_id ?? "").trim();
+    const personId = row.personId.trim();
     if (!personId || sourcePeopleById.has(personId)) {
       continue;
     }
-    sourcePeopleById.set(personId, row.data);
+    sourcePeopleById.set(personId, {
+      person_id: row.personId,
+      display_name: row.displayName,
+      birth_date: row.birthDate,
+      phones: row.phones,
+      address: row.address,
+      hobbies: row.hobbies,
+      notes: row.notes,
+      photo_file_id: row.photoFileId,
+      is_pinned: row.isPinned ? "TRUE" : "FALSE",
+      relationships: row.relationships.join(","),
+    });
   }
 
   const requestedMemberIds = Array.from(
@@ -262,6 +275,7 @@ export async function POST(request: Request) {
   let copiedPeopleCount = 0;
   for (const personId of requestedMemberIds) {
     if (existingInTarget.has(personId)) {
+      await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
       continue;
     }
     const source = sourcePeopleById.get(personId);
@@ -271,7 +285,6 @@ export async function POST(request: Request) {
     await createTableRecord(
       "People",
       {
-        family_group_key: familyGroupKey,
         person_id: personId,
         display_name: source.display_name ?? "",
         birth_date: source.birth_date ?? "",
@@ -286,6 +299,7 @@ export async function POST(request: Request) {
       familyGroupKey,
     );
     existingInTarget.add(personId);
+    await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
     copiedPeopleCount += 1;
   }
 

@@ -63,6 +63,7 @@ export function ProfileEditor({
   const [attributeValue, setAttributeValue] = useState("");
   const [attributeLabel, setAttributeLabel] = useState("");
   const [attributeVisibility, setAttributeVisibility] = useState("family");
+  const [attributeShareTarget, setAttributeShareTarget] = useState<"both" | string>("both");
   const [attributeSortOrder, setAttributeSortOrder] = useState(0);
   const [attributePrimary, setAttributePrimary] = useState(false);
   const [attributeStatus, setAttributeStatus] = useState("");
@@ -178,6 +179,8 @@ export function ProfileEditor({
           valueText: attributeValue,
           label: attributeLabel,
           visibility: attributeVisibility,
+          shareScope: attributeShareTarget === "both" ? "both_families" : "one_family",
+          shareFamilyGroupKey: attributeShareTarget === "both" ? "" : attributeShareTarget,
           sortOrder: attributeSortOrder,
           isPrimary: attributePrimary,
         }),
@@ -730,6 +733,19 @@ export function ProfileEditor({
                 <option value="private">private</option>
                 <option value="public">public</option>
               </select>
+              <label className="label">Share With</label>
+              <select
+                className="input"
+                value={attributeShareTarget}
+                onChange={(event) => setAttributeShareTarget(event.target.value)}
+              >
+                <option value="both">Both Families</option>
+                {tenantOptions.map((option) => (
+                  <option key={option.tenantKey} value={option.tenantKey}>
+                    {option.tenantName}
+                  </option>
+                ))}
+              </select>
               <label className="label">Sort Order</label>
               <input
                 className="input"
@@ -761,7 +777,7 @@ export function ProfileEditor({
                   <strong>{item.attributeType}</strong>: {item.valueText}
                   <div className="settings-attr-meta">
                     label: {item.label || "-"} | primary: {item.isPrimary ? "TRUE" : "FALSE"} | visibility:{" "}
-                    {item.visibility} | order: {item.sortOrder}
+                    {item.visibility} | share: {item.shareScope === "one_family" ? item.shareFamilyGroupKey : "both"} | order: {item.sortOrder}
                   </div>
                 </div>
                 {canEdit ? (

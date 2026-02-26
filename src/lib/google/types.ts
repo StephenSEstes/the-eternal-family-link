@@ -74,6 +74,8 @@ export type PersonAttributeRecord = {
   endDate: string;
   visibility: string;
   notes: string;
+  shareScope: "both_families" | "one_family";
+  shareFamilyGroupKey: string;
 };
 
 export type ImportantDateRecord = {

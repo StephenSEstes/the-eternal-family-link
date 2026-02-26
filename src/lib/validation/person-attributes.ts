@@ -13,6 +13,8 @@ export const personAttributeCreateSchema = z
     startDate: z.string().trim().max(32).optional().default(""),
     endDate: z.string().trim().max(32).optional().default(""),
     visibility: z.string().trim().max(32).optional().default("family"),
+    shareScope: z.enum(["both_families", "one_family"]).optional().default("both_families"),
+    shareFamilyGroupKey: z.string().trim().max(80).optional().default(""),
     notes: shortText,
   })
   .strict();

@@ -76,16 +76,22 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
+  await getPersonAttributes(resolved.tenant.tenantKey, personId);
+
   if (parsed.data.isPrimary) {
     await clearPrimaryForType(resolved.tenant.tenantKey, personId, parsed.data.attributeType);
   }
 
   const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId, parsed.data.attributeType);
+  const shareScope = parsed.data.shareScope;
+  const shareFamilyGroupKey =
+    shareScope === "one_family"
+      ? (parsed.data.shareFamilyGroupKey.trim().toLowerCase() || resolved.tenant.tenantKey)
+      : "";
   const record = await createTableRecord(
     PERSON_ATTRIBUTES_TAB,
     {
       attribute_id: attributeId,
-      tenant_key: resolved.tenant.tenantKey,
       person_id: personId,
       attribute_type: parsed.data.attributeType.toLowerCase(),
       value_text: parsed.data.valueText,
@@ -96,6 +102,8 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
       start_date: parsed.data.startDate,
       end_date: parsed.data.endDate,
       visibility: parsed.data.visibility.toLowerCase(),
+      share_scope: shareScope,
+      share_family_group_key: shareFamilyGroupKey,
       notes: parsed.data.notes,
     },
     resolved.tenant.tenantKey,

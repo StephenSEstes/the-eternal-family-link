@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   createTableRecord,
+  ensurePersonFamilyGroupMembership,
+  getPeople,
   getTableRecords,
   getTenantConfig,
   upsertTenantAccess,
@@ -49,13 +51,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ fam
   const sourceFamilyGroups = Array.from(new Set(resolved.tenant.tenants.map((entry) => entry.tenantKey)));
   const sourcePeopleById = new Map<string, Record<string, string>>();
   for (const sourceFamilyGroupKey of sourceFamilyGroups) {
-    const sourceRows = await getTableRecords("People", sourceFamilyGroupKey).catch(() => []);
+    const sourceRows = await getPeople(sourceFamilyGroupKey).catch(() => []);
     for (const row of sourceRows) {
-      const personId = (row.data.person_id ?? "").trim();
+      const personId = row.personId.trim();
       if (!personId || sourcePeopleById.has(personId)) {
         continue;
       }
-      sourcePeopleById.set(personId, row.data);
+      sourcePeopleById.set(personId, {
+        person_id: row.personId,
+        display_name: row.displayName,
+        birth_date: row.birthDate,
+        phones: row.phones,
+        address: row.address,
+        hobbies: row.hobbies,
+        notes: row.notes,
+        photo_file_id: row.photoFileId,
+        is_pinned: row.isPinned ? "TRUE" : "FALSE",
+        relationships: row.relationships.join(","),
+      });
     }
   }
 
@@ -63,6 +76,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fam
   const missingPersonIds: string[] = [];
   for (const personId of requestedPersonIds) {
     if (existingTargetPeople.has(personId)) {
+      await ensurePersonFamilyGroupMembership(personId, targetFamilyGroupKey, true);
       continue;
     }
     const source = sourcePeopleById.get(personId);
@@ -73,7 +87,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ fam
     await createTableRecord(
       "People",
       {
-        family_group_key: targetFamilyGroupKey,
         person_id: personId,
         display_name: source.display_name ?? "",
         birth_date: source.birth_date ?? "",
@@ -88,6 +101,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fam
       targetFamilyGroupKey,
     );
     existingTargetPeople.add(personId);
+    await ensurePersonFamilyGroupMembership(personId, targetFamilyGroupKey, true);
     importedPeopleCount += 1;
   }
 

@@ -9,7 +9,7 @@ import {
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
 } from "@/lib/google/sheets";
-import { assertTenantScopedValue, requireTenantAccess } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeItemRouteProps = {
@@ -58,7 +58,6 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  assertTenantScopedValue(existing.tenantKey, resolved.tenant.tenantKey);
 
   const parsed = personAttributeUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -81,6 +80,16 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
   if (parsed.data.startDate !== undefined) payload.start_date = parsed.data.startDate;
   if (parsed.data.endDate !== undefined) payload.end_date = parsed.data.endDate;
   if (parsed.data.visibility !== undefined) payload.visibility = parsed.data.visibility.toLowerCase();
+  if (parsed.data.shareScope !== undefined) payload.share_scope = parsed.data.shareScope;
+  if (parsed.data.shareFamilyGroupKey !== undefined) {
+    payload.share_family_group_key =
+      parsed.data.shareScope === "one_family" || payload.share_scope === "one_family"
+        ? parsed.data.shareFamilyGroupKey.trim().toLowerCase() || resolved.tenant.tenantKey
+        : "";
+  }
+  if ((parsed.data.shareScope === "one_family" || payload.share_scope === "one_family") && !payload.share_family_group_key) {
+    payload.share_family_group_key = resolved.tenant.tenantKey;
+  }
   if (parsed.data.notes !== undefined) payload.notes = parsed.data.notes;
 
   const updated = await updateTableRecordById(
@@ -125,7 +134,6 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  assertTenantScopedValue(existing.tenantKey, resolved.tenant.tenantKey);
 
   const deleted = await deleteTableRecordById(
     PERSON_ATTRIBUTES_TAB,

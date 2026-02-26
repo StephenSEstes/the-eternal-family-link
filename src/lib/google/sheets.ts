@@ -19,6 +19,8 @@ import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/cont
 
 const USER_ACCESS_TAB = "UserAccess";
 const USER_FAMILY_GROUPS_TAB = "UserFamilyGroups";
+const PERSON_FAMILY_GROUPS_TAB = "PersonFamilyGroups";
+const PERSON_FAMILY_GROUPS_HEADERS = ["person_id", "family_group_key", "is_enabled"];
 const USER_FAMILY_GROUPS_HEADERS = [
   "user_email",
   "family_group_key",
@@ -77,6 +79,8 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "start_date",
     "end_date",
     "visibility",
+    "share_scope",
+    "share_family_group_key",
     "notes",
   ],
   [FAMILY_SECURITY_POLICY_TAB]: [
@@ -367,6 +371,38 @@ async function ensureTabWithHeaders(sheets: sheets_v4.Sheets, tabName: string, h
       },
     });
   }
+}
+
+async function ensureResolvedTabColumns(
+  tabName: string | string[],
+  requiredHeaders: string[],
+  tenantKey?: string,
+) {
+  const sheets = await createSheetsClient();
+  const resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
+  if (!resolved) {
+    return;
+  }
+  const matrix = await readTabWithClient(sheets, resolved);
+  if (matrix.headers.length === 0) {
+    await ensureTabWithHeaders(sheets, resolved, requiredHeaders);
+    return;
+  }
+  const existing = new Set(matrix.headers.map((header) => normalizeHeader(header)));
+  const missing = requiredHeaders.filter((header) => !existing.has(normalizeHeader(header)));
+  if (missing.length === 0) {
+    return;
+  }
+  const env = getEnv();
+  const nextHeaders = [...matrix.headers, ...missing];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.SHEET_ID,
+    range: `${resolved}!A1:ZZ1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [nextHeaders],
+    },
+  });
 }
 
 export async function ensureTenantScaffold(input: {
@@ -724,6 +760,30 @@ async function ensureUserFamilyGroupsTabSchema(): Promise<SheetMatrix> {
   return { headers: nextHeaders, rows: matrix.rows };
 }
 
+async function ensurePersonFamilyGroupsTabSchema(): Promise<SheetMatrix> {
+  const sheets = await createSheetsClient();
+  await ensureTabWithHeaders(sheets, PERSON_FAMILY_GROUPS_TAB, PERSON_FAMILY_GROUPS_HEADERS);
+  const matrix = await readTabWithClient(sheets, PERSON_FAMILY_GROUPS_TAB);
+  const existing = new Set(matrix.headers.map((header) => normalizeHeader(header)));
+  const missing = PERSON_FAMILY_GROUPS_HEADERS.filter((header) => !existing.has(normalizeHeader(header)));
+  if (missing.length === 0) {
+    return matrix;
+  }
+
+  const env = getEnv();
+  const nextHeaders = [...matrix.headers, ...missing];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.SHEET_ID,
+    range: `${PERSON_FAMILY_GROUPS_TAB}!A1:ZZ1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [nextHeaders],
+    },
+  });
+
+  return { headers: nextHeaders, rows: matrix.rows };
+}
+
 function hasGoogleAccess(row: string[], idx: Map<string, number>) {
   const explicit = getCell(row, idx, "google_access");
   if (explicit.trim()) {
@@ -768,9 +828,17 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
     return null;
   }
 
+  const shareScopeRaw = getCell(row, idx, "share_scope").trim().toLowerCase();
+  const shareFamilyGroupKey = getCell(row, idx, "share_family_group_key").trim().toLowerCase();
+  const legacyTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase() || fallbackTenantKey;
+  const shareScope: "both_families" | "one_family" =
+    shareScopeRaw === "one_family" || shareScopeRaw === "single_family"
+      ? "one_family"
+      : "both_families";
+
   return {
     attributeId,
-    tenantKey: getCell(row, idx, "family_group_key").trim().toLowerCase() || fallbackTenantKey,
+    tenantKey: legacyTenantKey,
     personId,
     attributeType,
     valueText,
@@ -782,6 +850,8 @@ function rowToPersonAttribute(headers: string[], row: string[], fallbackTenantKe
     endDate: normalizeDate(getCell(row, idx, "end_date")),
     visibility: getCell(row, idx, "visibility").trim().toLowerCase() || "family",
     notes: getCell(row, idx, "notes").trim(),
+    shareScope,
+    shareFamilyGroupKey: shareScope === "one_family" ? (shareFamilyGroupKey || legacyTenantKey) : "",
   };
 }
 
@@ -802,18 +872,24 @@ export function personAttributesFromMatrix(matrix: SheetMatrix, tenantKey?: stri
   }
 
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("family_group_key");
+  const targetTenantKey = tenantKey ? normalizeTenantKey(tenantKey) : "";
 
   return matrix.rows
     .map((row) => {
-      if (hasTenantColumn) {
-        const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
-        if (rowTenant && rowTenant !== normalizedTenantKey) {
-          return null;
-        }
+      const attribute = rowToPersonAttribute(matrix.headers, row, normalizedTenantKey);
+      if (!attribute) {
+        return null;
       }
-      return rowToPersonAttribute(matrix.headers, row, normalizedTenantKey);
+      if (!targetTenantKey) {
+        return attribute;
+      }
+      if (attribute.shareScope === "both_families") {
+        return attribute;
+      }
+      if (attribute.shareFamilyGroupKey === targetTenantKey) {
+        return attribute;
+      }
+      return null;
     })
     .filter((item): item is PersonAttributeRecord => Boolean(item))
     .sort((a, b) => {
@@ -1076,6 +1152,57 @@ export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promis
   return { action: "created", rowNumber: matrix.rows.length + 2 };
 }
 
+export async function ensurePersonFamilyGroupMembership(
+  personId: string,
+  tenantKey: string,
+  isEnabled = true,
+): Promise<"created" | "updated"> {
+  const normalizedPersonId = personId.trim();
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (!normalizedPersonId) {
+    throw new Error("person_id is required");
+  }
+  const matrix = await ensurePersonFamilyGroupsTabSchema();
+  const idx = buildHeaderIndex(matrix.headers);
+  const rowIndex = matrix.rows.findIndex((row) => {
+    const rowPersonId = getCell(row, idx, "person_id").trim();
+    const rowTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+    return rowPersonId === normalizedPersonId && rowTenantKey === normalizedTenantKey;
+  });
+
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+  if (rowIndex >= 0) {
+    const mutable = Array.from({ length: matrix.headers.length }, (_, i) => matrix.rows[rowIndex][i] ?? "");
+    setCell(mutable, idx, "person_id", normalizedPersonId);
+    setCell(mutable, idx, "family_group_key", normalizedTenantKey);
+    setCell(mutable, idx, "is_enabled", toSheetBool(isEnabled));
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.SHEET_ID,
+      range: `${PERSON_FAMILY_GROUPS_TAB}!A${rowIndex + 2}:ZZ${rowIndex + 2}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [mutable] },
+    });
+    return "updated";
+  }
+
+  const row = matrix.headers.map((header) => {
+    const key = normalizeHeader(header);
+    if (key === "person_id") return normalizedPersonId;
+    if (key === "family_group_key") return normalizedTenantKey;
+    if (key === "is_enabled") return toSheetBool(isEnabled);
+    return "";
+  });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: env.SHEET_ID,
+    range: `${PERSON_FAMILY_GROUPS_TAB}!A:ZZ`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  });
+  return "created";
+}
+
 export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
   const { headers, rows } = await ensureUserAccessTabSchema();
   if (headers.length === 0) {
@@ -1129,17 +1256,39 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
   const matrix = await readTab(tabName);
   const people = peopleFromMatrix(matrix);
-  if (matrix.headers.length === 0) {
+  if (matrix.headers.length === 0 || !tenantKey) {
     return people;
+  }
+
+  const targetTenant = normalizeTenantKey(tenantKey);
+  const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
+  if (memberships && memberships.headers.length > 0) {
+    const membershipIdx = buildHeaderIndex(memberships.headers);
+    const allowedPersonIds = new Set(
+      memberships.rows
+        .filter((row) => {
+          const rowTenantKey = getCell(row, membershipIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+          if (rowTenantKey !== targetTenant) {
+            return false;
+          }
+          const enabledRaw = getCell(row, membershipIdx, "is_enabled").trim();
+          return !enabledRaw || parseBool(enabledRaw);
+        })
+        .map((row) => getCell(row, membershipIdx, "person_id").trim())
+        .filter(Boolean),
+    );
+    if (allowedPersonIds.size > 0) {
+      return people
+        .filter((person) => allowedPersonIds.has(person.personId))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }
   }
 
   const idx = buildHeaderIndex(matrix.headers);
   const hasTenantColumn = idx.has("family_group_key");
   if (!hasTenantColumn) {
-    return people;
+    return [];
   }
-
-  const targetTenant = normalizeTenantKey(tenantKey);
   return matrix.rows
     .filter((row) => {
       const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
@@ -1199,6 +1348,7 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
   let matrix: SheetMatrix;
 
   try {
+    await ensureResolvedTabColumns(IMPORTANT_DATES_TAB, ["share_scope", "share_family_group_key"], normalizedTenantKey);
     const tabName = await resolveTenantTabName(IMPORTANT_DATES_TAB, normalizedTenantKey);
     matrix = await readTab(tabName);
   } catch {
@@ -1210,13 +1360,22 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
   }
 
   const idx = buildHeaderIndex(matrix.headers);
-  const hasTenantColumn = idx.has("family_group_key");
 
   const items = matrix.rows
     .map((row, i) => {
-      const tenantFilter = getCell(row, idx, "family_group_key").trim().toLowerCase();
-      if (hasTenantColumn && tenantFilter && tenantFilter !== normalizedTenantKey) {
-        return null;
+      const shareScopeRaw = getCell(row, idx, "share_scope").trim().toLowerCase();
+      const shareScope =
+        shareScopeRaw === "one_family" || shareScopeRaw === "single_family" ? "one_family" : "both_families";
+      const shareFamilyGroupKey = getCell(row, idx, "share_family_group_key").trim().toLowerCase();
+      const legacyTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase();
+      if (normalizedTenantKey) {
+        const isVisibleForFamily =
+          shareScope === "both_families" ||
+          shareFamilyGroupKey === normalizedTenantKey ||
+          (!shareFamilyGroupKey && legacyTenantKey === normalizedTenantKey);
+        if (!isVisibleForFamily) {
+          return null;
+        }
       }
 
       const title = getCell(row, idx, "title").trim() || getCell(row, idx, "event_title").trim();
@@ -1253,6 +1412,11 @@ export async function getPersonAttributes(
   let matrix: SheetMatrix;
 
   try {
+    await ensureResolvedTabColumns(
+      PERSON_ATTRIBUTES_TAB,
+      ["share_scope", "share_family_group_key"],
+      normalizedTenantKey,
+    );
     const tabName = await resolveTenantTabName(PERSON_ATTRIBUTES_TAB, normalizedTenantKey);
     matrix = await readTab(tabName);
   } catch {
@@ -1306,7 +1470,8 @@ export async function updatePerson(
     if (!hasTenantColumn) {
       return true;
     }
-    return getCell(row, idx, "family_group_key").trim().toLowerCase() === targetTenant;
+    const rowTenant = getCell(row, idx, "family_group_key").trim().toLowerCase();
+    return !rowTenant || rowTenant === targetTenant;
   });
 
   if (rowIndex < 0) {

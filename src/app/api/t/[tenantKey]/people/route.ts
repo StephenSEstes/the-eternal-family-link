@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createTableRecord, getPeople, PERSON_ATTRIBUTES_TAB } from "@/lib/google/sheets";
+import {
+  createTableRecord,
+  ensurePersonFamilyGroupMembership,
+  getPersonById,
+  getPeople,
+  PERSON_ATTRIBUTES_TAB,
+} from "@/lib/google/sheets";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildPersonId } from "@/lib/person/id";
 
@@ -48,34 +54,56 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
     return NextResponse.json({ error: "invalid_person_id", message: "birth_date must be parseable" }, { status: 400 });
   }
 
-  const existing = await getPeople(resolved.tenant.tenantKey);
-  if (existing.some((item) => item.personId === personId)) {
-    return NextResponse.json({ error: "conflict", message: "Person already exists" }, { status: 409 });
+  const existingInFamily = await getPeople(resolved.tenant.tenantKey);
+  if (existingInFamily.some((item) => item.personId === personId)) {
+    return NextResponse.json({ error: "conflict", message: "Person already exists in this family group" }, { status: 409 });
   }
 
-  const record = await createTableRecord(
-    "People",
-    {
-      tenant_key: resolved.tenant.tenantKey,
-      person_id: personId,
-      display_name: parsed.data.display_name,
-      birth_date: parsed.data.birth_date,
-      phones: parsed.data.phones,
-      address: parsed.data.address,
-      hobbies: parsed.data.hobbies,
-      notes: parsed.data.notes,
-      photo_file_id: "",
-      is_pinned: "FALSE",
-      relationships: "",
-    },
-    resolved.tenant.tenantKey,
-  );
+  const existingGlobal = await getPersonById(personId);
+  let record:
+    | {
+        data: Record<string, string>;
+      }
+    | null = null;
+  if (existingGlobal) {
+    await ensurePersonFamilyGroupMembership(personId, resolved.tenant.tenantKey, true);
+    record = {
+      data: {
+        person_id: existingGlobal.personId,
+        display_name: existingGlobal.displayName,
+        birth_date: existingGlobal.birthDate,
+        phones: existingGlobal.phones,
+        address: existingGlobal.address,
+        hobbies: existingGlobal.hobbies,
+        notes: existingGlobal.notes,
+        photo_file_id: existingGlobal.photoFileId,
+        is_pinned: existingGlobal.isPinned ? "TRUE" : "FALSE",
+      },
+    };
+  } else {
+    record = await createTableRecord(
+      "People",
+      {
+        person_id: personId,
+        display_name: parsed.data.display_name,
+        birth_date: parsed.data.birth_date,
+        phones: parsed.data.phones,
+        address: parsed.data.address,
+        hobbies: parsed.data.hobbies,
+        notes: parsed.data.notes,
+        photo_file_id: "",
+        is_pinned: "FALSE",
+        relationships: "",
+      },
+      resolved.tenant.tenantKey,
+    );
+    await ensurePersonFamilyGroupMembership(personId, resolved.tenant.tenantKey, true);
+  }
 
   await createTableRecord(
     PERSON_ATTRIBUTES_TAB,
     {
       attribute_id: `${resolved.tenant.tenantKey}-${personId}-birthday`,
-      tenant_key: resolved.tenant.tenantKey,
       person_id: personId,
       attribute_type: "birthday",
       value_text: parsed.data.birth_date,
@@ -86,6 +114,8 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       start_date: "",
       end_date: "",
       visibility: "family",
+      share_scope: "both_families",
+      share_family_group_key: "",
       notes: "",
     },
     resolved.tenant.tenantKey,

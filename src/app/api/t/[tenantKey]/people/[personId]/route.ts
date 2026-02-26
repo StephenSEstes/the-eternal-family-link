@@ -72,7 +72,6 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
         PERSON_ATTRIBUTES_TAB,
         {
           attribute_id: `${resolved.tenant.tenantKey}-${personId}-birthday`,
-          tenant_key: resolved.tenant.tenantKey,
           person_id: personId,
           attribute_type: "birthday",
           value_text: parsed.data.birth_date,
@@ -83,6 +82,8 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
           start_date: "",
           end_date: "",
           visibility: "family",
+          share_scope: "both_families",
+          share_family_group_key: "",
           notes: "",
         },
         resolved.tenant.tenantKey,
