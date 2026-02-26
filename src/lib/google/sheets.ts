@@ -211,10 +211,13 @@ function normalizeTenantKey(tenantKey?: string) {
 }
 
 function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
-  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
-    return [tabName];
-  }
   const cleanKey = normalizeTenantKey(tenantKey);
+  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
+    if (cleanKey === DEFAULT_TENANT_KEY) {
+      return [tabName];
+    }
+    return [tabName, `${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`];
+  }
   if (cleanKey === DEFAULT_TENANT_KEY) {
     return [tabName];
   }
@@ -1214,6 +1217,42 @@ export async function ensurePersonFamilyGroupMembership(
   return "created";
 }
 
+async function backfillPersonMembershipsFromUserFamilyGroups(tenantKey: string): Promise<number> {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  const links = await ensureUserFamilyGroupsTabSchema().catch(() => null);
+  if (!links || links.headers.length === 0) {
+    return 0;
+  }
+  const linkIdx = buildHeaderIndex(links.headers);
+  const personIds = Array.from(
+    new Set(
+      links.rows
+        .filter((row) => {
+          const rowTenantKey = getCell(row, linkIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+          if (rowTenantKey !== normalizedTenantKey) {
+            return false;
+          }
+          const enabledRaw = getCell(row, linkIdx, "is_enabled").trim();
+          return !enabledRaw || parseBool(enabledRaw);
+        })
+        .map((row) => getCell(row, linkIdx, "person_id").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (personIds.length === 0) {
+    return 0;
+  }
+
+  let created = 0;
+  for (const personId of personIds) {
+    const action = await ensurePersonFamilyGroupMembership(personId, normalizedTenantKey, true);
+    if (action === "created") {
+      created += 1;
+    }
+  }
+  return created;
+}
+
 export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
   const { headers, rows } = await ensureUserAccessTabSchema();
   if (headers.length === 0) {
@@ -1272,10 +1311,13 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   }
 
   const targetTenant = normalizeTenantKey(tenantKey);
-  const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
-  if (memberships && memberships.headers.length > 0) {
+  const resolveAllowedPersonIds = async () => {
+    const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
+    if (!memberships || memberships.headers.length === 0) {
+      return new Set<string>();
+    }
     const membershipIdx = buildHeaderIndex(memberships.headers);
-    const allowedPersonIds = new Set(
+    return new Set(
       memberships.rows
         .filter((row) => {
           const rowTenantKey = getCell(row, membershipIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
@@ -1288,11 +1330,17 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
         .map((row) => getCell(row, membershipIdx, "person_id").trim())
         .filter(Boolean),
     );
-    if (allowedPersonIds.size > 0) {
-      return people
-        .filter((person) => allowedPersonIds.has(person.personId))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    }
+  };
+
+  let allowedPersonIds = await resolveAllowedPersonIds();
+  if (allowedPersonIds.size === 0) {
+    await backfillPersonMembershipsFromUserFamilyGroups(targetTenant);
+    allowedPersonIds = await resolveAllowedPersonIds();
+  }
+  if (allowedPersonIds.size > 0) {
+    return people
+      .filter((person) => allowedPersonIds.has(person.personId))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
   return [];
 }
