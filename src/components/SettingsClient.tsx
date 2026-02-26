@@ -179,6 +179,7 @@ export function SettingsClient({
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
   const adminLoadSeq = useRef(0);
+  const managedPersonSyncRef = useRef("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
     buildDirectoryPeople(accessItems, [], people),
@@ -658,6 +659,43 @@ export function SettingsClient({
   const selectedPersonLocalUsers = selectedDirectoryPersonId
     ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId)
     : [];
+  useEffect(() => {
+    const personId = selectedDirectoryPersonId.trim();
+    if (!personId) {
+      managedPersonSyncRef.current = "";
+      return;
+    }
+    if (managedPersonSyncRef.current === personId) {
+      return;
+    }
+    managedPersonSyncRef.current = personId;
+
+    const firstLocal = selectedPersonLocalUsers[0];
+    if (firstLocal) {
+      setLocalUsername(firstLocal.username);
+      setLocalRole(firstLocal.role);
+      setLocalEnabled(firstLocal.isEnabled);
+      setSelectedLocalUsername(firstLocal.username);
+      setManageRole(firstLocal.role);
+    } else {
+      setLocalUsername("");
+      setLocalRole("USER");
+      setLocalEnabled(true);
+      setSelectedLocalUsername("");
+      setManageRole("USER");
+    }
+
+    const firstGoogle = selectedPersonGoogleAccess[0];
+    if (firstGoogle) {
+      setUserEmail(firstGoogle.userEmail);
+      setRole(firstGoogle.role);
+      setIsEnabled(firstGoogle.isEnabled);
+    } else {
+      setUserEmail("");
+      setRole("USER");
+      setIsEnabled(false);
+    }
+  }, [selectedDirectoryPersonId, selectedPersonGoogleAccess, selectedPersonLocalUsers]);
   const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
   const importMemberCandidates = existingPeopleOptions.filter(
     (person) => person.sourceTenantKey.trim().toLowerCase() !== selectedTenantKey.trim().toLowerCase(),
