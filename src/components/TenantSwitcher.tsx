@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
@@ -17,6 +17,8 @@ type TenantSwitcherProps = {
 
 export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState(activeTenantKey);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -31,6 +33,29 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
     if (trimmed.includes("-") || trimmed.includes(" ")) return trimmed;
     if (!/[a-z][A-Z]/.test(trimmed)) return trimmed;
     return trimmed.replace(/([a-z])([A-Z])/g, "$1-$2");
+  };
+
+  const buildSwitchPath = (currentPath: string, nextTenantKey: string) => {
+    const normalizedNext = nextTenantKey.trim().toLowerCase();
+    const isDefaultNext = normalizedNext === DEFAULT_FAMILY_GROUP_KEY;
+    const parts = currentPath.split("/").filter(Boolean);
+    const hasTenantPrefix = parts[0] === "t" && Boolean(parts[1]);
+
+    if (hasTenantPrefix) {
+      const tail = parts.slice(2).join("/");
+      if (isDefaultNext) {
+        return tail ? `/${tail}` : "/";
+      }
+      return tail ? `/t/${encodeURIComponent(normalizedNext)}/${tail}` : `/t/${encodeURIComponent(normalizedNext)}`;
+    }
+
+    if (isDefaultNext) {
+      return currentPath || "/";
+    }
+    if (!currentPath || currentPath === "/") {
+      return `/t/${encodeURIComponent(normalizedNext)}`;
+    }
+    return `/t/${encodeURIComponent(normalizedNext)}${currentPath}`;
   };
 
   const handleSwitch = (nextKey: string) => {
@@ -54,10 +79,9 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
         return;
       }
 
-      const normalized = nextKey.trim().toLowerCase();
-      const nextPath =
-        normalized === DEFAULT_FAMILY_GROUP_KEY ? "/" : `/t/${encodeURIComponent(normalized)}`;
-      router.push(nextPath);
+      const nextPath = buildSwitchPath(pathname || "/", nextKey);
+      const query = searchParams?.toString() ?? "";
+      router.push(query ? `${nextPath}?${query}` : nextPath);
       router.refresh();
     });
   };
