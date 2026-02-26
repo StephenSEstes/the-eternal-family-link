@@ -7,18 +7,25 @@ export async function AppHeader() {
   const session = await getAppSession();
   const tenant = await getRequestFamilyGroupContext(session);
   const basePath = getFamilyGroupBasePath(tenant.tenantKey);
+  const formattedFamilyName = (() => {
+    const trimmed = tenant.tenantName.trim();
+    if (!trimmed) return tenant.tenantName;
+    if (trimmed.includes("-") || trimmed.includes(" ")) return trimmed;
+    if (!/[a-z][A-Z]/.test(trimmed)) return trimmed;
+    return trimmed.replace(/([a-z])([A-Z])/g, "$1-$2");
+  })();
+  const appTitle = `The Eternal ${formattedFamilyName} Family Link`;
 
   return (
     <header className="app-header">
       <div className="app-header-inner">
         <div className="app-header-top">
           <Link href={basePath || "/"} className="app-brand">
-            The Eternal Family Link
+            {appTitle}
           </Link>
 
           <div className="app-meta">
-            <span>Family group:</span>
-            <span className="tenant-chip">{tenant.tenantName}</span>
+            <span>Family Group:</span>
             <FamilyGroupSwitcher
               activeFamilyGroupKey={tenant.tenantKey}
               familyGroups={tenant.tenants.map((item) => ({

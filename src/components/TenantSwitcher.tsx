@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
 type TenantOption = {
   tenantKey: string;
@@ -24,8 +25,17 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
     return null;
   }
 
-  const handleSwitch = () => {
-    if (selected === activeTenantKey) {
+  const formatFamilyGroupName = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    if (trimmed.includes("-") || trimmed.includes(" ")) return trimmed;
+    if (!/[a-z][A-Z]/.test(trimmed)) return trimmed;
+    return trimmed.replace(/([a-z])([A-Z])/g, "$1-$2");
+  };
+
+  const handleSwitch = (nextKey: string) => {
+    setSelected(nextKey);
+    if (nextKey === activeTenantKey) {
       return;
     }
 
@@ -36,7 +46,7 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ familyGroupKey: selected }),
+        body: JSON.stringify({ familyGroupKey: nextKey }),
       });
 
       if (!response.ok) {
@@ -44,6 +54,10 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
         return;
       }
 
+      const normalized = nextKey.trim().toLowerCase();
+      const nextPath =
+        normalized === DEFAULT_FAMILY_GROUP_KEY ? "/" : `/t/${encodeURIComponent(normalized)}`;
+      router.push(nextPath);
       router.refresh();
     });
   };
@@ -53,18 +67,16 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
       <select
         className="tenant-select"
         value={selected}
-        onChange={(event) => setSelected(event.target.value)}
+        onChange={(event) => handleSwitch(event.target.value)}
         aria-label="Active family group"
+        disabled={isPending}
       >
         {tenants.map((tenant) => (
           <option key={tenant.tenantKey} value={tenant.tenantKey}>
-            {tenant.tenantName} ({tenant.role})
+            {formatFamilyGroupName(tenant.tenantName)} ({tenant.role})
           </option>
         ))}
       </select>
-      <button type="button" className="tenant-switch-button" onClick={handleSwitch} disabled={isPending}>
-        {isPending ? "Switching..." : "Open family group"}
-      </button>
       {error ? <span className="status-warn">{error}</span> : null}
     </div>
   );
