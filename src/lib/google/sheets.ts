@@ -878,32 +878,62 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
 
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const links = await ensureUserFamilyGroupsTabSchema();
-  if (links.headers.length === 0) {
+  const [links, users] = await Promise.all([ensureUserFamilyGroupsTabSchema(), ensureUserAccessTabSchema()]);
+  if (links.headers.length === 0 || users.headers.length === 0) {
     return [];
   }
-  const idx = buildHeaderIndex(links.headers);
-  return links.rows
-    .map((row) => {
-      const rowTenantKey = getCell(row, idx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-      if (rowTenantKey !== normalizedTenantKey) {
-        return null;
-      }
-      const userEmail = getCell(row, idx, "user_email").trim().toLowerCase();
-      if (!userEmail) {
-        return null;
-      }
-      return {
-        userEmail,
-        isEnabled: parseBool(getCell(row, idx, "is_enabled")),
-        role: toRole(getCell(row, idx, "role")),
-        personId: getCell(row, idx, "person_id"),
-        tenantKey: rowTenantKey,
-        tenantName: getCell(row, idx, "family_group_name").trim() || DEFAULT_TENANT_NAME,
-      } satisfies UserAccessRecord;
-    })
-    .filter((row): row is UserAccessRecord => Boolean(row))
-    .sort((a, b) => a.userEmail.localeCompare(b.userEmail));
+  const linkIdx = buildHeaderIndex(links.headers);
+  const userIdx = buildHeaderIndex(users.headers);
+
+  const userByPersonId = new Map<string, string[]>();
+  for (const row of users.rows) {
+    const personId = getCell(row, userIdx, "person_id").trim();
+    if (!personId) {
+      continue;
+    }
+    userByPersonId.set(personId, row);
+  }
+
+  const out: UserAccessRecord[] = [];
+  const seenPersonIds = new Set<string>();
+
+  for (const row of links.rows) {
+    const rowTenantKey = getCell(row, linkIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+    if (rowTenantKey !== normalizedTenantKey) {
+      continue;
+    }
+    const personId = getCell(row, linkIdx, "person_id").trim();
+    if (!personId || seenPersonIds.has(personId)) {
+      continue;
+    }
+    seenPersonIds.add(personId);
+
+    const userRow = userByPersonId.get(personId);
+    const userEmail = (
+      (userRow ? getCell(userRow, userIdx, "user_email") : "") || getCell(row, linkIdx, "user_email")
+    )
+      .trim()
+      .toLowerCase();
+    const googleEnabled = userRow ? parseBool(getCell(userRow, userIdx, "google_access")) : false;
+
+    out.push({
+      userEmail,
+      isEnabled: googleEnabled,
+      role: userRow ? toRole(getCell(userRow, userIdx, "role")) : toRole(getCell(row, linkIdx, "role")),
+      personId,
+      tenantKey: rowTenantKey,
+      tenantName: getCell(row, linkIdx, "family_group_name").trim() || DEFAULT_TENANT_NAME,
+    });
+  }
+
+  return out.sort((a, b) => {
+    if (a.userEmail && b.userEmail) {
+      return a.userEmail.localeCompare(b.userEmail);
+    }
+    if (a.userEmail) return -1;
+    if (b.userEmail) return 1;
+    return a.personId.localeCompare(b.personId);
+  });
 }
 
 export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promise<UpsertTenantAccessResult> {
