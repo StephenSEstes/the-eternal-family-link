@@ -579,6 +579,39 @@ export function SettingsClient({
     }
   };
 
+  const resetAddUserForm = () => {
+    setSelectedDirectoryPersonId("");
+    setSelectedLocalUsername("");
+    setLocalPersonId("");
+    setPersonId("");
+    setLocalUsername("");
+    setLocalPassword("");
+    setLocalRole("USER");
+    setLocalEnabled(true);
+    setUserEmail("");
+    setRole("USER");
+    setIsEnabled(false);
+  };
+
+  const handleAddUserPersonSelect = (nextPersonId: string) => {
+    setLocalPersonId(nextPersonId);
+    setPersonId(nextPersonId);
+    setLocalRole("USER");
+    setRole("USER");
+    setIsEnabled(false);
+    setLocalEnabled(true);
+
+    const selected = familyPeople.find((person) => person.personId === nextPersonId);
+    if (!selected) {
+      setLocalUsername("");
+      setUserEmail("");
+      return;
+    }
+
+    setLocalUsername(selected.displayName.trim());
+    setUserEmail("");
+  };
+
   const selectDirectoryPerson = (nextPersonId: string) => {
     setSelectedDirectoryPersonId(nextPersonId);
     setLocalPersonId(nextPersonId);
@@ -869,17 +902,7 @@ export function SettingsClient({
               const next = !showAddUserForm;
               setShowAddUserForm(next);
               if (next) {
-                setSelectedDirectoryPersonId("");
-                setSelectedLocalUsername("");
-                setLocalPersonId("");
-                setPersonId("");
-                setLocalUsername("");
-                setLocalPassword("");
-                setLocalRole("USER");
-                setLocalEnabled(true);
-                setUserEmail("");
-                setRole("USER");
-                setIsEnabled(false);
+                resetAddUserForm();
               }
             }}
           >
@@ -896,11 +919,7 @@ export function SettingsClient({
                 <select
                   className="input"
                   value={localPersonId}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setLocalPersonId(next);
-                    setPersonId(next);
-                  }}
+                  onChange={(e) => handleAddUserPersonSelect(e.target.value)}
                 >
                   <option value="">Select person</option>
                   {addUserCandidatePeople.map((person) => (
@@ -913,16 +932,34 @@ export function SettingsClient({
                   </p>
                 ) : null}
                 <label className="label">Local Username</label>
-                <input className="input" value={localUsername} onChange={(e) => setLocalUsername(e.target.value)} />
+                <input
+                  className="input"
+                  autoComplete="off"
+                  value={localUsername}
+                  onChange={(e) => setLocalUsername(e.target.value)}
+                />
                 <label className="label">Temporary Password</label>
-                <input className="input" type="password" value={localPassword} onChange={(e) => setLocalPassword(e.target.value)} />
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={localPassword}
+                  onChange={(e) => setLocalPassword(e.target.value)}
+                />
                 <label className="label">Role</label>
                 <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
                   <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
                 </select>
                 <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
                 <label className="label">Google Email (optional)</label>
-                <input className="input" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="name@gmail.com" />
+                <input
+                  className="input"
+                  type="email"
+                  autoComplete="off"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="name@gmail.com"
+                />
                 <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
                 <button type="button" className="button tap-button" onClick={createDirectoryUser}>Create User</button>
                 <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
