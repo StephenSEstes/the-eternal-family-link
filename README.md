@@ -83,6 +83,20 @@ Headers expected at minimum:
 - `is_pinned` or `is_pinned_viewer`
 - `relationships` (comma/semicolon-separated)
 
+## Favicons and app icons
+
+- Generated icon assets live in `/public`:
+  - `favicon.ico`
+  - `favicon-16x16.png`
+  - `favicon-32x32.png`
+  - `apple-touch-icon.png`
+  - `android-chrome-192x192.png`
+  - `android-chrome-512x512.png`
+  - `site.webmanifest`
+- Source logo is `public/brand/logo-arch-tree.png`.
+- To regenerate icons after replacing the source logo, run:
+  - `node scripts/generate-favicons.mjs`
+
 ## Local development
 
 ```bash
