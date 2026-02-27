@@ -38,7 +38,7 @@ a {
 }
 
 main {
-  width: min(1100px, calc(100% - 1.25rem));
+  width: min(1100px, calc(100% - 2rem));
   margin: 0 auto;
 }
 
@@ -235,8 +235,8 @@ main {
 }
 
 .section {
-  width: min(960px, 100%);
-  margin: 1.1rem auto 2.4rem;
+  width: 100%;
+  margin: 1.1rem 0 2.4rem;
 }
 
 .page-title {

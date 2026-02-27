@@ -1367,6 +1367,12 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
     getTableRecords("Households", targetTenant).catch(() => [] as SheetRecord[]),
   ]);
   for (const row of relationshipRows) {
+    const rowTenantKey = normalizeTenantKey(
+      ((row.data.family_group_key ?? row.data.tenant_key ?? "") as string).trim(),
+    );
+    if (rowTenantKey !== targetTenant) {
+      continue;
+    }
     const fromPersonId = (row.data.from_person_id ?? "").trim();
     const toPersonId = (row.data.to_person_id ?? "").trim();
     if (fromPersonId) {
@@ -1377,6 +1383,12 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
     }
   }
   for (const row of familyUnitRows) {
+    const rowTenantKey = normalizeTenantKey(
+      ((row.data.family_group_key ?? row.data.tenant_key ?? "") as string).trim(),
+    );
+    if (rowTenantKey !== targetTenant) {
+      continue;
+    }
     const partner1 = (row.data.partner1_person_id ?? "").trim();
     const partner2 = (row.data.partner2_person_id ?? "").trim();
     if (partner1) {
