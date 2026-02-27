@@ -204,6 +204,7 @@ export function SettingsClient({
   const [importMemberPersonIds, setImportMemberPersonIds] = useState<string[]>([]);
   const [importMembersStatus, setImportMembersStatus] = useState("");
   const [newTenantStatus, setNewTenantStatus] = useState("");
+  const [showCreateFamilyModal, setShowCreateFamilyModal] = useState(false);
   const [showDeleteFamilyModal, setShowDeleteFamilyModal] = useState(false);
   const [deleteFamilyKey, setDeleteFamilyKey] = useState("");
   const [deleteFamilyStatus, setDeleteFamilyStatus] = useState("");
@@ -974,8 +975,8 @@ export function SettingsClient({
           </button>
           <button
             type="button"
-            className={`button secondary tap-button ${familyGroupsSubTab === "create_group" ? "game-option-selected" : ""}`}
-            onClick={() => setFamilyGroupsSubTab("create_group")}
+            className={`button secondary tap-button ${showCreateFamilyModal ? "game-option-selected" : ""}`}
+            onClick={() => setShowCreateFamilyModal(true)}
           >
             Create Group
           </button>
@@ -1027,93 +1028,6 @@ export function SettingsClient({
               Import Selected Members Now
             </button>
             {importMembersStatus ? <p>{importMembersStatus}</p> : null}
-          </>
-        ) : null}
-        {familyGroupsSubTab === "create_group" ? (
-          <>
-            <p className="page-subtitle" style={{ marginTop: 0 }}>
-              Select the initial admin from the active source family group. Family key and name are generated from matriarch maiden name + patriarch last name.
-            </p>
-            <label className="label">Top-Level Patriarch (full name)</label>
-            <input className="input" value={newPatriarchFullName} onChange={(e) => setNewPatriarchFullName(e.target.value)} placeholder="Brenton Dale Estes" />
-            <label className="label">Top-Level Matriarch (full name)</label>
-            <input className="input" value={newMatriarchFullName} onChange={(e) => setNewMatriarchFullName(e.target.value)} placeholder="Ruth Snow Estes" />
-            <label className="label">Matriarch Maiden Name</label>
-            <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} placeholder="Snow" />
-            <label className="label">Generated Family Group Key</label>
-            <input className="input" value={generatedFamilyGroupKey} readOnly placeholder="snowestes" />
-            <label className="label">Generated Family Group Name</label>
-            <input className="input" value={generatedFamilyGroupName} readOnly placeholder="SnowEstes Family" />
-            <label className="label">Optional Override Key (advanced)</label>
-            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder={generatedFamilyGroupKey || "snowestes"} />
-            <label className="label">Optional Override Name (advanced)</label>
-            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder={generatedFamilyGroupName || "SnowEstes Family"} />
-            <label className="label">Initial Admin (existing person)</label>
-            <select className="input" value={newInitialAdminPersonId} onChange={(e) => setNewInitialAdminPersonId(e.target.value)}>
-              <option value="">Select existing person</option>
-              {createGroupInitialAdminOptions.map((person) => (
-                <option key={person.personId} value={person.personId}>
-                  {person.displayName}
-                </option>
-              ))}
-            </select>
-            {createGroupInitialAdminOptions.length === 0 ? (
-              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                No people found in this source family group. Add people first before creating a new family group.
-              </p>
-            ) : null}
-            <label className="label">
-              <input
-                type="checkbox"
-                checked={newParentsAreInitialAdminParents}
-                onChange={(e) => setNewParentsAreInitialAdminParents(e.target.checked)}
-              />{" "}
-              Patriarch and matriarch are parents of the initial admin
-            </label>
-            <label className="label">
-              <input
-                type="checkbox"
-                checked={newIncludeHouseholdCandidates}
-                onChange={(e) => setNewIncludeHouseholdCandidates(e.target.checked)}
-              />{" "}
-              Suggest spouse and children of initial admin for import after creation
-            </label>
-            <button type="button" className="button tap-button" onClick={createTenant}>
-              Create Family Group
-            </button>
-            {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h3 style={{ marginTop: 0 }}>Import Household To New Family</h3>
-                <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  Review suggested spouse/children. Uncheck anyone you do not want to import.
-                </p>
-                <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
-                  <table className="settings-table">
-                    <thead>
-                      <tr><th>Import</th><th>Person</th></tr>
-                    </thead>
-                    <tbody>
-                      {postCreateHouseholdCandidates.map((person) => (
-                        <tr key={`post-create-${person.personId}`}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={postCreateMemberPersonIds.includes(person.personId)}
-                              onChange={() => togglePostCreateMemberPersonId(person.personId)}
-                            />
-                          </td>
-                          <td>{person.displayName}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
-                  Import To New Family
-                </button>
-                {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
-              </div>
-            ) : null}
           </>
         ) : null}
         {newTenantStatus ? <p>{newTenantStatus}</p> : null}
@@ -1770,6 +1684,114 @@ export function SettingsClient({
               </div>
             ) : null}
             {deleteFamilyStatus ? <p style={{ marginTop: "0.75rem" }}>{deleteFamilyStatus}</p> : null}
+          </section>
+        </div>
+      ) : null}
+
+      {showCreateFamilyModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 60,
+          }}
+        >
+          <section className="card" style={{ width: "min(960px, 100%)", maxHeight: "85vh", overflow: "auto" }}>
+            <h3 style={{ marginTop: 0 }}>Create Family Group</h3>
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              Select the initial admin from the active source family group. Family key and name are generated from matriarch maiden name + patriarch last name.
+            </p>
+            <label className="label">Top-Level Patriarch (full name)</label>
+            <input className="input" value={newPatriarchFullName} onChange={(e) => setNewPatriarchFullName(e.target.value)} placeholder="Brenton Dale Estes" />
+            <label className="label">Top-Level Matriarch (full name)</label>
+            <input className="input" value={newMatriarchFullName} onChange={(e) => setNewMatriarchFullName(e.target.value)} placeholder="Ruth Snow Estes" />
+            <label className="label">Matriarch Maiden Name</label>
+            <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} placeholder="Snow" />
+            <label className="label">Generated Family Group Key</label>
+            <input className="input" value={generatedFamilyGroupKey} readOnly placeholder="snowestes" />
+            <label className="label">Generated Family Group Name</label>
+            <input className="input" value={generatedFamilyGroupName} readOnly placeholder="SnowEstes Family" />
+            <label className="label">Optional Override Key (advanced)</label>
+            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder={generatedFamilyGroupKey || "snowestes"} />
+            <label className="label">Optional Override Name (advanced)</label>
+            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder={generatedFamilyGroupName || "SnowEstes Family"} />
+            <label className="label">Initial Admin (existing person)</label>
+            <select className="input" value={newInitialAdminPersonId} onChange={(e) => setNewInitialAdminPersonId(e.target.value)}>
+              <option value="">Select existing person</option>
+              {createGroupInitialAdminOptions.map((person) => (
+                <option key={person.personId} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+            {createGroupInitialAdminOptions.length === 0 ? (
+              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                No people found in this source family group. Add people first before creating a new family group.
+              </p>
+            ) : null}
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={newParentsAreInitialAdminParents}
+                onChange={(e) => setNewParentsAreInitialAdminParents(e.target.checked)}
+              />{" "}
+              Patriarch and matriarch are parents of the initial admin
+            </label>
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={newIncludeHouseholdCandidates}
+                onChange={(e) => setNewIncludeHouseholdCandidates(e.target.checked)}
+              />{" "}
+              Suggest spouse and children of initial admin for import after creation
+            </label>
+            <div className="settings-chip-list">
+              <button type="button" className="button tap-button" onClick={createTenant}>
+                Create Family Group
+              </button>
+              <button type="button" className="button secondary tap-button" onClick={() => setShowCreateFamilyModal(false)}>
+                Close
+              </button>
+            </div>
+            {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h3 style={{ marginTop: 0 }}>Import Household To New Family</h3>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Review suggested spouse/children. Uncheck anyone you do not want to import.
+                </p>
+                <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
+                  <table className="settings-table">
+                    <thead>
+                      <tr><th>Import</th><th>Person</th></tr>
+                    </thead>
+                    <tbody>
+                      {postCreateHouseholdCandidates.map((person) => (
+                        <tr key={`post-create-${person.personId}`}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={postCreateMemberPersonIds.includes(person.personId)}
+                              onChange={() => togglePostCreateMemberPersonId(person.personId)}
+                            />
+                          </td>
+                          <td>{person.displayName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
+                  Import To New Family
+                </button>
+                {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
+              </div>
+            ) : null}
+            {newTenantStatus ? <p>{newTenantStatus}</p> : null}
           </section>
         </div>
       ) : null}
