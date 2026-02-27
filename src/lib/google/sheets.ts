@@ -214,10 +214,7 @@ function normalizeTenantKey(tenantKey?: string) {
 function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
   const cleanKey = normalizeTenantKey(tenantKey);
   if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
-    if (cleanKey === DEFAULT_TENANT_KEY) {
-      return [tabName];
-    }
-    return [tabName, `${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`];
+    return [tabName];
   }
   if (cleanKey === DEFAULT_TENANT_KEY) {
     return [tabName];
@@ -1228,42 +1225,6 @@ export async function ensurePersonFamilyGroupMembership(
   return "created";
 }
 
-async function backfillPersonMembershipsFromUserFamilyGroups(tenantKey: string): Promise<number> {
-  const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const links = await ensureUserFamilyGroupsTabSchema().catch(() => null);
-  if (!links || links.headers.length === 0) {
-    return 0;
-  }
-  const linkIdx = buildHeaderIndex(links.headers);
-  const personIds = Array.from(
-    new Set(
-      links.rows
-        .filter((row) => {
-          const rowTenantKey = getCell(row, linkIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-          if (rowTenantKey !== normalizedTenantKey) {
-            return false;
-          }
-          const enabledRaw = getCell(row, linkIdx, "is_enabled").trim();
-          return !enabledRaw || parseBool(enabledRaw);
-        })
-        .map((row) => getCell(row, linkIdx, "person_id").trim())
-        .filter(Boolean),
-    ),
-  );
-  if (personIds.length === 0) {
-    return 0;
-  }
-
-  let created = 0;
-  for (const personId of personIds) {
-    const action = await ensurePersonFamilyGroupMembership(personId, normalizedTenantKey, true);
-    if (action === "created") {
-      created += 1;
-    }
-  }
-  return created;
-}
-
 export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
   const { headers, rows } = await ensureUserAccessTabSchema();
   if (headers.length === 0) {
@@ -1326,93 +1287,36 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   const sharedPeople = sharedTabName ? await readPeopleFromTab(sharedTabName) : [];
 
   if (!tenantKey) {
-    return sharedPeople;
+    return sharedPeople.sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
   const targetTenant = normalizeTenantKey(tenantKey);
-  const scopedTabName = targetTenant === DEFAULT_TENANT_KEY ? "" : `${targetTenant}${TENANT_TAB_DELIMITER}${PEOPLE_TAB}`;
-  const hasScopedTab = scopedTabName ? await lookupTab(sheets, scopedTabName).catch(() => false) : false;
-  const scopedPeople = hasScopedTab ? await readPeopleFromTab(scopedTabName) : [];
+  const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
+  if (!memberships || memberships.headers.length === 0) {
+    return [];
+  }
+
+  const membershipIdx = buildHeaderIndex(memberships.headers);
+  const allowedPersonIds = new Set(
+    memberships.rows
+      .filter((row) => {
+        const rowTenantKey = getCell(row, membershipIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
+        if (rowTenantKey !== targetTenant) {
+          return false;
+        }
+        const enabledRaw = getCell(row, membershipIdx, "is_enabled").trim();
+        return !enabledRaw || parseBool(enabledRaw);
+      })
+      .map((row) => getCell(row, membershipIdx, "person_id").trim())
+      .filter(Boolean),
+  );
+  if (allowedPersonIds.size === 0) {
+    return [];
+  }
 
   const peopleById = new Map<string, PersonRecord>();
   for (const person of sharedPeople) {
     peopleById.set(person.personId, person);
-  }
-  for (const person of scopedPeople) {
-    if (!peopleById.has(person.personId)) {
-      peopleById.set(person.personId, person);
-    }
-  }
-
-  const resolveAllowedPersonIds = async () => {
-    const memberships = await ensurePersonFamilyGroupsTabSchema().catch(() => null);
-    if (!memberships || memberships.headers.length === 0) {
-      return new Set<string>();
-    }
-    const membershipIdx = buildHeaderIndex(memberships.headers);
-    return new Set(
-      memberships.rows
-        .filter((row) => {
-          const rowTenantKey = getCell(row, membershipIdx, "family_group_key").trim().toLowerCase() || DEFAULT_TENANT_KEY;
-          if (rowTenantKey !== targetTenant) {
-            return false;
-          }
-          const enabledRaw = getCell(row, membershipIdx, "is_enabled").trim();
-          return !enabledRaw || parseBool(enabledRaw);
-        })
-        .map((row) => getCell(row, membershipIdx, "person_id").trim())
-        .filter(Boolean),
-    );
-  };
-
-  let allowedPersonIds = await resolveAllowedPersonIds();
-  if (allowedPersonIds.size === 0) {
-    await backfillPersonMembershipsFromUserFamilyGroups(targetTenant);
-    allowedPersonIds = await resolveAllowedPersonIds();
-  }
-
-  const [relationshipRows, familyUnitRows] = await Promise.all([
-    getTableRecords("Relationships", targetTenant).catch(() => [] as SheetRecord[]),
-    getTableRecords("Households", targetTenant).catch(() => [] as SheetRecord[]),
-  ]);
-  for (const row of relationshipRows) {
-    const rowTenantKey = normalizeTenantKey(
-      ((row.data.family_group_key ?? row.data.tenant_key ?? "") as string).trim(),
-    );
-    if (rowTenantKey !== targetTenant) {
-      continue;
-    }
-    const fromPersonId = (row.data.from_person_id ?? "").trim();
-    const toPersonId = (row.data.to_person_id ?? "").trim();
-    if (fromPersonId) {
-      allowedPersonIds.add(fromPersonId);
-    }
-    if (toPersonId) {
-      allowedPersonIds.add(toPersonId);
-    }
-  }
-  for (const row of familyUnitRows) {
-    const rowTenantKey = normalizeTenantKey(
-      ((row.data.family_group_key ?? row.data.tenant_key ?? "") as string).trim(),
-    );
-    if (rowTenantKey !== targetTenant) {
-      continue;
-    }
-    const partner1 = (row.data.partner1_person_id ?? "").trim();
-    const partner2 = (row.data.partner2_person_id ?? "").trim();
-    if (partner1) {
-      allowedPersonIds.add(partner1);
-    }
-    if (partner2) {
-      allowedPersonIds.add(partner2);
-    }
-  }
-
-  for (const person of scopedPeople) {
-    allowedPersonIds.add(person.personId);
-  }
-  if (allowedPersonIds.size === 0) {
-    return [];
   }
 
   return Array.from(allowedPersonIds)

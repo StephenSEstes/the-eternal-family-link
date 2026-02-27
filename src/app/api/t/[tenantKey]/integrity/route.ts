@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { createSheetsClient, createTableRecord, getPeople, getTableRecords, getTenantConfig } from "@/lib/google/sheets";
+import { createSheetsClient, createTableRecord, getPeople, getTableRecords, getTenantConfig, listTabs } from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type IntegritySeverity = "error" | "warn";
@@ -128,12 +128,13 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
 
 async function runIntegrityAudit(tenantKey: string) {
   const familyGroupKey = normalize(tenantKey);
-  const [people, peopleRowsGlobal, userAccessRows, userGroupRows, legacyLocalRows] = await Promise.all([
+  const [people, peopleRowsGlobal, userAccessRows, userGroupRows, legacyLocalRows, tabs] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
     getTableRecords("People").catch(() => []),
     getTableRecords("UserAccess").catch(() => []),
     getTableRecords("UserFamilyGroups").catch(() => []),
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
+    listTabs().catch(() => []),
   ]);
 
   const peopleIds = new Set(
@@ -261,6 +262,17 @@ async function runIntegrityAudit(tenantKey: string) {
       sample: legacyLocalRows.slice(0, 10).map((row) => `${row.rowNumber}`),
     });
   }
+
+  const scopedPeopleTabs = tabs
+    .map((tab) => tab.trim())
+    .filter((tab) => tab.toLowerCase().endsWith("__people"));
+  pushFinding(
+    findings,
+    "warn",
+    "legacy_scoped_people_tabs_present",
+    "Legacy tenant-scoped People tabs exist. People data must remain global in the People tab only.",
+    scopedPeopleTabs,
+  );
 
   const errorCount = findings.filter((item) => item.severity === "error").length;
   const warnCount = findings.filter((item) => item.severity === "warn").length;
