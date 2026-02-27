@@ -37,8 +37,11 @@ type TreeGraphProps = {
 };
 
 export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGraphProps) {
-  const NODE_HALF_WIDTH = 72;
-  const NODE_HALF_HEIGHT = 24;
+  const NODE_CARD_WIDTH = 208;
+  const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
+  const NODE_HALF_HEIGHT = 30;
+  const SPOUSE_GAP = 0;
+  const NON_SPOUSE_GAP = 56;
   const MIN_SCALE = 0.35;
   const MAX_SCALE = 2.8;
 
@@ -202,22 +205,47 @@ export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGrap
     orderedByLevel.set(level, ordered);
   });
 
-  const maxCols = Math.max(orderedByLevel.size > 0 ? 1 : 0, ...Array.from(orderedByLevel.values()).map((row) => row.length));
+  const isSpousePair = (leftPersonId: string, rightPersonId: string) => {
+    const pairKey = [leftPersonId, rightPersonId].sort().join("::");
+    return spousePairIds.has(pairKey);
+  };
+
+  const rowWidth = (row: PersonNode[]) => {
+    if (row.length === 0) {
+      return 0;
+    }
+    let width = NODE_CARD_WIDTH;
+    for (let i = 1; i < row.length; i += 1) {
+      const previous = row[i - 1];
+      const current = row[i];
+      const gap = isSpousePair(previous.personId, current.personId) ? SPOUSE_GAP : NON_SPOUSE_GAP;
+      width += NODE_CARD_WIDTH + gap;
+    }
+    return width;
+  };
+
+  const maxRowWidth = Math.max(0, ...Array.from(orderedByLevel.values()).map((row) => rowWidth(row)));
   const rowGap = 130;
-  const colGap = 150;
   const xPadding = 90;
   const yPadding = 70;
-  const width = Math.max(840, xPadding * 2 + Math.max(0, maxCols - 1) * colGap);
+  const width = Math.max(980, xPadding * 2 + maxRowWidth);
   const height = Math.max(440, yPadding * 2 + Math.max(0, levelsSorted.length - 1) * rowGap);
 
   const positions = new Map<string, { x: number; y: number }>();
   levelsSorted.forEach((level, levelIndex) => {
     const row = orderedByLevel.get(level) ?? [];
-    const rowWidth = Math.max(0, (row.length - 1) * colGap);
-    const startX = (width - rowWidth) / 2;
+    const currentRowWidth = rowWidth(row);
+    const startCenterX = (width - currentRowWidth) / 2 + NODE_HALF_WIDTH;
     const y = yPadding + levelIndex * rowGap;
+    let x = startCenterX;
     row.forEach((node, index) => {
-      positions.set(node.personId, { x: startX + index * colGap, y });
+      positions.set(node.personId, { x, y });
+      if (index >= row.length - 1) {
+        return;
+      }
+      const nextNode = row[index + 1];
+      const gap = isSpousePair(node.personId, nextNode.personId) ? SPOUSE_GAP : NON_SPOUSE_GAP;
+      x += NODE_CARD_WIDTH + gap;
     });
   });
 
