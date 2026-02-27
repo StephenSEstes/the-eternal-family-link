@@ -9,6 +9,7 @@ type PersonItem = {
   personId: string;
   displayName: string;
   birthDate: string;
+  gender: "male" | "female" | "unspecified";
   photoFileId: string;
 };
 
@@ -84,11 +85,13 @@ export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoB
       <section className="people-grid album-grid">
         {filtered.map((person) => {
           const photoFileId = photoByPersonId[person.personId] || person.photoFileId;
+          const fallbackAvatar =
+            person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
           return (
             <article key={person.personId} className="person-card album-card">
               <div className="person-photo-wrap">
                 <img
-                  src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : "/globe.svg"}
+                  src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
                   alt={person.displayName}
                   className="person-photo"
                 />
@@ -113,4 +116,3 @@ export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoB
     </main>
   );
 }
-

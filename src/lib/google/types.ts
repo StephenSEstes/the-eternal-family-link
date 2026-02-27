@@ -42,6 +42,7 @@ export type PersonRecord = {
   personId: string;
   displayName: string;
   birthDate: string;
+  gender: "male" | "female" | "unspecified";
   phones: string;
   address: string;
   hobbies: string;
@@ -54,6 +55,7 @@ export type PersonRecord = {
 export type PersonUpdateInput = {
   display_name: string;
   birth_date: string;
+  gender?: "male" | "female" | "unspecified";
   phones: string;
   address: string;
   hobbies: string;

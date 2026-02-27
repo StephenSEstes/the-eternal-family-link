@@ -28,6 +28,7 @@ export async function GET(_: Request, { params }: TenantPeopleRouteProps) {
 const createPersonSchema = z.object({
   display_name: z.string().trim().min(1).max(140),
   birth_date: z.string().trim().min(1).max(64),
+  gender: z.enum(["male", "female", "unspecified"]).optional().default("unspecified"),
   phones: z.string().trim().max(2000).optional().default(""),
   address: z.string().trim().max(2000).optional().default(""),
   hobbies: z.string().trim().max(2000).optional().default(""),
@@ -72,6 +73,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         person_id: existingGlobal.personId,
         display_name: existingGlobal.displayName,
         birth_date: existingGlobal.birthDate,
+        gender: existingGlobal.gender,
         phones: existingGlobal.phones,
         address: existingGlobal.address,
         hobbies: existingGlobal.hobbies,
@@ -87,6 +89,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         person_id: personId,
         display_name: parsed.data.display_name,
         birth_date: parsed.data.birth_date,
+        gender: parsed.data.gender,
         phones: parsed.data.phones,
         address: parsed.data.address,
         hobbies: parsed.data.hobbies,

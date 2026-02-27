@@ -62,6 +62,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "person_id",
     "display_name",
     "birth_date",
+    "gender",
     "phones",
     "address",
     "hobbies",
@@ -821,6 +822,13 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
     personId: getCell(row, idx, "person_id"),
     displayName: getCell(row, idx, "display_name"),
     birthDate: getCell(row, idx, "birth_date"),
+    gender: ((): "male" | "female" | "unspecified" => {
+      const raw = getCell(row, idx, "gender").trim().toLowerCase();
+      if (raw === "male" || raw === "female") {
+        return raw;
+      }
+      return "unspecified";
+    })(),
     phones: getCell(row, idx, "phones"),
     address: getCell(row, idx, "address"),
     hobbies: getCell(row, idx, "hobbies"),
@@ -1306,6 +1314,7 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
+  await ensureResolvedTabColumns(PEOPLE_TAB, ["gender"], tenantKey).catch(() => undefined);
   const sheets = await createSheetsClient();
 
   const readPeopleFromTab = async (tabName: string) => {
@@ -1581,6 +1590,9 @@ export async function updatePerson(
   const mutableRow = Array.from({ length: headers.length }, (_, i) => rows[rowIndex][i] ?? "");
   setCell(mutableRow, idx, "display_name", updates.display_name);
   setCell(mutableRow, idx, "birth_date", updates.birth_date);
+  if (updates.gender) {
+    setCell(mutableRow, idx, "gender", updates.gender);
+  }
   setCell(mutableRow, idx, "phones", updates.phones);
   setCell(mutableRow, idx, "address", updates.address);
   setCell(mutableRow, idx, "hobbies", updates.hobbies);

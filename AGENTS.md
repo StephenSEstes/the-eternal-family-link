@@ -31,6 +31,7 @@
   - Mixed issue
 - Ask for confirmation before code changes when evidence indicates a pure data issue.
 - If uncertain, gather more evidence first; do not guess.
+- If the user interrupts with a side question, answer briefly and continue the active implementation unless the user explicitly says to stop or change scope.
 
 ## Google Sheets Access Pre-Check
 - Before any live Google Sheets read/write from scripts or API tooling, confirm the workbook is closed on the user side.

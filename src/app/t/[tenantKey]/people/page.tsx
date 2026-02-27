@@ -35,6 +35,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
           personId: person.personId,
           displayName: person.displayName,
           birthDate: person.birthDate,
+          gender: person.gender,
           photoFileId: person.photoFileId,
         }))}
         photoByPersonId={photoByPersonId}

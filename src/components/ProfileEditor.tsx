@@ -54,6 +54,7 @@ export function ProfileEditor({
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [displayName, setDisplayName] = useState(person.displayName);
   const [birthDate, setBirthDate] = useState(person.birthDate);
+  const [gender, setGender] = useState<"male" | "female" | "unspecified">(person.gender || "unspecified");
   const [parent1Id, setParent1Id] = useState(initialParentIds[0] ?? "");
   const [parent2Id, setParent2Id] = useState(initialParentIds[1] ?? "");
   const [spouseId, setSpouseId] = useState(initialSpouseId);
@@ -86,12 +87,13 @@ export function ProfileEditor({
     () => ({
       display_name: displayName,
       birth_date: birthDate,
+      gender,
       phones: person.phones,
       address: person.address,
       hobbies: person.hobbies,
       notes: person.notes,
     }),
-    [birthDate, displayName, person.address, person.hobbies, person.notes, person.phones],
+    [birthDate, displayName, gender, person.address, person.hobbies, person.notes, person.phones],
   );
 
   const parentOptions = useMemo(
@@ -531,6 +533,21 @@ export function ProfileEditor({
             readOnly={!canEdit}
             placeholder="YYYY-MM-DD"
           />
+
+          <label className="label" htmlFor="gender">
+            Gender
+          </label>
+          <select
+            id="gender"
+            className="input"
+            value={gender}
+            onChange={(event) => setGender(event.target.value as "male" | "female" | "unspecified")}
+            disabled={!canEdit}
+          >
+            <option value="unspecified">Unspecified</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
 
           <label className="label">
             <input

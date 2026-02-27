@@ -22,6 +22,7 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -42,6 +43,7 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
       body: JSON.stringify({
         display_name: displayName,
         birth_date: birthDate,
+        gender,
       }),
     });
     const body = await response.json().catch(() => null);
@@ -53,6 +55,7 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
     setStatus("Person created.");
     setDisplayName("");
     setBirthDate("");
+    setGender("unspecified");
     setOpen(false);
     setIsSaving(false);
     router.refresh();
@@ -72,6 +75,12 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
           <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="label">Birthday (YYYY-MM-DD)</label>
           <input className="input" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          <label className="label">Gender</label>
+          <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")}>
+            <option value="unspecified">Unspecified</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
           <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
             Add details like phone, address, hobbies, and notes later as attributes.
           </p>

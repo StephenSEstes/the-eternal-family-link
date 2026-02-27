@@ -30,6 +30,7 @@ export default async function PeoplePage() {
           personId: person.personId,
           displayName: person.displayName,
           birthDate: person.birthDate,
+          gender: person.gender,
           photoFileId: person.photoFileId,
         }))}
         photoByPersonId={photoByPersonId}

@@ -42,7 +42,9 @@ export function ViewerPeopleGrid({ people, tenantKey, photoByPersonId }: ViewerP
               src={
                 (photoByPersonId?.[person.personId] || person.photoFileId)
                   ? getPhotoProxyPath(photoByPersonId?.[person.personId] || person.photoFileId, tenantKey)
-                  : "/globe.svg"
+                  : person.gender === "female"
+                    ? "/placeholders/avatar-female.png"
+                    : "/placeholders/avatar-male.png"
               }
               alt={person.displayName}
             />
