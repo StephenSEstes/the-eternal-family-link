@@ -374,12 +374,24 @@ export function ProfileEditor({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ personId: person.personId, parentIds, spouseId }),
     });
-    const body = await response.json().catch(() => null);
+    const text = await response.text();
+    let body: { error?: string; message?: string } | null = null;
+    if (text) {
+      try {
+        body = JSON.parse(text) as { error?: string; message?: string };
+      } catch {
+        body = null;
+      }
+    }
     if (!response.ok) {
       if (response.status === 409 && body?.error === "spouse_unavailable") {
         return { ok: false, message: "Selected spouse is already married. Dissociate them first." };
       } else {
-        return { ok: false, message: `Failed: ${response.status} ${JSON.stringify(body)}` };
+        const detail =
+          body?.message ||
+          body?.error ||
+          (text ? text.slice(0, 220) : "No response payload");
+        return { ok: false, message: `Failed: ${response.status} ${detail}` };
       }
     }
     return { ok: true, message: "Relationships saved." };
@@ -646,7 +658,7 @@ export function ProfileEditor({
           </label>
           {!isInLaw ? (
             <>
-              <label className="label">Parent 1</label>
+              <label className="label">Mother</label>
               <select
                 className="input"
                 value={parent1Id}
@@ -663,7 +675,7 @@ export function ProfileEditor({
                   ))}
               </select>
 
-              <label className="label">Parent 2</label>
+              <label className="label">Father</label>
               <select
                 className="input"
                 value={parent2Id}

@@ -96,105 +96,113 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
+  try {
+    const parentIds = Array.from(new Set(parsed.data.parentIds.filter((id) => id !== parsed.data.personId)));
+    const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
+    const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
 
-  const parentIds = Array.from(new Set(parsed.data.parentIds.filter((id) => id !== parsed.data.personId)));
-  const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
-  const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
-
-  const existing = await getTableRecords("Relationships", normalizedTenantKey);
-  const desiredIds = new Set<string>();
-  parentIds.forEach((parentId) =>
-    desiredIds.add(makeRelId(normalizedTenantKey, parentId, parsed.data.personId, "parent")),
-  );
-  childIds.forEach((childId) =>
-    desiredIds.add(makeRelId(normalizedTenantKey, parsed.data.personId, childId, "parent")),
-  );
-
-  for (const row of existing) {
-    const relId = readField(row.data, "rel_id");
-    const relType = readField(row.data, "rel_type");
-    const fromPersonId = readField(row.data, "from_person_id");
-    const toPersonId = readField(row.data, "to_person_id");
-    const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
-    if (rowTenantKey !== normalizedTenantKey || relType.toLowerCase() !== "parent" || !relId) {
-      continue;
-    }
-
-    const isParentEdge = toPersonId === parsed.data.personId;
-    const isChildEdge = fromPersonId === parsed.data.personId;
-    if (!isParentEdge && !isChildEdge) {
-      continue;
-    }
-    if (desiredIds.has(relId)) {
-      continue;
-    }
-
-    await deleteTableRecordById("Relationships", relId, "rel_id", normalizedTenantKey);
-  }
-
-  for (const parentId of parentIds) {
-    await upsertRelation(normalizedTenantKey, parentId, parsed.data.personId, "parent");
-  }
-  for (const childId of childIds) {
-    await upsertRelation(normalizedTenantKey, parsed.data.personId, childId, "parent");
-  }
-
-  const households = await getTableRecords("Households", normalizedTenantKey);
-  const spouseConflict = spouseId
-    ? households.find((row) => {
-        const partner1 = readField(row.data, "partner1_person_id");
-        const partner2 = readField(row.data, "partner2_person_id");
-        const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
-        if (rowTenantKey !== normalizedTenantKey) {
-          return false;
-        }
-        if (partner1 !== spouseId && partner2 !== spouseId) {
-          return false;
-        }
-        return partner1 !== parsed.data.personId && partner2 !== parsed.data.personId;
-      })
-    : null;
-
-  if (spouseConflict) {
-    const partner1 = readField(spouseConflict.data, "partner1_person_id");
-    const partner2 = readField(spouseConflict.data, "partner2_person_id");
-    const otherPartner = partner1 === spouseId ? partner2 : partner1;
-    return NextResponse.json(
-      {
-        error: "spouse_unavailable",
-        spouseId,
-        currentSpouseId: otherPartner || null,
-      },
-      { status: 409 },
+    const existing = await getTableRecords("Relationships", normalizedTenantKey);
+    const desiredIds = new Set<string>();
+    parentIds.forEach((parentId) =>
+      desiredIds.add(makeRelId(normalizedTenantKey, parentId, parsed.data.personId, "parent")),
     );
-  }
+    childIds.forEach((childId) =>
+      desiredIds.add(makeRelId(normalizedTenantKey, parsed.data.personId, childId, "parent")),
+    );
 
-  for (const row of households) {
-    const unitId = readField(row.data, "household_id");
-    const partner1 = readField(row.data, "partner1_person_id");
-    const partner2 = readField(row.data, "partner2_person_id");
-    const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
-    if (!unitId || rowTenantKey !== normalizedTenantKey) {
-      continue;
-    }
-    if (partner1 !== parsed.data.personId && partner2 !== parsed.data.personId) {
-      continue;
-    }
-    if (spouseId && ((partner1 === parsed.data.personId && partner2 === spouseId) || (partner2 === parsed.data.personId && partner1 === spouseId))) {
-      continue;
-    }
-    await deleteTableRecordById("Households", unitId, "household_id", normalizedTenantKey);
-  }
+    for (const row of existing) {
+      const relId = readField(row.data, "rel_id");
+      const relType = readField(row.data, "rel_type");
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+      if (rowTenantKey !== normalizedTenantKey || relType.toLowerCase() !== "parent" || !relId) {
+        continue;
+      }
 
-  if (spouseId) {
-    await upsertFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
-  }
+      const isParentEdge = toPersonId === parsed.data.personId;
+      const isChildEdge = fromPersonId === parsed.data.personId;
+      if (!isParentEdge && !isChildEdge) {
+        continue;
+      }
+      if (desiredIds.has(relId)) {
+        continue;
+      }
 
-  return NextResponse.json({
-    ok: true,
-    personId: parsed.data.personId,
-    parentCount: parentIds.length,
-    childCount: childIds.length,
-    spouseId: spouseId || null,
-  });
+      await deleteTableRecordById("Relationships", relId, "rel_id", normalizedTenantKey);
+    }
+
+    for (const parentId of parentIds) {
+      await upsertRelation(normalizedTenantKey, parentId, parsed.data.personId, "parent");
+    }
+    for (const childId of childIds) {
+      await upsertRelation(normalizedTenantKey, parsed.data.personId, childId, "parent");
+    }
+
+    const households = await getTableRecords("Households", normalizedTenantKey);
+    const spouseConflict = spouseId
+      ? households.find((row) => {
+          const partner1 = readField(row.data, "partner1_person_id");
+          const partner2 = readField(row.data, "partner2_person_id");
+          const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+          if (rowTenantKey !== normalizedTenantKey) {
+            return false;
+          }
+          if (partner1 !== spouseId && partner2 !== spouseId) {
+            return false;
+          }
+          return partner1 !== parsed.data.personId && partner2 !== parsed.data.personId;
+        })
+      : null;
+
+    if (spouseConflict) {
+      const partner1 = readField(spouseConflict.data, "partner1_person_id");
+      const partner2 = readField(spouseConflict.data, "partner2_person_id");
+      const otherPartner = partner1 === spouseId ? partner2 : partner1;
+      return NextResponse.json(
+        {
+          error: "spouse_unavailable",
+          spouseId,
+          currentSpouseId: otherPartner || null,
+        },
+        { status: 409 },
+      );
+    }
+
+    for (const row of households) {
+      const unitId = readField(row.data, "household_id");
+      const partner1 = readField(row.data, "partner1_person_id");
+      const partner2 = readField(row.data, "partner2_person_id");
+      const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+      if (!unitId || rowTenantKey !== normalizedTenantKey) {
+        continue;
+      }
+      if (partner1 !== parsed.data.personId && partner2 !== parsed.data.personId) {
+        continue;
+      }
+      if (
+        spouseId &&
+        ((partner1 === parsed.data.personId && partner2 === spouseId) ||
+          (partner2 === parsed.data.personId && partner1 === spouseId))
+      ) {
+        continue;
+      }
+      await deleteTableRecordById("Households", unitId, "household_id", normalizedTenantKey);
+    }
+
+    if (spouseId) {
+      await upsertFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      personId: parsed.data.personId,
+      parentCount: parentIds.length,
+      childCount: childIds.length,
+      spouseId: spouseId || null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unexpected_error";
+    return NextResponse.json({ error: "relationship_save_failed", message }, { status: 500 });
+  }
 }
