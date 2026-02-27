@@ -142,8 +142,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const households = await getTableRecords("Households", normalizedTenantKey);
     const spouseConflict = spouseId
       ? households.find((row) => {
-          const partner1 = readField(row.data, "partner1_person_id");
-          const partner2 = readField(row.data, "partner2_person_id");
+          const partner1 = readField(row.data, "partner1_person_id", "husband_person_id");
+          const partner2 = readField(row.data, "partner2_person_id", "wife_person_id");
           const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
           if (rowTenantKey !== normalizedTenantKey) {
             return false;
@@ -156,8 +156,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       : null;
 
     if (spouseConflict) {
-      const partner1 = readField(spouseConflict.data, "partner1_person_id");
-      const partner2 = readField(spouseConflict.data, "partner2_person_id");
+      const partner1 = readField(spouseConflict.data, "partner1_person_id", "husband_person_id");
+      const partner2 = readField(spouseConflict.data, "partner2_person_id", "wife_person_id");
       const otherPartner = partner1 === spouseId ? partner2 : partner1;
       return NextResponse.json(
         {
@@ -171,8 +171,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     for (const row of households) {
       const unitId = readField(row.data, "household_id");
-      const partner1 = readField(row.data, "partner1_person_id");
-      const partner2 = readField(row.data, "partner2_person_id");
+      const partner1 = readField(row.data, "partner1_person_id", "husband_person_id");
+      const partner2 = readField(row.data, "partner2_person_id", "wife_person_id");
       const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
       if (!unitId || rowTenantKey !== normalizedTenantKey) {
         continue;

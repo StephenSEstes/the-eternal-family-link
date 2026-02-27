@@ -41,8 +41,20 @@ export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[
       return {
         id: readCell(data, "household_id", "id") || `fu-${idx + 2}`,
         tenantKey: rowTenant,
-        partner1PersonId: readCell(data, "partner1_person_id", "partner_1_person_id", "parent1_person_id"),
-        partner2PersonId: readCell(data, "partner2_person_id", "partner_2_person_id", "parent2_person_id"),
+        partner1PersonId: readCell(
+          data,
+          "partner1_person_id",
+          "husband_person_id",
+          "partner_1_person_id",
+          "parent1_person_id",
+        ),
+        partner2PersonId: readCell(
+          data,
+          "partner2_person_id",
+          "wife_person_id",
+          "partner_2_person_id",
+          "parent2_person_id",
+        ),
         label: readCell(data, "family_label", "label", "family_name"),
         notes: readCell(data, "notes", "family_notes"),
       } satisfies HouseholdRecord;

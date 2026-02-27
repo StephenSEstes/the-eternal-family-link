@@ -28,6 +28,9 @@ I will update this list as we add, complete, or remove work.
 - [ ] Review Viewer tile visibility on family home
   Est date: 2026-03-02
   Desc: Decide whether to remove the Viewer tile from `/t/[tenantKey]` home or gate it by role/setting so the landing screen stays focused.
+- [ ] Gender-based fallback headshots for missing profile photos
+  Est date: 2026-03-07
+  Desc: Use `/public/placeholders/avatar-male.png` and `/public/placeholders/avatar-female.png` when no profile photo exists, and add profile gender tracking so fallback selection is automatic.
 
 ## Backlog
 - [ ] Add test coverage goals by area

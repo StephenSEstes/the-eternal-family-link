@@ -347,8 +347,8 @@ export async function POST(request: Request) {
     const relationships = await getTableRecords("Relationships", sourceFamilyGroupKey).catch(() => []);
     const candidateIds = new Set<string>();
     for (const row of households) {
-      const partner1 = readValue(row.data, "partner1_person_id");
-      const partner2 = readValue(row.data, "partner2_person_id");
+      const partner1 = readValue(row.data, "partner1_person_id", "husband_person_id");
+      const partner2 = readValue(row.data, "partner2_person_id", "wife_person_id");
       if (partner1 === parsed.data.initialAdminPersonId && partner2) {
         candidateIds.add(partner2);
       }

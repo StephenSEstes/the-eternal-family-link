@@ -137,6 +137,12 @@ function normalizeHeader(header: string) {
   if (normalized === "tenant_name") {
     return "family_group_name";
   }
+  if (normalized === "husband_person_id") {
+    return "partner1_person_id";
+  }
+  if (normalized === "wife_person_id") {
+    return "partner2_person_id";
+  }
   return normalized;
 }
 

@@ -19,7 +19,12 @@ function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
     return { tabName: "Relationships", idColumn: "rel_id", required: ["rel_id", "from_person_id", "to_person_id"] };
   }
   if (target === "households") {
-    return { tabName: "Households", idColumn: "household_id", required: ["household_id", "partner1_person_id", "partner2_person_id"] };
+    return {
+      tabName: "Households",
+      idColumn: "household_id",
+      required: ["household_id"],
+      aliases: { partner1_person_id: "husband_person_id", partner2_person_id: "wife_person_id" } as Record<string, string>,
+    };
   }
   if (target === "person_attributes") {
     return { tabName: "PersonAttributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
@@ -71,6 +76,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       return NextResponse.json({ error: "invalid_csv_headers", missing: key }, { status: 400 });
     }
   }
+  if (target.tabName === "Households") {
+    const hasPartner1 = parsedCsv.headers.includes("partner1_person_id") || parsedCsv.headers.includes("husband_person_id");
+    const hasPartner2 = parsedCsv.headers.includes("partner2_person_id") || parsedCsv.headers.includes("wife_person_id");
+    if (!hasPartner1) {
+      return NextResponse.json({ error: "invalid_csv_headers", missing: "partner1_person_id|husband_person_id" }, { status: 400 });
+    }
+    if (!hasPartner2) {
+      return NextResponse.json({ error: "invalid_csv_headers", missing: "partner2_person_id|wife_person_id" }, { status: 400 });
+    }
+  }
 
   let created = 0;
   let updated = 0;
@@ -100,6 +115,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     Object.entries(sourceRow).forEach(([key, value]) => {
       payload[key] = value;
     });
+    if (target.tabName === "Households") {
+      if (!payload.partner1_person_id && payload.husband_person_id) {
+        payload.partner1_person_id = payload.husband_person_id;
+      }
+      if (!payload.partner2_person_id && payload.wife_person_id) {
+        payload.partner2_person_id = payload.wife_person_id;
+      }
+    }
     if (target.tabName === "People" && !payload.person_id) {
       payload.person_id = recordId;
     }
