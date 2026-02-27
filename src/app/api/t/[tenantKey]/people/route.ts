@@ -26,7 +26,11 @@ export async function GET(_: Request, { params }: TenantPeopleRouteProps) {
 }
 
 const createPersonSchema = z.object({
-  display_name: z.string().trim().min(1).max(140),
+  first_name: z.string().trim().min(1).max(80),
+  middle_name: z.string().trim().max(80).optional().default(""),
+  last_name: z.string().trim().min(1).max(80),
+  nick_name: z.string().trim().max(80).optional().default(""),
+  display_name: z.string().trim().max(140).optional().default(""),
   birth_date: z.string().trim().min(1).max(64),
   gender: z.enum(["male", "female", "unspecified"]).optional().default("unspecified"),
   phones: z.string().trim().max(2000).optional().default(""),
@@ -34,6 +38,10 @@ const createPersonSchema = z.object({
   hobbies: z.string().trim().max(2000).optional().default(""),
   notes: z.string().trim().max(2000).optional().default(""),
 });
+
+function composeDisplayName(firstName: string, middleName: string, lastName: string) {
+  return [firstName, middleName, lastName].filter((part) => part.trim()).join(" ").trim();
+}
 
 export async function POST(request: Request, { params }: TenantPeopleRouteProps) {
   const { tenantKey } = await params;
@@ -50,7 +58,9 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const personId = buildPersonId(parsed.data.display_name, parsed.data.birth_date);
+  const fullName = composeDisplayName(parsed.data.first_name, parsed.data.middle_name, parsed.data.last_name);
+  const displayName = parsed.data.display_name.trim() || fullName;
+  const personId = buildPersonId(fullName, parsed.data.birth_date);
   if (!personId) {
     return NextResponse.json({ error: "invalid_person_id", message: "birth_date must be parseable" }, { status: 400 });
   }
@@ -72,6 +82,10 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       data: {
         person_id: existingGlobal.personId,
         display_name: existingGlobal.displayName,
+        first_name: existingGlobal.firstName,
+        middle_name: existingGlobal.middleName,
+        last_name: existingGlobal.lastName,
+        nick_name: existingGlobal.nickName,
         birth_date: existingGlobal.birthDate,
         gender: existingGlobal.gender,
         phones: existingGlobal.phones,
@@ -87,7 +101,11 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       "People",
       {
         person_id: personId,
-        display_name: parsed.data.display_name,
+        display_name: displayName,
+        first_name: parsed.data.first_name,
+        middle_name: parsed.data.middle_name,
+        last_name: parsed.data.last_name,
+        nick_name: parsed.data.nick_name,
         birth_date: parsed.data.birth_date,
         gender: parsed.data.gender,
         phones: parsed.data.phones,

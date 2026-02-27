@@ -20,6 +20,10 @@ function PlusIcon() {
 export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPersonCardProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [nickName, setNickName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
@@ -31,8 +35,8 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
   }
 
   const submit = async () => {
-    if (!displayName.trim() || !birthDate.trim()) {
-      setStatus("Name and birthday are required.");
+    if (!firstName.trim() || !lastName.trim() || !birthDate.trim()) {
+      setStatus("First name, last name, and birthday are required.");
       return;
     }
     setIsSaving(true);
@@ -41,6 +45,10 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+        nick_name: nickName,
         display_name: displayName,
         birth_date: birthDate,
         gender,
@@ -53,6 +61,10 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
       return;
     }
     setStatus("Person created.");
+    setFirstName("");
+    setMiddleName("");
+    setLastName("");
+    setNickName("");
     setDisplayName("");
     setBirthDate("");
     setGender("unspecified");
@@ -71,8 +83,21 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
       </button>
       {open ? (
         <div className={compact ? "add-person-popover" : ""} style={compact ? undefined : { marginTop: "0.75rem" }}>
-          <label className="label">Full Name</label>
-          <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          <label className="label">First Name</label>
+          <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <label className="label">Middle Name</label>
+          <input className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+          <label className="label">Last Name</label>
+          <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          <label className="label">Nickname</label>
+          <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} />
+          <label className="label">Display Name</label>
+          <input
+            className="input"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Optional: how this name should appear in the app"
+          />
           <label className="label">Birthday (YYYY-MM-DD)</label>
           <input className="input" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
           <label className="label">Gender</label>

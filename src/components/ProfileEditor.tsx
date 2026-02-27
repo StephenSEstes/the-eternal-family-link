@@ -43,6 +43,31 @@ export function ProfileEditor({
   canManagePermissions,
   canEdit,
 }: ProfileEditorProps) {
+  const deriveNameParts = (fullName: string) => {
+    const tokens = fullName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (tokens.length === 0) {
+      return { firstName: "", middleName: "", lastName: "" };
+    }
+    if (tokens.length === 1) {
+      return { firstName: tokens[0], middleName: "", lastName: "" };
+    }
+    if (tokens.length === 2) {
+      return { firstName: tokens[0], middleName: "", lastName: tokens[1] };
+    }
+    return {
+      firstName: tokens[0],
+      middleName: tokens.slice(1, -1).join(" "),
+      lastName: tokens[tokens.length - 1],
+    };
+  };
+
+  const composeDisplayName = (firstName: string, middleName: string, lastName: string) =>
+    [firstName, middleName, lastName].filter((part) => part.trim()).join(" ").trim();
+
+  const initialNameParts = deriveNameParts(person.displayName);
   const initialInLaw = useMemo(() => {
     const marker = initialAttributes.find((item) => item.attributeType.toLowerCase() === "in_law");
     if (!marker) {
@@ -52,6 +77,10 @@ export function ProfileEditor({
     return normalized === "true" || normalized === "yes" || normalized === "1";
   }, [initialAttributes]);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [firstName, setFirstName] = useState(person.firstName || initialNameParts.firstName);
+  const [middleName, setMiddleName] = useState(person.middleName || initialNameParts.middleName);
+  const [lastName, setLastName] = useState(person.lastName || initialNameParts.lastName);
+  const [nickName, setNickName] = useState(person.nickName || "");
   const [displayName, setDisplayName] = useState(person.displayName);
   const [birthDate, setBirthDate] = useState(person.birthDate);
   const [gender, setGender] = useState<"male" | "female" | "unspecified">(person.gender || "unspecified");
@@ -85,7 +114,11 @@ export function ProfileEditor({
 
   const payload = useMemo(
     () => ({
-      display_name: displayName,
+      display_name: displayName.trim() || composeDisplayName(firstName, middleName, lastName) || person.displayName,
+      first_name: firstName,
+      middle_name: middleName,
+      last_name: lastName,
+      nick_name: nickName,
       birth_date: birthDate,
       gender,
       phones: person.phones,
@@ -93,7 +126,20 @@ export function ProfileEditor({
       hobbies: person.hobbies,
       notes: person.notes,
     }),
-    [birthDate, displayName, gender, person.address, person.hobbies, person.notes, person.phones],
+    [
+      birthDate,
+      displayName,
+      firstName,
+      middleName,
+      lastName,
+      nickName,
+      gender,
+      person.address,
+      person.hobbies,
+      person.notes,
+      person.phones,
+      person.displayName,
+    ],
   );
 
   const parentOptions = useMemo(
@@ -511,8 +557,48 @@ export function ProfileEditor({
 
       {activeTab === "overview" ? (
         <>
+          <label className="label" htmlFor="first_name">
+            First Name
+          </label>
+          <input
+            id="first_name"
+            className="input"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+            readOnly={!canEdit}
+          />
+          <label className="label" htmlFor="middle_name">
+            Middle Name
+          </label>
+          <input
+            id="middle_name"
+            className="input"
+            value={middleName}
+            onChange={(event) => setMiddleName(event.target.value)}
+            readOnly={!canEdit}
+          />
+          <label className="label" htmlFor="last_name">
+            Last Name
+          </label>
+          <input
+            id="last_name"
+            className="input"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+            readOnly={!canEdit}
+          />
+          <label className="label" htmlFor="nick_name">
+            Nickname
+          </label>
+          <input
+            id="nick_name"
+            className="input"
+            value={nickName}
+            onChange={(event) => setNickName(event.target.value)}
+            readOnly={!canEdit}
+          />
           <label className="label" htmlFor="display_name">
-            Full Name
+            Display Name
           </label>
           <input
             id="display_name"
