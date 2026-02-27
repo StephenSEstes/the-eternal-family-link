@@ -12,7 +12,10 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
   await params;
   const { tenant } = await requireFamilyGroupSession();
   const people = await getPeople(tenant.tenantKey);
-  const relationships = await getRelationships(tenant.tenantKey);
+  const peopleInFamily = new Set(people.map((person) => person.personId));
+  const relationships = (await getRelationships()).filter(
+    (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
+  );
   const households = await getHouseholds(tenant.tenantKey);
 
   const edges = [

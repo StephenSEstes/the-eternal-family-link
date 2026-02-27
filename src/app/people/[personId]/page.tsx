@@ -16,10 +16,10 @@ type PersonPageProps = {
 export default async function PersonPage({ params }: PersonPageProps) {
   const { personId } = await params;
   const { session, tenant } = await requireFamilyGroupSession();
-  const [person, people, relationships, households, attributes] = await Promise.all([
+  const [person, people, allRelationships, households, attributes] = await Promise.all([
     getPersonById(personId, tenant.tenantKey),
     getPeople(tenant.tenantKey),
-    getRelationships(tenant.tenantKey),
+    getRelationships(),
     getHouseholds(tenant.tenantKey),
     getPersonAttributes(tenant.tenantKey, personId),
   ]);
@@ -28,6 +28,10 @@ export default async function PersonPage({ params }: PersonPageProps) {
     notFound();
   }
 
+  const peopleInFamily = new Set(people.map((item) => item.personId));
+  const relationships = allRelationships.filter(
+    (edge) => peopleInFamily.has(edge.fromPersonId) && peopleInFamily.has(edge.toPersonId),
+  );
   const canEdit = canEditPerson(session, person.personId, tenant);
   const marriedToByPersonId = households.reduce<Record<string, string>>((acc, unit) => {
     acc[unit.partner1PersonId] = unit.partner2PersonId;

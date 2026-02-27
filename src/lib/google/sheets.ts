@@ -76,7 +76,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "relationships",
   ],
   Relationships: ["family_group_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
-  Households: ["family_group_key", "household_id", "partner1_person_id", "partner2_person_id"],
+  Households: ["family_group_key", "household_id", "husband_person_id", "wife_person_id"],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
     "attribute_id",
@@ -136,12 +136,6 @@ function normalizeHeader(header: string) {
   }
   if (normalized === "tenant_name") {
     return "family_group_name";
-  }
-  if (normalized === "husband_person_id") {
-    return "partner1_person_id";
-  }
-  if (normalized === "wife_person_id") {
-    return "partner2_person_id";
   }
   return normalized;
 }

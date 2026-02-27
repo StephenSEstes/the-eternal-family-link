@@ -86,8 +86,8 @@ function readValue(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-function makeRelationId(familyGroupKey: string, fromPersonId: string, toPersonId: string, relType: string) {
-  const raw = `${familyGroupKey}-${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
+function makeRelationId(fromPersonId: string, toPersonId: string, relType: string) {
+  const raw = `${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
   return raw.replace(/[^a-z0-9_-]+/g, "-");
 }
 
@@ -98,21 +98,19 @@ function makeFamilyUnitId(familyGroupKey: string, personA: string, personB: stri
 }
 
 async function upsertParentRelation(
-  familyGroupKey: string,
   fromPersonId: string,
   toPersonId: string,
 ) {
-  const relId = makeRelationId(familyGroupKey, fromPersonId, toPersonId, "parent");
+  const relId = makeRelationId(fromPersonId, toPersonId, "parent");
   const payload: Record<string, string> = {
-    family_group_key: familyGroupKey,
     rel_id: relId,
     from_person_id: fromPersonId,
     to_person_id: toPersonId,
     rel_type: "parent",
   };
-  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id", familyGroupKey);
+  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id");
   if (!updated) {
-    await createTableRecord("Relationships", payload, familyGroupKey);
+    await createTableRecord("Relationships", payload);
   }
 }
 
@@ -122,12 +120,12 @@ async function upsertFamilyUnit(
   personB: string,
 ) {
   const familyUnitId = makeFamilyUnitId(familyGroupKey, personA, personB);
-  const [partner1, partner2] = [personA, personB].sort();
+  const [husband, wife] = [personA, personB].sort();
   const payload: Record<string, string> = {
     family_group_key: familyGroupKey,
     household_id: familyUnitId,
-    partner1_person_id: partner1,
-    partner2_person_id: partner2,
+    husband_person_id: husband,
+    wife_person_id: wife,
   };
   const updated = await updateTableRecordById("Households", familyUnitId, payload, "household_id", familyGroupKey);
   if (!updated) {
@@ -337,18 +335,18 @@ export async function POST(request: Request) {
 
   await upsertFamilyUnit(familyGroupKey, patriarchPersonId, matriarchPersonId);
   if (parsed.data.parentsAreInitialAdminParents) {
-    await upsertParentRelation(familyGroupKey, patriarchPersonId, parsed.data.initialAdminPersonId);
-    await upsertParentRelation(familyGroupKey, matriarchPersonId, parsed.data.initialAdminPersonId);
+    await upsertParentRelation(patriarchPersonId, parsed.data.initialAdminPersonId);
+    await upsertParentRelation(matriarchPersonId, parsed.data.initialAdminPersonId);
   }
 
   let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
   if (parsed.data.includeHouseholdCandidates) {
     const households = await getTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
-    const relationships = await getTableRecords("Relationships", sourceFamilyGroupKey).catch(() => []);
+    const relationships = await getTableRecords("Relationships").catch(() => []);
     const candidateIds = new Set<string>();
     for (const row of households) {
-      const partner1 = readValue(row.data, "partner1_person_id", "husband_person_id");
-      const partner2 = readValue(row.data, "partner2_person_id", "wife_person_id");
+      const partner1 = readValue(row.data, "husband_person_id");
+      const partner2 = readValue(row.data, "wife_person_id");
       if (partner1 === parsed.data.initialAdminPersonId && partner2) {
         candidateIds.add(partner2);
       }

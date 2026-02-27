@@ -21,11 +21,15 @@ export async function GET(_: Request, { params }: TenantTreeRouteProps) {
   }
 
   const tenant = getTenantContext(session, normalized);
-  const [people, relationships, households] = await Promise.all([
+  const [people, allRelationships, households] = await Promise.all([
     getPeople(tenant.tenantKey),
-    getRelationships(tenant.tenantKey),
+    getRelationships(),
     getHouseholds(tenant.tenantKey),
   ]);
+  const peopleInFamily = new Set(people.map((person) => person.personId));
+  const relationships = allRelationships.filter(
+    (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
+  );
 
   return NextResponse.json({
     tenantKey: tenant.tenantKey,

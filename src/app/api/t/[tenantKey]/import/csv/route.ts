@@ -22,8 +22,7 @@ function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
     return {
       tabName: "Households",
       idColumn: "household_id",
-      required: ["household_id"],
-      aliases: { partner1_person_id: "husband_person_id", partner2_person_id: "wife_person_id" } as Record<string, string>,
+      required: ["household_id", "husband_person_id", "wife_person_id"],
     };
   }
   if (target === "person_attributes") {
@@ -76,16 +75,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       return NextResponse.json({ error: "invalid_csv_headers", missing: key }, { status: 400 });
     }
   }
-  if (target.tabName === "Households") {
-    const hasPartner1 = parsedCsv.headers.includes("partner1_person_id") || parsedCsv.headers.includes("husband_person_id");
-    const hasPartner2 = parsedCsv.headers.includes("partner2_person_id") || parsedCsv.headers.includes("wife_person_id");
-    if (!hasPartner1) {
-      return NextResponse.json({ error: "invalid_csv_headers", missing: "partner1_person_id|husband_person_id" }, { status: 400 });
-    }
-    if (!hasPartner2) {
-      return NextResponse.json({ error: "invalid_csv_headers", missing: "partner2_person_id|wife_person_id" }, { status: 400 });
-    }
-  }
 
   let created = 0;
   let updated = 0;
@@ -115,21 +104,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     Object.entries(sourceRow).forEach(([key, value]) => {
       payload[key] = value;
     });
-    if (target.tabName === "Households") {
-      if (!payload.partner1_person_id && payload.husband_person_id) {
-        payload.partner1_person_id = payload.husband_person_id;
-      }
-      if (!payload.partner2_person_id && payload.wife_person_id) {
-        payload.partner2_person_id = payload.wife_person_id;
-      }
-    }
     if (target.tabName === "People" && !payload.person_id) {
       payload.person_id = recordId;
     }
     if (target.tabName === "PersonAttributes" && !payload.attribute_id) {
       payload.attribute_id = recordId;
     }
-    if (target.tabName !== "People" && target.tabName !== "PersonAttributes" && target.tabName !== "ImportantDates") {
+    if (
+      target.tabName !== "People" &&
+      target.tabName !== "PersonAttributes" &&
+      target.tabName !== "ImportantDates" &&
+      target.tabName !== "Relationships"
+    ) {
       payload.tenant_key = normalizedTenantKey;
     }
     if (target.tabName === "PersonAttributes") {
@@ -152,17 +138,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
 
     try {
+      const targetTenantKey = target.tabName === "Relationships" ? undefined : normalizedTenantKey;
       const updatedRow = await updateTableRecordById(
         target.tabName,
         recordId,
         payload,
         target.idColumn,
-        normalizedTenantKey,
+        targetTenantKey,
       );
       if (updatedRow) {
         updated += 1;
       } else {
-        await createTableRecord(target.tabName, payload, normalizedTenantKey);
+        await createTableRecord(target.tabName, payload, targetTenantKey);
         created += 1;
       }
     } catch (error) {

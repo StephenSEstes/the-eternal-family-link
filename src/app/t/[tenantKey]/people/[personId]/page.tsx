@@ -16,10 +16,10 @@ type TenantPersonPageProps = {
 export default async function TenantPersonPage({ params }: TenantPersonPageProps) {
   const { personId } = await params;
   const { session, tenant } = await requireFamilyGroupSession();
-  const [person, people, relationships, households, initialAttributes] = await Promise.all([
+  const [person, people, allRelationships, households, initialAttributes] = await Promise.all([
     getPersonById(personId, tenant.tenantKey),
     getPeople(tenant.tenantKey),
-    getRelationships(tenant.tenantKey),
+    getRelationships(),
     getHouseholds(tenant.tenantKey),
     getPersonAttributes(tenant.tenantKey, personId),
   ]);
@@ -28,6 +28,10 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
     notFound();
   }
 
+  const peopleInFamily = new Set(people.map((item) => item.personId));
+  const relationships = allRelationships.filter(
+    (edge) => peopleInFamily.has(edge.fromPersonId) && peopleInFamily.has(edge.toPersonId),
+  );
   const canEdit = canEditPerson(session, person.personId, tenant);
   const photoAttributes = initialAttributes.filter((item) => item.attributeType === "photo");
   const primaryPhoto = photoAttributes.find((item) => item.isPrimary)?.valueText || photoAttributes[0]?.valueText || "";

@@ -16,8 +16,8 @@ const payloadSchema = z.object({
   spouseId: z.string().trim().optional().default(""),
 });
 
-function makeRelId(tenantKey: string, fromPersonId: string, toPersonId: string, relType: string) {
-  const clean = `${tenantKey}-${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
+function makeRelId(fromPersonId: string, toPersonId: string, relType: string) {
+  const clean = `${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
   return clean.replace(/[^a-z0-9_-]+/g, "-");
 }
 
@@ -33,23 +33,21 @@ function readField(record: Record<string, string>, ...keys: string[]) {
 }
 
 async function upsertRelation(
-  tenantKey: string,
   fromPersonId: string,
   toPersonId: string,
   relType: string,
 ) {
-  const relId = makeRelId(tenantKey, fromPersonId, toPersonId, relType);
+  const relId = makeRelId(fromPersonId, toPersonId, relType);
   const payload: Record<string, string> = {
     rel_id: relId,
     from_person_id: fromPersonId,
     to_person_id: toPersonId,
     rel_type: relType,
-    tenant_key: tenantKey,
   };
 
-  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id", tenantKey);
+  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id");
   if (!updated) {
-    await createTableRecord("Relationships", payload, tenantKey);
+    await createTableRecord("Relationships", payload);
   }
 }
 
@@ -61,11 +59,11 @@ function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
 
 async function upsertFamilyUnit(tenantKey: string, personA: string, personB: string) {
   const familyUnitId = makeFamilyUnitId(tenantKey, personA, personB);
-  const [partner1, partner2] = [personA, personB].sort();
+  const [husband, wife] = [personA, personB].sort();
   const payload: Record<string, string> = {
     household_id: familyUnitId,
-    partner1_person_id: partner1,
-    partner2_person_id: partner2,
+    husband_person_id: husband,
+    wife_person_id: wife,
     tenant_key: tenantKey,
   };
 
@@ -101,13 +99,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
     const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
 
-    const existing = await getTableRecords("Relationships", normalizedTenantKey);
+    const existing = await getTableRecords("Relationships");
     const desiredIds = new Set<string>();
     parentIds.forEach((parentId) =>
-      desiredIds.add(makeRelId(normalizedTenantKey, parentId, parsed.data.personId, "parent")),
+      desiredIds.add(makeRelId(parentId, parsed.data.personId, "parent")),
     );
     childIds.forEach((childId) =>
-      desiredIds.add(makeRelId(normalizedTenantKey, parsed.data.personId, childId, "parent")),
+      desiredIds.add(makeRelId(parsed.data.personId, childId, "parent")),
     );
 
     for (const row of existing) {
@@ -115,8 +113,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       const relType = readField(row.data, "rel_type");
       const fromPersonId = readField(row.data, "from_person_id");
       const toPersonId = readField(row.data, "to_person_id");
-      const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
-      if (rowTenantKey !== normalizedTenantKey || relType.toLowerCase() !== "parent" || !relId) {
+      if (relType.toLowerCase() !== "parent" || !relId) {
         continue;
       }
 
@@ -129,21 +126,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         continue;
       }
 
-      await deleteTableRecordById("Relationships", relId, "rel_id", normalizedTenantKey);
+      await deleteTableRecordById("Relationships", relId, "rel_id");
     }
 
     for (const parentId of parentIds) {
-      await upsertRelation(normalizedTenantKey, parentId, parsed.data.personId, "parent");
+      await upsertRelation(parentId, parsed.data.personId, "parent");
     }
     for (const childId of childIds) {
-      await upsertRelation(normalizedTenantKey, parsed.data.personId, childId, "parent");
+      await upsertRelation(parsed.data.personId, childId, "parent");
     }
 
     const households = await getTableRecords("Households", normalizedTenantKey);
     const spouseConflict = spouseId
       ? households.find((row) => {
-          const partner1 = readField(row.data, "partner1_person_id", "husband_person_id");
-          const partner2 = readField(row.data, "partner2_person_id", "wife_person_id");
+          const partner1 = readField(row.data, "husband_person_id");
+          const partner2 = readField(row.data, "wife_person_id");
           const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
           if (rowTenantKey !== normalizedTenantKey) {
             return false;
@@ -156,8 +153,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       : null;
 
     if (spouseConflict) {
-      const partner1 = readField(spouseConflict.data, "partner1_person_id", "husband_person_id");
-      const partner2 = readField(spouseConflict.data, "partner2_person_id", "wife_person_id");
+      const partner1 = readField(spouseConflict.data, "husband_person_id");
+      const partner2 = readField(spouseConflict.data, "wife_person_id");
       const otherPartner = partner1 === spouseId ? partner2 : partner1;
       return NextResponse.json(
         {
@@ -171,8 +168,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     for (const row of households) {
       const unitId = readField(row.data, "household_id");
-      const partner1 = readField(row.data, "partner1_person_id", "husband_person_id");
-      const partner2 = readField(row.data, "partner2_person_id", "wife_person_id");
+      const partner1 = readField(row.data, "husband_person_id");
+      const partner2 = readField(row.data, "wife_person_id");
       const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
       if (!unitId || rowTenantKey !== normalizedTenantKey) {
         continue;
