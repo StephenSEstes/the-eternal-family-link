@@ -31,3 +31,7 @@
   - Mixed issue
 - Ask for confirmation before code changes when evidence indicates a pure data issue.
 - If uncertain, gather more evidence first; do not guess.
+
+## Google Sheets Access Pre-Check
+- Before any live Google Sheets read/write from scripts or API tooling, confirm the workbook is closed on the user side.
+- If a sheet read fails unexpectedly, include "close the workbook and retry" as an immediate diagnostic step.

@@ -23,8 +23,10 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
-  const accessItems = await getTenantUserAccessList(tenant.tenantKey);
-  const people = await getPeople(tenant.tenantKey);
+  const [accessItems, people] = await Promise.all([
+    getTenantUserAccessList(tenant.tenantKey),
+    getPeople(tenant.tenantKey),
+  ]);
 
   return (
     <>

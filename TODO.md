@@ -25,6 +25,9 @@ I will update this list as we add, complete, or remove work.
 - [ ] Import related contacts when creating/migrating a family group
   Est date: 2026-03-21
   Desc: Add relationship-aware import rules so selected members bring related contacts into the target group automatically; 3rd gen child import includes parents, and 2nd gen import includes spouse plus in-law children.
+- [ ] Review Viewer tile visibility on family home
+  Est date: 2026-03-02
+  Desc: Decide whether to remove the Viewer tile from `/t/[tenantKey]` home or gate it by role/setting so the landing screen stays focused.
 
 ## Backlog
 - [ ] Add test coverage goals by area

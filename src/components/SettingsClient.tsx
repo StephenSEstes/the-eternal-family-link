@@ -206,7 +206,9 @@ export function SettingsClient({
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
   const adminLoadSeq = useRef(0);
+  const adminLoadAbortRef = useRef<AbortController | null>(null);
   const managedPersonSyncRef = useRef("");
+  const [adminLoadStatus, setAdminLoadStatus] = useState("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
   const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string }[]>(people);
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
@@ -228,53 +230,104 @@ export function SettingsClient({
     return `${titleCaseWord(maiden)}${titleCaseWord(partner)} Family`;
   }, [newMatriarchMaidenName, newPatriarchFullName]);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const fetchJsonWithRetry = async (url: string, signal: AbortSignal) => {
+    let lastStatus = 0;
+    let lastBody: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const res = await fetch(url, { signal, cache: "no-store" });
+      const body = await res.json().catch(() => null);
+      if (res.ok) {
+        return { ok: true as const, status: res.status, body };
+      }
+      lastStatus = res.status;
+      lastBody = body;
+      if (!(res.status === 429 || res.status >= 500) || attempt === 1) {
+        break;
+      }
+      await sleep(300 * (attempt + 1));
+    }
+    return { ok: false as const, status: lastStatus, body: lastBody };
+  };
+
   const loadTenantAdminData = async (tenantKeyToLoad: string) => {
     const loadSeq = ++adminLoadSeq.current;
+    adminLoadAbortRef.current?.abort();
+    const controller = new AbortController();
+    adminLoadAbortRef.current = controller;
+    const signal = controller.signal;
+
     const [accessRes, policyRes, usersRes, peopleRes] = await Promise.all([
-      fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/user-access`),
-      fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/security-policy`),
-      fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/local-users`),
-      fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/people`),
+      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/user-access`, signal),
+      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/security-policy`, signal),
+      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/local-users`, signal),
+      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/people`, signal),
     ]);
     if (loadSeq !== adminLoadSeq.current) {
       return;
     }
-    const accessBody = await accessRes.json().catch(() => null);
-    const policyBody = await policyRes.json().catch(() => null);
-    const usersBody = await usersRes.json().catch(() => null);
-    const peopleBody = await peopleRes.json().catch(() => null);
+
+    const failures: string[] = [];
 
     const nextAccessItems: AccessItem[] =
-      accessRes.ok && Array.isArray(accessBody?.items) ? (accessBody.items as AccessItem[]) : [];
-    setVisibleAccessItems(nextAccessItems);
-
-    if (policyRes.ok && policyBody?.policy) {
-      setPolicy({
-        minLength: Number(policyBody.policy.minLength ?? DEFAULT_POLICY.minLength),
-        requireNumber: Boolean(policyBody.policy.requireNumber),
-        requireUppercase: Boolean(policyBody.policy.requireUppercase),
-        requireLowercase: Boolean(policyBody.policy.requireLowercase),
-        lockoutAttempts: Number(policyBody.policy.lockoutAttempts ?? DEFAULT_POLICY.lockoutAttempts),
-      });
+      accessRes.ok && Array.isArray(accessRes.body?.items) ? (accessRes.body.items as AccessItem[]) : [];
+    if (accessRes.ok) {
+      setVisibleAccessItems(nextAccessItems);
     } else {
-      setPolicy(DEFAULT_POLICY);
+      failures.push(`User Access (${accessRes.status || "request failed"})`);
+    }
+
+    if (policyRes.ok && policyRes.body?.policy) {
+      setPolicy({
+        minLength: Number(policyRes.body.policy.minLength ?? DEFAULT_POLICY.minLength),
+        requireNumber: Boolean(policyRes.body.policy.requireNumber),
+        requireUppercase: Boolean(policyRes.body.policy.requireUppercase),
+        requireLowercase: Boolean(policyRes.body.policy.requireLowercase),
+        lockoutAttempts: Number(policyRes.body.policy.lockoutAttempts ?? DEFAULT_POLICY.lockoutAttempts),
+      });
+    } else if (!policyRes.ok) {
+      failures.push(`Password Policy (${policyRes.status || "request failed"})`);
     }
 
     const nextLocalUsers: LocalUserItem[] =
-      usersRes.ok && Array.isArray(usersBody?.users) ? (usersBody.users as LocalUserItem[]) : [];
-    setLocalUsers(nextLocalUsers);
+      usersRes.ok && Array.isArray(usersRes.body?.users) ? (usersRes.body.users as LocalUserItem[]) : [];
+    if (usersRes.ok) {
+      setLocalUsers(nextLocalUsers);
+    } else {
+      failures.push(`Local Users (${usersRes.status || "request failed"})`);
+    }
 
     const nextPeople: { personId: string; displayName: string }[] =
-      peopleRes.ok && Array.isArray(peopleBody?.items)
-        ? peopleBody.items
+      peopleRes.ok && Array.isArray(peopleRes.body?.items)
+        ? peopleRes.body.items
             .filter((item: { personId?: string }) => Boolean(item?.personId))
             .map((item: { personId: string; displayName?: string }) => ({
               personId: item.personId,
               displayName: item.displayName?.trim() || item.personId,
             }))
         : [];
-    setFamilyPeople(nextPeople);
-    setDirectoryPeople(buildDirectoryPeople(nextAccessItems, nextLocalUsers, nextPeople));
+    if (peopleRes.ok) {
+      setFamilyPeople(nextPeople);
+    } else {
+      failures.push(`People (${peopleRes.status || "request failed"})`);
+    }
+
+    if (accessRes.ok || usersRes.ok || peopleRes.ok) {
+      setDirectoryPeople(
+        buildDirectoryPeople(
+          accessRes.ok ? nextAccessItems : visibleAccessItems,
+          usersRes.ok ? nextLocalUsers : localUsers,
+          peopleRes.ok ? nextPeople : familyPeople,
+        ),
+      );
+    }
+
+    if (failures.length > 0) {
+      setAdminLoadStatus(`Load warning: ${failures.join(", ")}. Keeping last successful data.`);
+      return;
+    }
+    setAdminLoadStatus("");
   };
 
   useEffect(() => {
@@ -290,6 +343,7 @@ export function SettingsClient({
     void run();
     return () => {
       cancelled = true;
+      adminLoadAbortRef.current?.abort();
     };
   }, [selectedTenantKey]);
 
@@ -1375,6 +1429,7 @@ export function SettingsClient({
           </>
         ) : null}
         {accessStatus ? <p>{accessStatus}</p> : null}
+        {adminLoadStatus ? <p className="status-warn">{adminLoadStatus}</p> : null}
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
         </section>
