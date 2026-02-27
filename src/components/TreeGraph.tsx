@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FocusPanel } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
 
 type PersonNode = {
   personId: string;
@@ -30,13 +29,12 @@ type HouseholdLink = {
 };
 
 type TreeGraphProps = {
-  tenantKey: string;
   nodes: PersonNode[];
   edges: GraphEdge[];
   households?: HouseholdLink[];
 };
 
-export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGraphProps) {
+export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
   const NODE_CARD_WIDTH = 208;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
   const NODE_HALF_HEIGHT = 30;
@@ -263,17 +261,28 @@ export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGrap
   const [isPanning, setIsPanning] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState("");
 
-  const peopleById = new Map(nodes.map((node) => [node.personId, node]));
+  const toTreeDisplayName = (value: string) => {
+    const parts = value
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (parts.length <= 2) {
+      return value.trim();
+    }
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+  };
+
+  const asTreePerson = (person: PersonNode): PersonNode => ({
+    ...person,
+    displayName: toTreeDisplayName(person.displayName),
+  });
+
+  const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) ?? null : null;
 
   const getAvatarUrl = useCallback(
-    (person: PersonNode) => {
-      if (person.photoFileId?.trim()) {
-        return getPhotoProxyPath(person.photoFileId.trim(), tenantKey);
-      }
-      return person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
-    },
-    [tenantKey],
+    (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
+    [],
   );
 
   const clampScale = useCallback((value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)), []);
@@ -539,7 +548,7 @@ export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGrap
           >
             <PersonNodeCard
               personId={node.personId}
-              displayName={node.displayName}
+              displayName={toTreeDisplayName(node.displayName)}
               secondaryText={secondaryText}
               avatarUrl={getAvatarUrl(node)}
               selected={isSelected}

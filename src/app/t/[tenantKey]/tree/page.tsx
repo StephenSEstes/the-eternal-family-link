@@ -41,7 +41,6 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
           <h2 style={{ marginTop: 0 }}>Interactive Family Graph</h2>
           {people.length > 0 ? (
             <TreeGraph
-              tenantKey={tenant.tenantKey}
               nodes={people.map((person) => ({
                 personId: person.personId,
                 displayName: person.displayName,
