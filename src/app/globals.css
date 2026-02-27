@@ -570,11 +570,24 @@ main {
   width: 100%;
   max-width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 320px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+  min-height: 360px;
+  border: 1px solid color-mix(in oklab, var(--line) 85%, #fff 15%);
+  border-radius: 16px;
+  background-image: url('/brand/clouds-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   overflow: hidden;
+  box-shadow: 0 18px 42px color-mix(in oklab, #184f69 10%, transparent 90%);
+}
+
+.tree-cloud-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: color-mix(in oklab, #ffffff 72%, transparent 28%);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
 }
 
 .tree-map {
@@ -592,6 +605,7 @@ main {
   left: 0;
   transform-origin: top left;
   will-change: transform;
+  z-index: 1;
 }
 
 .tree-lines {
@@ -604,6 +618,7 @@ main {
 .tree-line {
   stroke: color-mix(in oklab, var(--accent) 65%, #fff 35%);
   stroke-width: 2;
+  transition: opacity 160ms ease;
 }
 
 .tree-spouse-cluster {
@@ -616,40 +631,285 @@ main {
   font-size: 11px;
   fill: var(--text-muted);
   text-anchor: middle;
+  transition: opacity 160ms ease;
 }
 
 .tree-family-label {
   font-size: 11px;
   fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
   text-anchor: middle;
+  transition: opacity 160ms ease;
 }
 
-.tree-node {
+.tree-dimmed {
+  opacity: 0.3;
+}
+
+.tree-node-card-wrap {
   position: absolute;
   transform: translate(-50%, -50%);
-  min-width: 92px;
-  max-width: 130px;
-  border: 2px solid var(--line);
+}
+
+.tree-person-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 176px;
+  max-width: 230px;
+  border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
+  border-radius: 16px;
+  background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
+  box-shadow: 0 8px 18px color-mix(in oklab, #124564 12%, transparent 88%);
+  padding: 0.46rem 0.56rem;
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
+  cursor: pointer;
+}
+
+.tree-person-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 24px color-mix(in oklab, #0e4664 17%, transparent 83%);
+}
+
+.tree-person-card.is-selected {
+  border: 2px solid color-mix(in oklab, var(--accent) 78%, #ffffff 22%);
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent 78%),
+    0 18px 30px color-mix(in oklab, #0e5a7f 20%, transparent 80%);
+}
+
+.tree-person-card.is-dimmed {
+  opacity: 0.33;
+}
+
+.tree-person-avatar {
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
-  background: #fff;
-  text-align: center;
-  font-size: 0.82rem;
+  object-fit: cover;
+  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  background: #f3f8fc;
+}
+
+.tree-person-meta {
+  min-width: 0;
+  display: grid;
+}
+
+.tree-person-name {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-person-secondary {
+  display: block;
+  font-size: 0.73rem;
   line-height: 1.15;
-  padding: 0.45rem 0.55rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tree-map-controls {
+.tree-person-actions {
+  display: grid;
+  gap: 0.18rem;
+  align-content: center;
+  justify-items: center;
+}
+
+.tree-person-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+}
+
+.tree-control-cluster {
   position: absolute;
-  right: 0.6rem;
-  bottom: 0.6rem;
+  right: 0.85rem;
+  bottom: 0.85rem;
   display: flex;
-  gap: 0.45rem;
-  z-index: 2;
+  gap: 0.5rem;
+  z-index: 5;
 }
 
-.tree-map-controls .button {
-  font-size: 0.78rem;
-  padding: 0.38rem 0.55rem;
+.tree-control-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  background: color-mix(in oklab, #ffffff 94%, #ddf3ff 6%);
+  color: color-mix(in oklab, var(--text) 84%, var(--accent) 16%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px color-mix(in oklab, #154864 12%, transparent 88%);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.tree-control-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px color-mix(in oklab, #154864 18%, transparent 82%);
+  background: #ffffff;
+}
+
+.tree-control-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree-focus-panel {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  width: min(410px, 40vw);
+  background: color-mix(in oklab, #ffffff 89%, #ecf8ff 11%);
+  border: 1px solid color-mix(in oklab, var(--line) 80%, #fff 20%);
+  border-radius: 16px;
+  box-shadow: 0 16px 34px color-mix(in oklab, #124866 18%, transparent 82%);
+  backdrop-filter: blur(6px);
+  z-index: 6;
+  padding: 0.9rem;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0.7rem;
+}
+
+.tree-focus-close {
+  position: absolute;
+  top: 0.58rem;
+  right: 0.6rem;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  background: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.tree-focus-header {
+  text-align: center;
+  padding-top: 0.2rem;
+}
+
+.tree-focus-avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid color-mix(in oklab, var(--accent) 28%, #fff 72%);
+  margin: 0 auto 0.4rem;
+}
+
+.tree-focus-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tree-focus-header p {
+  margin: 0.22rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.tree-focus-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.tree-focus-tab {
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  background: #fff;
+  color: var(--text);
+  font-size: 0.81rem;
+  font-weight: 700;
+  padding: 0.43rem 0.48rem;
+}
+
+.tree-focus-tab.is-active {
+  background: color-mix(in oklab, var(--accent) 82%, #fff 18%);
+  color: #fff;
+  border-color: transparent;
+}
+
+.tree-focus-list {
+  overflow: auto;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.tree-focus-empty {
+  color: var(--text-muted);
+  margin: 0.2rem 0;
+}
+
+.tree-focus-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+}
+
+.tree-focus-item img {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.tree-focus-item span {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .tree-focus-panel {
+    top: auto;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: auto;
+    max-height: 58%;
+    border-radius: 14px;
+    animation: treeSheetUp 180ms ease;
+  }
+}
+
+@keyframes treeSheetUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .games-stack {

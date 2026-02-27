@@ -1,11 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FocusPanel } from "@/components/familyTree/FocusPanel";
+import { GraphControls } from "@/components/familyTree/GraphControls";
+import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
+import { getPhotoProxyPath } from "@/lib/google/photo-path";
 
 type PersonNode = {
   personId: string;
   displayName: string;
+  gender?: "male" | "female" | "unspecified";
+  photoFileId?: string;
+  birthDate?: string;
 };
 
 type GraphEdge = {
@@ -24,13 +30,13 @@ type HouseholdLink = {
 };
 
 type TreeGraphProps = {
-  basePath: string;
+  tenantKey: string;
   nodes: PersonNode[];
   edges: GraphEdge[];
   households?: HouseholdLink[];
 };
 
-export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraphProps) {
+export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGraphProps) {
   const NODE_HALF_WIDTH = 72;
   const NODE_HALF_HEIGHT = 24;
   const MIN_SCALE = 0.35;
@@ -227,6 +233,20 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+
+  const peopleById = new Map(nodes.map((node) => [node.personId, node]));
+  const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) ?? null : null;
+
+  const getAvatarUrl = useCallback(
+    (person: PersonNode) => {
+      if (person.photoFileId?.trim()) {
+        return getPhotoProxyPath(person.photoFileId.trim(), tenantKey);
+      }
+      return person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
+    },
+    [tenantKey],
+  );
 
   const clampScale = useCallback((value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)), []);
 
@@ -284,10 +304,34 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
     [zoomAtPoint],
   );
 
+  const selectedParents = selectedPerson
+    ? Array.from(parentIdsByChild.get(selectedPerson.personId) ?? [])
+        .map((id) => peopleById.get(id))
+        .filter((item): item is PersonNode => Boolean(item))
+    : [];
+
+  const selectedSpouses = selectedPerson
+    ? (() => {
+        const partner = partnerMap.get(selectedPerson.personId);
+        if (!partner) {
+          return [];
+        }
+        const person = peopleById.get(partner);
+        return person ? [person] : [];
+      })()
+    : [];
+
+  const selectedChildren = selectedPerson
+    ? Array.from(childIdsByParent.get(selectedPerson.personId) ?? [])
+        .map((id) => peopleById.get(id))
+        .filter((item): item is PersonNode => Boolean(item))
+    : [];
+
   return (
     <div
       ref={viewportRef}
       className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}`}
+      onClick={() => setSelectedPersonId("")}
       onWheel={(event) => {
         event.preventDefault();
         const factor = event.deltaY < 0 ? 1.1 : 0.9;
@@ -336,6 +380,7 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
         setIsPanning(false);
       }}
     >
+      <div className="tree-cloud-overlay" />
       <div
         className="tree-map-layer"
         style={{
@@ -368,9 +413,14 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
           const halfWidth = Math.max(90, distance / 2 + NODE_HALF_WIDTH + 14);
           const halfHeight = NODE_HALF_HEIGHT + 16;
 
+          const dimmed =
+            Boolean(selectedPersonId) &&
+            selectedPersonId !== leftId &&
+            selectedPersonId !== rightId;
+
           return (
             <g key={`cluster-${pairKey}`}>
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`tree-line ${dimmed ? "tree-dimmed" : ""}`} />
               <rect
                 x={midX - halfWidth}
                 y={midY - halfHeight}
@@ -378,7 +428,7 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
                 height={halfHeight * 2}
                 rx={22}
                 ry={22}
-                className="tree-spouse-cluster"
+                className={`tree-spouse-cluster ${dimmed ? "tree-dimmed" : ""}`}
               />
               {label ? (
                 <text x={midX} y={midY + 4} className="tree-family-label">
@@ -401,11 +451,15 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
           const midY = (from.y + to.y) / 2;
           const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
           const isParentEdge = edge.label.trim().toLowerCase() === "parent";
+          const dimmed =
+            Boolean(selectedPersonId) &&
+            edge.fromPersonId !== selectedPersonId &&
+            edge.toPersonId !== selectedPersonId;
           return (
             <g key={edge.id}>
-              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
+              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className={`tree-line ${dimmed ? "tree-dimmed" : ""}`} />
               {!isFamilyEdge && !isParentEdge ? (
-                <text x={midX} y={midY} className="tree-line-label">
+                <text x={midX} y={midY} className={`tree-line-label ${dimmed ? "tree-dimmed" : ""}`}>
                   {edge.label}
                 </text>
               ) : null}
@@ -427,6 +481,7 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
           const midY = (a.y + b.y) / 2;
           const startY = midY + NODE_HALF_HEIGHT + 16;
           const endY = child.y - NODE_HALF_HEIGHT;
+          const dimmed = Boolean(selectedPersonId) && connector.childId !== selectedPersonId && pair.leftId !== selectedPersonId && pair.rightId !== selectedPersonId;
           return (
             <line
               key={`family-child-${connector.pairKey}-${connector.childId}`}
@@ -434,7 +489,7 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
               y1={startY}
               x2={child.x}
               y2={endY}
-              className="tree-line"
+              className={`tree-line ${dimmed ? "tree-dimmed" : ""}`}
             />
           );
         })}
@@ -445,29 +500,40 @@ export function TreeGraph({ basePath, nodes, edges, households = [] }: TreeGraph
         if (!pos) {
           return null;
         }
+        const isSelected = selectedPersonId === node.personId;
+        const isDimmed = Boolean(selectedPersonId) && !isSelected;
+        const secondaryText = node.birthDate?.trim() ? `Born ${node.birthDate.trim()}` : "";
         return (
-          <Link
+          <div
             key={node.personId}
-            href={`${basePath}/people/${encodeURIComponent(node.personId)}`}
-            className="tree-node"
+            className="tree-node-card-wrap"
             style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
           >
-            {node.displayName}
-          </Link>
+            <PersonNodeCard
+              personId={node.personId}
+              displayName={node.displayName}
+              secondaryText={secondaryText}
+              avatarUrl={getAvatarUrl(node)}
+              selected={isSelected}
+              dimmed={isDimmed}
+              onSelect={setSelectedPersonId}
+            />
+          </div>
         );
       })}
       </div>
-      <div className="tree-map-controls">
-        <button type="button" className="button secondary tap-button" onClick={() => zoomFromCenter(1.15)}>
-          Zoom In
-        </button>
-        <button type="button" className="button secondary tap-button" onClick={() => zoomFromCenter(0.87)}>
-          Zoom Out
-        </button>
-        <button type="button" className="button secondary tap-button" onClick={fitToView}>
-          Reset View
-        </button>
-      </div>
+      <GraphControls onZoomIn={() => zoomFromCenter(1.15)} onZoomOut={() => zoomFromCenter(0.87)} onFit={fitToView} />
+      {selectedPerson ? (
+        <FocusPanel
+          selectedPerson={selectedPerson}
+          parents={selectedParents}
+          spouses={selectedSpouses}
+          children={selectedChildren}
+          getAvatarUrl={getAvatarUrl}
+          onSelectPerson={setSelectedPersonId}
+          onClose={() => setSelectedPersonId("")}
+        />
+      ) : null}
     </div>
   );
 }

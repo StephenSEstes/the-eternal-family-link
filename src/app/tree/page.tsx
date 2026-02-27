@@ -3,11 +3,9 @@ import { TreeGraph } from "@/components/TreeGraph";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/google/sheets";
-import { getTenantBasePath } from "@/lib/family-group/context";
 
 export default async function TreePage() {
   const { tenant } = await requireFamilyGroupSession();
-  const basePath = getTenantBasePath(tenant.tenantKey);
   const people = await getPeople(tenant.tenantKey);
   const relationships = await getRelationships(tenant.tenantKey);
   const households = await getHouseholds(tenant.tenantKey);
@@ -38,8 +36,14 @@ export default async function TreePage() {
           <h2 style={{ marginTop: 0 }}>Interactive Family Graph</h2>
           {people.length > 0 ? (
             <TreeGraph
-              basePath={basePath}
-              nodes={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
+              tenantKey={tenant.tenantKey}
+              nodes={people.map((person) => ({
+                personId: person.personId,
+                displayName: person.displayName,
+                gender: person.gender,
+                photoFileId: person.photoFileId,
+                birthDate: person.birthDate,
+              }))}
               edges={edges}
               households={households.map((unit) => ({
                 id: unit.id,
