@@ -1,4 +1,4 @@
-"use client";
+ï»¿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -56,7 +56,7 @@ export function FocusPanel({
   return (
     <aside className="tree-focus-panel" onPointerDown={(event) => event.stopPropagation()}>
       <button type="button" className="tree-focus-close" onClick={onClose} aria-label="Close focus mode">
-        ×
+        X
       </button>
 
       <div className="tree-focus-header">
