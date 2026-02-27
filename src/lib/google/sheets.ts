@@ -48,15 +48,6 @@ export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
 const FAMILY_CONFIG_TAB = "FamilyConfig";
 const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
 const FAMILY_SECURITY_POLICY_TAB = "FamilySecurityPolicy";
-const TENANT_TAB_DELIMITER = "__";
-const GLOBAL_SHARED_TABS = new Set<string>([
-  USER_ACCESS_TAB.toLowerCase(),
-  USER_FAMILY_GROUPS_TAB.toLowerCase(),
-  PERSON_FAMILY_GROUPS_TAB.toLowerCase(),
-  PEOPLE_TAB.toLowerCase(),
-  IMPORTANT_DATES_TAB.toLowerCase(),
-  PERSON_ATTRIBUTES_TAB.toLowerCase(),
-]);
 const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   People: [
     "person_id",
@@ -215,24 +206,16 @@ function normalizeTenantKey(tenantKey?: string) {
   return clean || DEFAULT_TENANT_KEY;
 }
 
-function buildTenantTabCandidates(tabName: string, tenantKey?: string) {
-  const cleanKey = normalizeTenantKey(tenantKey);
-  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
-    return [tabName];
-  }
-  if (cleanKey === DEFAULT_TENANT_KEY) {
-    return [tabName];
-  }
-
-  return [`${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`, tabName];
+function buildTenantTabCandidates(tabName: string) {
+  return [tabName];
 }
 
-function buildMultiTenantTabCandidates(tabNames: string | string[], tenantKey?: string) {
+function buildMultiTenantTabCandidates(tabNames: string | string[]) {
   const names = Array.isArray(tabNames) ? tabNames : [tabNames];
   const out: string[] = [];
   const seen = new Set<string>();
   for (const name of names) {
-    for (const candidate of buildTenantTabCandidates(name, tenantKey)) {
+    for (const candidate of buildTenantTabCandidates(name)) {
       const normalized = candidate.trim().toLowerCase();
       if (!seen.has(normalized)) {
         seen.add(normalized);
@@ -244,14 +227,8 @@ function buildMultiTenantTabCandidates(tabNames: string | string[], tenantKey?: 
 }
 
 function buildTenantScopedTabName(tabName: string, tenantKey?: string) {
-  if (GLOBAL_SHARED_TABS.has(tabName.trim().toLowerCase())) {
-    return tabName;
-  }
-  const cleanKey = normalizeTenantKey(tenantKey);
-  if (cleanKey === DEFAULT_TENANT_KEY) {
-    return tabName;
-  }
-  return `${cleanKey}${TENANT_TAB_DELIMITER}${tabName}`;
+  void tenantKey;
+  return tabName;
 }
 
 function defaultTenantConfig(tenantKey?: string): TenantConfig {
@@ -458,6 +435,7 @@ async function resolveTenantTabNameWithClient(
   tenantKey?: string,
   timeoutMs = 3500,
 ): Promise<string | null> {
+  void tenantKey;
   const env = getEnv();
   const result = await withAbortTimeout(timeoutMs, (signal) =>
     sheets.spreadsheets.get(
@@ -475,7 +453,7 @@ async function resolveTenantTabNameWithClient(
       .map((title) => title.trim())
       .filter(Boolean) ?? [];
   const index = new Map(tabs.map((tab) => [tab.trim().toLowerCase(), tab]));
-  const candidates = buildMultiTenantTabCandidates(tabName, tenantKey);
+  const candidates = buildMultiTenantTabCandidates(tabName);
 
   for (const candidate of candidates) {
     const match = index.get(candidate.trim().toLowerCase());

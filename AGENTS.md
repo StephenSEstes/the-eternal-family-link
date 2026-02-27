@@ -40,3 +40,9 @@
 ## Testing and Deployment Policy
 - Do not rely on local app testing as a release gate.
 - Use lint/type/build checks and deployed-environment validation as the primary verification path.
+
+## Documentation Discipline
+- For any code/data/schema change that is committed, update docs in the same commit:
+  - `docs/design-decisions.md` when a design or architecture choice changed.
+  - `docs/change-summary.md` with a concise release entry (what changed, why, verify).
+- If no design decision changed, explicitly note "No design decision change" in the change summary entry.
