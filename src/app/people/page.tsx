@@ -1,8 +1,7 @@
-import Link from "next/link";
-import { AddPersonCard } from "@/components/AddPersonCard";
 import { AppHeader } from "@/components/AppHeader";
+import { PeopleDirectory } from "@/components/PeopleDirectory";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getTenantBasePath } from "@/lib/family-group/context";
 import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
 
 export default async function PeoplePage() {
@@ -18,31 +17,23 @@ export default async function PeoplePage() {
       }
       return acc;
     }, {});
+  const basePath = getTenantBasePath(tenant.tenantKey);
 
   return (
     <>
       <AppHeader />
-      <main className="section">
-        <h1 className="page-title">People</h1>
-        <p className="page-subtitle">Family members and key details.</p>
-        <AddPersonCard tenantKey={tenant.tenantKey} canManage={tenant.role === "ADMIN"} />
-
-        <section className="people-grid">
-          {people.map((person) => (
-            <Link key={person.personId} href={`/people/${person.personId}`} className="person-card">
-              <img
-                src={
-                  photoByPersonId[person.personId] || person.photoFileId
-                    ? getPhotoProxyPath(photoByPersonId[person.personId] || person.photoFileId)
-                    : "/globe.svg"
-                }
-                alt={person.displayName}
-              />
-              <h3>{person.displayName}</h3>
-            </Link>
-          ))}
-        </section>
-      </main>
+      <PeopleDirectory
+        tenantKey={tenant.tenantKey}
+        basePath={basePath}
+        canManage={tenant.role === "ADMIN"}
+        people={people.map((person) => ({
+          personId: person.personId,
+          displayName: person.displayName,
+          birthDate: person.birthDate,
+          photoFileId: person.photoFileId,
+        }))}
+        photoByPersonId={photoByPersonId}
+      />
     </>
   );
 }

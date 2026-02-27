@@ -6,9 +6,18 @@ import { useRouter } from "next/navigation";
 type AddPersonCardProps = {
   tenantKey: string;
   canManage: boolean;
+  compact?: boolean;
 };
 
-export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPersonCardProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -50,12 +59,15 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
   };
 
   return (
-    <section className="card">
-      <button type="button" className="button tap-button" onClick={() => setOpen((value) => !value)}>
-        {open ? "Close Add Person" : "Add Person"}
+    <section className={compact ? "add-person-inline" : "card"}>
+      <button type="button" className={compact ? "button button-primary add-person-trigger" : "button tap-button"} onClick={() => setOpen((value) => !value)}>
+        <span className="button-icon">
+          <PlusIcon />
+        </span>
+        <span>{open ? "Close Add Person" : "Add Person"}</span>
       </button>
       {open ? (
-        <div style={{ marginTop: "0.75rem" }}>
+        <div className={compact ? "add-person-popover" : ""} style={compact ? undefined : { marginTop: "0.75rem" }}>
           <label className="label">Full Name</label>
           <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="label">Birthday (YYYY-MM-DD)</label>
@@ -63,7 +75,7 @@ export function AddPersonCard({ tenantKey, canManage }: AddPersonCardProps) {
           <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
             Add details like phone, address, hobbies, and notes later as attributes.
           </p>
-          <button type="button" className="button tap-button" onClick={submit} disabled={isSaving}>
+          <button type="button" className="button tap-button button-primary" onClick={submit} disabled={isSaving}>
             {isSaving ? "Saving..." : "Create Person"}
           </button>
         </div>

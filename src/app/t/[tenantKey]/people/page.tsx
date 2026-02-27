@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { AddPersonCard } from "@/components/AddPersonCard";
 import { AppHeader } from "@/components/AppHeader";
+import { PeopleDirectory } from "@/components/PeopleDirectory";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
 import { getTenantBasePath } from "@/lib/family-group/context";
 
@@ -29,27 +27,18 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
   return (
     <>
       <AppHeader />
-      <main className="section">
-        <h1 className="page-title">People</h1>
-        <p className="page-subtitle">Family members and key details.</p>
-        <AddPersonCard tenantKey={tenant.tenantKey} canManage={tenant.role === "ADMIN"} />
-
-        <section className="people-grid">
-          {people.map((person) => (
-            <Link key={person.personId} href={`${basePath}/people/${person.personId}`} className="person-card">
-              <img
-                src={
-                  photoByPersonId[person.personId] || person.photoFileId
-                    ? getPhotoProxyPath(photoByPersonId[person.personId] || person.photoFileId, tenant.tenantKey)
-                    : "/globe.svg"
-                }
-                alt={person.displayName}
-              />
-              <h3>{person.displayName}</h3>
-            </Link>
-          ))}
-        </section>
-      </main>
+      <PeopleDirectory
+        tenantKey={tenant.tenantKey}
+        basePath={basePath}
+        canManage={tenant.role === "ADMIN"}
+        people={people.map((person) => ({
+          personId: person.personId,
+          displayName: person.displayName,
+          birthDate: person.birthDate,
+          photoFileId: person.photoFileId,
+        }))}
+        photoByPersonId={photoByPersonId}
+      />
     </>
   );
 }
