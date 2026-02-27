@@ -22,6 +22,12 @@ function parseBool(value: string) {
   return out === "true" || out === "yes" || out === "1";
 }
 
+function isEnabledLike(value: string | undefined) {
+  const out = (value ?? "").trim().toLowerCase();
+  if (!out) return true;
+  return out === "true" || out === "yes" || out === "1";
+}
+
 function normalize(value: string) {
   return value.trim().toLowerCase();
 }
@@ -128,11 +134,14 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
 
 async function runIntegrityAudit(tenantKey: string) {
   const familyGroupKey = normalize(tenantKey);
-  const [people, peopleRowsGlobal, userAccessRows, userGroupRows, legacyLocalRows, tabs] = await Promise.all([
+  const [people, peopleRowsGlobal, personFamilyRows, userAccessRows, userGroupRows, householdsRows, familyConfigRows, legacyLocalRows, tabs] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
     getTableRecords("People").catch(() => []),
+    getTableRecords("PersonFamilyGroups").catch(() => []),
     getTableRecords("UserAccess").catch(() => []),
     getTableRecords("UserFamilyGroups").catch(() => []),
+    getTableRecords("Households").catch(() => []),
+    getTableRecords(["FamilyConfig", "TenantConfig"]).catch(() => []),
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
     listTabs().catch(() => []),
   ]);
@@ -251,6 +260,73 @@ async function runIntegrityAudit(tenantKey: string) {
     "people_missing_userfamilygroups_link",
     "People with UserAccess rows but no UserFamilyGroups link for this family group.",
     peopleMissingLinks,
+  );
+
+  const enabledPersonFamilyByPerson = new Map<string, number>();
+  for (const row of personFamilyRows) {
+    const personId = normalize(readField(row.data, "person_id"));
+    if (!personId || !isEnabledLike(readField(row.data, "is_enabled"))) {
+      continue;
+    }
+    enabledPersonFamilyByPerson.set(personId, (enabledPersonFamilyByPerson.get(personId) ?? 0) + 1);
+  }
+  const orphanPeopleNoFamily = Array.from(allPeopleIds).filter(
+    (personId) => (enabledPersonFamilyByPerson.get(personId) ?? 0) === 0,
+  );
+  pushFinding(
+    findings,
+    "warn",
+    "orphan_people_no_family_groups",
+    "People rows with no enabled PersonFamilyGroups association.",
+    orphanPeopleNoFamily,
+  );
+
+  const validFamilyGroupKeys = new Set(
+    familyConfigRows
+      .map((row) => normalize(readField(row.data, "family_group_key")))
+      .filter(Boolean),
+  );
+  const orphanHouseholdsNoFamily = householdsRows
+    .map((row) => ({
+      householdId: readField(row.data, "household_id"),
+      familyGroupKey: normalize(readField(row.data, "family_group_key")),
+    }))
+    .filter((row) => row.householdId)
+    .filter((row) => !row.familyGroupKey || !validFamilyGroupKeys.has(row.familyGroupKey))
+    .map((row) => row.householdId);
+  pushFinding(
+    findings,
+    "warn",
+    "orphan_households_no_family_groups",
+    "Households rows with no valid family_group_key association.",
+    Array.from(new Set(orphanHouseholdsNoFamily)),
+  );
+
+  const enabledUserFamilyByPerson = new Map<string, number>();
+  for (const row of userGroupRows) {
+    const personId = normalize(readField(row.data, "person_id"));
+    if (!personId || !isEnabledLike(readField(row.data, "is_enabled"))) {
+      continue;
+    }
+    enabledUserFamilyByPerson.set(personId, (enabledUserFamilyByPerson.get(personId) ?? 0) + 1);
+  }
+  const orphanUsersNoFamily = userAccessRows
+    .map((row) => ({
+      personId: normalize(readField(row.data, "person_id")),
+      userEmail: normalize(readField(row.data, "user_email")),
+      localAccess: parseBool(readField(row.data, "local_access")),
+      googleAccess: parseBool(readField(row.data, "google_access")),
+      isEnabled: isEnabledLike(readField(row.data, "is_enabled")),
+    }))
+    .filter((row) => row.personId && row.isEnabled && (row.localAccess || row.googleAccess))
+    .filter((row) => (enabledUserFamilyByPerson.get(row.personId) ?? 0) === 0)
+    .map((row) => row.userEmail || row.personId);
+  pushFinding(
+    findings,
+    "warn",
+    "orphan_users_no_family_groups",
+    "UserAccess login users with no enabled family-group association.",
+    Array.from(new Set(orphanUsersNoFamily)),
   );
 
   if (legacyLocalRows.length > 0) {

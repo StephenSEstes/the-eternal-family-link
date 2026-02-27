@@ -46,3 +46,9 @@
   - `docs/design-decisions.md` when a design or architecture choice changed.
   - `docs/change-summary.md` with a concise release entry (what changed, why, verify).
 - If no design decision changed, explicitly note "No design decision change" in the change summary entry.
+
+## Session Startup Behavior
+- At the start of each new repo session, read `TODO.md` and `docs/design-decisions.md`.
+- List current `Priority: High` items first.
+- Prompt the user: "Do you want to work on one of these now?"
+- If the user chooses one, prioritize that task before lower-priority work unless the user explicitly changes scope.

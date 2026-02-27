@@ -57,6 +57,23 @@ type IntegrityReport = {
   findings: IntegrityFinding[];
 };
 
+type DeleteFamilyPreview = {
+  familyGroupKey: string;
+  orphanPeople: { personId: string; displayName: string }[];
+  orphanHouseholds: { householdId: string; husbandPersonId: string; wifePersonId: string }[];
+  familyAttributesToDelete: { source: string; rowNumber: number; data: Record<string, string> }[];
+  usersToDisable: { personId: string; userEmail: string; username: string; reason: string }[];
+  counts: {
+    personFamilyRowsToDelete: number;
+    userFamilyRowsToDelete: number;
+    familyConfigRowsToDelete: number;
+    familyPolicyRowsToDelete: number;
+    orphanPeople: number;
+    orphanHouseholds: number;
+    usersToDisable: number;
+  };
+};
+
 type SettingsClientProps = {
   tenantKey: string;
   tenantName: string;
@@ -187,6 +204,12 @@ export function SettingsClient({
   const [importMemberPersonIds, setImportMemberPersonIds] = useState<string[]>([]);
   const [importMembersStatus, setImportMembersStatus] = useState("");
   const [newTenantStatus, setNewTenantStatus] = useState("");
+  const [showDeleteFamilyModal, setShowDeleteFamilyModal] = useState(false);
+  const [deleteFamilyKey, setDeleteFamilyKey] = useState("");
+  const [deleteFamilyStatus, setDeleteFamilyStatus] = useState("");
+  const [deleteFamilyBusy, setDeleteFamilyBusy] = useState(false);
+  const [disableOrphanedUsers, setDisableOrphanedUsers] = useState(true);
+  const [deleteFamilyPreview, setDeleteFamilyPreview] = useState<DeleteFamilyPreview | null>(null);
   const [policy, setPolicy] = useState<SecurityPolicy>(DEFAULT_POLICY);
   const [policyStatus, setPolicyStatus] = useState("");
   const [localUsers, setLocalUsers] = useState<LocalUserItem[]>([]);
@@ -640,6 +663,74 @@ export function SettingsClient({
     await runIntegrityCheck();
   };
 
+  const openDeleteFamilyModal = () => {
+    setDeleteFamilyKey(selectedTenantKey);
+    setDeleteFamilyPreview(null);
+    setDisableOrphanedUsers(true);
+    setDeleteFamilyStatus("");
+    setShowDeleteFamilyModal(true);
+  };
+
+  const loadDeleteFamilyPreview = async (familyKey: string) => {
+    if (!familyKey.trim()) {
+      setDeleteFamilyStatus("Select a family group first.");
+      setDeleteFamilyPreview(null);
+      return;
+    }
+    setDeleteFamilyBusy(true);
+    setDeleteFamilyStatus("Loading delete preview...");
+    const res = await fetch(`/api/family-groups/delete?familyGroupKey=${encodeURIComponent(familyKey)}`);
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.preview) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeleteFamilyStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeleteFamilyPreview(null);
+      setDeleteFamilyBusy(false);
+      return;
+    }
+    setDeleteFamilyPreview(body.preview as DeleteFamilyPreview);
+    setDeleteFamilyStatus("Preview loaded.");
+    setDeleteFamilyBusy(false);
+  };
+
+  const executeDeleteFamily = async () => {
+    if (!deleteFamilyKey.trim()) {
+      setDeleteFamilyStatus("Select a family group first.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Delete this family group? People and households will NOT be deleted. Family links/config will be removed.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeleteFamilyBusy(true);
+    setDeleteFamilyStatus("Deleting family group...");
+    const res = await fetch("/api/family-groups/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        familyGroupKey: deleteFamilyKey,
+        disableOrphanedUsers,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeleteFamilyStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeleteFamilyBusy(false);
+      return;
+    }
+    const deleted = body?.deleted ?? {};
+    setDeleteFamilyStatus(
+      `Deleted links/config. PersonFamilyGroups: ${Number(deleted.deletedPersonFamilyRows ?? 0)}, UserFamilyGroups: ${Number(deleted.deletedUserFamilyRows ?? 0)}, FamilyConfig: ${Number(deleted.deletedFamilyConfigRows ?? 0)}, FamilyPolicy: ${Number(deleted.deletedFamilyPolicyRows ?? 0)}, Disabled users: ${Number(deleted.disabledUsers ?? 0)}.`,
+    );
+    setDeleteFamilyBusy(false);
+    await loadTenantAdminData(selectedTenantKey);
+    await runIntegrityCheck();
+    router.refresh();
+  };
+
   useEffect(() => {
     if (localUsers.length === 0 && selectedLocalUsername) {
       setSelectedLocalUsername("");
@@ -887,6 +978,13 @@ export function SettingsClient({
             onClick={() => setFamilyGroupsSubTab("create_group")}
           >
             Create Group
+          </button>
+          <button
+            type="button"
+            className="button secondary tap-button"
+            onClick={openDeleteFamilyModal}
+          >
+            Delete Family Group
           </button>
         </div>
         {familyGroupsSubTab === "overview" ? (
@@ -1527,6 +1625,153 @@ export function SettingsClient({
         ) : null}
         {importStatus ? <p>{importStatus}</p> : null}
         </section>
+      ) : null}
+
+      {showDeleteFamilyModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            zIndex: 60,
+          }}
+        >
+          <section className="card" style={{ width: "min(960px, 100%)", maxHeight: "85vh", overflow: "auto" }}>
+            <h3 style={{ marginTop: 0 }}>Delete Family Group</h3>
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              This removes family-group links/config only. People and households are NOT deleted.
+            </p>
+            <label className="label">Family Group</label>
+            <select className="input" value={deleteFamilyKey} onChange={(e) => setDeleteFamilyKey(e.target.value)}>
+              <option value="">Select family group</option>
+              {tenantOptions.map((option) => (
+                <option key={`delete-family-${option.tenantKey}`} value={option.tenantKey}>
+                  {option.tenantName} ({option.role})
+                </option>
+              ))}
+            </select>
+            <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={() => loadDeleteFamilyPreview(deleteFamilyKey)}
+                disabled={deleteFamilyBusy}
+              >
+                Preview Deletion Impact
+              </button>
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={executeDeleteFamily}
+                disabled={deleteFamilyBusy || !deleteFamilyPreview}
+              >
+                Confirm Delete Family Group
+              </button>
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={() => setShowDeleteFamilyModal(false)}
+                disabled={deleteFamilyBusy}
+              >
+                Close
+              </button>
+            </div>
+            <label className="label" style={{ marginTop: "0.75rem" }}>
+              <input
+                type="checkbox"
+                checked={disableOrphanedUsers}
+                onChange={(e) => setDisableOrphanedUsers(e.target.checked)}
+              />{" "}
+              Disable users with logins who would have no access to any remaining family group (default: yes)
+            </label>
+
+            {deleteFamilyPreview ? (
+              <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                <table className="settings-table">
+                  <thead>
+                    <tr><th>Impact</th><th>Count</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>PersonFamilyGroups rows to delete</td><td>{deleteFamilyPreview.counts.personFamilyRowsToDelete}</td></tr>
+                    <tr><td>UserFamilyGroups rows to delete</td><td>{deleteFamilyPreview.counts.userFamilyRowsToDelete}</td></tr>
+                    <tr><td>Family config/policy rows to delete</td><td>{deleteFamilyPreview.counts.familyConfigRowsToDelete + deleteFamilyPreview.counts.familyPolicyRowsToDelete}</td></tr>
+                    <tr><td>People that would become orphaned (no family groups)</td><td>{deleteFamilyPreview.counts.orphanPeople}</td></tr>
+                    <tr><td>Households that would become orphaned (no family groups)</td><td>{deleteFamilyPreview.counts.orphanHouseholds}</td></tr>
+                    <tr><td>Users eligible for disable</td><td>{deleteFamilyPreview.counts.usersToDisable}</td></tr>
+                  </tbody>
+                </table>
+                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                  <thead>
+                    <tr><th>Orphaned People</th></tr>
+                  </thead>
+                  <tbody>
+                    {deleteFamilyPreview.orphanPeople.length > 0 ? deleteFamilyPreview.orphanPeople.map((person) => (
+                      <tr key={`orphan-person-${person.personId}`}>
+                        <td>{person.displayName} ({person.personId})</td>
+                      </tr>
+                    )) : (
+                      <tr><td>-</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                  <thead>
+                    <tr><th>Orphaned Households</th><th>Husband</th><th>Wife</th></tr>
+                  </thead>
+                  <tbody>
+                    {deleteFamilyPreview.orphanHouseholds.length > 0 ? deleteFamilyPreview.orphanHouseholds.map((unit) => (
+                      <tr key={`orphan-household-${unit.householdId}`}>
+                        <td>{unit.householdId}</td>
+                        <td>{unit.husbandPersonId || "-"}</td>
+                        <td>{unit.wifePersonId || "-"}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={3}>-</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                  <thead>
+                    <tr><th>Users To Disable</th><th>Email</th><th>Username</th><th>Reason</th></tr>
+                  </thead>
+                  <tbody>
+                    {deleteFamilyPreview.usersToDisable.length > 0 ? deleteFamilyPreview.usersToDisable.map((user) => (
+                      <tr key={`disable-user-${user.personId}-${user.userEmail}`}>
+                        <td>{user.personId}</td>
+                        <td>{user.userEmail || "-"}</td>
+                        <td>{user.username || "-"}</td>
+                        <td>{user.reason}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={4}>-</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                  <thead>
+                    <tr><th>Family Attributes To Delete</th><th>Source</th><th>Sample</th></tr>
+                  </thead>
+                  <tbody>
+                    {deleteFamilyPreview.familyAttributesToDelete.length > 0 ? deleteFamilyPreview.familyAttributesToDelete.map((row) => (
+                      <tr key={`delete-attr-${row.source}-${row.rowNumber}`}>
+                        <td>{row.data.family_group_name || row.data.family_group_key || "-"}</td>
+                        <td>{row.source}</td>
+                        <td>{JSON.stringify(row.data).slice(0, 140)}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={3}>-</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {deleteFamilyStatus ? <p style={{ marginTop: "0.75rem" }}>{deleteFamilyStatus}</p> : null}
+          </section>
+        </div>
       ) : null}
     </div>
   );
