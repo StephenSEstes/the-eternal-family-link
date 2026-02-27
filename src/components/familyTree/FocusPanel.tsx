@@ -14,7 +14,7 @@ type FocusPanelProps = {
   selectedPerson: FocusPerson;
   parents: FocusPerson[];
   spouses: FocusPerson[];
-  children: FocusPerson[];
+  childrenList: FocusPerson[];
   getAvatarUrl: (person: FocusPerson) => string;
   onSelectPerson: (personId: string) => void;
   onClose: () => void;
@@ -36,7 +36,7 @@ export function FocusPanel({
   selectedPerson,
   parents,
   spouses,
-  children,
+  childrenList,
   getAvatarUrl,
   onSelectPerson,
   onClose,
@@ -50,8 +50,8 @@ export function FocusPanel({
   const activeList = useMemo(() => {
     if (activeTab === "parents") return parents;
     if (activeTab === "spouse") return spouses;
-    return children;
-  }, [activeTab, children, parents, spouses]);
+    return childrenList;
+  }, [activeTab, childrenList, parents, spouses]);
 
   return (
     <aside className="tree-focus-panel" onPointerDown={(event) => event.stopPropagation()}>

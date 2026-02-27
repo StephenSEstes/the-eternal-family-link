@@ -528,7 +528,7 @@ export function TreeGraph({ tenantKey, nodes, edges, households = [] }: TreeGrap
           selectedPerson={selectedPerson}
           parents={selectedParents}
           spouses={selectedSpouses}
-          children={selectedChildren}
+          childrenList={selectedChildren}
           getAvatarUrl={getAvatarUrl}
           onSelectPerson={setSelectedPersonId}
           onClose={() => setSelectedPersonId("")}
