@@ -259,11 +259,27 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
     originX: number;
     originY: number;
   } | null>(null);
+  const touchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{
+    distance: number;
+    midpointX: number;
+    midpointY: number;
+  } | null>(null);
 
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState("");
+  const scaleRef = useRef(scale);
+  const offsetRef = useRef(offset);
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
 
   const toTreeDisplayName = (value: string) => {
     const parts = value
@@ -354,6 +370,52 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
     [zoomAtPoint],
   );
 
+  const updatePinch = useCallback(
+    (target: HTMLDivElement) => {
+      const touchPoints = Array.from(touchPointersRef.current.values());
+      if (touchPoints.length !== 2) {
+        return;
+      }
+      const [a, b] = touchPoints;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.hypot(dx, dy);
+      if (!distance) {
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      const midpointClientX = (a.x + b.x) / 2;
+      const midpointClientY = (a.y + b.y) / 2;
+      const midpointX = midpointClientX - rect.left;
+      const midpointY = midpointClientY - rect.top;
+
+      const previous = pinchRef.current;
+      if (!previous) {
+        pinchRef.current = { distance, midpointX, midpointY };
+        return;
+      }
+
+      const currentScale = scaleRef.current;
+      const currentOffset = offsetRef.current;
+      const factor = distance / previous.distance;
+      const nextScale = clampScale(currentScale * factor);
+
+      const worldX = (previous.midpointX - currentOffset.x) / currentScale;
+      const worldY = (previous.midpointY - currentOffset.y) / currentScale;
+      const nextOffset = {
+        x: midpointX - worldX * nextScale,
+        y: midpointY - worldY * nextScale,
+      };
+
+      scaleRef.current = nextScale;
+      offsetRef.current = nextOffset;
+      setScale(nextScale);
+      setOffset(nextOffset);
+      pinchRef.current = { distance, midpointX, midpointY };
+    },
+    [clampScale],
+  );
+
   const selectedParents = selectedPerson
     ? Array.from(parentIdsByChild.get(selectedPerson.personId) ?? [])
         .map((id) => peopleById.get(id))
@@ -391,6 +453,17 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
         if (event.pointerType !== "touch" && event.button !== 0) {
           return;
         }
+        if (event.pointerType === "touch") {
+          touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          event.currentTarget.setPointerCapture(event.pointerId);
+          if (touchPointersRef.current.size === 2) {
+            dragRef.current = null;
+            setIsPanning(false);
+            pinchRef.current = null;
+            updatePinch(event.currentTarget);
+            return;
+          }
+        }
         dragRef.current = {
           pointerId: event.pointerId,
           startX: event.clientX,
@@ -402,6 +475,16 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={(event) => {
+        if (event.pointerType === "touch") {
+          if (!touchPointersRef.current.has(event.pointerId)) {
+            return;
+          }
+          touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (touchPointersRef.current.size === 2) {
+            updatePinch(event.currentTarget);
+            return;
+          }
+        }
         if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
           return;
         }
@@ -413,6 +496,30 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
         });
       }}
       onPointerUp={(event) => {
+        if (event.pointerType === "touch") {
+          touchPointersRef.current.delete(event.pointerId);
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+          if (touchPointersRef.current.size < 2) {
+            pinchRef.current = null;
+          }
+          if (touchPointersRef.current.size === 1) {
+            const [remainingPointerId, remainingPoint] = Array.from(touchPointersRef.current.entries())[0];
+            dragRef.current = {
+              pointerId: remainingPointerId,
+              startX: remainingPoint.x,
+              startY: remainingPoint.y,
+              originX: offsetRef.current.x,
+              originY: offsetRef.current.y,
+            };
+            setIsPanning(true);
+          } else {
+            dragRef.current = null;
+            setIsPanning(false);
+          }
+          return;
+        }
         if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
           return;
         }
@@ -423,6 +530,17 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
         }
       }}
       onPointerCancel={(event) => {
+        if (event.pointerType === "touch") {
+          touchPointersRef.current.delete(event.pointerId);
+          if (touchPointersRef.current.size < 2) {
+            pinchRef.current = null;
+          }
+          if (touchPointersRef.current.size === 0) {
+            dragRef.current = null;
+            setIsPanning(false);
+          }
+          return;
+        }
         if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) {
           return;
         }
