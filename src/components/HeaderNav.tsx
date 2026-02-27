@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
 type HeaderNavProps = {
   basePath: string;
@@ -12,7 +13,7 @@ type NavItem = {
   label: string;
   href: string;
   match: (pathname: string) => boolean;
-  icon: JSX.Element;
+  icon: ReactNode;
 };
 
 function HomeIcon() {
