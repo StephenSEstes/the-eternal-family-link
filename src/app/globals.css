@@ -619,12 +619,14 @@ main {
   stroke: color-mix(in oklab, var(--accent) 65%, #fff 35%);
   stroke-width: 2;
   transition: opacity 160ms ease;
+  vector-effect: non-scaling-stroke;
 }
 
 .tree-spouse-cluster {
   fill: color-mix(in oklab, #d8e7ff 70%, #ffffff 30%);
   stroke: color-mix(in oklab, var(--accent) 42%, #ffffff 58%);
   stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
 }
 
 .tree-line-label {

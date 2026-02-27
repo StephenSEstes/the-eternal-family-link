@@ -41,6 +41,10 @@ export type FamilyGroupSecurityPolicy = {
 export type PersonRecord = {
   personId: string;
   displayName: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  nickName: string;
   birthDate: string;
   gender: "male" | "female" | "unspecified";
   phones: string;
@@ -54,6 +58,10 @@ export type PersonRecord = {
 
 export type PersonUpdateInput = {
   display_name: string;
+  first_name?: string;
+  middle_name?: string;
+  last_name?: string;
+  nick_name?: string;
   birth_date: string;
   gender?: "male" | "female" | "unspecified";
   phones: string;

@@ -44,6 +44,10 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
               nodes={people.map((person) => ({
                 personId: person.personId,
                 displayName: person.displayName,
+                firstName: person.firstName,
+                middleName: person.middleName,
+                lastName: person.lastName,
+                nickName: person.nickName,
                 gender: person.gender,
                 photoFileId: person.photoFileId,
                 birthDate: person.birthDate,

@@ -29,7 +29,12 @@ function tabLabel(tab: TabKey) {
 }
 
 function lifespanLabel(person: FocusPerson) {
-  return person.birthDate?.trim() ? `Born ${person.birthDate.trim()}` : "";
+  const raw = person.birthDate?.trim() ?? "";
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${match[2]}-${match[3]}`;
+  }
+  return "";
 }
 
 export function FocusPanel({

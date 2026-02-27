@@ -61,6 +61,10 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   People: [
     "person_id",
     "display_name",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "nick_name",
     "birth_date",
     "gender",
     "phones",
@@ -815,9 +819,18 @@ function hasLocalAccess(row: string[], idx: Map<string, number>) {
 
 function rowToPerson(headers: string[], row: string[]): PersonRecord {
   const idx = buildHeaderIndex(headers);
+  const firstName = getCell(row, idx, "first_name").trim();
+  const middleName = getCell(row, idx, "middle_name").trim();
+  const lastName = getCell(row, idx, "last_name").trim();
+  const nickName = getCell(row, idx, "nick_name").trim();
+  const fallbackDisplayName = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
   return {
     personId: getCell(row, idx, "person_id"),
-    displayName: getCell(row, idx, "display_name"),
+    displayName: getCell(row, idx, "display_name") || fallbackDisplayName,
+    firstName,
+    middleName,
+    lastName,
+    nickName,
     birthDate: getCell(row, idx, "birth_date"),
     gender: ((): "male" | "female" | "unspecified" => {
       const raw = getCell(row, idx, "gender").trim().toLowerCase();
@@ -1275,7 +1288,7 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
-  await ensureResolvedTabColumns(PEOPLE_TAB, ["gender"], tenantKey).catch(() => undefined);
+  await ensureResolvedTabColumns(PEOPLE_TAB, ["gender", "first_name", "middle_name", "last_name", "nick_name"], tenantKey).catch(() => undefined);
   const sheets = await createSheetsClient();
 
   const readPeopleFromTab = async (tabName: string) => {
@@ -1493,6 +1506,18 @@ export async function updatePerson(
 
   const mutableRow = Array.from({ length: headers.length }, (_, i) => rows[rowIndex][i] ?? "");
   setCell(mutableRow, idx, "display_name", updates.display_name);
+  if (updates.first_name !== undefined) {
+    setCell(mutableRow, idx, "first_name", updates.first_name);
+  }
+  if (updates.middle_name !== undefined) {
+    setCell(mutableRow, idx, "middle_name", updates.middle_name);
+  }
+  if (updates.last_name !== undefined) {
+    setCell(mutableRow, idx, "last_name", updates.last_name);
+  }
+  if (updates.nick_name !== undefined) {
+    setCell(mutableRow, idx, "nick_name", updates.nick_name);
+  }
   setCell(mutableRow, idx, "birth_date", updates.birth_date);
   if (updates.gender) {
     setCell(mutableRow, idx, "gender", updates.gender);

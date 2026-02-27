@@ -8,6 +8,10 @@ import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
 type PersonNode = {
   personId: string;
   displayName: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  nickName?: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   birthDate?: string;
@@ -40,7 +44,7 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
   const NODE_HALF_HEIGHT = 30;
   const SPOUSE_GAP = 0;
   const NON_SPOUSE_GAP = 56;
-  const MIN_SCALE = 0.35;
+  const MIN_SCALE = 0.18;
   const MAX_SCALE = 2.8;
 
   const partnerMap = new Map<string, string>();
@@ -272,9 +276,18 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
     return `${parts[0]} ${parts[parts.length - 1]}`;
   };
 
+  const toMonthDay = (value?: string) => {
+    const raw = (value ?? "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return `${match[2]}-${match[3]}`;
+    }
+    return "";
+  };
+
   const asTreePerson = (person: PersonNode): PersonNode => ({
     ...person,
-    displayName: toTreeDisplayName(person.displayName),
+    displayName: [person.firstName, person.lastName].filter((part) => part?.trim()).join(" ").trim() || toTreeDisplayName(person.displayName),
   });
 
   const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
@@ -539,7 +552,7 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
         }
         const isSelected = selectedPersonId === node.personId;
         const isDimmed = Boolean(selectedPersonId) && !isSelected;
-        const secondaryText = node.birthDate?.trim() ? `Born ${node.birthDate.trim()}` : "";
+        const secondaryText = toMonthDay(node.birthDate);
         return (
           <div
             key={node.personId}
