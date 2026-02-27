@@ -258,75 +258,46 @@ export function SettingsClient({
     adminLoadAbortRef.current = controller;
     const signal = controller.signal;
 
-    const [accessRes, policyRes, usersRes, peopleRes] = await Promise.all([
-      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/user-access`, signal),
-      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/security-policy`, signal),
-      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/local-users`, signal),
-      fetchJsonWithRetry(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/people`, signal),
-    ]);
+    const snapshotRes = await fetchJsonWithRetry(
+      `/api/t/${encodeURIComponent(tenantKeyToLoad)}/admin-snapshot`,
+      signal,
+    );
     if (loadSeq !== adminLoadSeq.current) {
       return;
     }
 
-    const failures: string[] = [];
-
-    const nextAccessItems: AccessItem[] =
-      accessRes.ok && Array.isArray(accessRes.body?.items) ? (accessRes.body.items as AccessItem[]) : [];
-    if (accessRes.ok) {
-      setVisibleAccessItems(nextAccessItems);
-    } else {
-      failures.push(`User Access (${accessRes.status || "request failed"})`);
-    }
-
-    if (policyRes.ok && policyRes.body?.policy) {
-      setPolicy({
-        minLength: Number(policyRes.body.policy.minLength ?? DEFAULT_POLICY.minLength),
-        requireNumber: Boolean(policyRes.body.policy.requireNumber),
-        requireUppercase: Boolean(policyRes.body.policy.requireUppercase),
-        requireLowercase: Boolean(policyRes.body.policy.requireLowercase),
-        lockoutAttempts: Number(policyRes.body.policy.lockoutAttempts ?? DEFAULT_POLICY.lockoutAttempts),
-      });
-    } else if (!policyRes.ok) {
-      failures.push(`Password Policy (${policyRes.status || "request failed"})`);
-    }
-
-    const nextLocalUsers: LocalUserItem[] =
-      usersRes.ok && Array.isArray(usersRes.body?.users) ? (usersRes.body.users as LocalUserItem[]) : [];
-    if (usersRes.ok) {
-      setLocalUsers(nextLocalUsers);
-    } else {
-      failures.push(`Local Users (${usersRes.status || "request failed"})`);
-    }
-
-    const nextPeople: { personId: string; displayName: string }[] =
-      peopleRes.ok && Array.isArray(peopleRes.body?.items)
-        ? peopleRes.body.items
-            .filter((item: { personId?: string }) => Boolean(item?.personId))
-            .map((item: { personId: string; displayName?: string }) => ({
-              personId: item.personId,
-              displayName: item.displayName?.trim() || item.personId,
-            }))
-        : [];
-    if (peopleRes.ok) {
-      setFamilyPeople(nextPeople);
-    } else {
-      failures.push(`People (${peopleRes.status || "request failed"})`);
-    }
-
-    if (accessRes.ok || usersRes.ok || peopleRes.ok) {
-      setDirectoryPeople(
-        buildDirectoryPeople(
-          accessRes.ok ? nextAccessItems : visibleAccessItems,
-          usersRes.ok ? nextLocalUsers : localUsers,
-          peopleRes.ok ? nextPeople : familyPeople,
-        ),
+    if (!snapshotRes.ok) {
+      setAdminLoadStatus(
+        `Load warning: User Administration snapshot (${snapshotRes.status || "request failed"}). Keeping last successful data.`,
       );
-    }
-
-    if (failures.length > 0) {
-      setAdminLoadStatus(`Load warning: ${failures.join(", ")}. Keeping last successful data.`);
       return;
     }
+
+    const nextAccessItems: AccessItem[] = Array.isArray(snapshotRes.body?.accessItems)
+      ? (snapshotRes.body.accessItems as AccessItem[])
+      : [];
+    const nextLocalUsers: LocalUserItem[] = Array.isArray(snapshotRes.body?.localUsers)
+      ? (snapshotRes.body.localUsers as LocalUserItem[])
+      : [];
+    const nextPeople: { personId: string; displayName: string }[] = Array.isArray(snapshotRes.body?.people)
+      ? (snapshotRes.body.people as { personId: string; displayName: string }[])
+      : [];
+    const nextPolicy =
+      snapshotRes.body?.policy && typeof snapshotRes.body.policy === "object"
+        ? (snapshotRes.body.policy as SecurityPolicy)
+        : DEFAULT_POLICY;
+
+    setVisibleAccessItems(nextAccessItems);
+    setLocalUsers(nextLocalUsers);
+    setFamilyPeople(nextPeople);
+    setPolicy({
+      minLength: Number(nextPolicy.minLength ?? DEFAULT_POLICY.minLength),
+      requireNumber: Boolean(nextPolicy.requireNumber),
+      requireUppercase: Boolean(nextPolicy.requireUppercase),
+      requireLowercase: Boolean(nextPolicy.requireLowercase),
+      lockoutAttempts: Number(nextPolicy.lockoutAttempts ?? DEFAULT_POLICY.lockoutAttempts),
+    });
+    setDirectoryPeople(buildDirectoryPeople(nextAccessItems, nextLocalUsers, nextPeople));
     setAdminLoadStatus("");
   };
 
