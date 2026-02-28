@@ -163,6 +163,14 @@ function extractLastName(fullName: string) {
   return parts[parts.length - 1] ?? "";
 }
 
+function buildFullName(firstName: string, middleName: string, lastName: string) {
+  return [firstName, middleName, lastName]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
 function titleCaseWord(value: string) {
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
@@ -191,12 +199,25 @@ export function SettingsClient({
   const [importStatus, setImportStatus] = useState("");
   const [newTenantKey, setNewTenantKey] = useState("");
   const [newTenantName, setNewTenantName] = useState("");
-  const [newPatriarchFullName, setNewPatriarchFullName] = useState("");
-  const [newMatriarchFullName, setNewMatriarchFullName] = useState("");
+  const [newPatriarchFirstName, setNewPatriarchFirstName] = useState("");
+  const [newPatriarchMiddleName, setNewPatriarchMiddleName] = useState("");
+  const [newPatriarchLastName, setNewPatriarchLastName] = useState("");
+  const [newPatriarchNickName, setNewPatriarchNickName] = useState("");
+  const [newPatriarchBirthDate, setNewPatriarchBirthDate] = useState("");
+  const [newMatriarchFirstName, setNewMatriarchFirstName] = useState("");
+  const [newMatriarchMiddleName, setNewMatriarchMiddleName] = useState("");
+  const [newMatriarchLastName, setNewMatriarchLastName] = useState("");
+  const [newMatriarchNickName, setNewMatriarchNickName] = useState("");
+  const [newMatriarchBirthDate, setNewMatriarchBirthDate] = useState("");
   const [newMatriarchMaidenName, setNewMatriarchMaidenName] = useState("");
   const [newInitialAdminPersonId, setNewInitialAdminPersonId] = useState("");
   const [newParentsAreInitialAdminParents, setNewParentsAreInitialAdminParents] = useState(false);
   const [newIncludeHouseholdCandidates, setNewIncludeHouseholdCandidates] = useState(true);
+  const [createFamilyStep, setCreateFamilyStep] = useState<1 | 2 | 3 | 4>(1);
+  const [createFamilyDebugNotes, setCreateFamilyDebugNotes] = useState("");
+  const [preCreateHouseholdCandidates, setPreCreateHouseholdCandidates] = useState<HouseholdImportCandidate[]>([]);
+  const [preCreateMemberPersonIds, setPreCreateMemberPersonIds] = useState<string[]>([]);
+  const [preCreatePreviewStatus, setPreCreatePreviewStatus] = useState("");
   const [postCreateTargetFamilyKey, setPostCreateTargetFamilyKey] = useState("");
   const [postCreateHouseholdCandidates, setPostCreateHouseholdCandidates] = useState<HouseholdImportCandidate[]>([]);
   const [postCreateMemberPersonIds, setPostCreateMemberPersonIds] = useState<string[]>([]);
@@ -241,19 +262,27 @@ export function SettingsClient({
   );
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
+  const newPatriarchFullName = useMemo(
+    () => buildFullName(newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName),
+    [newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName],
+  );
+  const newMatriarchFullName = useMemo(
+    () => buildFullName(newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName),
+    [newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName],
+  );
   const generatedFamilyGroupKey = useMemo(() => {
     const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
-    const partner = normalizeFamilyKeyPart(extractLastName(newPatriarchFullName));
+    const partner = normalizeFamilyKeyPart(newPatriarchLastName || extractLastName(newPatriarchFullName));
     return `${maiden}${partner}`;
-  }, [newMatriarchMaidenName, newPatriarchFullName]);
+  }, [newMatriarchMaidenName, newPatriarchLastName, newPatriarchFullName]);
   const generatedFamilyGroupName = useMemo(() => {
     const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
-    const partner = normalizeFamilyKeyPart(extractLastName(newPatriarchFullName));
+    const partner = normalizeFamilyKeyPart(newPatriarchLastName || extractLastName(newPatriarchFullName));
     if (!maiden || !partner) {
       return "";
     }
-    return `${titleCaseWord(maiden)}${titleCaseWord(partner)} Family`;
-  }, [newMatriarchMaidenName, newPatriarchFullName]);
+    return `${titleCaseWord(maiden)}-${titleCaseWord(partner)} Family`;
+  }, [newMatriarchMaidenName, newPatriarchLastName, newPatriarchFullName]);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -401,6 +430,7 @@ export function SettingsClient({
 
   const createTenant = async () => {
     setNewTenantStatus("Creating family group...");
+    setCreateFamilyDebugNotes("");
     setPostCreateImportStatus("");
     setPostCreateTargetFamilyKey("");
     setPostCreateHouseholdCandidates([]);
@@ -422,10 +452,21 @@ export function SettingsClient({
         familyGroupKey: newTenantKey.trim() || generatedFamilyGroupKey,
         familyGroupName: newTenantName.trim() || generatedFamilyGroupName,
         patriarchFullName: newPatriarchFullName,
+        patriarchFirstName: newPatriarchFirstName,
+        patriarchMiddleName: newPatriarchMiddleName,
+        patriarchLastName: newPatriarchLastName,
+        patriarchNickName: newPatriarchNickName,
+        patriarchBirthDate: newPatriarchBirthDate,
         matriarchFullName: newMatriarchFullName,
+        matriarchFirstName: newMatriarchFirstName,
+        matriarchMiddleName: newMatriarchMiddleName,
+        matriarchLastName: newMatriarchLastName,
+        matriarchNickName: newMatriarchNickName,
+        matriarchBirthDate: newMatriarchBirthDate,
         matriarchMaidenName: newMatriarchMaidenName,
         initialAdminPersonId: newInitialAdminPersonId,
         memberPersonIds: [],
+        householdCandidatePersonIds: preCreateMemberPersonIds,
         parentsAreInitialAdminParents: newParentsAreInitialAdminParents,
         includeHouseholdCandidates: newIncludeHouseholdCandidates,
         isEnabled: true,
@@ -435,6 +476,7 @@ export function SettingsClient({
     if (!res.ok || !body) {
       const text = typeof body === "object" ? JSON.stringify(body) : "";
       setNewTenantStatus(`Failed: ${res.status} ${text.slice(0, 160)}`);
+      setCreateFamilyDebugNotes(text.slice(0, 400));
       return;
     }
     const targetKey = String(body.familyGroupKey ?? "").trim().toLowerCase();
@@ -448,20 +490,70 @@ export function SettingsClient({
     setPostCreateHouseholdCandidates(candidates);
     setPostCreateMemberPersonIds(candidates.map((item) => item.personId));
     setPostCreateAutoImported(autoImported);
+    const successStatus = autoImported
+      ? `Family group created. Household candidates were imported now. Imported people: ${autoImportedPeopleCount}, imported access links: ${autoImportedAccessCount}.`
+      : "Family group created. Review household imports below, then import selected members.";
     setNewTenantStatus(
       autoImported
         ? `Family group created. Household candidates were imported now. Imported people: ${autoImportedPeopleCount}, imported access links: ${autoImportedAccessCount}.`
         : "Family group created. Review household imports below, then import selected members.",
     );
-    setNewTenantKey("");
-    setNewTenantName("");
-    setNewPatriarchFullName("");
-    setNewMatriarchFullName("");
-    setNewMatriarchMaidenName("");
-    setNewInitialAdminPersonId("");
-    setNewParentsAreInitialAdminParents(false);
-    setNewIncludeHouseholdCandidates(true);
+    setCreateFamilyDebugNotes(`Create success: key=${targetKey}, autoImported=${autoImported}, importedPeople=${autoImportedPeopleCount}, importedAccess=${autoImportedAccessCount}`);
+    if (targetKey) {
+      await fetch("/api/family-groups/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familyGroupKey: targetKey }),
+      }).catch(() => null);
+      setSelectedTenantKey(targetKey);
+      await loadTenantAdminData(targetKey);
+      setNewTenantStatus(`${successStatus} Active family group switched to ${targetKey}.`);
+    }
+    setCreateFamilyStep(4);
     router.refresh();
+  };
+
+  const previewCreateFamilyCandidates = async () => {
+    if (!newInitialAdminPersonId) {
+      setPreCreatePreviewStatus("Select initial admin first.");
+      return;
+    }
+    setPreCreatePreviewStatus("Loading suggested spouse/children...");
+    const res = await fetch("/api/family-groups/provision-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceFamilyGroupKey: selectedTenantKey,
+        initialAdminPersonId: newInitialAdminPersonId,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setPreCreatePreviewStatus(`Failed: ${res.status} ${text.slice(0, 180)}`);
+      setPreCreateHouseholdCandidates([]);
+      setPreCreateMemberPersonIds([]);
+      return;
+    }
+    const candidates = Array.isArray(body.householdImportCandidates)
+      ? (body.householdImportCandidates as HouseholdImportCandidate[])
+      : [];
+    setPreCreateHouseholdCandidates(candidates);
+    setPreCreateMemberPersonIds(candidates.map((item) => item.personId));
+    setPreCreatePreviewStatus(
+      candidates.length > 0
+        ? `Found ${candidates.length} suggested spouse/children.`
+        : "No suggested spouse/children found for selected initial admin.",
+    );
+  };
+
+  const togglePreCreateMemberPersonId = (personIdToToggle: string) => {
+    setPreCreateMemberPersonIds((current) => {
+      if (current.includes(personIdToToggle)) {
+        return current.filter((value) => value !== personIdToToggle);
+      }
+      return [...current, personIdToToggle];
+    });
   };
 
   const toggleImportMemberPersonId = (personIdToToggle: string) => {
@@ -680,6 +772,17 @@ export function SettingsClient({
     setDisableOrphanedUsers(true);
     setDeleteFamilyStatus("");
     setShowDeleteFamilyModal(true);
+  };
+
+  const openCreateFamilyModal = () => {
+    setCreateFamilyStep(1);
+    setNewTenantStatus("");
+    setCreateFamilyDebugNotes("");
+    setPostCreateImportStatus("");
+    setPreCreatePreviewStatus("");
+    setPreCreateHouseholdCandidates([]);
+    setPreCreateMemberPersonIds([]);
+    setShowCreateFamilyModal(true);
   };
 
   const loadDeleteFamilyPreview = async (familyKey: string) => {
@@ -1018,7 +1121,7 @@ export function SettingsClient({
           <button
             type="button"
             className={`button secondary tap-button ${showCreateFamilyModal ? "game-option-selected" : ""}`}
-            onClick={() => setShowCreateFamilyModal(true)}
+            onClick={openCreateFamilyModal}
           >
             Create Group
           </button>
@@ -1746,100 +1849,246 @@ export function SettingsClient({
           <section className="card" style={{ width: "min(960px, 100%)", maxHeight: "85vh", overflow: "auto" }}>
             <h3 style={{ marginTop: 0 }}>Create Family Group</h3>
             <p className="page-subtitle" style={{ marginTop: 0 }}>
-              Select the initial admin from the active source family group. Family key and name are generated from matriarch maiden name + patriarch last name.
+              Step {createFamilyStep} of 4. Enter parents first, then select initial admin and optional spouse/children import.
             </p>
-            <label className="label">Top-Level Patriarch (full name)</label>
-            <input className="input" value={newPatriarchFullName} onChange={(e) => setNewPatriarchFullName(e.target.value)} placeholder="Brenton Dale Estes" />
-            <label className="label">Top-Level Matriarch (full name)</label>
-            <input className="input" value={newMatriarchFullName} onChange={(e) => setNewMatriarchFullName(e.target.value)} placeholder="Ruth Snow Estes" />
-            <label className="label">Matriarch Maiden Name</label>
-            <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} placeholder="Snow" />
-            <label className="label">Generated Family Group Key</label>
-            <input className="input" value={generatedFamilyGroupKey} readOnly placeholder="snowestes" />
-            <label className="label">Generated Family Group Name</label>
-            <input className="input" value={generatedFamilyGroupName} readOnly placeholder="SnowEstes Family" />
-            <label className="label">Optional Override Key (advanced)</label>
-            <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder={generatedFamilyGroupKey || "snowestes"} />
-            <label className="label">Optional Override Name (advanced)</label>
-            <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder={generatedFamilyGroupName || "SnowEstes Family"} />
-            <label className="label">Initial Admin (existing person)</label>
-            <select className="input" value={newInitialAdminPersonId} onChange={(e) => setNewInitialAdminPersonId(e.target.value)}>
-              <option value="">Select existing person</option>
-              {createGroupInitialAdminOptions.map((person) => (
-                <option key={person.personId} value={person.personId}>
-                  {person.displayName}
-                </option>
-              ))}
-            </select>
-            {createGroupInitialAdminOptions.length === 0 ? (
-              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                No people found in this source family group. Add people first before creating a new family group.
-              </p>
+            {createFamilyStep === 1 ? (
+              <div>
+                <h4 style={{ marginTop: 0 }}>Matriarch</h4>
+                <label className="label">First Name</label>
+                <input className="input" value={newMatriarchFirstName} onChange={(e) => setNewMatriarchFirstName(e.target.value)} />
+                <label className="label">Middle Name</label>
+                <input className="input" value={newMatriarchMiddleName} onChange={(e) => setNewMatriarchMiddleName(e.target.value)} />
+                <label className="label">Last Name</label>
+                <input className="input" value={newMatriarchLastName} onChange={(e) => setNewMatriarchLastName(e.target.value)} />
+                <label className="label">Maiden Name</label>
+                <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} />
+                <label className="label">Nickname</label>
+                <input className="input" value={newMatriarchNickName} onChange={(e) => setNewMatriarchNickName(e.target.value)} />
+                <label className="label">Birthdate</label>
+                <input className="input" type="date" value={newMatriarchBirthDate} onChange={(e) => setNewMatriarchBirthDate(e.target.value)} />
+              </div>
             ) : null}
-            <label className="label">
-              <input
-                type="checkbox"
-                checked={newParentsAreInitialAdminParents}
-                onChange={(e) => setNewParentsAreInitialAdminParents(e.target.checked)}
-              />{" "}
-              Patriarch and matriarch are parents of the initial admin
-            </label>
-            <label className="label">
-              <input
-                type="checkbox"
-                checked={newIncludeHouseholdCandidates}
-                onChange={(e) => setNewIncludeHouseholdCandidates(e.target.checked)}
-              />{" "}
-              Suggest spouse and children of initial admin for import after creation
-            </label>
-            <div className="settings-chip-list">
-              <button type="button" className="button tap-button" onClick={createTenant}>
-                Create Family Group
-              </button>
+
+            {createFamilyStep === 2 ? (
+              <div>
+                <h4 style={{ marginTop: 0 }}>Patriarch</h4>
+                <label className="label">First Name</label>
+                <input className="input" value={newPatriarchFirstName} onChange={(e) => setNewPatriarchFirstName(e.target.value)} />
+                <label className="label">Middle Name</label>
+                <input className="input" value={newPatriarchMiddleName} onChange={(e) => setNewPatriarchMiddleName(e.target.value)} />
+                <label className="label">Last Name</label>
+                <input className="input" value={newPatriarchLastName} onChange={(e) => setNewPatriarchLastName(e.target.value)} />
+                <label className="label">Nickname</label>
+                <input className="input" value={newPatriarchNickName} onChange={(e) => setNewPatriarchNickName(e.target.value)} />
+                <label className="label">Birthdate</label>
+                <input className="input" type="date" value={newPatriarchBirthDate} onChange={(e) => setNewPatriarchBirthDate(e.target.value)} />
+                <label className="label">Suggested Family Group Key</label>
+                <input className="input" value={generatedFamilyGroupKey} readOnly />
+                <label className="label">Suggested Family Group Name</label>
+                <input className="input" value={generatedFamilyGroupName} readOnly />
+              </div>
+            ) : null}
+
+            {createFamilyStep === 3 ? (
+              <div>
+                <h4 style={{ marginTop: 0 }}>Initial Admin and Import Preview</h4>
+                <label className="label">Initial Admin (existing person)</label>
+                <select
+                  className="input"
+                  value={newInitialAdminPersonId}
+                  onChange={(e) => {
+                    setNewInitialAdminPersonId(e.target.value);
+                    setPreCreateHouseholdCandidates([]);
+                    setPreCreateMemberPersonIds([]);
+                    setPreCreatePreviewStatus("");
+                  }}
+                >
+                  <option value="">Select existing person</option>
+                  {createGroupInitialAdminOptions.map((person) => (
+                    <option key={person.personId} value={person.personId}>
+                      {person.displayName}
+                    </option>
+                  ))}
+                </select>
+                {createGroupInitialAdminOptions.length === 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    No people found in this source family group. Add people first before creating a new family group.
+                  </p>
+                ) : null}
+                <label className="label">
+                  <input
+                    type="checkbox"
+                    checked={newParentsAreInitialAdminParents}
+                    onChange={(e) => setNewParentsAreInitialAdminParents(e.target.checked)}
+                  />{" "}
+                  Matriarch and patriarch are the parents of the initial admin
+                </label>
+                <label className="label">
+                  <input
+                    type="checkbox"
+                    checked={newIncludeHouseholdCandidates}
+                    onChange={(e) => setNewIncludeHouseholdCandidates(e.target.checked)}
+                  />{" "}
+                  Import spouse and children of initial admin
+                </label>
+                {newIncludeHouseholdCandidates ? (
+                  <div className="settings-chip-list">
+                    <button type="button" className="button secondary tap-button" onClick={previewCreateFamilyCandidates}>
+                      Load Suggested Spouse/Children
+                    </button>
+                  </div>
+                ) : null}
+                {preCreatePreviewStatus ? <p>{preCreatePreviewStatus}</p> : null}
+                {preCreateHouseholdCandidates.length > 0 ? (
+                  <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
+                    <table className="settings-table">
+                      <thead>
+                        <tr><th>Import</th><th>Person</th></tr>
+                      </thead>
+                      <tbody>
+                        {preCreateHouseholdCandidates.map((person) => (
+                          <tr key={`pre-create-${person.personId}`}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={preCreateMemberPersonIds.includes(person.personId)}
+                                onChange={() => togglePreCreateMemberPersonId(person.personId)}
+                              />
+                            </td>
+                            <td>{person.displayName}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {createFamilyStep === 4 ? (
+              <div>
+                <h4 style={{ marginTop: 0 }}>Review and Create</h4>
+                <label className="label">Family Group Key</label>
+                <input className="input" value={newTenantKey} onChange={(e) => setNewTenantKey(e.target.value)} placeholder={generatedFamilyGroupKey || "snowestes"} />
+                <label className="label">Family Group Name (editable)</label>
+                <input className="input" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} placeholder={generatedFamilyGroupName || "Snow-Estes Family"} />
+                <table className="settings-table" style={{ marginTop: "0.75rem" }}>
+                  <thead>
+                    <tr><th>Item</th><th>Value</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Source Family</td><td>{selectedTenantOption?.tenantName ?? selectedTenantKey}</td></tr>
+                    <tr><td>Matriarch</td><td>{newMatriarchFullName || "-"}</td></tr>
+                    <tr><td>Patriarch</td><td>{newPatriarchFullName || "-"}</td></tr>
+                    <tr><td>Initial Admin</td><td>{createGroupInitialAdminOptions.find((person) => person.personId === newInitialAdminPersonId)?.displayName ?? "-"}</td></tr>
+                    <tr><td>Parents of Initial Admin</td><td>{newParentsAreInitialAdminParents ? "Yes" : "No"}</td></tr>
+                    <tr><td>Import spouse/children</td><td>{newIncludeHouseholdCandidates ? "Yes" : "No"}</td></tr>
+                    <tr><td>Selected import people</td><td>{preCreateMemberPersonIds.length}</td></tr>
+                  </tbody>
+                </table>
+                {!newTenantStatus || newTenantStatus.startsWith("Failed:") ? (
+                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                    <button type="button" className="button tap-button" onClick={createTenant}>
+                      Create Family Group
+                    </button>
+                  </div>
+                ) : null}
+                {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey && !postCreateAutoImported ? (
+                  <div className="card" style={{ marginTop: "0.75rem" }}>
+                    <h4 style={{ marginTop: 0 }}>Optional Additional Import</h4>
+                    <p className="page-subtitle" style={{ marginTop: 0 }}>
+                      Review suggested spouse/children. Uncheck anyone you do not want to import.
+                    </p>
+                    <div className="settings-table-wrap" style={{ maxHeight: "180px", overflow: "auto" }}>
+                      <table className="settings-table">
+                        <thead>
+                          <tr><th>Import</th><th>Person</th></tr>
+                        </thead>
+                        <tbody>
+                          {postCreateHouseholdCandidates.map((person) => (
+                            <tr key={`post-create-${person.personId}`}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={postCreateMemberPersonIds.includes(person.personId)}
+                                  onChange={() => togglePostCreateMemberPersonId(person.personId)}
+                                />
+                              </td>
+                              <td>{person.displayName}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="settings-chip-list">
+                      <button type="button" className="button secondary tap-button" onClick={importPostCreateMembers}>
+                        Import To New Family
+                      </button>
+                    </div>
+                    {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+              {createFamilyStep > 1 ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    setNewTenantStatus("");
+                    setCreateFamilyDebugNotes("");
+                    setCreateFamilyStep((current) => (current > 1 ? ((current - 1) as 1 | 2 | 3 | 4) : 1));
+                  }}
+                >
+                  Back
+                </button>
+              ) : null}
+              {createFamilyStep < 4 ? (
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={async () => {
+                    if (createFamilyStep === 1) {
+                      if (!newMatriarchFirstName.trim() || !newMatriarchLastName.trim() || !newMatriarchMaidenName.trim() || !newMatriarchBirthDate.trim()) {
+                        setNewTenantStatus("Matriarch first name, last name, maiden name, and birthdate are required.");
+                        return;
+                      }
+                    }
+                    if (createFamilyStep === 2) {
+                      if (!newPatriarchFirstName.trim() || !newPatriarchLastName.trim() || !newPatriarchBirthDate.trim()) {
+                        setNewTenantStatus("Patriarch first name, last name, and birthdate are required.");
+                        return;
+                      }
+                    }
+                    if (createFamilyStep === 3) {
+                      if (!newInitialAdminPersonId.trim()) {
+                        setNewTenantStatus("Select an initial admin before continuing.");
+                        return;
+                      }
+                      if (newIncludeHouseholdCandidates && preCreateHouseholdCandidates.length === 0) {
+                        await previewCreateFamilyCandidates();
+                      }
+                    }
+                    setNewTenantStatus("");
+                    setCreateFamilyDebugNotes("");
+                    setCreateFamilyStep((current) => (current < 4 ? ((current + 1) as 1 | 2 | 3 | 4) : 4));
+                  }}
+                >
+                  Next
+                </button>
+              ) : null}
               <button type="button" className="button secondary tap-button" onClick={() => setShowCreateFamilyModal(false)}>
                 Close
               </button>
             </div>
-            {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h3 style={{ marginTop: 0 }}>
-                  {postCreateAutoImported ? "Imported Household Members" : "Import Household To New Family"}
-                </h3>
-                <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  {postCreateAutoImported
-                    ? "These spouse/children candidates were imported at creation time."
-                    : "Review suggested spouse/children. Uncheck anyone you do not want to import."}
-                </p>
-                <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
-                  <table className="settings-table">
-                    <thead>
-                      <tr><th>Import</th><th>Person</th></tr>
-                    </thead>
-                    <tbody>
-                      {postCreateHouseholdCandidates.map((person) => (
-                        <tr key={`post-create-${person.personId}`}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={postCreateMemberPersonIds.includes(person.personId)}
-                              onChange={() => togglePostCreateMemberPersonId(person.personId)}
-                            />
-                          </td>
-                          <td>{person.displayName}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!postCreateAutoImported ? (
-                  <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
-                    Import To New Family
-                  </button>
-                ) : null}
-                {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
-              </div>
-            ) : null}
             {newTenantStatus ? <p>{newTenantStatus}</p> : null}
+            {createFamilyDebugNotes ? (
+              <p className="page-subtitle" style={{ whiteSpace: "pre-wrap" }}>
+                Debug: {createFamilyDebugNotes}
+              </p>
+            ) : null}
           </section>
         </div>
       ) : null}

@@ -13,6 +13,7 @@ import {
   upsertTenantAccess,
 } from "@/lib/google/sheets";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
+import { buildPersonId } from "@/lib/person/id";
 
 const payloadSchema = z.object({
   familyGroupKey: z.string().trim().min(1).max(80).optional(),
@@ -20,11 +21,22 @@ const payloadSchema = z.object({
   familyGroupName: z.string().trim().min(1).max(120).optional(),
   tenantName: z.string().trim().min(1).max(120).optional(),
   patriarchFullName: z.string().trim().min(1).max(160),
+  patriarchFirstName: z.string().trim().max(80).optional(),
+  patriarchMiddleName: z.string().trim().max(80).optional(),
+  patriarchLastName: z.string().trim().max(80).optional(),
+  patriarchNickName: z.string().trim().max(80).optional(),
+  patriarchBirthDate: z.string().trim().max(40).optional(),
   matriarchFullName: z.string().trim().min(1).max(160),
+  matriarchFirstName: z.string().trim().max(80).optional(),
+  matriarchMiddleName: z.string().trim().max(80).optional(),
+  matriarchLastName: z.string().trim().max(80).optional(),
+  matriarchNickName: z.string().trim().max(80).optional(),
+  matriarchBirthDate: z.string().trim().max(40).optional(),
   matriarchMaidenName: z.string().trim().min(1).max(120),
   sourceFamilyGroupKey: z.string().trim().min(1).max(80).optional(),
   initialAdminPersonId: z.string().trim().min(1).max(120),
   memberPersonIds: z.array(z.string().trim().min(1).max(120)).max(500).optional().default([]),
+  householdCandidatePersonIds: z.array(z.string().trim().min(1).max(120)).max(500).optional().default([]),
   parentsAreInitialAdminParents: z.boolean().optional().default(false),
   includeHouseholdCandidates: z.boolean().optional().default(false),
   isEnabled: z.boolean().default(true),
@@ -52,6 +64,14 @@ function normalizeFamilyNamePart(value: string) {
 function titleCaseWord(value: string) {
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function buildFullName(firstName?: string, middleName?: string, lastName?: string) {
+  return [firstName, middleName, lastName]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 function extractLastName(fullName: string) {
@@ -150,14 +170,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
+  const patriarchFullName = parsed.data.patriarchFullName.trim() || buildFullName(
+    parsed.data.patriarchFirstName,
+    parsed.data.patriarchMiddleName,
+    parsed.data.patriarchLastName,
+  );
+  const matriarchFullName = parsed.data.matriarchFullName.trim() || buildFullName(
+    parsed.data.matriarchFirstName,
+    parsed.data.matriarchMiddleName,
+    parsed.data.matriarchLastName,
+  );
   const maidenPart = normalizeFamilyNamePart(parsed.data.matriarchMaidenName);
-  const patriarchLastName = normalizeFamilyNamePart(extractLastName(parsed.data.patriarchFullName));
+  const patriarchLastName = normalizeFamilyNamePart(
+    parsed.data.patriarchLastName?.trim() || extractLastName(patriarchFullName),
+  );
   const generatedFamilyGroupKey = `${maidenPart}${patriarchLastName}`;
   const familyGroupKey = normalizeFamilyGroupKey(parsed.data.familyGroupKey ?? parsed.data.tenantKey ?? generatedFamilyGroupKey);
   const familyGroupName =
     parsed.data.familyGroupName ??
     parsed.data.tenantName ??
-    `${titleCaseWord(maidenPart)}${titleCaseWord(patriarchLastName)} Family`;
+    `${titleCaseWord(maidenPart)}-${titleCaseWord(patriarchLastName)} Family`;
   if (!familyGroupName.trim()) {
     return NextResponse.json({ error: "invalid_payload", issues: "familyGroupName could not be generated." }, { status: 400 });
   }
@@ -181,14 +213,21 @@ export async function POST(request: Request) {
   const targetPeopleRows = await getTableRecords("People", familyGroupKey);
   const existingInTarget = new Set(targetPeopleRows.map((row) => (row.data.person_id ?? "").trim()).filter(Boolean));
 
-  const patriarchPersonId = buildSeedPersonId(familyGroupKey, "patriarch", parsed.data.patriarchFullName);
+  const patriarchPersonId =
+    buildPersonId(patriarchFullName, parsed.data.patriarchBirthDate ?? "") ||
+    buildSeedPersonId(familyGroupKey, "patriarch", patriarchFullName);
   if (!existingInTarget.has(patriarchPersonId)) {
     await createTableRecord(
       "People",
       {
         person_id: patriarchPersonId,
-        display_name: parsed.data.patriarchFullName,
-        birth_date: "",
+        display_name: patriarchFullName,
+        first_name: parsed.data.patriarchFirstName ?? "",
+        middle_name: parsed.data.patriarchMiddleName ?? "",
+        last_name: parsed.data.patriarchLastName ?? "",
+        nick_name: parsed.data.patriarchNickName ?? "",
+        birth_date: parsed.data.patriarchBirthDate ?? "",
+        gender: "male",
         phones: "",
         address: "",
         hobbies: "",
@@ -203,14 +242,21 @@ export async function POST(request: Request) {
   }
   await ensurePersonFamilyGroupMembership(patriarchPersonId, familyGroupKey, true);
 
-  const matriarchPersonId = buildSeedPersonId(familyGroupKey, "matriarch", parsed.data.matriarchFullName);
+  const matriarchPersonId =
+    buildPersonId(matriarchFullName, parsed.data.matriarchBirthDate ?? "") ||
+    buildSeedPersonId(familyGroupKey, "matriarch", matriarchFullName);
   if (!existingInTarget.has(matriarchPersonId)) {
     await createTableRecord(
       "People",
       {
         person_id: matriarchPersonId,
-        display_name: parsed.data.matriarchFullName,
-        birth_date: "",
+        display_name: matriarchFullName,
+        first_name: parsed.data.matriarchFirstName ?? "",
+        middle_name: parsed.data.matriarchMiddleName ?? "",
+        last_name: parsed.data.matriarchLastName ?? "",
+        nick_name: parsed.data.matriarchNickName ?? "",
+        birth_date: parsed.data.matriarchBirthDate ?? "",
+        gender: "female",
         phones: "",
         address: "",
         hobbies: "",
@@ -347,22 +393,39 @@ export async function POST(request: Request) {
     const households = await getTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
     const relationships = await getTableRecords("Relationships").catch(() => []);
     const candidateIds = new Set<string>();
+    const spouseIds = new Set<string>();
     for (const row of households) {
       const partner1 = readValue(row.data, "husband_person_id");
       const partner2 = readValue(row.data, "wife_person_id");
       if (partner1 === parsed.data.initialAdminPersonId && partner2) {
         candidateIds.add(partner2);
+        spouseIds.add(partner2);
       }
       if (partner2 === parsed.data.initialAdminPersonId && partner1) {
         candidateIds.add(partner1);
+        spouseIds.add(partner1);
       }
     }
     for (const row of relationships) {
       const relType = readValue(row.data, "rel_type").toLowerCase();
       const fromPersonId = readValue(row.data, "from_person_id");
       const toPersonId = readValue(row.data, "to_person_id");
-      if (relType === "parent" && fromPersonId === parsed.data.initialAdminPersonId && toPersonId) {
+      if (
+        relType === "parent" &&
+        toPersonId &&
+        (fromPersonId === parsed.data.initialAdminPersonId || spouseIds.has(fromPersonId))
+      ) {
         candidateIds.add(toPersonId);
+      }
+    }
+    const selectedCandidateIds = new Set(
+      parsed.data.householdCandidatePersonIds.map((value) => value.trim()).filter(Boolean),
+    );
+    if (selectedCandidateIds.size > 0) {
+      for (const candidateId of Array.from(candidateIds)) {
+        if (!selectedCandidateIds.has(candidateId)) {
+          candidateIds.delete(candidateId);
+        }
       }
     }
     candidateIds.delete(parsed.data.initialAdminPersonId);
