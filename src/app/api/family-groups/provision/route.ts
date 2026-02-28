@@ -165,17 +165,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  const debug = {
+    getPeopleCalls: 0,
+    getTableRecordsCalls: 0,
+    createTableRecordCalls: 0,
+    upsertTenantAccessCalls: 0,
+    ensureTenantPhotosFolderCalls: 0,
+    ensureTenantScaffoldCalls: 0,
+    upsertParentRelationCalls: 0,
+    upsertFamilyUnitCalls: 0,
+  };
+
   try {
-    const debug = {
-      getPeopleCalls: 0,
-      getTableRecordsCalls: 0,
-      createTableRecordCalls: 0,
-      upsertTenantAccessCalls: 0,
-      ensureTenantPhotosFolderCalls: 0,
-      ensureTenantScaffoldCalls: 0,
-      upsertParentRelationCalls: 0,
-      upsertFamilyUnitCalls: 0,
-    };
     const countedGetPeople = async (tenantKey?: string) => {
       debug.getPeopleCalls += 1;
       return getPeople(tenantKey);
@@ -253,12 +254,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const sourcePeopleRows = await countedGetPeople(sourceFamilyGroupKey).catch(() => []);
+  const personFamilyRows = await countedGetTableRecords("PersonFamilyGroups").catch(() => []);
   const globalPeopleRows = await countedGetPeople().catch(() => []);
+  const sourcePersonIds = new Set(
+    personFamilyRows
+      .filter(
+        (row) =>
+          readValue(row.data, "family_group_key", "tenant_key").toLowerCase() === sourceFamilyGroupKey &&
+          isTrueLike(row.data.is_enabled),
+      )
+      .map((row) => (row.data.person_id ?? "").trim())
+      .filter(Boolean),
+  );
   const sourcePeopleById = new Map<string, Record<string, string>>();
-  for (const row of sourcePeopleRows) {
+  for (const row of globalPeopleRows) {
     const personId = row.personId.trim();
-    if (!personId || sourcePeopleById.has(personId)) {
+    if (!personId || sourcePeopleById.has(personId) || !sourcePersonIds.has(personId)) {
       continue;
     }
     sourcePeopleById.set(personId, {
@@ -315,7 +326,6 @@ export async function POST(request: Request) {
 
   const targetPeopleRows = await countedGetTableRecords("People", familyGroupKey);
   const existingInTarget = new Set(targetPeopleRows.map((row) => (row.data.person_id ?? "").trim()).filter(Boolean));
-  const personFamilyRows = await countedGetTableRecords("PersonFamilyGroups").catch(() => []);
   const existingMemberships = new Set(
     personFamilyRows
       .filter((row) => readValue(row.data, "family_group_key", "tenant_key").toLowerCase() === familyGroupKey)
@@ -687,6 +697,7 @@ export async function POST(request: Request) {
         error: "provision_failed",
         message,
         hint: "Retry in 60-90 seconds if this is a quota error.",
+        debug,
       },
       { status: 500 },
     );

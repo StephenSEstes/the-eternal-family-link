@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Family-create now includes API call counters in debug output and reduced repeated membership reads to lower Sheets quota pressure. See `docs/change-summary.md`.
+- 2026-02-28: Family-create now returns debug counters on failure and uses fewer reads by deriving source people from global people + membership links. See `docs/change-summary.md`.
