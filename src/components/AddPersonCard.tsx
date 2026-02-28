@@ -52,10 +52,72 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
         display_name: displayName,
         birth_date: birthDate,
         gender,
+        allow_duplicate_similar: false,
       }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
+      if (response.status === 409 && body?.error === "duplicate_exact_birthdate_name") {
+        const message = typeof body?.message === "string"
+          ? body.message
+          : "A person with the same name and birthdate already exists. Please contact your system administrator.";
+        window.alert(message);
+        setStatus(message);
+        setIsSaving(false);
+        return;
+      }
+      if (response.status === 409 && body?.error === "duplicate_similar_birthdate_name") {
+        const matches = Array.isArray(body?.matches)
+          ? body.matches
+              .slice(0, 5)
+              .map((match: { displayName?: string; personId?: string; birthDate?: string }) =>
+                `${match.displayName ?? match.personId ?? "Existing person"} (${match.birthDate ?? "n/a"})`,
+              )
+              .join("\n")
+          : "";
+        const prompt =
+          `${typeof body?.message === "string" ? body.message : "Possible duplicate found."}\n\n` +
+          (matches ? `Possible matches:\n${matches}\n\n` : "") +
+          "Press OK to Add New anyway, or Cancel to review existing people.";
+        const confirmAdd = window.confirm(prompt);
+        if (!confirmAdd) {
+          setStatus("Creation cancelled. Review existing people and use existing if applicable.");
+          setIsSaving(false);
+          return;
+        }
+        const forceResponse = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            first_name: firstName,
+            middle_name: middleName,
+            last_name: lastName,
+            nick_name: nickName,
+            display_name: displayName,
+            birth_date: birthDate,
+            gender,
+            allow_duplicate_similar: true,
+          }),
+        });
+        const forceBody = await forceResponse.json().catch(() => null);
+        if (!forceResponse.ok) {
+          setStatus(`Failed: ${forceResponse.status} ${JSON.stringify(forceBody)}`);
+          setIsSaving(false);
+          return;
+        }
+        setStatus("Person created.");
+        setFirstName("");
+        setMiddleName("");
+        setLastName("");
+        setNickName("");
+        setDisplayName("");
+        setBirthDate("");
+        setGender("unspecified");
+        setOpen(false);
+        setIsSaving(false);
+        router.refresh();
+        return;
+      }
       setStatus(`Failed: ${response.status} ${JSON.stringify(body)}`);
       setIsSaving(false);
       return;

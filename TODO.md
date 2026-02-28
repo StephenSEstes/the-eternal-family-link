@@ -64,6 +64,10 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-04-05
   Desc: Add invitation workflow (email-based) and support install/launch icon guidance for invited users.
+- [ ] Evaluate value/necessity of Viewer PIN function
+  Priority: Med
+  Est date: 2026-04-06
+  Desc: Review whether Viewer PIN unlock is needed for this product phase, including UX complexity, security value, and whether to keep, simplify, or remove.
 
 ## Backlog
 - [ ] Define current top 3 development priorities

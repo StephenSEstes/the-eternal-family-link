@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Family Group creation now supports selecting existing matriarch/patriarch via search to avoid duplicate parent records. See `docs/change-summary.md`.
+- 2026-02-28: Added family-create error diagnostics and person duplicate guard (same birthdate + same/similar name) in Add Person flow. See `docs/change-summary.md`.

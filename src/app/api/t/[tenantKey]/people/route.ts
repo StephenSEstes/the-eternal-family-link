@@ -37,10 +37,63 @@ const createPersonSchema = z.object({
   address: z.string().trim().max(2000).optional().default(""),
   hobbies: z.string().trim().max(2000).optional().default(""),
   notes: z.string().trim().max(2000).optional().default(""),
+  allow_duplicate_similar: z.boolean().optional().default(false),
 });
 
 function composeDisplayName(firstName: string, middleName: string, lastName: string) {
   return [firstName, middleName, lastName].filter((part) => part.trim()).join(" ").trim();
+}
+
+function normalizeDateKey(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return trimmed.toLowerCase();
+  }
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toBigrams(value: string) {
+  const compact = value.replace(/\s+/g, " ");
+  if (compact.length < 2) {
+    return compact ? [compact] : [];
+  }
+  const grams: string[] = [];
+  for (let idx = 0; idx < compact.length - 1; idx += 1) {
+    grams.push(compact.slice(idx, idx + 2));
+  }
+  return grams;
+}
+
+function diceSimilarity(a: string, b: string) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const gramsA = toBigrams(a);
+  const gramsB = toBigrams(b);
+  if (gramsA.length === 0 || gramsB.length === 0) return 0;
+  const counts = new Map<string, number>();
+  for (const gram of gramsA) {
+    counts.set(gram, (counts.get(gram) ?? 0) + 1);
+  }
+  let overlap = 0;
+  for (const gram of gramsB) {
+    const count = counts.get(gram) ?? 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(gram, count - 1);
+    }
+  }
+  return (2 * overlap) / (gramsA.length + gramsB.length);
 }
 
 export async function POST(request: Request, { params }: TenantPeopleRouteProps) {
@@ -68,6 +121,61 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
   const existingInFamily = await getPeople(resolved.tenant.tenantKey);
   if (existingInFamily.some((item) => item.personId === personId)) {
     return NextResponse.json({ error: "conflict", message: "Person already exists in this family group" }, { status: 409 });
+  }
+
+  const birthDateKey = normalizeDateKey(parsed.data.birth_date);
+  const inputFullName = normalizeName(fullName);
+  const inputFirstLast = normalizeName(`${parsed.data.first_name} ${parsed.data.last_name}`);
+  const sameBirthCandidates = existingInFamily.filter(
+    (person) => normalizeDateKey(person.birthDate) === birthDateKey,
+  );
+  const exactNameMatches = sameBirthCandidates.filter((person) => {
+    const personFull = normalizeName(
+      composeDisplayName(person.firstName ?? "", person.middleName ?? "", person.lastName ?? "") || person.displayName,
+    );
+    const personFirstLast = normalizeName(`${person.firstName ?? ""} ${person.lastName ?? ""}`.trim());
+    return Boolean(
+      (personFull && personFull === inputFullName) ||
+      (personFirstLast && personFirstLast === inputFirstLast),
+    );
+  });
+  if (exactNameMatches.length > 0) {
+    return NextResponse.json(
+      {
+        error: "duplicate_exact_birthdate_name",
+        message: "A person with the same name and birthdate already exists. Please contact your system administrator.",
+        matches: exactNameMatches.slice(0, 5).map((person) => ({
+          personId: person.personId,
+          displayName: person.displayName,
+          birthDate: person.birthDate,
+        })),
+      },
+      { status: 409 },
+    );
+  }
+  const similarNameMatches = sameBirthCandidates.filter((person) => {
+    const personFull = normalizeName(
+      composeDisplayName(person.firstName ?? "", person.middleName ?? "", person.lastName ?? "") || person.displayName,
+    );
+    const personFirstLast = normalizeName(`${person.firstName ?? ""} ${person.lastName ?? ""}`.trim());
+    const fullScore = diceSimilarity(inputFullName, personFull);
+    const firstLastScore = diceSimilarity(inputFirstLast, personFirstLast || personFull);
+    return fullScore >= 0.76 || firstLastScore >= 0.82;
+  });
+  if (similarNameMatches.length > 0 && !parsed.data.allow_duplicate_similar) {
+    return NextResponse.json(
+      {
+        error: "duplicate_similar_birthdate_name",
+        message:
+          "Possible duplicate found (same birthdate, similar name). Use existing if this is the same person, or confirm Add New to continue.",
+        matches: similarNameMatches.slice(0, 8).map((person) => ({
+          personId: person.personId,
+          displayName: person.displayName,
+          birthDate: person.birthDate,
+        })),
+      },
+      { status: 409 },
+    );
   }
 
   const existingGlobal = await getPersonById(personId);

@@ -502,11 +502,17 @@ export function SettingsClient({
         isEnabled: true,
       }),
     });
-    const body = await res.json().catch(() => null);
+    let body: unknown = null;
+    let rawText = "";
+    try {
+      body = await res.json();
+    } catch {
+      rawText = await res.text().catch(() => "");
+    }
     if (!res.ok || !body) {
-      const text = typeof body === "object" ? JSON.stringify(body) : "";
-      setNewTenantStatus(`Failed: ${res.status} ${text.slice(0, 160)}`);
-      setCreateFamilyDebugNotes(text.slice(0, 400));
+      const text = typeof body === "object" ? JSON.stringify(body) : rawText;
+      setNewTenantStatus(`Failed: ${res.status} ${(text || "No error body").slice(0, 220)}`);
+      setCreateFamilyDebugNotes((text || "No error body").slice(0, 800));
       return;
     }
     const targetKey = String(body.familyGroupKey ?? "").trim().toLowerCase();

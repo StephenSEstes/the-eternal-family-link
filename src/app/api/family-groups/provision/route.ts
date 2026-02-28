@@ -166,11 +166,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const payload = await request.json().catch(() => null);
-  const parsed = payloadSchema.safeParse(payload);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
-  }
+  try {
+    const payload = await request.json().catch(() => null);
+    const parsed = payloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
+    }
 
   const patriarchFullName = parsed.data.patriarchFullName.trim() || buildFullName(
     parsed.data.patriarchFirstName,
@@ -580,22 +581,32 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({
-    ok: true,
-    photosFolderId,
-    familyGroupKey,
-    familyGroupName,
-    sourceFamilyGroupKey,
-    createdPeople: {
-      patriarchPersonId,
-      matriarchPersonId,
-      importedExistingPeopleCount: copiedPeopleCount,
-    },
-    parentsLinkedToInitialAdmin: parsed.data.parentsAreInitialAdminParents,
-    householdImportCandidates,
-    importedAccessCount,
-    autoImportedHouseholdCandidates,
-    autoImportedPeopleCount,
-    autoImportedAccessCount,
-  });
+    return NextResponse.json({
+      ok: true,
+      photosFolderId,
+      familyGroupKey,
+      familyGroupName,
+      sourceFamilyGroupKey,
+      createdPeople: {
+        patriarchPersonId,
+        matriarchPersonId,
+        importedExistingPeopleCount: copiedPeopleCount,
+      },
+      parentsLinkedToInitialAdmin: parsed.data.parentsAreInitialAdminParents,
+      householdImportCandidates,
+      importedAccessCount,
+      autoImportedHouseholdCandidates,
+      autoImportedPeopleCount,
+      autoImportedAccessCount,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      {
+        error: "provision_failed",
+        message,
+      },
+      { status: 500 },
+    );
+  }
 }
