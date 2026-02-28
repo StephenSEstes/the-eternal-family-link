@@ -340,6 +340,9 @@ export async function POST(request: Request) {
   }
 
   let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
+  let autoImportedPeopleCount = 0;
+  let autoImportedAccessCount = 0;
+  let autoImportedHouseholdCandidates = false;
   if (parsed.data.includeHouseholdCandidates) {
     const households = await getTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
     const relationships = await getTableRecords("Relationships").catch(() => []);
@@ -376,6 +379,70 @@ export async function POST(request: Request) {
       })
       .filter((item): item is { personId: string; displayName: string } => Boolean(item))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    const candidatePersonIds = householdImportCandidates.map((item) => item.personId);
+    if (candidatePersonIds.length > 0) {
+      autoImportedHouseholdCandidates = true;
+      for (const personId of candidatePersonIds) {
+        if (existingInTarget.has(personId)) {
+          await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+          continue;
+        }
+        const source = sourcePeopleById.get(personId);
+        if (!source) {
+          continue;
+        }
+        await createTableRecord(
+          "People",
+          {
+            person_id: personId,
+            display_name: source.display_name ?? "",
+            birth_date: source.birth_date ?? "",
+            phones: source.phones ?? "",
+            address: source.address ?? "",
+            hobbies: source.hobbies ?? "",
+            notes: source.notes ?? "",
+            photo_file_id: source.photo_file_id ?? "",
+            is_pinned: source.is_pinned ?? "FALSE",
+            relationships: source.relationships ?? "",
+          },
+          familyGroupKey,
+        );
+        existingInTarget.add(personId);
+        await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+        autoImportedPeopleCount += 1;
+      }
+
+      for (const row of accessRows) {
+        const personId = (row.data.person_id ?? "").trim();
+        const userEmail = (row.data.user_email ?? "").trim().toLowerCase();
+        const rowFamilyGroupKey = readValue(row.data, "family_group_key", "tenant_key").toLowerCase();
+        if (!personId || !userEmail || !candidatePersonIds.includes(personId)) {
+          continue;
+        }
+        if (rowFamilyGroupKey !== sourceFamilyGroupKey) {
+          continue;
+        }
+        if (!isTrueLike(row.data.is_enabled)) {
+          continue;
+        }
+        const dedupeKey = `${personId}|${userEmail}`;
+        if (importedAccessKeys.has(dedupeKey)) {
+          continue;
+        }
+        importedAccessKeys.add(dedupeKey);
+        await upsertTenantAccess({
+          userEmail,
+          tenantKey: familyGroupKey,
+          tenantName: familyGroupName,
+          role: (row.data.role ?? "USER").trim().toUpperCase() === "ADMIN" ? "ADMIN" : "USER",
+          personId,
+          isEnabled: parsed.data.isEnabled,
+        });
+        importedAccessCount += 1;
+        autoImportedAccessCount += 1;
+      }
+    }
   }
 
   return NextResponse.json({
@@ -392,5 +459,8 @@ export async function POST(request: Request) {
     parentsLinkedToInitialAdmin: parsed.data.parentsAreInitialAdminParents,
     householdImportCandidates,
     importedAccessCount,
+    autoImportedHouseholdCandidates,
+    autoImportedPeopleCount,
+    autoImportedAccessCount,
   });
 }

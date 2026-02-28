@@ -200,6 +200,7 @@ export function SettingsClient({
   const [postCreateTargetFamilyKey, setPostCreateTargetFamilyKey] = useState("");
   const [postCreateHouseholdCandidates, setPostCreateHouseholdCandidates] = useState<HouseholdImportCandidate[]>([]);
   const [postCreateMemberPersonIds, setPostCreateMemberPersonIds] = useState<string[]>([]);
+  const [postCreateAutoImported, setPostCreateAutoImported] = useState(false);
   const [postCreateImportStatus, setPostCreateImportStatus] = useState("");
   const [importMemberPersonIds, setImportMemberPersonIds] = useState<string[]>([]);
   const [importMembersStatus, setImportMembersStatus] = useState("");
@@ -404,6 +405,7 @@ export function SettingsClient({
     setPostCreateTargetFamilyKey("");
     setPostCreateHouseholdCandidates([]);
     setPostCreateMemberPersonIds([]);
+    setPostCreateAutoImported(false);
     if (!newInitialAdminPersonId) {
       setNewTenantStatus("Select an existing person to be initial admin.");
       return;
@@ -439,10 +441,18 @@ export function SettingsClient({
     const candidates = Array.isArray(body.householdImportCandidates)
       ? (body.householdImportCandidates as HouseholdImportCandidate[])
       : [];
+    const autoImported = Boolean(body.autoImportedHouseholdCandidates);
+    const autoImportedPeopleCount = Number(body.autoImportedPeopleCount ?? 0);
+    const autoImportedAccessCount = Number(body.autoImportedAccessCount ?? 0);
     setPostCreateTargetFamilyKey(targetKey);
     setPostCreateHouseholdCandidates(candidates);
     setPostCreateMemberPersonIds(candidates.map((item) => item.personId));
-    setNewTenantStatus("Family group created. Review household imports below, then import selected members.");
+    setPostCreateAutoImported(autoImported);
+    setNewTenantStatus(
+      autoImported
+        ? `Family group created. Household candidates were imported now. Imported people: ${autoImportedPeopleCount}, imported access links: ${autoImportedAccessCount}.`
+        : "Family group created. Review household imports below, then import selected members.",
+    );
     setNewTenantKey("");
     setNewTenantName("");
     setNewPatriarchFullName("");
@@ -723,10 +733,42 @@ export function SettingsClient({
       return;
     }
     const deleted = body?.deleted ?? {};
+    const deletedKey = deleteFamilyKey.trim().toLowerCase();
+    const wasActiveFamilyDeleted = selectedTenantKey.trim().toLowerCase() === deletedKey;
     setDeleteFamilyStatus(
       `Deleted links/config. PersonFamilyGroups: ${Number(deleted.deletedPersonFamilyRows ?? 0)}, UserFamilyGroups: ${Number(deleted.deletedUserFamilyRows ?? 0)}, FamilyConfig: ${Number(deleted.deletedFamilyConfigRows ?? 0)}, FamilyPolicy: ${Number(deleted.deletedFamilyPolicyRows ?? 0)}, Disabled users: ${Number(deleted.disabledUsers ?? 0)}.`,
     );
     setDeleteFamilyBusy(false);
+
+    if (wasActiveFamilyDeleted) {
+      const fallback = tenantOptions.find(
+        (option) => option.tenantKey.trim().toLowerCase() !== deletedKey,
+      );
+      if (!fallback) {
+        setShowDeleteFamilyModal(false);
+        setDeleteFamilyStatus("Deleted active family group. No remaining accessible family groups; redirecting to login.");
+        router.push("/login");
+        return;
+      }
+
+      await fetch("/api/family-groups/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familyGroupKey: fallback.tenantKey }),
+      });
+
+      setSelectedTenantKey(fallback.tenantKey);
+      setShowDeleteFamilyModal(false);
+      const fallbackKey = fallback.tenantKey.trim().toLowerCase();
+      const fallbackSettingsPath = fallbackKey === "snowestes"
+        ? "/settings"
+        : `/t/${encodeURIComponent(fallbackKey)}/settings`;
+      router.push(fallbackSettingsPath);
+      router.refresh();
+      return;
+    }
+
+    setShowDeleteFamilyModal(false);
     await loadTenantAdminData(selectedTenantKey);
     await runIntegrityCheck();
     router.refresh();
@@ -1760,9 +1802,13 @@ export function SettingsClient({
             </div>
             {postCreateHouseholdCandidates.length > 0 && postCreateTargetFamilyKey ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h3 style={{ marginTop: 0 }}>Import Household To New Family</h3>
+                <h3 style={{ marginTop: 0 }}>
+                  {postCreateAutoImported ? "Imported Household Members" : "Import Household To New Family"}
+                </h3>
                 <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  Review suggested spouse/children. Uncheck anyone you do not want to import.
+                  {postCreateAutoImported
+                    ? "These spouse/children candidates were imported at creation time."
+                    : "Review suggested spouse/children. Uncheck anyone you do not want to import."}
                 </p>
                 <div className="settings-table-wrap" style={{ maxHeight: "220px", overflow: "auto" }}>
                   <table className="settings-table">
@@ -1785,9 +1831,11 @@ export function SettingsClient({
                     </tbody>
                   </table>
                 </div>
-                <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
-                  Import To New Family
-                </button>
+                {!postCreateAutoImported ? (
+                  <button type="button" className="button tap-button" onClick={importPostCreateMembers}>
+                    Import To New Family
+                  </button>
+                ) : null}
                 {postCreateImportStatus ? <p>{postCreateImportStatus}</p> : null}
               </div>
             ) : null}
