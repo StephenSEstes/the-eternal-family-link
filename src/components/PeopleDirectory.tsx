@@ -3,14 +3,24 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AddPersonCard } from "@/components/AddPersonCard";
+import { HouseholdEditModal } from "@/components/HouseholdEditModal";
+import { PersonEditModal } from "@/components/PersonEditModal";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 
 type PersonItem = {
   personId: string;
   displayName: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  nickName?: string;
   birthDate: string;
   gender: "male" | "female" | "unspecified";
   photoFileId: string;
+  phones?: string;
+  address?: string;
+  hobbies?: string;
+  notes?: string;
 };
 
 type PeopleDirectoryProps = {
@@ -19,6 +29,8 @@ type PeopleDirectoryProps = {
   canManage: boolean;
   people: PersonItem[];
   photoByPersonId: Record<string, string>;
+  edges: { id: string; fromPersonId: string; toPersonId: string; label: string }[];
+  households: { id: string; partner1PersonId: string; partner2PersonId: string }[];
 };
 
 function SearchIcon() {
@@ -48,8 +60,18 @@ function normalizeDateLabel(value: string) {
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoByPersonId }: PeopleDirectoryProps) {
+export function PeopleDirectory({
+  tenantKey,
+  basePath,
+  canManage,
+  people,
+  photoByPersonId,
+  edges,
+  households,
+}: PeopleDirectoryProps) {
   const [query, setQuery] = useState("");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -58,6 +80,10 @@ export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoB
     }
     return people.filter((person) => person.displayName.toLowerCase().includes(normalized));
   }, [people, query]);
+  const selectedPerson = useMemo(
+    () => people.find((item) => item.personId === selectedPersonId) ?? null,
+    [people, selectedPersonId],
+  );
 
   return (
     <main className="section">
@@ -88,7 +114,19 @@ export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoB
           const fallbackAvatar =
             person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
           return (
-            <article key={person.personId} className="person-card album-card">
+            <article
+              key={person.personId}
+              className="person-card album-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedPersonId(person.personId)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedPersonId(person.personId);
+                }
+              }}
+            >
               <div className="person-photo-wrap">
                 <img
                   src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
@@ -113,6 +151,26 @@ export function PeopleDirectory({ tenantKey, basePath, canManage, people, photoB
           );
         })}
       </section>
+
+      <PersonEditModal
+        open={Boolean(selectedPerson)}
+        tenantKey={tenantKey}
+        canManage={canManage}
+        person={selectedPerson}
+        people={people}
+        edges={edges}
+        households={households}
+        onClose={() => setSelectedPersonId("")}
+        onSaved={() => window.location.reload()}
+        onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
+      />
+      <HouseholdEditModal
+        open={Boolean(selectedHouseholdId)}
+        tenantKey={tenantKey}
+        householdId={selectedHouseholdId}
+        onClose={() => setSelectedHouseholdId("")}
+        onSaved={() => window.location.reload()}
+      />
     </main>
   );
 }

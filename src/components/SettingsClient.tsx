@@ -114,9 +114,15 @@ type CreateFamilyResponse = {
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
-type UserAdminSubTab = "directory" | "password_policy";
+type UserAdminSubTab = "directory" | "family_access" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
+
+type FamilyAccessRow = {
+  personId: string;
+  displayName: string;
+  isEnabled: boolean;
+};
 
 const CSV_TEMPLATES: Record<string, string> = {
   people: "display_name,birth_date,phones,address,hobbies,notes,photo_file_id\nJordan Tenant,1950-05-20,555-0104,44 Family Rd,Chess,Imported profile,",
@@ -283,6 +289,8 @@ export function SettingsClient({
   const [adminLoadStatus, setAdminLoadStatus] = useState("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
   const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string }[]>(people);
+  const [familyAccessRows, setFamilyAccessRows] = useState<FamilyAccessRow[]>([]);
+  const [familyAccessStatus, setFamilyAccessStatus] = useState("");
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
     buildDirectoryPeople(accessItems, [], people),
   );
@@ -423,12 +431,25 @@ export function SettingsClient({
     setAdminLoadStatus("");
   };
 
+  const loadFamilyAccessRows = async (tenantKeyToLoad: string) => {
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKeyToLoad)}/family-access`, { cache: "no-store" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setFamilyAccessStatus(`Load failed: ${res.status}`);
+      return;
+    }
+    const rows = Array.isArray(body?.rows) ? (body.rows as FamilyAccessRow[]) : [];
+    setFamilyAccessRows(rows);
+    setFamilyAccessStatus("");
+  };
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       setSelectedDirectoryPersonId("");
       setSelectedLocalUsername("");
       await loadTenantAdminData(selectedTenantKey);
+      await loadFamilyAccessRows(selectedTenantKey);
       if (cancelled) {
         return;
       }
@@ -494,6 +515,25 @@ export function SettingsClient({
     setAccessStatus("Saved.");
     await loadTenantAdminData(selectedTenantKey);
     router.refresh();
+  };
+
+  const toggleFamilyAccess = async (personIdToToggle: string, nextEnabled: boolean) => {
+    setFamilyAccessStatus("Saving...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/family-access`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personId: personIdToToggle, isEnabled: nextEnabled }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      setFamilyAccessStatus(`Save failed: ${res.status} ${body.slice(0, 120)}`);
+      return;
+    }
+    setFamilyAccessRows((current) =>
+      current.map((row) => (row.personId === personIdToToggle ? { ...row, isEnabled: nextEnabled } : row)),
+    );
+    setFamilyAccessStatus("Saved.");
+    await loadTenantAdminData(selectedTenantKey);
   };
 
   const createTenant = async () => {
@@ -1340,6 +1380,16 @@ export function SettingsClient({
           </button>
           <button
             type="button"
+            className={`button secondary tap-button ${userAdminSubTab === "family_access" ? "game-option-selected" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("family_access");
+              setShowAddUserForm(false);
+            }}
+          >
+            Family Access
+          </button>
+          <button
+            type="button"
             className={`button secondary tap-button ${userAdminSubTab === "password_policy" ? "game-option-selected" : ""}`}
             onClick={() => {
               setUserAdminSubTab("password_policy");
@@ -1662,6 +1712,42 @@ export function SettingsClient({
               </p>
             ) : null}
 
+          </>
+        ) : null}
+
+        {userAdminSubTab === "family_access" ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>Family Group Access</h3>
+            <p className="page-subtitle">
+              People in this family group can be switched on/off for family visibility and access.
+            </p>
+            <div className="settings-table-wrap">
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Person</th><th>Family Access Enabled</th></tr>
+                </thead>
+                <tbody>
+                  {familyAccessRows.length > 0 ? familyAccessRows.map((row) => (
+                    <tr key={`fam-access-${row.personId}`}>
+                      <td>{row.displayName}</td>
+                      <td>
+                        <label className="label" style={{ margin: 0 }}>
+                          <input
+                            type="checkbox"
+                            checked={row.isEnabled}
+                            onChange={(e) => void toggleFamilyAccess(row.personId, e.target.checked)}
+                          />{" "}
+                          {row.isEnabled ? "On" : "Off"}
+                        </label>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={2}>No family membership links found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {familyAccessStatus ? <p>{familyAccessStatus}</p> : null}
           </>
         ) : null}
 

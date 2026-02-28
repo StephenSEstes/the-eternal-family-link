@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { HouseholdEditModal } from "@/components/HouseholdEditModal";
+import { PersonEditModal } from "@/components/PersonEditModal";
 import { FocusPanel } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
@@ -15,6 +17,10 @@ type PersonNode = {
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   birthDate?: string;
+  phones?: string;
+  address?: string;
+  hobbies?: string;
+  notes?: string;
 };
 
 type GraphEdge = {
@@ -33,12 +39,14 @@ type HouseholdLink = {
 };
 
 type TreeGraphProps = {
+  tenantKey: string;
+  canManage: boolean;
   nodes: PersonNode[];
   edges: GraphEdge[];
   households?: HouseholdLink[];
 };
 
-export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
+export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] }: TreeGraphProps) {
   const NODE_CARD_WIDTH = 208;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
   const NODE_HALF_HEIGHT = 30;
@@ -270,6 +278,8 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [editPersonId, setEditPersonId] = useState("");
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
 
@@ -308,6 +318,7 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
 
   const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) ?? null : null;
+  const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
 
   const getAvatarUrl = useCallback(
     (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
@@ -597,6 +608,20 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
                 rx={22}
                 ry={22}
                 className={`tree-spouse-cluster ${dimmed ? "tree-dimmed" : ""}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!canManage) {
+                    return;
+                  }
+                  const unit = households.find((item) => {
+                    const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
+                    const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
+                    return matchForward || matchReverse;
+                  });
+                  if (unit) {
+                    setSelectedHouseholdId(unit.id);
+                  }
+                }}
               />
               {label ? (
                 <text x={midX} y={midY + 4} className="tree-family-label">
@@ -684,7 +709,12 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
               avatarUrl={getAvatarUrl(node)}
               selected={isSelected}
               dimmed={isDimmed}
-              onSelect={setSelectedPersonId}
+              onSelect={(personId) => {
+                setSelectedPersonId(personId);
+                if (canManage) {
+                  setEditPersonId(personId);
+                }
+              }}
             />
           </div>
         );
@@ -702,6 +732,25 @@ export function TreeGraph({ nodes, edges, households = [] }: TreeGraphProps) {
           onClose={() => setSelectedPersonId("")}
         />
       ) : null}
+      <PersonEditModal
+        open={Boolean(editPerson)}
+        tenantKey={tenantKey}
+        canManage={canManage}
+        person={editPerson}
+        people={nodes}
+        edges={edges}
+        households={households}
+        onClose={() => setEditPersonId("")}
+        onSaved={() => window.location.reload()}
+        onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
+      />
+      <HouseholdEditModal
+        open={Boolean(selectedHouseholdId)}
+        tenantKey={tenantKey}
+        householdId={selectedHouseholdId}
+        onClose={() => setSelectedHouseholdId("")}
+        onSaved={() => window.location.reload()}
+      />
     </div>
   );
 }

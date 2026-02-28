@@ -80,7 +80,15 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "relationships",
   ],
   Relationships: ["family_group_key", "rel_id", "from_person_id", "to_person_id", "rel_type"],
-  Households: ["family_group_key", "household_id", "husband_person_id", "wife_person_id"],
+  Households: [
+    "family_group_key",
+    "household_id",
+    "husband_person_id",
+    "wife_person_id",
+    "label",
+    "notes",
+    "wedding_photo_file_id",
+  ],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
     "attribute_id",
@@ -215,6 +223,17 @@ function setCell(row: string[], indexMap: Map<string, number>, key: string, valu
     return;
   }
   row[idx] = value;
+}
+
+function readValue(record: Record<string, string>, ...keys: string[]) {
+  const lowered = new Map(Object.entries(record).map(([key, value]) => [key.trim().toLowerCase(), value]));
+  for (const key of keys) {
+    const value = lowered.get(key.trim().toLowerCase());
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return "";
 }
 
 function toSheetBool(value: boolean) {
@@ -391,7 +410,7 @@ async function ensureTabWithHeaders(sheets: sheets_v4.Sheets, tabName: string, h
   }
 }
 
-async function ensureResolvedTabColumns(
+export async function ensureResolvedTabColumns(
   tabName: string | string[],
   requiredHeaders: string[],
   tenantKey?: string,
