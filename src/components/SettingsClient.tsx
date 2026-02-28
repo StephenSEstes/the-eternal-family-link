@@ -554,8 +554,23 @@ export function SettingsClient({
     }
     if (!res.ok || !body) {
       const text = typeof body === "object" ? JSON.stringify(body) : rawText;
-      setNewTenantStatus(`Failed: ${res.status} ${(text || "No error body").slice(0, 220)}`);
-      setCreateFamilyDebugNotes((text || "No error body").slice(0, 800));
+      const errorBody = body as Record<string, unknown> | null;
+      const debugCounters = errorBody && typeof errorBody.debug === "object"
+        ? JSON.stringify(errorBody.debug)
+        : "";
+      const message = errorBody && typeof errorBody.message === "string" ? errorBody.message : "";
+      const hint = errorBody && typeof errorBody.hint === "string" ? errorBody.hint : "";
+      const summary = errorBody && typeof errorBody.debug_summary === "string" ? errorBody.debug_summary : "";
+      setNewTenantStatus(`Failed: ${res.status} ${(message || text || "No error body").slice(0, 220)}`);
+      const debugText = [
+        summary ? `Summary: ${summary}` : "",
+        debugCounters ? `Counters: ${debugCounters}` : "",
+        hint ? `Hint: ${hint}` : "",
+        `Raw: ${(text || "No error body").slice(0, 800)}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      setCreateFamilyDebugNotes(debugText);
       return;
     }
     const targetKey = String(body.familyGroupKey ?? "").trim().toLowerCase();
@@ -1975,6 +1990,29 @@ export function SettingsClient({
             {createFamilyStep === 1 ? (
               <div>
                 <h4 style={{ marginTop: 0 }}>Matriarch</h4>
+                <label className="label">Initial Admin (existing person)</label>
+                <select
+                  className="input"
+                  value={newInitialAdminPersonId}
+                  onChange={(e) => {
+                    setNewInitialAdminPersonId(e.target.value);
+                    setPreCreateHouseholdCandidates([]);
+                    setPreCreateMemberPersonIds([]);
+                    setPreCreatePreviewStatus("");
+                  }}
+                >
+                  <option value="">Select existing person</option>
+                  {createGroupInitialAdminOptions.map((person) => (
+                    <option key={person.personId} value={person.personId}>
+                      {person.displayName}
+                    </option>
+                  ))}
+                </select>
+                {createGroupInitialAdminOptions.length === 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    No people found in this source family group. Add people first before creating a new family group.
+                  </p>
+                ) : null}
                 <label className="label">
                   <input
                     type="checkbox"
@@ -2084,30 +2122,10 @@ export function SettingsClient({
 
             {createFamilyStep === 3 ? (
               <div>
-                <h4 style={{ marginTop: 0 }}>Initial Admin and Import Preview</h4>
-                <label className="label">Initial Admin (existing person)</label>
-                <select
-                  className="input"
-                  value={newInitialAdminPersonId}
-                  onChange={(e) => {
-                    setNewInitialAdminPersonId(e.target.value);
-                    setPreCreateHouseholdCandidates([]);
-                    setPreCreateMemberPersonIds([]);
-                    setPreCreatePreviewStatus("");
-                  }}
-                >
-                  <option value="">Select existing person</option>
-                  {createGroupInitialAdminOptions.map((person) => (
-                    <option key={person.personId} value={person.personId}>
-                      {person.displayName}
-                    </option>
-                  ))}
-                </select>
-                {createGroupInitialAdminOptions.length === 0 ? (
-                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                    No people found in this source family group. Add people first before creating a new family group.
-                  </p>
-                ) : null}
+                <h4 style={{ marginTop: 0 }}>Import Preview (Optional)</h4>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Spouse and children import is enabled by default. Load preview only if you want to review or uncheck specific people.
+                </p>
                 <label className="label">
                   <input
                     type="checkbox"
@@ -2244,6 +2262,10 @@ export function SettingsClient({
                   className="button tap-button"
                   onClick={async () => {
                     if (createFamilyStep === 1) {
+                      if (!newInitialAdminPersonId.trim()) {
+                        setNewTenantStatus("Select an initial admin before continuing.");
+                        return;
+                      }
                       if (!newMatriarchMaidenName.trim()) {
                         setNewTenantStatus("Matriarch maiden name is required.");
                         return;
@@ -2268,13 +2290,7 @@ export function SettingsClient({
                       }
                     }
                     if (createFamilyStep === 3) {
-                      if (!newInitialAdminPersonId.trim()) {
-                        setNewTenantStatus("Select an initial admin before continuing.");
-                        return;
-                      }
-                      if (newIncludeHouseholdCandidates && preCreateHouseholdCandidates.length === 0) {
-                        await previewCreateFamilyCandidates();
-                      }
+                      // Preview is optional. Create flow can continue without preloading candidates.
                     }
                     setNewTenantStatus("");
                     setCreateFamilyDebugNotes("");

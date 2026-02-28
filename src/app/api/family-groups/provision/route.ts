@@ -553,41 +553,40 @@ export async function POST(request: Request) {
   let autoImportedAccessCount = 0;
   let autoImportedHouseholdCandidates = false;
   if (parsed.data.includeHouseholdCandidates) {
-    const households = await countedGetTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
-    const relationships = await countedGetTableRecords("Relationships").catch(() => []);
-    const candidateIds = new Set<string>();
-    const spouseIds = new Set<string>();
-    for (const row of households) {
-      const partner1 = readValue(row.data, "husband_person_id");
-      const partner2 = readValue(row.data, "wife_person_id");
-      if (partner1 === parsed.data.initialAdminPersonId && partner2) {
-        candidateIds.add(partner2);
-        spouseIds.add(partner2);
-      }
-      if (partner2 === parsed.data.initialAdminPersonId && partner1) {
-        candidateIds.add(partner1);
-        spouseIds.add(partner1);
-      }
-    }
-    for (const row of relationships) {
-      const relType = readValue(row.data, "rel_type").toLowerCase();
-      const fromPersonId = readValue(row.data, "from_person_id");
-      const toPersonId = readValue(row.data, "to_person_id");
-      if (
-        relType === "parent" &&
-        toPersonId &&
-        (fromPersonId === parsed.data.initialAdminPersonId || spouseIds.has(fromPersonId))
-      ) {
-        candidateIds.add(toPersonId);
-      }
-    }
     const selectedCandidateIds = new Set(
       parsed.data.householdCandidatePersonIds.map((value) => value.trim()).filter(Boolean),
     );
+    const candidateIds = new Set<string>();
     if (selectedCandidateIds.size > 0) {
-      for (const candidateId of Array.from(candidateIds)) {
-        if (!selectedCandidateIds.has(candidateId)) {
-          candidateIds.delete(candidateId);
+      for (const candidateId of selectedCandidateIds) {
+        candidateIds.add(candidateId);
+      }
+    } else {
+      const households = await countedGetTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
+      const relationships = await countedGetTableRecords("Relationships").catch(() => []);
+      const spouseIds = new Set<string>();
+      for (const row of households) {
+        const partner1 = readValue(row.data, "husband_person_id");
+        const partner2 = readValue(row.data, "wife_person_id");
+        if (partner1 === parsed.data.initialAdminPersonId && partner2) {
+          candidateIds.add(partner2);
+          spouseIds.add(partner2);
+        }
+        if (partner2 === parsed.data.initialAdminPersonId && partner1) {
+          candidateIds.add(partner1);
+          spouseIds.add(partner1);
+        }
+      }
+      for (const row of relationships) {
+        const relType = readValue(row.data, "rel_type").toLowerCase();
+        const fromPersonId = readValue(row.data, "from_person_id");
+        const toPersonId = readValue(row.data, "to_person_id");
+        if (
+          relType === "parent" &&
+          toPersonId &&
+          (fromPersonId === parsed.data.initialAdminPersonId || spouseIds.has(fromPersonId))
+        ) {
+          candidateIds.add(toPersonId);
         }
       }
     }
@@ -695,9 +694,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "provision_failed",
+        debug,
+        debug_summary: `getPeople=${debug.getPeopleCalls}, getTableRecords=${debug.getTableRecordsCalls}, createTableRecord=${debug.createTableRecordCalls}, upsertTenantAccess=${debug.upsertTenantAccessCalls}`,
         message,
         hint: "Retry in 60-90 seconds if this is a quota error.",
-        debug,
       },
       { status: 500 },
     );
