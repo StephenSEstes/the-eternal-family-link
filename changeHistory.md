@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Added hidden Steve super-access for developer account with global family-group ADMIN session scope (no new UI role). See `docs/change-summary.md`.
+- 2026-02-28: Stabilized Steve login/session by caching family access in JWT and reducing repeated Sheets reads during token refresh. See `docs/change-summary.md`.

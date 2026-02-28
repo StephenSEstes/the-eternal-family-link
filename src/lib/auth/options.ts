@@ -147,12 +147,32 @@ export const authOptions: NextAuthOptions = {
 
       const currentEmail = (typeof user?.email === "string" ? user.email : token.email) ?? "";
       if (hasSteveAccess(currentEmail)) {
-        const existingAccesses = await getEnabledUserAccessList(currentEmail);
-        const personId =
-          existingAccesses[0]?.personId ||
-          (typeof token.person_id === "string" ? token.person_id : "") ||
-          STEVE_PERSON_ID;
-        const allAccesses = await getAllFamilyGroupAccesses(personId);
+        const personId = (typeof token.person_id === "string" ? token.person_id : "") || STEVE_PERSON_ID;
+        const cachedAccesses =
+          Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
+            ? (token.tenantAccesses as {
+                tenantKey: string;
+                tenantName: string;
+                role: "ADMIN" | "USER";
+                personId: string;
+              }[])
+            : [];
+        let allAccesses = cachedAccesses;
+        // Refresh from sheets only on initial sign-in or when cache is empty.
+        if (user?.email || allAccesses.length === 0) {
+          try {
+            allAccesses = await getAllFamilyGroupAccesses(personId);
+          } catch {
+            allAccesses = [
+              {
+                tenantKey: DEFAULT_TENANT_KEY,
+                tenantName: DEFAULT_TENANT_NAME,
+                role: "ADMIN",
+                personId,
+              },
+            ];
+          }
+        }
         const primary = allAccesses[0] ?? {
           tenantKey: DEFAULT_TENANT_KEY,
           tenantName: DEFAULT_TENANT_NAME,
