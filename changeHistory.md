@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Existing-parent family-create flow now resolves names globally, hides manual fields, and defaults matriarch maiden name from middle name. See `docs/change-summary.md`.
+- 2026-02-28: Fixed API mismatch so existing matriarch/patriarch can be selected from any family (global people scope). See `docs/change-summary.md`.

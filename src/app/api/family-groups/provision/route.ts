@@ -222,6 +222,7 @@ export async function POST(request: Request) {
   }
 
   const sourcePeopleRows = await getPeople(sourceFamilyGroupKey).catch(() => []);
+  const globalPeopleRows = await getPeople().catch(() => []);
   const sourcePeopleById = new Map<string, Record<string, string>>();
   for (const row of sourcePeopleRows) {
     const personId = row.personId.trim();
@@ -229,6 +230,30 @@ export async function POST(request: Request) {
       continue;
     }
     sourcePeopleById.set(personId, {
+      person_id: row.personId,
+      display_name: row.displayName,
+      first_name: row.firstName ?? "",
+      middle_name: row.middleName ?? "",
+      last_name: row.lastName ?? "",
+      nick_name: row.nickName ?? "",
+      birth_date: row.birthDate,
+      gender: row.gender ?? "unspecified",
+      phones: row.phones,
+      address: row.address,
+      hobbies: row.hobbies,
+      notes: row.notes,
+      photo_file_id: row.photoFileId,
+      is_pinned: row.isPinned ? "TRUE" : "FALSE",
+      relationships: row.relationships.join(","),
+    });
+  }
+  const globalPeopleById = new Map<string, Record<string, string>>();
+  for (const row of globalPeopleRows) {
+    const personId = row.personId.trim();
+    if (!personId || globalPeopleById.has(personId)) {
+      continue;
+    }
+    globalPeopleById.set(personId, {
       person_id: row.personId,
       display_name: row.displayName,
       first_name: row.firstName ?? "",
@@ -261,15 +286,15 @@ export async function POST(request: Request) {
   const patriarchPersonId = existingPatriarchPersonId ||
     buildPersonId(patriarchFullName, parsed.data.patriarchBirthDate ?? "") ||
     buildSeedPersonId(familyGroupKey, "patriarch", patriarchFullName);
-  if (existingPatriarchPersonId && !sourcePeopleById.has(existingPatriarchPersonId)) {
+  if (existingPatriarchPersonId && !globalPeopleById.has(existingPatriarchPersonId)) {
     return NextResponse.json(
-      { error: "invalid_existing_patriarch", issues: "Selected existing patriarch was not found in source family people." },
+      { error: "invalid_existing_patriarch", issues: "Selected existing patriarch was not found in global people." },
       { status: 400 },
     );
   }
   if (!existingInTarget.has(patriarchPersonId)) {
     if (existingPatriarchPersonId) {
-      const source = sourcePeopleById.get(existingPatriarchPersonId)!;
+      const source = globalPeopleById.get(existingPatriarchPersonId)!;
       await createTableRecord(
         "People",
         {
@@ -322,15 +347,15 @@ export async function POST(request: Request) {
   const matriarchPersonId = existingMatriarchPersonId ||
     buildPersonId(matriarchFullName, parsed.data.matriarchBirthDate ?? "") ||
     buildSeedPersonId(familyGroupKey, "matriarch", matriarchFullName);
-  if (existingMatriarchPersonId && !sourcePeopleById.has(existingMatriarchPersonId)) {
+  if (existingMatriarchPersonId && !globalPeopleById.has(existingMatriarchPersonId)) {
     return NextResponse.json(
-      { error: "invalid_existing_matriarch", issues: "Selected existing matriarch was not found in source family people." },
+      { error: "invalid_existing_matriarch", issues: "Selected existing matriarch was not found in global people." },
       { status: 400 },
     );
   }
   if (!existingInTarget.has(matriarchPersonId)) {
     if (existingMatriarchPersonId) {
-      const source = sourcePeopleById.get(existingMatriarchPersonId)!;
+      const source = globalPeopleById.get(existingMatriarchPersonId)!;
       await createTableRecord(
         "People",
         {
