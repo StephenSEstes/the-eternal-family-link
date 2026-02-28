@@ -7,7 +7,7 @@ import {
   getTenantSecurityPolicy,
   patchLocalUser,
 } from "@/lib/auth/local-users";
-import { getEnabledUserAccess, getEnabledUserAccessList } from "@/lib/google/sheets";
+import { getEnabledUserAccess, getEnabledUserAccessList, getEnabledUserAccessListByPersonId } from "@/lib/google/sheets";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 import { verifyPassword } from "@/lib/security/password";
 
@@ -142,6 +142,23 @@ export const authOptions: NextAuthOptions = {
         token.tenantKey = primary.tenantKey;
         token.tenantName = primary.tenantName;
         token.tenantAccesses = accesses;
+      }
+
+      const tokenPersonId = typeof token.person_id === "string" ? token.person_id.trim() : "";
+      if (tokenPersonId) {
+        const accesses = await getEnabledUserAccessListByPersonId(tokenPersonId);
+        if (accesses.length > 0) {
+          const primary = accesses[0];
+          token.role = primary.role;
+          token.person_id = primary.personId;
+          token.tenantKey = primary.tenantKey;
+          token.tenantName = primary.tenantName;
+          token.tenantAccesses = accesses;
+        } else {
+          token.tenantAccesses = [];
+          token.tenantKey = DEFAULT_TENANT_KEY;
+          token.tenantName = DEFAULT_TENANT_NAME;
+        }
       }
 
       return token;

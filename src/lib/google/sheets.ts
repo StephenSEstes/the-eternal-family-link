@@ -970,6 +970,35 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
   return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
 }
 
+export async function getEnabledUserAccessListByPersonId(personId: string): Promise<TenantAccess[]> {
+  const targetPersonId = personId.trim();
+  if (!targetPersonId) {
+    return [];
+  }
+  const links = await ensureUserFamilyGroupsTabSchema();
+  if (links.headers.length === 0) {
+    return [];
+  }
+  const idx = buildHeaderIndex(links.headers);
+  const familyMap = new Map<string, TenantAccess>();
+  for (const row of links.rows) {
+    const rowPersonId = getCell(row, idx, "person_id").trim();
+    const isEnabled = parseBool(getCell(row, idx, "is_enabled"));
+    if (rowPersonId !== targetPersonId || !isEnabled) {
+      continue;
+    }
+    const tenantKey = getCell(row, idx, "family_group_key").trim() || DEFAULT_TENANT_KEY;
+    const tenantName = getCell(row, idx, "family_group_name").trim() || DEFAULT_TENANT_NAME;
+    familyMap.set(tenantKey, {
+      tenantKey,
+      tenantName,
+      role: toRole(getCell(row, idx, "role")),
+      personId: rowPersonId,
+    });
+  }
+  return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+}
+
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   const [links, users] = await Promise.all([
