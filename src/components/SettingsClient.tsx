@@ -101,6 +101,16 @@ type CreateFamilyResponse = {
   autoImportedHouseholdCandidates?: boolean;
   autoImportedPeopleCount?: number;
   autoImportedAccessCount?: number;
+  debug?: {
+    getPeopleCalls: number;
+    getTableRecordsCalls: number;
+    createTableRecordCalls: number;
+    upsertTenantAccessCalls: number;
+    ensureTenantPhotosFolderCalls: number;
+    ensureTenantScaffoldCalls: number;
+    upsertParentRelationCalls: number;
+    upsertFamilyUnitCalls: number;
+  };
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
@@ -567,7 +577,10 @@ export function SettingsClient({
         ? `Family group created. Household candidates were imported now. Imported people: ${autoImportedPeopleCount}, imported access links: ${autoImportedAccessCount}.`
         : "Family group created. Review household imports below, then import selected members.",
     );
-    setCreateFamilyDebugNotes(`Create success: key=${targetKey}, autoImported=${autoImported}, importedPeople=${autoImportedPeopleCount}, importedAccess=${autoImportedAccessCount}`);
+    const debugText = body.debug ? `, calls=${JSON.stringify(body.debug)}` : "";
+    setCreateFamilyDebugNotes(
+      `Create success: key=${targetKey}, autoImported=${autoImported}, importedPeople=${autoImportedPeopleCount}, importedAccess=${autoImportedAccessCount}${debugText}`,
+    );
     if (targetKey) {
       await fetch("/api/family-groups/active", {
         method: "POST",

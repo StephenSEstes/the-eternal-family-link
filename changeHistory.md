@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Fixed API mismatch so existing matriarch/patriarch can be selected from any family (global people scope). See `docs/change-summary.md`.
+- 2026-02-28: Family-create now includes API call counters in debug output and reduced repeated membership reads to lower Sheets quota pressure. See `docs/change-summary.md`.

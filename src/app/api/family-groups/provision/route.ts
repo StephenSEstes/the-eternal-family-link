@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth/options";
 import { ensureTenantPhotosFolder } from "@/lib/google/drive";
 import {
   createTableRecord,
-  ensurePersonFamilyGroupMembership,
   ensureTenantScaffold,
   getPeople,
   getTableRecords,
@@ -167,6 +166,39 @@ export async function POST(request: Request) {
   }
 
   try {
+    const debug = {
+      getPeopleCalls: 0,
+      getTableRecordsCalls: 0,
+      createTableRecordCalls: 0,
+      upsertTenantAccessCalls: 0,
+      ensureTenantPhotosFolderCalls: 0,
+      ensureTenantScaffoldCalls: 0,
+      upsertParentRelationCalls: 0,
+      upsertFamilyUnitCalls: 0,
+    };
+    const countedGetPeople = async (tenantKey?: string) => {
+      debug.getPeopleCalls += 1;
+      return getPeople(tenantKey);
+    };
+    const countedGetTableRecords = async (tabName: string | string[], tenantKey?: string) => {
+      debug.getTableRecordsCalls += 1;
+      return getTableRecords(tabName, tenantKey);
+    };
+    const countedCreateTableRecord = async (
+      tabName: string | string[],
+      values: Record<string, string>,
+      tenantKey?: string,
+    ) => {
+      debug.createTableRecordCalls += 1;
+      return createTableRecord(tabName, values, tenantKey);
+    };
+    const countedUpsertTenantAccess = async (
+      input: Parameters<typeof upsertTenantAccess>[0],
+    ) => {
+      debug.upsertTenantAccessCalls += 1;
+      return upsertTenantAccess(input);
+    };
+
     const payload = await request.json().catch(() => null);
     const parsed = payloadSchema.safeParse(payload);
     if (!parsed.success) {
@@ -221,8 +253,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const sourcePeopleRows = await getPeople(sourceFamilyGroupKey).catch(() => []);
-  const globalPeopleRows = await getPeople().catch(() => []);
+  const sourcePeopleRows = await countedGetPeople(sourceFamilyGroupKey).catch(() => []);
+  const globalPeopleRows = await countedGetPeople().catch(() => []);
   const sourcePeopleById = new Map<string, Record<string, string>>();
   for (const row of sourcePeopleRows) {
     const personId = row.personId.trim();
@@ -272,15 +304,36 @@ export async function POST(request: Request) {
     });
   }
 
+  debug.ensureTenantPhotosFolderCalls += 1;
   const photosFolderId = await ensureTenantPhotosFolder(familyGroupKey, familyGroupName);
+  debug.ensureTenantScaffoldCalls += 1;
   await ensureTenantScaffold({
     tenantKey: familyGroupKey,
     tenantName: familyGroupName,
     photosFolderId,
   });
 
-  const targetPeopleRows = await getTableRecords("People", familyGroupKey);
+  const targetPeopleRows = await countedGetTableRecords("People", familyGroupKey);
   const existingInTarget = new Set(targetPeopleRows.map((row) => (row.data.person_id ?? "").trim()).filter(Boolean));
+  const personFamilyRows = await countedGetTableRecords("PersonFamilyGroups").catch(() => []);
+  const existingMemberships = new Set(
+    personFamilyRows
+      .filter((row) => readValue(row.data, "family_group_key", "tenant_key").toLowerCase() === familyGroupKey)
+      .map((row) => (row.data.person_id ?? "").trim())
+      .filter(Boolean),
+  );
+  const ensureMembership = async (personId: string) => {
+    const normalized = personId.trim();
+    if (!normalized || existingMemberships.has(normalized)) {
+      return;
+    }
+    await countedCreateTableRecord("PersonFamilyGroups", {
+      person_id: normalized,
+      family_group_key: familyGroupKey,
+      is_enabled: "TRUE",
+    });
+    existingMemberships.add(normalized);
+  };
 
   const existingPatriarchPersonId = (parsed.data.existingPatriarchPersonId ?? "").trim();
   const patriarchPersonId = existingPatriarchPersonId ||
@@ -295,7 +348,7 @@ export async function POST(request: Request) {
   if (!existingInTarget.has(patriarchPersonId)) {
     if (existingPatriarchPersonId) {
       const source = globalPeopleById.get(existingPatriarchPersonId)!;
-      await createTableRecord(
+      await countedCreateTableRecord(
         "People",
         {
           person_id: existingPatriarchPersonId,
@@ -317,7 +370,7 @@ export async function POST(request: Request) {
         familyGroupKey,
       );
     } else {
-      await createTableRecord(
+      await countedCreateTableRecord(
         "People",
         {
           person_id: patriarchPersonId,
@@ -341,7 +394,7 @@ export async function POST(request: Request) {
     }
     existingInTarget.add(patriarchPersonId);
   }
-  await ensurePersonFamilyGroupMembership(patriarchPersonId, familyGroupKey, true);
+  await ensureMembership(patriarchPersonId);
 
   const existingMatriarchPersonId = (parsed.data.existingMatriarchPersonId ?? "").trim();
   const matriarchPersonId = existingMatriarchPersonId ||
@@ -356,7 +409,7 @@ export async function POST(request: Request) {
   if (!existingInTarget.has(matriarchPersonId)) {
     if (existingMatriarchPersonId) {
       const source = globalPeopleById.get(existingMatriarchPersonId)!;
-      await createTableRecord(
+      await countedCreateTableRecord(
         "People",
         {
           person_id: existingMatriarchPersonId,
@@ -378,7 +431,7 @@ export async function POST(request: Request) {
         familyGroupKey,
       );
     } else {
-      await createTableRecord(
+      await countedCreateTableRecord(
         "People",
         {
           person_id: matriarchPersonId,
@@ -402,7 +455,7 @@ export async function POST(request: Request) {
     }
     existingInTarget.add(matriarchPersonId);
   }
-  await ensurePersonFamilyGroupMembership(matriarchPersonId, familyGroupKey, true);
+  await ensureMembership(matriarchPersonId);
 
   const requestedMemberIds = Array.from(
     new Set([parsed.data.initialAdminPersonId, ...parsed.data.memberPersonIds.map((value) => value.trim()).filter(Boolean)]),
@@ -417,14 +470,14 @@ export async function POST(request: Request) {
   let copiedPeopleCount = 0;
   for (const personId of requestedMemberIds) {
     if (existingInTarget.has(personId)) {
-      await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+      await ensureMembership(personId);
       continue;
     }
     const source = sourcePeopleById.get(personId);
     if (!source) {
       continue;
     }
-    await createTableRecord(
+    await countedCreateTableRecord(
       "People",
       {
         person_id: personId,
@@ -441,11 +494,11 @@ export async function POST(request: Request) {
       familyGroupKey,
     );
     existingInTarget.add(personId);
-    await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+    await ensureMembership(personId);
     copiedPeopleCount += 1;
   }
 
-  const accessRows = await getTableRecords("UserFamilyGroups").catch(() => []);
+  const accessRows = await countedGetTableRecords("UserFamilyGroups").catch(() => []);
   const importedAccessKeys = new Set<string>();
   let importedAccessCount = 0;
   for (const row of accessRows) {
@@ -466,7 +519,7 @@ export async function POST(request: Request) {
       continue;
     }
     importedAccessKeys.add(dedupeKey);
-    await upsertTenantAccess({
+    await countedUpsertTenantAccess({
       userEmail,
       tenantKey: familyGroupKey,
       tenantName: familyGroupName,
@@ -477,8 +530,10 @@ export async function POST(request: Request) {
     importedAccessCount += 1;
   }
 
+  debug.upsertFamilyUnitCalls += 1;
   await upsertFamilyUnit(familyGroupKey, patriarchPersonId, matriarchPersonId);
   if (parsed.data.parentsAreInitialAdminParents) {
+    debug.upsertParentRelationCalls += 2;
     await upsertParentRelation(patriarchPersonId, parsed.data.initialAdminPersonId);
     await upsertParentRelation(matriarchPersonId, parsed.data.initialAdminPersonId);
   }
@@ -488,8 +543,8 @@ export async function POST(request: Request) {
   let autoImportedAccessCount = 0;
   let autoImportedHouseholdCandidates = false;
   if (parsed.data.includeHouseholdCandidates) {
-    const households = await getTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
-    const relationships = await getTableRecords("Relationships").catch(() => []);
+    const households = await countedGetTableRecords("Households", sourceFamilyGroupKey).catch(() => []);
+    const relationships = await countedGetTableRecords("Relationships").catch(() => []);
     const candidateIds = new Set<string>();
     const spouseIds = new Set<string>();
     for (const row of households) {
@@ -546,14 +601,14 @@ export async function POST(request: Request) {
       autoImportedHouseholdCandidates = true;
       for (const personId of candidatePersonIds) {
         if (existingInTarget.has(personId)) {
-          await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+          await ensureMembership(personId);
           continue;
         }
         const source = sourcePeopleById.get(personId);
         if (!source) {
           continue;
         }
-        await createTableRecord(
+        await countedCreateTableRecord(
           "People",
           {
             person_id: personId,
@@ -570,7 +625,7 @@ export async function POST(request: Request) {
           familyGroupKey,
         );
         existingInTarget.add(personId);
-        await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+        await ensureMembership(personId);
         autoImportedPeopleCount += 1;
       }
 
@@ -592,7 +647,7 @@ export async function POST(request: Request) {
           continue;
         }
         importedAccessKeys.add(dedupeKey);
-        await upsertTenantAccess({
+        await countedUpsertTenantAccess({
           userEmail,
           tenantKey: familyGroupKey,
           tenantName: familyGroupName,
@@ -623,6 +678,7 @@ export async function POST(request: Request) {
       autoImportedHouseholdCandidates,
       autoImportedPeopleCount,
       autoImportedAccessCount,
+      debug,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -630,6 +686,7 @@ export async function POST(request: Request) {
       {
         error: "provision_failed",
         message,
+        hint: "Retry in 60-90 seconds if this is a quota error.",
       },
       { status: 500 },
     );
