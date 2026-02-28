@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Family-create now selects initial admin in step 1 and avoids extra preview/recompute reads unless needed, reducing quota pressure. See `docs/change-summary.md`.
+- 2026-02-28: Added hidden Steve super-access for developer account with global family-group ADMIN session scope (no new UI role). See `docs/change-summary.md`.

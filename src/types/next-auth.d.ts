@@ -9,6 +9,7 @@ declare module "next-auth" {
       image?: string | null;
       role?: "ADMIN" | "USER";
       person_id?: string;
+      steveAccess?: boolean;
       tenantAccesses?: {
         tenantKey: string;
         tenantName: string;
@@ -29,6 +30,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: "ADMIN" | "USER";
     person_id?: string;
+    steveAccess?: boolean;
     tenantKey?: string;
     tenantName?: string;
     familyGroupKey?: string;

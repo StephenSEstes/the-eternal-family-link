@@ -7,7 +7,12 @@ import {
   getTenantSecurityPolicy,
   patchLocalUser,
 } from "@/lib/auth/local-users";
-import { getEnabledUserAccess, getEnabledUserAccessList, getEnabledUserAccessListByPersonId } from "@/lib/google/sheets";
+import {
+  getAllFamilyGroupAccesses,
+  getEnabledUserAccess,
+  getEnabledUserAccessList,
+  getEnabledUserAccessListByPersonId,
+} from "@/lib/google/sheets";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 import { verifyPassword } from "@/lib/security/password";
 
@@ -17,6 +22,13 @@ function normalizeTenantKey(value?: string) {
     return DEFAULT_TENANT_KEY;
   }
   return raw || DEFAULT_TENANT_KEY;
+}
+
+const STEVE_ACCESS_EMAIL = "stephensestes@gmail.com";
+const STEVE_PERSON_ID = "19660812-stephen-snow-estes";
+
+function hasSteveAccess(email?: string | null) {
+  return (email ?? "").trim().toLowerCase() === STEVE_ACCESS_EMAIL;
 }
 
 export const authOptions: NextAuthOptions = {
@@ -104,6 +116,9 @@ export const authOptions: NextAuthOptions = {
       if (!user.email) {
         return false;
       }
+      if (hasSteveAccess(user.email)) {
+        return true;
+      }
 
       const access = await getEnabledUserAccess(user.email);
       return !!access;
@@ -127,6 +142,29 @@ export const authOptions: NextAuthOptions = {
         token.tenantKey = local.tenantKey;
         token.tenantName = local.tenantName;
         token.tenantAccesses = local.tenantAccesses ?? [];
+        return token;
+      }
+
+      const currentEmail = (typeof user?.email === "string" ? user.email : token.email) ?? "";
+      if (hasSteveAccess(currentEmail)) {
+        const existingAccesses = await getEnabledUserAccessList(currentEmail);
+        const personId =
+          existingAccesses[0]?.personId ||
+          (typeof token.person_id === "string" ? token.person_id : "") ||
+          STEVE_PERSON_ID;
+        const allAccesses = await getAllFamilyGroupAccesses(personId);
+        const primary = allAccesses[0] ?? {
+          tenantKey: DEFAULT_TENANT_KEY,
+          tenantName: DEFAULT_TENANT_NAME,
+          role: "ADMIN" as const,
+          personId,
+        };
+        token.role = "ADMIN";
+        token.person_id = personId;
+        token.tenantKey = primary.tenantKey;
+        token.tenantName = primary.tenantName;
+        token.tenantAccesses = allAccesses;
+        token.steveAccess = true;
         return token;
       }
 
@@ -168,6 +206,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as "ADMIN" | "USER" | undefined;
         session.user.person_id = token.person_id as string | undefined;
         session.user.tenantAccesses = (token.tenantAccesses as typeof session.user.tenantAccesses) ?? [];
+        session.user.steveAccess = Boolean(token.steveAccess);
       }
       session.tenantKey = (token.tenantKey as string | undefined) ?? DEFAULT_TENANT_KEY;
       session.tenantName = (token.tenantName as string | undefined) ?? DEFAULT_TENANT_NAME;

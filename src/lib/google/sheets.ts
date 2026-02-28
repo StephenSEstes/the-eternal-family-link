@@ -999,6 +999,36 @@ export async function getEnabledUserAccessListByPersonId(personId: string): Prom
   return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
 }
 
+export async function getAllFamilyGroupAccesses(personId: string): Promise<TenantAccess[]> {
+  const normalizedPersonId = personId.trim();
+  const rows = await getTableRecords(["FamilyConfig", "TenantConfig"]).catch(() => []);
+  const byKey = new Map<string, TenantAccess>();
+  for (const row of rows) {
+    const tenantKey = readValue(row.data, "family_group_key", "tenant_key").trim().toLowerCase();
+    const tenantName = readValue(row.data, "family_group_name", "tenant_name").trim();
+    if (!tenantKey) {
+      continue;
+    }
+    if (!byKey.has(tenantKey)) {
+      byKey.set(tenantKey, {
+        tenantKey,
+        tenantName: tenantName || DEFAULT_TENANT_NAME,
+        role: "ADMIN",
+        personId: normalizedPersonId,
+      });
+    }
+  }
+  if (!byKey.has(DEFAULT_TENANT_KEY)) {
+    byKey.set(DEFAULT_TENANT_KEY, {
+      tenantKey: DEFAULT_TENANT_KEY,
+      tenantName: DEFAULT_TENANT_NAME,
+      role: "ADMIN",
+      personId: normalizedPersonId,
+    });
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+}
+
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   const [links, users] = await Promise.all([
