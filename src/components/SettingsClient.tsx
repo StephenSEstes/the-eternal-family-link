@@ -94,6 +94,14 @@ type HouseholdImportCandidate = {
   displayName: string;
 };
 
+type CreateFamilyResponse = {
+  familyGroupKey?: string;
+  householdImportCandidates?: HouseholdImportCandidate[];
+  autoImportedHouseholdCandidates?: boolean;
+  autoImportedPeopleCount?: number;
+  autoImportedAccessCount?: number;
+};
+
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
 type UserAdminSubTab = "directory" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
@@ -502,10 +510,13 @@ export function SettingsClient({
         isEnabled: true,
       }),
     });
-    let body: unknown = null;
+    let body: CreateFamilyResponse | null = null;
     let rawText = "";
     try {
-      body = await res.json();
+      const parsedJson: unknown = await res.json();
+      if (parsedJson && typeof parsedJson === "object" && !Array.isArray(parsedJson)) {
+        body = parsedJson as CreateFamilyResponse;
+      }
     } catch {
       rawText = await res.text().catch(() => "");
     }
@@ -517,7 +528,7 @@ export function SettingsClient({
     }
     const targetKey = String(body.familyGroupKey ?? "").trim().toLowerCase();
     const candidates = Array.isArray(body.householdImportCandidates)
-      ? (body.householdImportCandidates as HouseholdImportCandidate[])
+      ? body.householdImportCandidates
       : [];
     const autoImported = Boolean(body.autoImportedHouseholdCandidates);
     const autoImportedPeopleCount = Number(body.autoImportedPeopleCount ?? 0);
