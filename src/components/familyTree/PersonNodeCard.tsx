@@ -8,6 +8,9 @@ type PersonNodeCardProps = {
   selected: boolean;
   dimmed: boolean;
   onSelect: (personId: string) => void;
+  onEditPerson?: (personId: string) => void;
+  onEditHousehold?: (personId: string) => void;
+  hasHousehold?: boolean;
 };
 
 export function PersonNodeCard({
@@ -18,15 +21,25 @@ export function PersonNodeCard({
   selected,
   dimmed,
   onSelect,
+  onEditPerson,
+  onEditHousehold,
+  hasHousehold = false,
 }: PersonNodeCardProps) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={`tree-person-card ${selected ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""}`}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
         onSelect(personId);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(personId);
+        }
       }}
       aria-pressed={selected}
       aria-label={`Focus on ${displayName}`}
@@ -37,9 +50,36 @@ export function PersonNodeCard({
         {secondaryText ? <span className="tree-person-secondary">{secondaryText}</span> : null}
       </span>
       <span className="tree-person-actions" aria-hidden="true">
-        <span className="tree-person-dot" />
-        <span className="tree-person-dot" />
+        <button
+          type="button"
+          className="tree-person-dot-button"
+          title="Edit person"
+          aria-label={`Edit person ${displayName}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onEditPerson?.(personId);
+          }}
+        >
+          <span className="tree-person-dot" />
+        </button>
+        <button
+          type="button"
+          className="tree-person-dot-button"
+          title={hasHousehold ? "Edit household" : "No household linked"}
+          aria-label={hasHousehold ? `Edit household for ${displayName}` : `No household for ${displayName}`}
+          disabled={!hasHousehold}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (hasHousehold) {
+              onEditHousehold?.(personId);
+            }
+          }}
+        >
+          <span className="tree-person-dot" />
+        </button>
       </span>
-    </button>
+    </div>
   );
 }

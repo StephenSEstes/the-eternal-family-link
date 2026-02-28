@@ -629,6 +629,7 @@ main {
   vector-effect: non-scaling-stroke;
   cursor: pointer;
   pointer-events: all;
+  transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease;
 }
 
 .tree-line-label {
@@ -643,6 +644,17 @@ main {
   fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
   text-anchor: middle;
   transition: opacity 160ms ease;
+}
+
+.tree-household-group:hover .tree-spouse-cluster {
+  fill: color-mix(in oklab, #cde4ff 76%, #ffffff 24%);
+  stroke: color-mix(in oklab, var(--accent) 68%, #ffffff 32%);
+  stroke-width: 2;
+  filter: drop-shadow(0 4px 10px color-mix(in oklab, var(--accent) 22%, transparent 78%));
+}
+
+.tree-household-group:hover .tree-family-label {
+  fill: color-mix(in oklab, var(--accent) 78%, #1f2937 22%);
 }
 
 .tree-dimmed {
@@ -730,11 +742,37 @@ main {
   justify-items: center;
 }
 
+.tree-person-dot-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tree-person-dot-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .tree-person-dot {
   width: 4px;
   height: 4px;
   border-radius: 999px;
   background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+}
+
+.tree-household-action-dot {
+  fill: color-mix(in oklab, var(--accent) 68%, #ffffff 32%);
+  stroke: #ffffff;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  pointer-events: all;
 }
 
 .tree-control-cluster {

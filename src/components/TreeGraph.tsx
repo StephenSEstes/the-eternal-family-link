@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
 import { FocusPanel } from "@/components/familyTree/FocusPanel";
@@ -319,6 +319,14 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) ?? null : null;
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
+  const householdByPersonId = useMemo(() => {
+    const out = new Map<string, HouseholdLink>();
+    households.forEach((unit) => {
+      out.set(unit.partner1PersonId, unit);
+      out.set(unit.partner2PersonId, unit);
+    });
+    return out;
+  }, [households]);
 
   const getAvatarUrl = useCallback(
     (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
@@ -598,7 +606,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
             selectedPersonId !== rightId;
 
           return (
-            <g key={`cluster-${pairKey}`}>
+            <g key={`cluster-${pairKey}`} className="tree-household-group">
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`tree-line ${dimmed ? "tree-dimmed" : ""}`} />
               <rect
                 x={midX - halfWidth}
@@ -627,6 +635,46 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
                 <text x={midX} y={midY + 4} className="tree-family-label">
                   {label}
                 </text>
+              ) : null}
+              {canManage ? (
+                <>
+                  <circle
+                    cx={midX + halfWidth - 18}
+                    cy={midY - halfHeight + 18}
+                    r={7}
+                    className="tree-household-action-dot"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const unit = households.find((item) => {
+                        const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
+                        const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
+                        return matchForward || matchReverse;
+                      });
+                      if (unit) {
+                        setSelectedHouseholdId(unit.id);
+                      }
+                    }}
+                  />
+                  <circle
+                    cx={midX + halfWidth - 36}
+                    cy={midY - halfHeight + 18}
+                    r={7}
+                    className="tree-household-action-dot"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const unit = households.find((item) => {
+                        const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
+                        const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
+                        return matchForward || matchReverse;
+                      });
+                      if (unit) {
+                        setSelectedHouseholdId(unit.id);
+                      }
+                    }}
+                  />
+                </>
               ) : null}
             </g>
           );
@@ -709,10 +757,20 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
               avatarUrl={getAvatarUrl(node)}
               selected={isSelected}
               dimmed={isDimmed}
-              onSelect={(personId) => {
-                setSelectedPersonId(personId);
+              hasHousehold={householdByPersonId.has(node.personId)}
+              onSelect={setSelectedPersonId}
+              onEditPerson={(personId) => {
                 if (canManage) {
                   setEditPersonId(personId);
+                }
+              }}
+              onEditHousehold={(personId) => {
+                if (!canManage) {
+                  return;
+                }
+                const unit = householdByPersonId.get(personId);
+                if (unit) {
+                  setSelectedHouseholdId(unit.id);
                 }
               }}
             />
