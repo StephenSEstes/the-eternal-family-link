@@ -53,6 +53,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
           allPeople={allPeople.map((person) => ({
             personId: person.personId,
             displayName: person.displayName,
+            middleName: person.middleName,
             gender: person.gender,
           }))}
         />

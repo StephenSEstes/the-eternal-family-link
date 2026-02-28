@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Create Family existing-parent lookup is now global and gender-filtered (female matriarch, male patriarch). See `docs/change-summary.md`.
+- 2026-02-28: Existing-parent family-create flow now resolves names globally, hides manual fields, and defaults matriarch maiden name from middle name. See `docs/change-summary.md`.

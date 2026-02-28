@@ -80,7 +80,7 @@ type SettingsClientProps = {
   tenantOptions: TenantOption[];
   accessItems: AccessItem[];
   people: { personId: string; displayName: string }[];
-  allPeople: { personId: string; displayName: string; gender: "male" | "female" | "unspecified" }[];
+  allPeople: { personId: string; displayName: string; middleName: string; gender: "male" | "female" | "unspecified" }[];
 };
 
 type ExistingPersonOption = {
@@ -278,35 +278,55 @@ export function SettingsClient({
   );
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
-  const familyPeopleById = useMemo(
-    () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
-    [familyPeople],
+  const allPeopleById = useMemo(
+    () => new Map(allPeople.map((person) => [person.personId, person])),
+    [allPeople],
   );
   const newPatriarchFullName = useMemo(() => {
     if (useExistingPatriarch && existingPatriarchPersonId) {
-      return (familyPeopleById.get(existingPatriarchPersonId) ?? "").trim();
+      return (allPeopleById.get(existingPatriarchPersonId)?.displayName ?? "").trim();
     }
     return buildFullName(newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName);
   }, [
     useExistingPatriarch,
     existingPatriarchPersonId,
-    familyPeopleById,
+    allPeopleById,
     newPatriarchFirstName,
     newPatriarchMiddleName,
     newPatriarchLastName,
   ]);
   const newMatriarchFullName = useMemo(() => {
     if (useExistingMatriarch && existingMatriarchPersonId) {
-      return (familyPeopleById.get(existingMatriarchPersonId) ?? "").trim();
+      return (allPeopleById.get(existingMatriarchPersonId)?.displayName ?? "").trim();
     }
     return buildFullName(newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName);
   }, [
     useExistingMatriarch,
     existingMatriarchPersonId,
-    familyPeopleById,
+    allPeopleById,
     newMatriarchFirstName,
     newMatriarchMiddleName,
     newMatriarchLastName,
+  ]);
+  useEffect(() => {
+    if (!useExistingMatriarch) {
+      return;
+    }
+    if (!existingMatriarchPersonId.trim()) {
+      return;
+    }
+    if (newMatriarchMaidenName.trim()) {
+      return;
+    }
+    const middleName = allPeopleById.get(existingMatriarchPersonId)?.middleName?.trim() ?? "";
+    if (middleName) {
+      setNewMatriarchMaidenName(middleName);
+    }
+  }, [
+    useExistingMatriarch,
+    existingMatriarchPersonId,
+    newMatriarchMaidenName,
+    allPeopleById,
   ]);
   const generatedFamilyGroupKey = useMemo(() => {
     const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
@@ -1968,20 +1988,28 @@ export function SettingsClient({
                         </option>
                       ))}
                     </select>
+                    {existingMatriarchPersonId ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                        Using existing matriarch: {newMatriarchFullName || existingMatriarchPersonId}
+                      </p>
+                    ) : null}
                   </>
-                ) : null}
-                <label className="label">First Name</label>
-                <input className="input" value={newMatriarchFirstName} onChange={(e) => setNewMatriarchFirstName(e.target.value)} disabled={useExistingMatriarch} />
-                <label className="label">Middle Name</label>
-                <input className="input" value={newMatriarchMiddleName} onChange={(e) => setNewMatriarchMiddleName(e.target.value)} disabled={useExistingMatriarch} />
-                <label className="label">Last Name</label>
-                <input className="input" value={newMatriarchLastName} onChange={(e) => setNewMatriarchLastName(e.target.value)} disabled={useExistingMatriarch} />
+                ) : (
+                  <>
+                    <label className="label">First Name</label>
+                    <input className="input" value={newMatriarchFirstName} onChange={(e) => setNewMatriarchFirstName(e.target.value)} />
+                    <label className="label">Middle Name</label>
+                    <input className="input" value={newMatriarchMiddleName} onChange={(e) => setNewMatriarchMiddleName(e.target.value)} />
+                    <label className="label">Last Name</label>
+                    <input className="input" value={newMatriarchLastName} onChange={(e) => setNewMatriarchLastName(e.target.value)} />
+                    <label className="label">Nickname</label>
+                    <input className="input" value={newMatriarchNickName} onChange={(e) => setNewMatriarchNickName(e.target.value)} />
+                    <label className="label">Birthdate</label>
+                    <input className="input" type="date" value={newMatriarchBirthDate} onChange={(e) => setNewMatriarchBirthDate(e.target.value)} />
+                  </>
+                )}
                 <label className="label">Maiden Name</label>
                 <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} />
-                <label className="label">Nickname</label>
-                <input className="input" value={newMatriarchNickName} onChange={(e) => setNewMatriarchNickName(e.target.value)} disabled={useExistingMatriarch} />
-                <label className="label">Birthdate</label>
-                <input className="input" type="date" value={newMatriarchBirthDate} onChange={(e) => setNewMatriarchBirthDate(e.target.value)} disabled={useExistingMatriarch} />
               </div>
             ) : null}
 
@@ -2014,18 +2042,26 @@ export function SettingsClient({
                         </option>
                       ))}
                     </select>
+                    {existingPatriarchPersonId ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                        Using existing patriarch: {newPatriarchFullName || existingPatriarchPersonId}
+                      </p>
+                    ) : null}
                   </>
-                ) : null}
-                <label className="label">First Name</label>
-                <input className="input" value={newPatriarchFirstName} onChange={(e) => setNewPatriarchFirstName(e.target.value)} disabled={useExistingPatriarch} />
-                <label className="label">Middle Name</label>
-                <input className="input" value={newPatriarchMiddleName} onChange={(e) => setNewPatriarchMiddleName(e.target.value)} disabled={useExistingPatriarch} />
-                <label className="label">Last Name</label>
-                <input className="input" value={newPatriarchLastName} onChange={(e) => setNewPatriarchLastName(e.target.value)} disabled={useExistingPatriarch} />
-                <label className="label">Nickname</label>
-                <input className="input" value={newPatriarchNickName} onChange={(e) => setNewPatriarchNickName(e.target.value)} disabled={useExistingPatriarch} />
-                <label className="label">Birthdate</label>
-                <input className="input" type="date" value={newPatriarchBirthDate} onChange={(e) => setNewPatriarchBirthDate(e.target.value)} disabled={useExistingPatriarch} />
+                ) : (
+                  <>
+                    <label className="label">First Name</label>
+                    <input className="input" value={newPatriarchFirstName} onChange={(e) => setNewPatriarchFirstName(e.target.value)} />
+                    <label className="label">Middle Name</label>
+                    <input className="input" value={newPatriarchMiddleName} onChange={(e) => setNewPatriarchMiddleName(e.target.value)} />
+                    <label className="label">Last Name</label>
+                    <input className="input" value={newPatriarchLastName} onChange={(e) => setNewPatriarchLastName(e.target.value)} />
+                    <label className="label">Nickname</label>
+                    <input className="input" value={newPatriarchNickName} onChange={(e) => setNewPatriarchNickName(e.target.value)} />
+                    <label className="label">Birthdate</label>
+                    <input className="input" type="date" value={newPatriarchBirthDate} onChange={(e) => setNewPatriarchBirthDate(e.target.value)} />
+                  </>
+                )}
                 <label className="label">Suggested Family Group Key</label>
                 <input className="input" value={generatedFamilyGroupKey} readOnly />
                 <label className="label">Suggested Family Group Name</label>
