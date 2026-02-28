@@ -126,6 +126,14 @@ export function PersonEditModal({
     );
     return match?.id ?? "";
   }, [households, person]);
+  const spouseByPersonId = useMemo(() => {
+    const map = new Map<string, string>();
+    households.forEach((unit) => {
+      map.set(unit.partner1PersonId, unit.partner2PersonId);
+      map.set(unit.partner2PersonId, unit.partner1PersonId);
+    });
+    return map;
+  }, [households]);
 
   const fallbackAvatar = (person?.gender ?? "unspecified") === "female"
     ? "/placeholders/avatar-female.png"
@@ -185,6 +193,8 @@ export function PersonEditModal({
   }
 
   const personOptions = people.filter((item) => item.personId !== person.personId);
+  const motherOptions = personOptions.filter((item) => (item.gender ?? "unspecified") === "female");
+  const fatherOptions = personOptions.filter((item) => (item.gender ?? "unspecified") === "male");
   const showReadOnly = !canManage;
 
   return (
@@ -277,18 +287,36 @@ export function PersonEditModal({
                 <div className="settings-chip-list">
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <label className="label">Mother</label>
-                    <select className="input" value={parent1Id} onChange={(e) => setParent1Id(e.target.value)}>
+                    <select
+                      className="input"
+                      value={parent1Id}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setParent1Id(next);
+                        const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
+                        setSpouseId(spouse);
+                      }}
+                    >
                       <option value="">None</option>
-                      {personOptions.map((option) => (
+                      {motherOptions.map((option) => (
                         <option key={`p1-${option.personId}`} value={option.personId}>{option.displayName}</option>
                       ))}
                     </select>
                   </div>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <label className="label">Father</label>
-                    <select className="input" value={parent2Id} onChange={(e) => setParent2Id(e.target.value)}>
+                    <select
+                      className="input"
+                      value={parent2Id}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setParent2Id(next);
+                        const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
+                        setSpouseId(spouse);
+                      }}
+                    >
                       <option value="">None</option>
-                      {personOptions.map((option) => (
+                      {fatherOptions.map((option) => (
                         <option key={`p2-${option.personId}`} value={option.personId}>{option.displayName}</option>
                       ))}
                     </select>

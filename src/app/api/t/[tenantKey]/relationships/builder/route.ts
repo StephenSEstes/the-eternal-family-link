@@ -64,7 +64,7 @@ async function upsertFamilyUnit(tenantKey: string, personA: string, personB: str
     household_id: familyUnitId,
     husband_person_id: husband,
     wife_person_id: wife,
-    tenant_key: tenantKey,
+    family_group_key: tenantKey,
   };
 
   const updated = await updateTableRecordById("Households", familyUnitId, payload, "household_id", tenantKey);
@@ -141,7 +141,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       ? households.find((row) => {
           const partner1 = readField(row.data, "husband_person_id");
           const partner2 = readField(row.data, "wife_person_id");
-          const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+          const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
           if (rowTenantKey !== normalizedTenantKey) {
             return false;
           }
@@ -170,7 +170,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       const unitId = readField(row.data, "household_id");
       const partner1 = readField(row.data, "husband_person_id");
       const partner2 = readField(row.data, "wife_person_id");
-      const rowTenantKey = readField(row.data, "tenant_key") || normalizedTenantKey;
+      const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
       if (!unitId || rowTenantKey !== normalizedTenantKey) {
         continue;
       }
