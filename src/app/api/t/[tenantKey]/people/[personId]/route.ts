@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import {
+  appendAuditLog,
   createTableRecord,
   getPersonAttributes,
   getPersonById,
@@ -90,6 +91,17 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
       );
     }
   }
+
+  await appendAuditLog({
+    actorEmail: resolved.session.user?.email ?? "",
+    actorPersonId: resolved.session.user?.person_id ?? "",
+    action: "UPDATE",
+    entityType: "PERSON",
+    entityId: personId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Updated person ${person.displayName}.`,
+  }).catch(() => undefined);
 
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, person });
 }

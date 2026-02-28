@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  appendAuditLog,
   createTableRecord,
   ensurePersonFamilyGroupMembership,
   getPersonById,
@@ -249,6 +250,17 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
     },
     resolved.tenant.tenantKey,
   );
+
+  await appendAuditLog({
+    actorEmail: resolved.session.user?.email ?? "",
+    actorPersonId: resolved.session.user?.person_id ?? "",
+    action: "CREATE",
+    entityType: "PERSON",
+    entityId: personId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Created person ${displayName}.`,
+  }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey, person: record.data }, { status: 201 });
 }

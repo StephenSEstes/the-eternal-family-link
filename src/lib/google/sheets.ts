@@ -48,6 +48,19 @@ export const PERSON_ATTRIBUTES_TAB = "PersonAttributes";
 const FAMILY_CONFIG_TAB = "FamilyConfig";
 const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
 const FAMILY_SECURITY_POLICY_TAB = "FamilySecurityPolicy";
+const AUDIT_LOG_TAB = "AuditLog";
+const AUDIT_LOG_HEADERS = [
+  "event_id",
+  "timestamp",
+  "actor_email",
+  "actor_person_id",
+  "action",
+  "entity_type",
+  "entity_id",
+  "family_group_key",
+  "status",
+  "details",
+];
 const TENANT_TABLE_HEADERS: Record<string, string[]> = {
   People: [
     "person_id",
@@ -118,6 +131,17 @@ export type UpsertTenantAccessInput = {
 export type UpsertTenantAccessResult = {
   action: "created" | "updated";
   rowNumber: number;
+};
+
+export type AuditLogInput = {
+  actorEmail?: string;
+  actorPersonId?: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  familyGroupKey?: string;
+  status?: "SUCCESS" | "FAILURE";
+  details?: string;
 };
 
 function normalizeHeader(header: string) {
@@ -427,6 +451,32 @@ export async function ensureTenantScaffold(input: {
   if (!updated) {
     await createTableRecord(FAMILY_CONFIG_TAB, configPayload);
   }
+}
+
+async function ensureAuditLogTab() {
+  const sheets = await createSheetsClient();
+  await ensureTabWithHeaders(sheets, AUDIT_LOG_TAB, AUDIT_LOG_HEADERS);
+}
+
+export async function appendAuditLog(input: AuditLogInput) {
+  await ensureAuditLogTab();
+  const now = new Date().toISOString();
+  const eventId = `${now}-${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-zA-Z0-9_-]/g, "");
+  await createTableRecord(
+    AUDIT_LOG_TAB,
+    {
+      event_id: eventId,
+      timestamp: now,
+      actor_email: (input.actorEmail ?? "").trim().toLowerCase(),
+      actor_person_id: (input.actorPersonId ?? "").trim(),
+      action: input.action.trim(),
+      entity_type: input.entityType.trim(),
+      entity_id: (input.entityId ?? "").trim(),
+      family_group_key: normalizeTenantKey(input.familyGroupKey),
+      status: (input.status ?? "SUCCESS").trim().toUpperCase(),
+      details: (input.details ?? "").slice(0, 2000),
+    },
+  );
 }
 
 async function resolveTenantTabNameWithClient(

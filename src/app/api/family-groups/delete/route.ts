@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { getEnv } from "@/lib/env";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
-import { createSheetsClient, getTableRecords, updateTableRecordById } from "@/lib/google/sheets";
+import { appendAuditLog, createSheetsClient, getTableRecords, updateTableRecordById } from "@/lib/google/sheets";
 
 type OrphanPerson = {
   personId: string;
@@ -359,6 +359,16 @@ export async function POST(request: Request) {
       }
     }
   }
+  await appendAuditLog({
+    actorEmail: session.user?.email ?? "",
+    actorPersonId: session.user?.person_id ?? "",
+    action: "DELETE",
+    entityType: "FAMILY_GROUP",
+    entityId: familyGroupKey,
+    familyGroupKey,
+    status: "SUCCESS",
+    details: `Deleted family links/config. personLinks=${deletedPersonFamilyRows}, userLinks=${deletedUserFamilyRows}, disabledUsers=${disabledUsers}`,
+  }).catch(() => undefined);
 
   return NextResponse.json({
     ok: true,

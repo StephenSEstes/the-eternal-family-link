@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/google/sheets";
+import { appendAuditLog, getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const upsertSchema = z.object({
@@ -15,7 +15,7 @@ async function resolveAdmin(requestedTenantKey: string) {
   if ("error" in resolved) {
     return resolved;
   }
-  return { tenant: resolved.tenant } as const;
+  return { tenant: resolved.tenant, session: resolved.session } as const;
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
@@ -50,6 +50,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     personId: parsed.data.personId,
     isEnabled: parsed.data.isEnabled ?? true,
   });
+  await appendAuditLog({
+    actorEmail: resolved.session.user?.email ?? "",
+    actorPersonId: resolved.session.user?.person_id ?? "",
+    action: "UPSERT",
+    entityType: "USER_ACCESS",
+    entityId: parsed.data.personId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `role=${parsed.data.role}, email=${parsed.data.userEmail.toLowerCase()}, enabled=${String(parsed.data.isEnabled ?? true)}`,
+  }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, ...result });
 }

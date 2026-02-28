@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { ensureTenantPhotosFolder } from "@/lib/google/drive";
 import {
+  appendAuditLog,
   createTableRecord,
   ensureTenantScaffold,
   getPeople,
@@ -670,6 +671,17 @@ export async function POST(request: Request) {
     }
   }
 
+    await appendAuditLog({
+      actorEmail: session.user?.email ?? "",
+      actorPersonId: session.user?.person_id ?? "",
+      action: "CREATE",
+      entityType: "FAMILY_GROUP",
+      entityId: familyGroupKey,
+      familyGroupKey,
+      status: "SUCCESS",
+      details: `Created family group ${familyGroupName}. Initial admin: ${parsed.data.initialAdminPersonId}.`,
+    }).catch(() => undefined);
+
     return NextResponse.json({
       ok: true,
       photosFolderId,
@@ -691,6 +703,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await appendAuditLog({
+      actorEmail: session.user?.email ?? "",
+      actorPersonId: session.user?.person_id ?? "",
+      action: "CREATE",
+      entityType: "FAMILY_GROUP",
+      entityId: "",
+      status: "FAILURE",
+      details: `Provision failed: ${message}`.slice(0, 2000),
+    }).catch(() => undefined);
     return NextResponse.json(
       {
         error: "provision_failed",

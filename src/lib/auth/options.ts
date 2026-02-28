@@ -8,6 +8,7 @@ import {
   patchLocalUser,
 } from "@/lib/auth/local-users";
 import {
+  appendAuditLog,
   getAllFamilyGroupAccesses,
   getEnabledUserAccess,
   getEnabledUserAccessList,
@@ -111,17 +112,53 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "credentials") {
+        const localUser = user as { person_id?: string } | undefined;
+        await appendAuditLog({
+          actorEmail: user.email ?? "",
+          actorPersonId: typeof localUser?.person_id === "string" ? localUser.person_id : "",
+          action: "LOGIN",
+          entityType: "AUTH",
+          entityId: "credentials",
+          status: "SUCCESS",
+          details: "Credentials sign-in accepted.",
+        }).catch(() => undefined);
         return true;
       }
       if (!user.email) {
+        await appendAuditLog({
+          actorEmail: "",
+          action: "LOGIN",
+          entityType: "AUTH",
+          entityId: "oauth",
+          status: "FAILURE",
+          details: "OAuth sign-in rejected: missing user email.",
+        }).catch(() => undefined);
         return false;
       }
       if (hasSteveAccess(user.email)) {
+        await appendAuditLog({
+          actorEmail: user.email,
+          action: "LOGIN",
+          entityType: "AUTH",
+          entityId: "oauth",
+          status: "SUCCESS",
+          details: "Steve super-access sign-in accepted.",
+        }).catch(() => undefined);
         return true;
       }
 
       const access = await getEnabledUserAccess(user.email);
-      return !!access;
+      const ok = !!access;
+      await appendAuditLog({
+        actorEmail: user.email,
+        actorPersonId: access?.personId ?? "",
+        action: "LOGIN",
+        entityType: "AUTH",
+        entityId: "oauth",
+        status: ok ? "SUCCESS" : "FAILURE",
+        details: ok ? "OAuth sign-in accepted via enabled access." : "OAuth sign-in rejected: no enabled family-group access.",
+      }).catch(() => undefined);
+      return ok;
     },
     async jwt({ token, user, account }) {
       if (account?.provider === "credentials" && user) {
@@ -231,6 +268,20 @@ export const authOptions: NextAuthOptions = {
       session.tenantKey = (token.tenantKey as string | undefined) ?? DEFAULT_TENANT_KEY;
       session.tenantName = (token.tenantName as string | undefined) ?? DEFAULT_TENANT_NAME;
       return session;
+    },
+  },
+  events: {
+    async signOut(message) {
+      const token = message.token as { email?: string; person_id?: string } | undefined;
+      await appendAuditLog({
+        actorEmail: token?.email ?? "",
+        actorPersonId: token?.person_id ?? "",
+        action: "LOGOUT",
+        entityType: "AUTH",
+        entityId: "session",
+        status: "SUCCESS",
+        details: "User signed out.",
+      }).catch(() => undefined);
     },
   },
   secret: getEnv().NEXTAUTH_SECRET,
