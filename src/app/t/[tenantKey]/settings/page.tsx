@@ -23,9 +23,10 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
-  const [accessItems, people] = await Promise.all([
+  const [accessItems, people, allPeople] = await Promise.all([
     getTenantUserAccessList(tenant.tenantKey),
     getPeople(tenant.tenantKey),
+    getPeople(),
   ]);
 
   return (
@@ -49,6 +50,11 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             isEnabled: item.isEnabled,
           }))}
           people={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
+          allPeople={allPeople.map((person) => ({
+            personId: person.personId,
+            displayName: person.displayName,
+            gender: person.gender,
+          }))}
         />
       </main>
     </>

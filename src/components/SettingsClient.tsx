@@ -80,6 +80,7 @@ type SettingsClientProps = {
   tenantOptions: TenantOption[];
   accessItems: AccessItem[];
   people: { personId: string; displayName: string }[];
+  allPeople: { personId: string; displayName: string; gender: "male" | "female" | "unspecified" }[];
 };
 
 type ExistingPersonOption = {
@@ -190,6 +191,7 @@ export function SettingsClient({
   tenantOptions,
   accessItems,
   people,
+  allPeople,
 }: SettingsClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>("user_admin");
@@ -1118,22 +1120,39 @@ export function SettingsClient({
     () => [...familyPeople].sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [familyPeople],
   );
+  const existingParentLookupOptions = useMemo(() => {
+    const dedupe = new Map<string, { personId: string; displayName: string; gender: "male" | "female" | "unspecified" }>();
+    for (const person of allPeople) {
+      const personId = person.personId.trim();
+      if (!personId || dedupe.has(personId)) {
+        continue;
+      }
+      dedupe.set(personId, {
+        personId,
+        displayName: person.displayName?.trim() || personId,
+        gender: person.gender,
+      });
+    }
+    return Array.from(dedupe.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [allPeople]);
   const filteredPatriarchOptions = useMemo(() => {
     const query = patriarchLookupQuery.trim().toLowerCase();
-    if (!query) return createGroupInitialAdminOptions;
-    return createGroupInitialAdminOptions.filter(
+    const maleOptions = existingParentLookupOptions.filter((person) => person.gender === "male");
+    if (!query) return maleOptions;
+    return maleOptions.filter(
       (person) =>
         person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query),
     );
-  }, [createGroupInitialAdminOptions, patriarchLookupQuery]);
+  }, [existingParentLookupOptions, patriarchLookupQuery]);
   const filteredMatriarchOptions = useMemo(() => {
     const query = matriarchLookupQuery.trim().toLowerCase();
-    if (!query) return createGroupInitialAdminOptions;
-    return createGroupInitialAdminOptions.filter(
+    const femaleOptions = existingParentLookupOptions.filter((person) => person.gender === "female");
+    if (!query) return femaleOptions;
+    return femaleOptions.filter(
       (person) =>
         person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query),
     );
-  }, [createGroupInitialAdminOptions, matriarchLookupQuery]);
+  }, [existingParentLookupOptions, matriarchLookupQuery]);
 
   return (
     <div className="settings-stack">

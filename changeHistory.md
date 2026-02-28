@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Fixed family-create modal TypeScript response typing issue that blocked deployment build. See `docs/change-summary.md`.
+- 2026-02-28: Create Family existing-parent lookup is now global and gender-filtered (female matriarch, male patriarch). See `docs/change-summary.md`.
