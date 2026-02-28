@@ -589,8 +589,8 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const midX = (a.x + b.x) / 2;
           const midY = (a.y + b.y) / 2;
           const distance = Math.hypot(a.x - b.x, a.y - b.y);
-          const halfWidth = Math.max(90, distance / 2 + NODE_HALF_WIDTH + 14);
-          const halfHeight = NODE_HALF_HEIGHT + 16;
+          const halfWidth = Math.max(112, distance / 2 + NODE_HALF_WIDTH + 24);
+          const halfHeight = NODE_HALF_HEIGHT + 26;
 
           const dimmed =
             Boolean(selectedPersonId) &&

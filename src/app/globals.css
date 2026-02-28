@@ -627,6 +627,7 @@ main {
   stroke: color-mix(in oklab, var(--accent) 42%, #ffffff 58%);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+  cursor: pointer;
 }
 
 .tree-line-label {
