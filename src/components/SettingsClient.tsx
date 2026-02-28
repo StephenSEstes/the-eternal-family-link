@@ -204,11 +204,17 @@ export function SettingsClient({
   const [newPatriarchLastName, setNewPatriarchLastName] = useState("");
   const [newPatriarchNickName, setNewPatriarchNickName] = useState("");
   const [newPatriarchBirthDate, setNewPatriarchBirthDate] = useState("");
+  const [useExistingPatriarch, setUseExistingPatriarch] = useState(false);
+  const [existingPatriarchPersonId, setExistingPatriarchPersonId] = useState("");
+  const [patriarchLookupQuery, setPatriarchLookupQuery] = useState("");
   const [newMatriarchFirstName, setNewMatriarchFirstName] = useState("");
   const [newMatriarchMiddleName, setNewMatriarchMiddleName] = useState("");
   const [newMatriarchLastName, setNewMatriarchLastName] = useState("");
   const [newMatriarchNickName, setNewMatriarchNickName] = useState("");
   const [newMatriarchBirthDate, setNewMatriarchBirthDate] = useState("");
+  const [useExistingMatriarch, setUseExistingMatriarch] = useState(false);
+  const [existingMatriarchPersonId, setExistingMatriarchPersonId] = useState("");
+  const [matriarchLookupQuery, setMatriarchLookupQuery] = useState("");
   const [newMatriarchMaidenName, setNewMatriarchMaidenName] = useState("");
   const [newInitialAdminPersonId, setNewInitialAdminPersonId] = useState("");
   const [newParentsAreInitialAdminParents, setNewParentsAreInitialAdminParents] = useState(false);
@@ -262,14 +268,36 @@ export function SettingsClient({
   );
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
-  const newPatriarchFullName = useMemo(
-    () => buildFullName(newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName),
-    [newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName],
+  const familyPeopleById = useMemo(
+    () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
+    [familyPeople],
   );
-  const newMatriarchFullName = useMemo(
-    () => buildFullName(newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName),
-    [newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName],
-  );
+  const newPatriarchFullName = useMemo(() => {
+    if (useExistingPatriarch && existingPatriarchPersonId) {
+      return (familyPeopleById.get(existingPatriarchPersonId) ?? "").trim();
+    }
+    return buildFullName(newPatriarchFirstName, newPatriarchMiddleName, newPatriarchLastName);
+  }, [
+    useExistingPatriarch,
+    existingPatriarchPersonId,
+    familyPeopleById,
+    newPatriarchFirstName,
+    newPatriarchMiddleName,
+    newPatriarchLastName,
+  ]);
+  const newMatriarchFullName = useMemo(() => {
+    if (useExistingMatriarch && existingMatriarchPersonId) {
+      return (familyPeopleById.get(existingMatriarchPersonId) ?? "").trim();
+    }
+    return buildFullName(newMatriarchFirstName, newMatriarchMiddleName, newMatriarchLastName);
+  }, [
+    useExistingMatriarch,
+    existingMatriarchPersonId,
+    familyPeopleById,
+    newMatriarchFirstName,
+    newMatriarchMiddleName,
+    newMatriarchLastName,
+  ]);
   const generatedFamilyGroupKey = useMemo(() => {
     const maiden = normalizeFamilyKeyPart(newMatriarchMaidenName);
     const partner = normalizeFamilyKeyPart(newPatriarchLastName || extractLastName(newPatriarchFullName));
@@ -457,12 +485,14 @@ export function SettingsClient({
         patriarchLastName: newPatriarchLastName,
         patriarchNickName: newPatriarchNickName,
         patriarchBirthDate: newPatriarchBirthDate,
+        existingPatriarchPersonId: useExistingPatriarch ? existingPatriarchPersonId : undefined,
         matriarchFullName: newMatriarchFullName,
         matriarchFirstName: newMatriarchFirstName,
         matriarchMiddleName: newMatriarchMiddleName,
         matriarchLastName: newMatriarchLastName,
         matriarchNickName: newMatriarchNickName,
         matriarchBirthDate: newMatriarchBirthDate,
+        existingMatriarchPersonId: useExistingMatriarch ? existingMatriarchPersonId : undefined,
         matriarchMaidenName: newMatriarchMaidenName,
         initialAdminPersonId: newInitialAdminPersonId,
         memberPersonIds: [],
@@ -782,6 +812,12 @@ export function SettingsClient({
     setPreCreatePreviewStatus("");
     setPreCreateHouseholdCandidates([]);
     setPreCreateMemberPersonIds([]);
+    setUseExistingPatriarch(false);
+    setExistingPatriarchPersonId("");
+    setPatriarchLookupQuery("");
+    setUseExistingMatriarch(false);
+    setExistingMatriarchPersonId("");
+    setMatriarchLookupQuery("");
     setShowCreateFamilyModal(true);
   };
 
@@ -1065,6 +1101,22 @@ export function SettingsClient({
     () => [...familyPeople].sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [familyPeople],
   );
+  const filteredPatriarchOptions = useMemo(() => {
+    const query = patriarchLookupQuery.trim().toLowerCase();
+    if (!query) return createGroupInitialAdminOptions;
+    return createGroupInitialAdminOptions.filter(
+      (person) =>
+        person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query),
+    );
+  }, [createGroupInitialAdminOptions, patriarchLookupQuery]);
+  const filteredMatriarchOptions = useMemo(() => {
+    const query = matriarchLookupQuery.trim().toLowerCase();
+    if (!query) return createGroupInitialAdminOptions;
+    return createGroupInitialAdminOptions.filter(
+      (person) =>
+        person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query),
+    );
+  }, [createGroupInitialAdminOptions, matriarchLookupQuery]);
 
   return (
     <div className="settings-stack">
@@ -1854,34 +1906,90 @@ export function SettingsClient({
             {createFamilyStep === 1 ? (
               <div>
                 <h4 style={{ marginTop: 0 }}>Matriarch</h4>
+                <label className="label">
+                  <input
+                    type="checkbox"
+                    checked={useExistingMatriarch}
+                    onChange={(e) => setUseExistingMatriarch(e.target.checked)}
+                  />{" "}
+                  Use existing matriarch from people list
+                </label>
+                {useExistingMatriarch ? (
+                  <>
+                    <label className="label">Search Existing People</label>
+                    <input
+                      className="input"
+                      value={matriarchLookupQuery}
+                      onChange={(e) => setMatriarchLookupQuery(e.target.value)}
+                      placeholder="Search name or person ID"
+                    />
+                    <label className="label">Select Matriarch</label>
+                    <select className="input" value={existingMatriarchPersonId} onChange={(e) => setExistingMatriarchPersonId(e.target.value)}>
+                      <option value="">Select existing person</option>
+                      {filteredMatriarchOptions.map((person) => (
+                        <option key={`matriarch-${person.personId}`} value={person.personId}>
+                          {person.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
                 <label className="label">First Name</label>
-                <input className="input" value={newMatriarchFirstName} onChange={(e) => setNewMatriarchFirstName(e.target.value)} />
+                <input className="input" value={newMatriarchFirstName} onChange={(e) => setNewMatriarchFirstName(e.target.value)} disabled={useExistingMatriarch} />
                 <label className="label">Middle Name</label>
-                <input className="input" value={newMatriarchMiddleName} onChange={(e) => setNewMatriarchMiddleName(e.target.value)} />
+                <input className="input" value={newMatriarchMiddleName} onChange={(e) => setNewMatriarchMiddleName(e.target.value)} disabled={useExistingMatriarch} />
                 <label className="label">Last Name</label>
-                <input className="input" value={newMatriarchLastName} onChange={(e) => setNewMatriarchLastName(e.target.value)} />
+                <input className="input" value={newMatriarchLastName} onChange={(e) => setNewMatriarchLastName(e.target.value)} disabled={useExistingMatriarch} />
                 <label className="label">Maiden Name</label>
                 <input className="input" value={newMatriarchMaidenName} onChange={(e) => setNewMatriarchMaidenName(e.target.value)} />
                 <label className="label">Nickname</label>
-                <input className="input" value={newMatriarchNickName} onChange={(e) => setNewMatriarchNickName(e.target.value)} />
+                <input className="input" value={newMatriarchNickName} onChange={(e) => setNewMatriarchNickName(e.target.value)} disabled={useExistingMatriarch} />
                 <label className="label">Birthdate</label>
-                <input className="input" type="date" value={newMatriarchBirthDate} onChange={(e) => setNewMatriarchBirthDate(e.target.value)} />
+                <input className="input" type="date" value={newMatriarchBirthDate} onChange={(e) => setNewMatriarchBirthDate(e.target.value)} disabled={useExistingMatriarch} />
               </div>
             ) : null}
 
             {createFamilyStep === 2 ? (
               <div>
                 <h4 style={{ marginTop: 0 }}>Patriarch</h4>
+                <label className="label">
+                  <input
+                    type="checkbox"
+                    checked={useExistingPatriarch}
+                    onChange={(e) => setUseExistingPatriarch(e.target.checked)}
+                  />{" "}
+                  Use existing patriarch from people list
+                </label>
+                {useExistingPatriarch ? (
+                  <>
+                    <label className="label">Search Existing People</label>
+                    <input
+                      className="input"
+                      value={patriarchLookupQuery}
+                      onChange={(e) => setPatriarchLookupQuery(e.target.value)}
+                      placeholder="Search name or person ID"
+                    />
+                    <label className="label">Select Patriarch</label>
+                    <select className="input" value={existingPatriarchPersonId} onChange={(e) => setExistingPatriarchPersonId(e.target.value)}>
+                      <option value="">Select existing person</option>
+                      {filteredPatriarchOptions.map((person) => (
+                        <option key={`patriarch-${person.personId}`} value={person.personId}>
+                          {person.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
                 <label className="label">First Name</label>
-                <input className="input" value={newPatriarchFirstName} onChange={(e) => setNewPatriarchFirstName(e.target.value)} />
+                <input className="input" value={newPatriarchFirstName} onChange={(e) => setNewPatriarchFirstName(e.target.value)} disabled={useExistingPatriarch} />
                 <label className="label">Middle Name</label>
-                <input className="input" value={newPatriarchMiddleName} onChange={(e) => setNewPatriarchMiddleName(e.target.value)} />
+                <input className="input" value={newPatriarchMiddleName} onChange={(e) => setNewPatriarchMiddleName(e.target.value)} disabled={useExistingPatriarch} />
                 <label className="label">Last Name</label>
-                <input className="input" value={newPatriarchLastName} onChange={(e) => setNewPatriarchLastName(e.target.value)} />
+                <input className="input" value={newPatriarchLastName} onChange={(e) => setNewPatriarchLastName(e.target.value)} disabled={useExistingPatriarch} />
                 <label className="label">Nickname</label>
-                <input className="input" value={newPatriarchNickName} onChange={(e) => setNewPatriarchNickName(e.target.value)} />
+                <input className="input" value={newPatriarchNickName} onChange={(e) => setNewPatriarchNickName(e.target.value)} disabled={useExistingPatriarch} />
                 <label className="label">Birthdate</label>
-                <input className="input" type="date" value={newPatriarchBirthDate} onChange={(e) => setNewPatriarchBirthDate(e.target.value)} />
+                <input className="input" type="date" value={newPatriarchBirthDate} onChange={(e) => setNewPatriarchBirthDate(e.target.value)} disabled={useExistingPatriarch} />
                 <label className="label">Suggested Family Group Key</label>
                 <input className="input" value={generatedFamilyGroupKey} readOnly />
                 <label className="label">Suggested Family Group Name</label>
@@ -2051,13 +2159,25 @@ export function SettingsClient({
                   className="button tap-button"
                   onClick={async () => {
                     if (createFamilyStep === 1) {
-                      if (!newMatriarchFirstName.trim() || !newMatriarchLastName.trim() || !newMatriarchMaidenName.trim() || !newMatriarchBirthDate.trim()) {
-                        setNewTenantStatus("Matriarch first name, last name, maiden name, and birthdate are required.");
+                      if (!newMatriarchMaidenName.trim()) {
+                        setNewTenantStatus("Matriarch maiden name is required.");
+                        return;
+                      }
+                      if (useExistingMatriarch && !existingMatriarchPersonId.trim()) {
+                        setNewTenantStatus("Select an existing matriarch.");
+                        return;
+                      }
+                      if (!useExistingMatriarch && (!newMatriarchFirstName.trim() || !newMatriarchLastName.trim() || !newMatriarchBirthDate.trim())) {
+                        setNewTenantStatus("Matriarch first name, last name, and birthdate are required.");
                         return;
                       }
                     }
                     if (createFamilyStep === 2) {
-                      if (!newPatriarchFirstName.trim() || !newPatriarchLastName.trim() || !newPatriarchBirthDate.trim()) {
+                      if (useExistingPatriarch && !existingPatriarchPersonId.trim()) {
+                        setNewTenantStatus("Select an existing patriarch.");
+                        return;
+                      }
+                      if (!useExistingPatriarch && (!newPatriarchFirstName.trim() || !newPatriarchLastName.trim() || !newPatriarchBirthDate.trim())) {
                         setNewTenantStatus("Patriarch first name, last name, and birthdate are required.");
                         return;
                       }

@@ -28,10 +28,6 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-03-24
   Desc: Build a dedicated Add Contact flow with required fields, validation, and family-group association.
-- [ ] Develop Add Family screen
-  Priority: Med
-  Est date: 2026-03-25
-  Desc: Build a dedicated Add Family flow for creating family groups with structured setup steps.
 - [ ] Develop Contact attributes
   Priority: Med
   Est date: 2026-03-26
@@ -84,3 +80,4 @@ I will update this list as we add, complete, or remove work.
 - [x] Gender-based fallback headshots for missing profile photos
 - [x] Improve multi-family group switching for shared users
 - [x] Document data structure (tables, columns, joins, indexes, media links, entity IDs)
+- [x] Develop Add Family screen

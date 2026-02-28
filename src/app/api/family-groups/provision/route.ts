@@ -26,12 +26,14 @@ const payloadSchema = z.object({
   patriarchLastName: z.string().trim().max(80).optional(),
   patriarchNickName: z.string().trim().max(80).optional(),
   patriarchBirthDate: z.string().trim().max(40).optional(),
+  existingPatriarchPersonId: z.string().trim().min(1).max(120).optional(),
   matriarchFullName: z.string().trim().min(1).max(160),
   matriarchFirstName: z.string().trim().max(80).optional(),
   matriarchMiddleName: z.string().trim().max(80).optional(),
   matriarchLastName: z.string().trim().max(80).optional(),
   matriarchNickName: z.string().trim().max(80).optional(),
   matriarchBirthDate: z.string().trim().max(40).optional(),
+  existingMatriarchPersonId: z.string().trim().min(1).max(120).optional(),
   matriarchMaidenName: z.string().trim().min(1).max(120),
   sourceFamilyGroupKey: z.string().trim().min(1).max(80).optional(),
   initialAdminPersonId: z.string().trim().min(1).max(120),
@@ -203,74 +205,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const photosFolderId = await ensureTenantPhotosFolder(familyGroupKey, familyGroupName);
-  await ensureTenantScaffold({
-    tenantKey: familyGroupKey,
-    tenantName: familyGroupName,
-    photosFolderId,
-  });
-
-  const targetPeopleRows = await getTableRecords("People", familyGroupKey);
-  const existingInTarget = new Set(targetPeopleRows.map((row) => (row.data.person_id ?? "").trim()).filter(Boolean));
-
-  const patriarchPersonId =
-    buildPersonId(patriarchFullName, parsed.data.patriarchBirthDate ?? "") ||
-    buildSeedPersonId(familyGroupKey, "patriarch", patriarchFullName);
-  if (!existingInTarget.has(patriarchPersonId)) {
-    await createTableRecord(
-      "People",
-      {
-        person_id: patriarchPersonId,
-        display_name: patriarchFullName,
-        first_name: parsed.data.patriarchFirstName ?? "",
-        middle_name: parsed.data.patriarchMiddleName ?? "",
-        last_name: parsed.data.patriarchLastName ?? "",
-        nick_name: parsed.data.patriarchNickName ?? "",
-        birth_date: parsed.data.patriarchBirthDate ?? "",
-        gender: "male",
-        phones: "",
-        address: "",
-        hobbies: "",
-        notes: "Top-level patriarch",
-        photo_file_id: "",
-        is_pinned: "FALSE",
-        relationships: "",
-      },
-      familyGroupKey,
-    );
-    existingInTarget.add(patriarchPersonId);
-  }
-  await ensurePersonFamilyGroupMembership(patriarchPersonId, familyGroupKey, true);
-
-  const matriarchPersonId =
-    buildPersonId(matriarchFullName, parsed.data.matriarchBirthDate ?? "") ||
-    buildSeedPersonId(familyGroupKey, "matriarch", matriarchFullName);
-  if (!existingInTarget.has(matriarchPersonId)) {
-    await createTableRecord(
-      "People",
-      {
-        person_id: matriarchPersonId,
-        display_name: matriarchFullName,
-        first_name: parsed.data.matriarchFirstName ?? "",
-        middle_name: parsed.data.matriarchMiddleName ?? "",
-        last_name: parsed.data.matriarchLastName ?? "",
-        nick_name: parsed.data.matriarchNickName ?? "",
-        birth_date: parsed.data.matriarchBirthDate ?? "",
-        gender: "female",
-        phones: "",
-        address: "",
-        hobbies: "",
-        notes: `Top-level matriarch (maiden name: ${parsed.data.matriarchMaidenName})`,
-        photo_file_id: "",
-        is_pinned: "FALSE",
-        relationships: "",
-      },
-      familyGroupKey,
-    );
-    existingInTarget.add(matriarchPersonId);
-  }
-  await ensurePersonFamilyGroupMembership(matriarchPersonId, familyGroupKey, true);
-
   const sourceFamilyGroupKey = (parsed.data.sourceFamilyGroupKey ?? context.tenantKey).trim().toLowerCase();
   const sourceAccess = context.tenants.find((entry) => entry.tenantKey.trim().toLowerCase() === sourceFamilyGroupKey);
   if (!sourceAccess) {
@@ -285,6 +219,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+
   const sourcePeopleRows = await getPeople(sourceFamilyGroupKey).catch(() => []);
   const sourcePeopleById = new Map<string, Record<string, string>>();
   for (const row of sourcePeopleRows) {
@@ -295,7 +230,12 @@ export async function POST(request: Request) {
     sourcePeopleById.set(personId, {
       person_id: row.personId,
       display_name: row.displayName,
+      first_name: row.firstName ?? "",
+      middle_name: row.middleName ?? "",
+      last_name: row.lastName ?? "",
+      nick_name: row.nickName ?? "",
       birth_date: row.birthDate,
+      gender: row.gender ?? "unspecified",
       phones: row.phones,
       address: row.address,
       hobbies: row.hobbies,
@@ -305,6 +245,138 @@ export async function POST(request: Request) {
       relationships: row.relationships.join(","),
     });
   }
+
+  const photosFolderId = await ensureTenantPhotosFolder(familyGroupKey, familyGroupName);
+  await ensureTenantScaffold({
+    tenantKey: familyGroupKey,
+    tenantName: familyGroupName,
+    photosFolderId,
+  });
+
+  const targetPeopleRows = await getTableRecords("People", familyGroupKey);
+  const existingInTarget = new Set(targetPeopleRows.map((row) => (row.data.person_id ?? "").trim()).filter(Boolean));
+
+  const existingPatriarchPersonId = (parsed.data.existingPatriarchPersonId ?? "").trim();
+  const patriarchPersonId = existingPatriarchPersonId ||
+    buildPersonId(patriarchFullName, parsed.data.patriarchBirthDate ?? "") ||
+    buildSeedPersonId(familyGroupKey, "patriarch", patriarchFullName);
+  if (existingPatriarchPersonId && !sourcePeopleById.has(existingPatriarchPersonId)) {
+    return NextResponse.json(
+      { error: "invalid_existing_patriarch", issues: "Selected existing patriarch was not found in source family people." },
+      { status: 400 },
+    );
+  }
+  if (!existingInTarget.has(patriarchPersonId)) {
+    if (existingPatriarchPersonId) {
+      const source = sourcePeopleById.get(existingPatriarchPersonId)!;
+      await createTableRecord(
+        "People",
+        {
+          person_id: existingPatriarchPersonId,
+          display_name: source.display_name ?? "",
+          first_name: source.first_name ?? "",
+          middle_name: source.middle_name ?? "",
+          last_name: source.last_name ?? "",
+          nick_name: source.nick_name ?? "",
+          birth_date: source.birth_date ?? "",
+          gender: source.gender || "male",
+          phones: source.phones ?? "",
+          address: source.address ?? "",
+          hobbies: source.hobbies ?? "",
+          notes: source.notes ?? "",
+          photo_file_id: source.photo_file_id ?? "",
+          is_pinned: source.is_pinned ?? "FALSE",
+          relationships: source.relationships ?? "",
+        },
+        familyGroupKey,
+      );
+    } else {
+      await createTableRecord(
+        "People",
+        {
+          person_id: patriarchPersonId,
+          display_name: patriarchFullName,
+          first_name: parsed.data.patriarchFirstName ?? "",
+          middle_name: parsed.data.patriarchMiddleName ?? "",
+          last_name: parsed.data.patriarchLastName ?? "",
+          nick_name: parsed.data.patriarchNickName ?? "",
+          birth_date: parsed.data.patriarchBirthDate ?? "",
+          gender: "male",
+          phones: "",
+          address: "",
+          hobbies: "",
+          notes: "Top-level patriarch",
+          photo_file_id: "",
+          is_pinned: "FALSE",
+          relationships: "",
+        },
+        familyGroupKey,
+      );
+    }
+    existingInTarget.add(patriarchPersonId);
+  }
+  await ensurePersonFamilyGroupMembership(patriarchPersonId, familyGroupKey, true);
+
+  const existingMatriarchPersonId = (parsed.data.existingMatriarchPersonId ?? "").trim();
+  const matriarchPersonId = existingMatriarchPersonId ||
+    buildPersonId(matriarchFullName, parsed.data.matriarchBirthDate ?? "") ||
+    buildSeedPersonId(familyGroupKey, "matriarch", matriarchFullName);
+  if (existingMatriarchPersonId && !sourcePeopleById.has(existingMatriarchPersonId)) {
+    return NextResponse.json(
+      { error: "invalid_existing_matriarch", issues: "Selected existing matriarch was not found in source family people." },
+      { status: 400 },
+    );
+  }
+  if (!existingInTarget.has(matriarchPersonId)) {
+    if (existingMatriarchPersonId) {
+      const source = sourcePeopleById.get(existingMatriarchPersonId)!;
+      await createTableRecord(
+        "People",
+        {
+          person_id: existingMatriarchPersonId,
+          display_name: source.display_name ?? "",
+          first_name: source.first_name ?? "",
+          middle_name: source.middle_name ?? "",
+          last_name: source.last_name ?? "",
+          nick_name: source.nick_name ?? "",
+          birth_date: source.birth_date ?? "",
+          gender: source.gender || "female",
+          phones: source.phones ?? "",
+          address: source.address ?? "",
+          hobbies: source.hobbies ?? "",
+          notes: source.notes ?? "",
+          photo_file_id: source.photo_file_id ?? "",
+          is_pinned: source.is_pinned ?? "FALSE",
+          relationships: source.relationships ?? "",
+        },
+        familyGroupKey,
+      );
+    } else {
+      await createTableRecord(
+        "People",
+        {
+          person_id: matriarchPersonId,
+          display_name: matriarchFullName,
+          first_name: parsed.data.matriarchFirstName ?? "",
+          middle_name: parsed.data.matriarchMiddleName ?? "",
+          last_name: parsed.data.matriarchLastName ?? "",
+          nick_name: parsed.data.matriarchNickName ?? "",
+          birth_date: parsed.data.matriarchBirthDate ?? "",
+          gender: "female",
+          phones: "",
+          address: "",
+          hobbies: "",
+          notes: `Top-level matriarch (maiden name: ${parsed.data.matriarchMaidenName})`,
+          photo_file_id: "",
+          is_pinned: "FALSE",
+          relationships: "",
+        },
+        familyGroupKey,
+      );
+    }
+    existingInTarget.add(matriarchPersonId);
+  }
+  await ensurePersonFamilyGroupMembership(matriarchPersonId, familyGroupKey, true);
 
   const requestedMemberIds = Array.from(
     new Set([parsed.data.initialAdminPersonId, ...parsed.data.memberPersonIds.map((value) => value.trim()).filter(Boolean)]),

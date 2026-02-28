@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Family Group creation is now a 4-step wizard with initial-admin import preview and post-create active-family switch. See `docs/change-summary.md`.
+- 2026-02-28: Family Group creation now supports selecting existing matriarch/patriarch via search to avoid duplicate parent records. See `docs/change-summary.md`.
