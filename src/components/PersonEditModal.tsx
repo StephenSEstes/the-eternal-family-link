@@ -217,7 +217,7 @@ export function PersonEditModal({
           <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
         </div>
 
-        <div className="settings-chip-list" style={{ marginTop: "0.8rem" }}>
+        <div className="settings-chip-list" style={{ marginTop: "0.8rem", flexWrap: "nowrap", overflowX: "auto" }}>
           <button type="button" className={`button secondary tap-button ${activeTab === "contact" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("contact")}>Contact Info</button>
           <button type="button" className={`button secondary tap-button ${activeTab === "attributes" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("attributes")}>Attributes</button>
           <button type="button" className={`button secondary tap-button ${activeTab === "photos" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
@@ -522,4 +522,3 @@ export function PersonEditModal({
     </div>
   );
 }
-

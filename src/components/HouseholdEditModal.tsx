@@ -110,7 +110,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
           <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
         </div>
 
-        <div className="settings-chip-list" style={{ marginTop: "0.8rem" }}>
+        <div className="settings-chip-list" style={{ marginTop: "0.8rem", flexWrap: "nowrap", overflowX: "auto" }}>
           <button type="button" className={`button secondary tap-button ${activeTab === "info" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("info")}>Info</button>
           <button type="button" className={`button secondary tap-button ${activeTab === "children" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("children")}>Children</button>
           <button type="button" className={`button secondary tap-button ${activeTab === "pictures" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("pictures")}>Pictures</button>
@@ -288,4 +288,3 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     </div>
   );
 }
-
