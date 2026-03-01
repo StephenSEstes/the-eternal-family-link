@@ -159,8 +159,11 @@ type CachedValue = {
 
 const TAB_RESOLVE_CACHE_TTL_MS = 60_000;
 const SHEET_ID_CACHE_TTL_MS = 60_000;
+const PEOPLE_SCHEMA_CHECK_TTL_MS = 15 * 60_000;
 const tabResolveCache = new Map<string, CachedValue>();
 const sheetIdCache = new Map<string, CachedValue>();
+const inFlightTabReads = new Map<string, Promise<SheetMatrix>>();
+let nextPeopleSchemaCheckAt = 0;
 
 function normalizeHeader(header: string) {
   const normalized = header.trim().toLowerCase();
@@ -839,8 +842,22 @@ export async function deleteTableRows(
 }
 
 async function readTab(tabName: string): Promise<SheetMatrix> {
-  const sheets = await createSheetsClient();
-  return readTabWithClient(sheets, tabName);
+  const cacheKey = tabName.trim().toLowerCase();
+  const inFlight = inFlightTabReads.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const nextRead = (async () => {
+    const sheets = await createSheetsClient();
+    return readTabWithClient(sheets, tabName);
+  })();
+  inFlightTabReads.set(cacheKey, nextRead);
+  try {
+    return await nextRead;
+  } finally {
+    inFlightTabReads.delete(cacheKey);
+  }
 }
 
 async function ensureUserAccessTabSchema(): Promise<SheetMatrix> {
@@ -892,6 +909,34 @@ async function ensureUserFamilyGroupsTabSchema(): Promise<SheetMatrix> {
 }
 
 async function ensurePersonFamilyGroupsTabSchema(): Promise<SheetMatrix> {
+  try {
+    const tabName = await resolveTenantTabName(PERSON_FAMILY_GROUPS_TAB);
+    const matrix = await readTab(tabName);
+    if (matrix.headers.length === 0) {
+      throw new Error("empty_person_family_groups_headers");
+    }
+    const existing = new Set(matrix.headers.map((header) => normalizeHeader(header)));
+    const missing = PERSON_FAMILY_GROUPS_HEADERS.filter((header) => !existing.has(normalizeHeader(header)));
+    if (missing.length === 0) {
+      return matrix;
+    }
+
+    const sheets = await createSheetsClient();
+    const env = getEnv();
+    const nextHeaders = [...matrix.headers, ...missing];
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.SHEET_ID,
+      range: `${tabName}!A1:ZZ1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [nextHeaders],
+      },
+    });
+    return { headers: nextHeaders, rows: matrix.rows };
+  } catch {
+    // Fall through to scaffold path if tab is missing or unreadable.
+  }
+
   const sheets = await createSheetsClient();
   await ensureTabWithHeaders(sheets, PERSON_FAMILY_GROUPS_TAB, PERSON_FAMILY_GROUPS_HEADERS);
   const matrix = await readTabWithClient(sheets, PERSON_FAMILY_GROUPS_TAB);
@@ -913,6 +958,23 @@ async function ensurePersonFamilyGroupsTabSchema(): Promise<SheetMatrix> {
   });
 
   return { headers: nextHeaders, rows: matrix.rows };
+}
+
+async function ensurePeopleReadSchema(tenantKey?: string) {
+  if (Date.now() < nextPeopleSchemaCheckAt) {
+    return;
+  }
+  try {
+    await ensureResolvedTabColumns(
+      PEOPLE_TAB,
+      ["gender", "first_name", "middle_name", "last_name", "nick_name"],
+      tenantKey,
+    );
+    nextPeopleSchemaCheckAt = Date.now() + PEOPLE_SCHEMA_CHECK_TTL_MS;
+  } catch {
+    // Keep retry window short on failures to avoid repeated metadata reads in hot paths.
+    nextPeopleSchemaCheckAt = Date.now() + 60_000;
+  }
 }
 
 function hasGoogleAccess(row: string[], idx: Map<string, number>) {
@@ -1461,7 +1523,7 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
-  await ensureResolvedTabColumns(PEOPLE_TAB, ["gender", "first_name", "middle_name", "last_name", "nick_name"], tenantKey).catch(() => undefined);
+  await ensurePeopleReadSchema(tenantKey);
   const sheets = await createSheetsClient();
 
   const readPeopleFromTab = async (tabName: string) => {

@@ -143,7 +143,12 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
         {items.map((item) => {
           const active = item.match(pathname);
           return (
-            <Link key={item.label} href={item.href} className={active ? "nav-pill nav-pill-active" : "nav-pill"}>
+            <Link
+              key={item.label}
+              href={item.href}
+              prefetch={false}
+              className={active ? "nav-pill nav-pill-active" : "nav-pill"}
+            >
               <span className="nav-pill-icon">{item.icon}</span>
               <span>{item.label}</span>
             </Link>

@@ -29,7 +29,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
 
         <section className="tile-grid">
           {tiles.map((tile) => (
-            <Link key={tile.title} href={tile.href} className="tile">
+            <Link key={tile.title} href={tile.href} prefetch={false} className="tile">
               <strong>{tile.title}</strong>
               <span>{tile.subtitle}</span>
             </Link>

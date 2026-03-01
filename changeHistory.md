@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Reduced relationship-save Sheets quota pressure by batching relationship delete/create operations and caching tab/sheet metadata lookups. See `docs/change-summary.md`.
+- 2026-03-01: Added incremental Sheets hardening by disabling nav prefetch fan-out and adding Sheets read de-duplication/throttled schema checks to reduce quota pressure. See `docs/change-summary.md`.

@@ -29,7 +29,7 @@ export async function AppHeader() {
     <header className="app-header">
       <div className="app-header-inner">
         <div className="app-header-top">
-          <Link href={basePath || "/"} className="app-brand-link">
+          <Link href={basePath || "/"} prefetch={false} className="app-brand-link">
             <span className="app-brand-logo-wrap">
               <Image
                 src="/brand/logo-arch-tree.png"

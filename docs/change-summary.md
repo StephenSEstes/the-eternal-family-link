@@ -398,3 +398,23 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (incremental Sheets hardening: nav prefetch + read dedupe)
+
+- `Change`: Disabled Next.js link prefetch on header/home navigation links to reduce multi-route background SSR fan-out, added in-flight tab read de-duplication in Sheets access layer, and throttled recurring People schema checks in hot read path.
+- `Type`: UI, API, Performance, Reliability
+- `Why`: Vercel logs showed single navigation actions triggering multiple route renders and repeated Sheets reads (`People`, `PersonFamilyGroups`, metadata) that increase quota pressure.
+- `Files`:
+  - `src/components/HeaderNav.tsx`
+  - `src/components/AppHeader.tsx`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/lib/google/sheets.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Family-group switch/tree navigation no longer prefetches multiple app pages in the background.
+  - Concurrent same-tab reads in one request path collapse to one in-flight read.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
