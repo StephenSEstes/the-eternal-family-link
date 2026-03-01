@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: People now use modal-only person detail flow (removed View Profile link), and PersonEditModal now supports Add Spouse with existing-person lookup or inline person creation + default in-law option. See `docs/change-summary.md`.
+- 2026-03-01: Reduced relationship-save Sheets quota pressure by batching relationship delete/create operations and caching tab/sheet metadata lookups. See `docs/change-summary.md`.

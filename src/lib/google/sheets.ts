@@ -152,6 +152,16 @@ export type AuditLogInput = {
   details?: string;
 };
 
+type CachedValue = {
+  expiresAt: number;
+  value: string;
+};
+
+const TAB_RESOLVE_CACHE_TTL_MS = 60_000;
+const SHEET_ID_CACHE_TTL_MS = 60_000;
+const tabResolveCache = new Map<string, CachedValue>();
+const sheetIdCache = new Map<string, CachedValue>();
+
 function normalizeHeader(header: string) {
   const normalized = header.trim().toLowerCase();
   if (normalized === "tenant_key") {
@@ -535,12 +545,19 @@ async function resolveTenantTabNameWithClient(
 }
 
 async function resolveTenantTabName(tabName: string | string[], tenantKey?: string): Promise<string> {
+  const cacheKey = `${normalizeTenantKey(tenantKey)}::${buildMultiTenantTabCandidates(tabName).join("|").toLowerCase()}`;
+  const cached = tabResolveCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const sheets = await createSheetsClient();
   const resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
   if (!resolved) {
     const tabLabel = Array.isArray(tabName) ? tabName.join("' or '") : tabName;
     throw new Error(`Tab '${tabLabel}' not found for tenant '${normalizeTenantKey(tenantKey)}'.`);
   }
+  tabResolveCache.set(cacheKey, { value: resolved, expiresAt: Date.now() + TAB_RESOLVE_CACHE_TTL_MS });
   return resolved;
 }
 
@@ -625,6 +642,31 @@ export async function createTableRecord(
   payload: Record<string, string>,
   tenantKey?: string,
 ): Promise<SheetRecord> {
+  const [created] = await createTableRecords(tabName, [payload], tenantKey);
+  return created;
+}
+
+function parseRowNumberFromUpdatedRange(updatedRange: string | null | undefined) {
+  const raw = (updatedRange ?? "").trim();
+  if (!raw) {
+    return 0;
+  }
+  const match = raw.match(/![A-Z]+(\d+):[A-Z]+(\d+)$/i);
+  if (!match) {
+    return 0;
+  }
+  const row = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(row) ? row : 0;
+}
+
+export async function createTableRecords(
+  tabName: string | string[],
+  payloads: Record<string, string>[],
+  tenantKey?: string,
+): Promise<SheetRecord[]> {
+  if (!payloads.length) {
+    return [];
+  }
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
@@ -632,32 +674,30 @@ export async function createTableRecord(
   }
 
   const canonicalHeaders = headerKeyMap(matrix.headers);
-  const normalizedPayload: Record<string, string> = {};
-
-  Object.entries(payload).forEach(([key, value]) => {
-    const canonical = canonicalHeaders.get(normalizeHeader(key));
-    if (canonical) {
-      normalizedPayload[canonical] = value;
-    }
+  const rows = payloads.map((payload) => {
+    const normalizedPayload: Record<string, string> = {};
+    Object.entries(payload).forEach(([key, value]) => {
+      const canonical = canonicalHeaders.get(normalizeHeader(key));
+      if (canonical) {
+        normalizedPayload[canonical] = value;
+      }
+    });
+    return matrix.headers.map((header) => normalizedPayload[header] ?? "");
   });
-
-  const row = matrix.headers.map((header) => normalizedPayload[header] ?? "");
   const sheets = await createSheetsClient();
   const env = getEnv();
-  await sheets.spreadsheets.values.append({
+  const appendResult = await sheets.spreadsheets.values.append({
     spreadsheetId: env.SHEET_ID,
     range: `${resolvedTab}!A:ZZ`,
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [row] },
+    requestBody: { values: rows },
   });
-
-  const refreshed = await readTab(resolvedTab);
-  const createdData = toRecord(refreshed.headers, row);
-  return {
-    rowNumber: refreshed.rows.length + 1,
-    data: createdData,
-  };
+  const firstRow = parseRowNumberFromUpdatedRange(appendResult.data.updates?.updatedRange);
+  return rows.map((row, index) => ({
+    rowNumber: firstRow > 0 ? firstRow + index : 0,
+    data: toRecord(matrix.headers, row),
+  }));
 }
 
 export async function updateTableRecordById(
@@ -736,39 +776,66 @@ export async function deleteTableRecordById(
     return false;
   }
 
+  await deleteTableRows(tabName, [rowIndex + 2], tenantKey);
+  return true;
+}
+
+async function resolveSheetIdForTab(sheets: sheets_v4.Sheets, resolvedTab: string): Promise<number> {
   const env = getEnv();
-  const sheets = await createSheetsClient();
+  const sheetKey = resolvedTab.trim().toLowerCase();
+  const cachedSheetId = sheetIdCache.get(sheetKey);
+  const cachedValue = cachedSheetId && cachedSheetId.expiresAt > Date.now() ? Number(cachedSheetId.value) : NaN;
+  if (Number.isFinite(cachedValue)) {
+    return cachedValue;
+  }
+
   const metadata = await sheets.spreadsheets.get({
     spreadsheetId: env.SHEET_ID,
     fields: "sheets.properties.sheetId,sheets.properties.title",
   });
-  const sheet = metadata.data.sheets?.find(
-    (item) => item.properties?.title?.trim().toLowerCase() === resolvedTab.trim().toLowerCase(),
-  );
-  const sheetId = sheet?.properties?.sheetId;
-  if (sheetId === undefined) {
+  const sheet = metadata.data.sheets?.find((item) => item.properties?.title?.trim().toLowerCase() === sheetKey);
+  const nextSheetId = sheet?.properties?.sheetId;
+  if (typeof nextSheetId !== "number") {
     throw new Error("Sheet not found.");
   }
+  sheetIdCache.set(sheetKey, { value: String(nextSheetId), expiresAt: Date.now() + SHEET_ID_CACHE_TTL_MS });
+  return nextSheetId;
+}
+
+export async function deleteTableRows(
+  tabName: string | string[],
+  rowNumbers: number[],
+  tenantKey?: string,
+): Promise<number> {
+  const uniqueRows = Array.from(
+    new Set(rowNumbers.filter((value) => Number.isInteger(value) && value >= 2)),
+  ).sort((a, b) => b - a);
+  if (uniqueRows.length === 0) {
+    return 0;
+  }
+
+  const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
+  const sheets = await createSheetsClient();
+  const env = getEnv();
+  const sheetId = await resolveSheetIdForTab(sheets, resolvedTab);
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: env.SHEET_ID,
     requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: "ROWS",
-              startIndex: rowIndex + 1,
-              endIndex: rowIndex + 2,
-            },
+      requests: uniqueRows.map((rowNumber) => ({
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: rowNumber - 1,
+            endIndex: rowNumber,
           },
         },
-      ],
+      })),
     },
   });
 
-  return true;
+  return uniqueRows.length;
 }
 
 async function readTab(tabName: string): Promise<SheetMatrix> {

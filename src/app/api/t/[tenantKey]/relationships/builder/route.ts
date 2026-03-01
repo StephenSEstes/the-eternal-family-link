@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import {
   createTableRecord,
+  createTableRecords,
   deleteTableRecordById,
+  deleteTableRows,
   getTableRecords,
 } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
@@ -31,13 +33,15 @@ function readField(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-async function createRelation(
+function relationPayload(
+  tenantKey: string,
   fromPersonId: string,
   toPersonId: string,
   relType: string,
-) {
+): Record<string, string> {
   const relId = makeRelId(fromPersonId, toPersonId, relType);
-  const payload: Record<string, string> = {
+  return {
+    family_group_key: tenantKey,
     rel_id: relId,
     relationship_id: relId,
     id: relId,
@@ -45,7 +49,6 @@ async function createRelation(
     to_person_id: toPersonId,
     rel_type: relType,
   };
-  await createTableRecord("Relationships", payload);
 }
 
 function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
@@ -101,7 +104,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
 
     debugContext.phase = "load_relationships";
-    const existing = await getTableRecords("Relationships");
+    const existing = await getTableRecords("Relationships", normalizedTenantKey);
     const desiredIds = new Set<string>();
     parentIds.forEach((parentId) =>
       desiredIds.add(makeRelId(parentId, parsed.data.personId, "parent")),
@@ -111,6 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     );
 
     const existingParentEdgeIds = new Set<string>();
+    const relationshipRowNumbersToDelete: number[] = [];
     for (const row of existing) {
       const relId = readField(row.data, "rel_id", "relationship_id", "id");
       const relType = readField(row.data, "rel_type");
@@ -145,37 +149,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (desiredIds.has(relId)) {
         continue;
       }
-
-      let deleted = false;
-      const idColumns = ["rel_id", "relationship_id", "id"] as const;
-      for (const idColumn of idColumns) {
-        try {
-          deleted = await deleteTableRecordById("Relationships", relId, idColumn);
-          if (deleted) {
-            break;
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "";
-          if (!message.includes("No id column found")) {
-            throw error;
-          }
-        }
-      }
+      relationshipRowNumbersToDelete.push(row.rowNumber);
+    }
+    if (relationshipRowNumbersToDelete.length > 0) {
+      await deleteTableRows("Relationships", relationshipRowNumbersToDelete, normalizedTenantKey);
     }
 
     debugContext.phase = "upsert_parent_edges";
+    const relationsToCreate: Record<string, string>[] = [];
     for (const parentId of parentIds) {
       const relId = makeRelId(parentId, parsed.data.personId, "parent");
       if (!existingParentEdgeIds.has(relId)) {
-        await createRelation(parentId, parsed.data.personId, "parent");
+        relationsToCreate.push(relationPayload(normalizedTenantKey, parentId, parsed.data.personId, "parent"));
       }
     }
     debugContext.phase = "upsert_child_edges";
     for (const childId of childIds) {
       const relId = makeRelId(parsed.data.personId, childId, "parent");
       if (!existingParentEdgeIds.has(relId)) {
-        await createRelation(parsed.data.personId, childId, "parent");
+        relationsToCreate.push(relationPayload(normalizedTenantKey, parsed.data.personId, childId, "parent"));
       }
+    }
+    if (relationsToCreate.length > 0) {
+      await createTableRecords("Relationships", relationsToCreate, normalizedTenantKey);
     }
 
     debugContext.phase = "load_households";
