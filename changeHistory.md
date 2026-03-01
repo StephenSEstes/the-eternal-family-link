@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Made family-group switching deterministic via full-page navigation after active-group update to eliminate remaining duplicate tree renders. See `docs/change-summary.md`.
+- 2026-03-01: Added tree-page in-flight/short-TTL dedupe loader so immediate duplicate renders reuse one Sheets data load instead of repeated reads. See `docs/change-summary.md`.

@@ -448,3 +448,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - One family-group switch should produce one destination page render request.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (tree page duplicate-render read dedupe guard)
+
+- `Change`: Added shared tree-page data loader with per-tenant in-flight de-duplication and a short (3s) cache window, and wired both `/tree` and `/t/[tenantKey]/tree` pages to it.
+- `Type`: API, Performance, Reliability
+- `Why`: Switch-flow telemetry showed duplicate tree renders with repeated Sheets read sets; this guard prevents immediate duplicate renders from re-reading Sheets.
+- `Files`:
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/app/tree/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Immediate duplicate tree renders reuse cached/in-flight load and reduce repeated Sheets reads.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

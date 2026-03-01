@@ -2,8 +2,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { TreeGraph } from "@/components/TreeGraph";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
-import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople } from "@/lib/google/sheets";
+import { loadTreePageData, type TreePageData } from "@/lib/tree/load-tree-page-data";
 
 type TenantTreePageProps = {
   params: Promise<{ tenantKey: string }>;
@@ -47,20 +46,14 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
     }
   };
 
-  let people: Awaited<ReturnType<typeof getPeople>> = [];
-  let relationships: Awaited<ReturnType<typeof getRelationships>> = [];
-  let households: Awaited<ReturnType<typeof getHouseholds>> = [];
+  let people: TreePageData["people"] = [];
+  let relationships: TreePageData["relationships"] = [];
+  let households: TreePageData["households"] = [];
 
   try {
-    ({ people, relationships, households } = await runStep("load_tree_page_data", async () => {
-      const people = await getPeople(tenant.tenantKey);
-      const peopleInFamily = new Set(people.map((person) => person.personId));
-      const [allRelationships, households] = await Promise.all([getRelationships(), getHouseholds(tenant.tenantKey)]);
-      const relationships = allRelationships.filter(
-        (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
-      );
-      return { people, relationships, households };
-    }));
+    ({ people, relationships, households } = await runStep("load_tree_page_data", async () =>
+      loadTreePageData(tenant.tenantKey),
+    ));
   } catch (error) {
     const classified = classifyOperationalError(error);
     return (
