@@ -76,7 +76,7 @@ export default async function PersonPage({ params }: PersonPageProps) {
           <ProfileEditor
             person={person}
             tenantKey={tenant.tenantKey}
-            people={people.map((item) => ({ personId: item.personId, displayName: item.displayName }))}
+            people={people.map((item) => ({ personId: item.personId, displayName: item.displayName, gender: item.gender }))}
             marriedToByPersonId={marriedToByPersonId}
             initialParentIds={initialParentIds}
             initialSpouseId={initialSpouseId}

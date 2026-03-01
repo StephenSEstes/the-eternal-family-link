@@ -12,7 +12,7 @@ type TenantOption = {
 type ProfileEditorProps = {
   person: PersonRecord;
   tenantKey: string;
-  people: { personId: string; displayName: string }[];
+  people: { personId: string; displayName: string; gender?: "male" | "female" | "unspecified" }[];
   marriedToByPersonId: Record<string, string>;
   initialParentIds: string[];
   initialSpouseId: string;
@@ -145,6 +145,14 @@ export function ProfileEditor({
   const parentOptions = useMemo(
     () => people.filter((option) => option.personId !== person.personId),
     [people, person.personId],
+  );
+  const motherOptions = useMemo(
+    () => parentOptions.filter((option) => (option.gender ?? "unspecified") === "female"),
+    [parentOptions],
+  );
+  const fatherOptions = useMemo(
+    () => parentOptions.filter((option) => (option.gender ?? "unspecified") === "male"),
+    [parentOptions],
   );
 
   const spouseOptions = useMemo(
@@ -446,10 +454,13 @@ export function ProfileEditor({
   };
 
   const onParentChange = (slot: 1 | 2, value: string) => {
+    const spouse = value ? marriedToByPersonId[value] : "";
+    if (spouse && spouse !== person.personId) {
+      setSpouseId(spouse);
+    }
     if (slot === 1) {
       setParent1Id(value);
       if (!parent2Id && value) {
-        const spouse = marriedToByPersonId[value];
         if (spouse && spouse !== person.personId) {
           setParent2Id(spouse);
         }
@@ -458,7 +469,6 @@ export function ProfileEditor({
     }
     setParent2Id(value);
     if (!parent1Id && value) {
-      const spouse = marriedToByPersonId[value];
       if (spouse && spouse !== person.personId) {
         setParent1Id(spouse);
       }
@@ -666,7 +676,7 @@ export function ProfileEditor({
                 disabled={!canEdit}
               >
                 <option value="">Not set</option>
-                {parentOptions
+                {motherOptions
                   .filter((option) => option.personId !== parent2Id)
                   .map((option) => (
                     <option key={option.personId} value={option.personId}>
@@ -683,7 +693,7 @@ export function ProfileEditor({
                 disabled={!canEdit}
               >
                 <option value="">Not set</option>
-                {parentOptions
+                {fatherOptions
                   .filter((option) => option.personId !== parent1Id)
                   .map((option) => (
                     <option key={option.personId} value={option.personId}>

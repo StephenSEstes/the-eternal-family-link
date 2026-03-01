@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { getPeople } from "@/lib/google/sheets";
 import { getRequestTenantContext } from "@/lib/family-group/context";
+import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 
 class StepFailure extends Error {
   constructor(
@@ -17,15 +18,27 @@ class StepFailure extends Error {
 export async function GET() {
   const routeStart = Date.now();
   let currentStep = "session";
+  const requestId = createRequestId();
+  let tenantKey = "";
+  let userEmailMasked = "";
 
   const logStart = (step: string) => {
-    console.log(`[api/people] step=${step} status=start`);
+    logRoute("api/people", { requestId, step, status: "start", tenantKey, userEmailMasked });
   };
   const logOk = (step: string, durationMs: number) => {
-    console.log(`[api/people] step=${step} status=ok durationMs=${durationMs}`);
+    logRoute("api/people", { requestId, step, status: "ok", durationMs, tenantKey, userEmailMasked });
   };
-  const logError = (step: string, durationMs: number, message: string) => {
-    console.error(`[api/people] step=${step} status=error durationMs=${durationMs} message=${message}`);
+  const logError = (step: string, durationMs: number, message: string, errorCode = "internal_error") => {
+    logRoute("api/people", {
+      requestId,
+      step,
+      status: "error",
+      durationMs,
+      message,
+      errorCode,
+      tenantKey,
+      userEmailMasked,
+    });
   };
 
   const runStep = async <T>(
@@ -62,20 +75,33 @@ export async function GET() {
     const session = await runStep("session", 1800, async () => getAppSession());
     if (!session?.user?.email) {
       const durationMs = Date.now() - routeStart;
-      console.log(`[api/people] status=unauthorized durationMs=${durationMs}`);
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      logRoute("api/people", {
+        requestId,
+        status: "error",
+        durationMs,
+        message: "unauthorized",
+        errorCode: "unauthorized",
+      });
+      return NextResponse.json({ error: "unauthorized", requestId }, { status: 401 });
     }
+    userEmailMasked = maskEmail(session.user.email);
 
     const tenant = await runStep("tenant resolution", 300, async () => {
       return getRequestTenantContext(session);
     });
+    tenantKey = tenant.tenantKey;
     const people = await runStep("fetch", 6500, async () => getPeople(tenant.tenantKey));
 
     const durationMs = Date.now() - routeStart;
-    console.log(
-      `[api/people] status=ok durationMs=${durationMs} count=${people.length} tenant=${tenant.tenantKey}`,
-    );
-    return NextResponse.json({ people });
+    logRoute("api/people", {
+      requestId,
+      status: "ok",
+      durationMs,
+      tenantKey,
+      userEmailMasked,
+      message: `count=${people.length}`,
+    });
+    return NextResponse.json({ people, requestId });
   };
 
   const overallTimeoutMs = 9800;
@@ -83,12 +109,14 @@ export async function GET() {
   const overallTimeout = new Promise<NextResponse>((resolve) => {
     overallTimer = setTimeout(() => {
       const durationMs = Date.now() - routeStart;
-      logError(currentStep, durationMs, "Route exceeded 10s budget");
+      logError(currentStep, durationMs, "Route exceeded 10s budget", "route_timeout");
       resolve(
         NextResponse.json(
           {
             error: "people_fetch_failed",
             step: currentStep,
+            errorCode: "route_timeout",
+            requestId,
             message: "Route exceeded 10s timeout budget",
             durationMs,
           },
@@ -103,10 +131,14 @@ export async function GET() {
   } catch (error) {
     if (error instanceof StepFailure) {
       const durationMs = Date.now() - routeStart;
+      const classified = classifyOperationalError(error);
+      logError(error.step, durationMs, error.message, classified.errorCode);
       return NextResponse.json(
         {
           error: "people_fetch_failed",
           step: error.step,
+          errorCode: classified.errorCode,
+          requestId,
           message: error.message,
           durationMs,
         },
@@ -115,16 +147,18 @@ export async function GET() {
     }
 
     const durationMs = Date.now() - routeStart;
-    const message = error instanceof Error ? error.message : "Unexpected error";
-    console.error(`[api/people] step=${currentStep} status=error durationMs=${durationMs} message=${message}`);
+    const classified = classifyOperationalError(error);
+    logError(currentStep, durationMs, classified.message, classified.errorCode);
     return NextResponse.json(
       {
         error: "people_fetch_failed",
         step: currentStep,
-        message,
+        errorCode: classified.errorCode,
+        requestId,
+        message: classified.message,
         durationMs,
       },
-      { status: 500 },
+      { status: classified.status },
     );
   } finally {
     if (overallTimer) {

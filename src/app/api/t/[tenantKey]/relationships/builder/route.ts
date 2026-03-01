@@ -40,12 +40,26 @@ async function upsertRelation(
   const relId = makeRelId(fromPersonId, toPersonId, relType);
   const payload: Record<string, string> = {
     rel_id: relId,
+    relationship_id: relId,
+    id: relId,
     from_person_id: fromPersonId,
     to_person_id: toPersonId,
     rel_type: relType,
   };
 
-  const updated = await updateTableRecordById("Relationships", relId, payload, "rel_id");
+  let updated = null;
+  const idColumns = ["rel_id", "relationship_id", "id"] as const;
+  for (const idColumn of idColumns) {
+    try {
+      updated = await updateTableRecordById("Relationships", relId, payload, idColumn);
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("No id column found")) {
+        throw error;
+      }
+    }
+  }
   if (!updated) {
     await createTableRecord("Relationships", payload);
   }
@@ -94,11 +108,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
+  const debugContext = {
+    phase: "start",
+    personId: parsed.data.personId,
+    parentCount: parsed.data.parentIds.length,
+    childCount: parsed.data.childIds.length,
+    spouseId: parsed.data.spouseId ?? "",
+  };
   try {
+    debugContext.phase = "prepare";
     const parentIds = Array.from(new Set(parsed.data.parentIds.filter((id) => id !== parsed.data.personId)));
     const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
     const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
 
+    debugContext.phase = "load_relationships";
     const existing = await getTableRecords("Relationships");
     const desiredIds = new Set<string>();
     parentIds.forEach((parentId) =>
@@ -108,6 +131,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       desiredIds.add(makeRelId(parsed.data.personId, childId, "parent")),
     );
 
+    debugContext.phase = "prune_existing_relationships";
     for (const row of existing) {
       const relId = readField(row.data, "rel_id");
       const relType = readField(row.data, "rel_type");
@@ -126,16 +150,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         continue;
       }
 
-      await deleteTableRecordById("Relationships", relId, "rel_id");
+      let deleted = false;
+      const idColumns = ["rel_id", "relationship_id", "id"] as const;
+      for (const idColumn of idColumns) {
+        try {
+          deleted = await deleteTableRecordById("Relationships", relId, idColumn);
+          if (deleted) {
+            break;
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (!message.includes("No id column found")) {
+            throw error;
+          }
+        }
+      }
     }
 
+    debugContext.phase = "upsert_parent_edges";
     for (const parentId of parentIds) {
       await upsertRelation(parentId, parsed.data.personId, "parent");
     }
+    debugContext.phase = "upsert_child_edges";
     for (const childId of childIds) {
       await upsertRelation(parsed.data.personId, childId, "parent");
     }
 
+    debugContext.phase = "load_households";
     const households = await getTableRecords("Households", normalizedTenantKey);
     const spouseConflict = spouseId
       ? households.find((row) => {
@@ -166,6 +207,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       );
     }
 
+    debugContext.phase = "prune_households";
     for (const row of households) {
       const unitId = readField(row.data, "household_id");
       const partner1 = readField(row.data, "husband_person_id");
@@ -187,10 +229,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       await deleteTableRecordById("Households", unitId, "household_id", normalizedTenantKey);
     }
 
+    debugContext.phase = "upsert_household";
     if (spouseId) {
       await upsertFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
     }
 
+    debugContext.phase = "done";
     return NextResponse.json({
       ok: true,
       personId: parsed.data.personId,
@@ -200,6 +244,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unexpected_error";
-    return NextResponse.json({ error: "relationship_save_failed", message }, { status: 500 });
+    return NextResponse.json({ error: "relationship_save_failed", message, debug: debugContext }, { status: 500 });
   }
 }

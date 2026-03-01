@@ -70,3 +70,13 @@
 ## Post-Commit TODO Hygiene
 - After each commit, review `TODO.md` for tasks that may now be complete.
 - Propose specific completed task updates and ask Steve for confirmation before marking them done.
+
+## Multi-Agent Safety Rule
+- Never run more than one Codex agent in the same repo/worktree at the same time.
+- If another Codex session is active, stop and wait until that session is fully ended before starting a new one.
+- If unexpected file changes appear during the session, stop immediately, report the file(s), and ask Steve how to proceed.
+
+## Investigation-Only Mode Rule
+- If Steve asks for investigation/debugging only, do not modify files.
+- In investigation-only mode, limit actions to reading files, running non-mutating commands, and reporting evidence/root cause.
+- Before any file edit in that mode, ask Steve for explicit approval to switch from investigation to implementation.

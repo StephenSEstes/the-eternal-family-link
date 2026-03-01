@@ -14,6 +14,7 @@ import {
 } from "@/lib/google/sheets";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
 import { buildPersonId } from "@/lib/person/id";
+import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 
 const payloadSchema = z.object({
   familyGroupKey: z.string().trim().min(1).max(80).optional(),
@@ -156,15 +157,42 @@ async function upsertFamilyUnit(
 }
 
 export async function POST(request: Request) {
+  const routeStart = Date.now();
+  const requestId = createRequestId();
+  let currentStep = "session";
+  let tenantKey = "";
+  let userEmailMasked = "";
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    logRoute("api/family-groups/provision", {
+      requestId,
+      step: currentStep,
+      status: "error",
+      durationMs: Date.now() - routeStart,
+      errorCode: "unauthorized",
+      message: "unauthorized",
+    });
+    return NextResponse.json({ error: "unauthorized", requestId }, { status: 401 });
   }
+  userEmailMasked = maskEmail(session.user.email);
 
+  currentStep = "family_group_context";
   const context = await getRequestFamilyGroupContext(session);
   if (context.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    logRoute("api/family-groups/provision", {
+      requestId,
+      step: currentStep,
+      status: "error",
+      durationMs: Date.now() - routeStart,
+      errorCode: "forbidden",
+      message: "forbidden",
+      tenantKey: context.tenantKey,
+      userEmailMasked,
+    });
+    return NextResponse.json({ error: "forbidden", requestId }, { status: 403 });
   }
+  tenantKey = context.tenantKey;
 
   const debug = {
     getPeopleCalls: 0,
@@ -178,6 +206,14 @@ export async function POST(request: Request) {
   };
 
   try {
+    logRoute("api/family-groups/provision", {
+      requestId,
+      step: "route",
+      status: "start",
+      tenantKey,
+      userEmailMasked,
+    });
+
     const countedGetPeople = async (tenantKey?: string) => {
       debug.getPeopleCalls += 1;
       return getPeople(tenantKey);
@@ -201,10 +237,20 @@ export async function POST(request: Request) {
       return upsertTenantAccess(input);
     };
 
+    currentStep = "parse_payload";
     const payload = await request.json().catch(() => null);
     const parsed = payloadSchema.safeParse(payload);
     if (!parsed.success) {
-      return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
+      logRoute("api/family-groups/provision", {
+        requestId,
+        step: currentStep,
+        status: "error",
+        durationMs: Date.now() - routeStart,
+        errorCode: "invalid_payload",
+        tenantKey,
+        userEmailMasked,
+      });
+      return NextResponse.json({ error: "invalid_payload", requestId, issues: parsed.error.flatten() }, { status: 400 });
     }
 
   const patriarchFullName = parsed.data.patriarchFullName.trim() || buildFullName(
@@ -255,6 +301,7 @@ export async function POST(request: Request) {
     );
   }
 
+  currentStep = "load_source_data";
   const personFamilyRows = await countedGetTableRecords("PersonFamilyGroups").catch(() => []);
   const globalPeopleRows = await countedGetPeople().catch(() => []);
   const sourcePersonIds = new Set(
@@ -316,6 +363,7 @@ export async function POST(request: Request) {
     });
   }
 
+  currentStep = "ensure_scaffold";
   debug.ensureTenantPhotosFolderCalls += 1;
   const photosFolderId = await ensureTenantPhotosFolder(familyGroupKey, familyGroupName);
   debug.ensureTenantScaffoldCalls += 1;
@@ -346,6 +394,7 @@ export async function POST(request: Request) {
     existingMemberships.add(normalized);
   };
 
+  currentStep = "upsert_parents";
   const existingPatriarchPersonId = (parsed.data.existingPatriarchPersonId ?? "").trim();
   const patriarchPersonId = existingPatriarchPersonId ||
     buildPersonId(patriarchFullName, parsed.data.patriarchBirthDate ?? "") ||
@@ -478,6 +527,7 @@ export async function POST(request: Request) {
     );
   }
 
+  currentStep = "import_members";
   let copiedPeopleCount = 0;
   for (const personId of requestedMemberIds) {
     if (existingInTarget.has(personId)) {
@@ -509,6 +559,7 @@ export async function POST(request: Request) {
     copiedPeopleCount += 1;
   }
 
+  currentStep = "import_access";
   const accessRows = await countedGetTableRecords("UserFamilyGroups").catch(() => []);
   const importedAccessKeys = new Set<string>();
   let importedAccessCount = 0;
@@ -549,6 +600,7 @@ export async function POST(request: Request) {
     await upsertParentRelation(matriarchPersonId, parsed.data.initialAdminPersonId);
   }
 
+  currentStep = "household_candidates";
   let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
   let autoImportedPeopleCount = 0;
   let autoImportedAccessCount = 0;
@@ -671,6 +723,7 @@ export async function POST(request: Request) {
     }
   }
 
+    currentStep = "append_audit_log";
     await appendAuditLog({
       actorEmail: session.user?.email ?? "",
       actorPersonId: session.user?.person_id ?? "",
@@ -682,8 +735,19 @@ export async function POST(request: Request) {
       details: `Created family group ${familyGroupName}. Initial admin: ${parsed.data.initialAdminPersonId}.`,
     }).catch(() => undefined);
 
+    logRoute("api/family-groups/provision", {
+      requestId,
+      step: "route",
+      status: "ok",
+      durationMs: Date.now() - routeStart,
+      tenantKey: familyGroupKey,
+      userEmailMasked,
+      message: `created=${familyGroupKey}`,
+    });
+
     return NextResponse.json({
       ok: true,
+      requestId,
       photosFolderId,
       familyGroupKey,
       familyGroupName,
@@ -702,7 +766,19 @@ export async function POST(request: Request) {
       debug,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const classified = classifyOperationalError(error);
+    const message = classified.message;
+    logRoute("api/family-groups/provision", {
+      requestId,
+      step: currentStep,
+      status: "error",
+      durationMs: Date.now() - routeStart,
+      errorCode: classified.errorCode,
+      message,
+      tenantKey,
+      userEmailMasked,
+    });
+
     await appendAuditLog({
       actorEmail: session.user?.email ?? "",
       actorPersonId: session.user?.person_id ?? "",
@@ -715,12 +791,16 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "provision_failed",
+        errorCode: classified.errorCode,
+        requestId,
+        step: currentStep,
+        durationMs: Date.now() - routeStart,
         debug,
         debug_summary: `getPeople=${debug.getPeopleCalls}, getTableRecords=${debug.getTableRecordsCalls}, createTableRecord=${debug.createTableRecordCalls}, upsertTenantAccess=${debug.upsertTenantAccessCalls}`,
         message,
         hint: "Retry in 60-90 seconds if this is a quota error.",
       },
-      { status: 500 },
+      { status: classified.status },
     );
   }
 }
