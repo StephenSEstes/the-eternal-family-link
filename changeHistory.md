@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Added quota hotfix for People/Tree routes (TTL read caching + graceful fallback diagnostics) and switched post-save refreshes to router refresh to reduce read bursts. See `docs/change-summary.md`.
+- 2026-03-01: People now use modal-only person detail flow (removed View Profile link), and PersonEditModal now supports Add Spouse with existing-person lookup or inline person creation + default in-law option. See `docs/change-summary.md`.

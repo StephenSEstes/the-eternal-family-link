@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AddPersonCard } from "@/components/AddPersonCard";
@@ -26,7 +25,6 @@ type PersonItem = {
 
 type PeopleDirectoryProps = {
   tenantKey: string;
-  basePath: string;
   canManage: boolean;
   people: PersonItem[];
   photoByPersonId: Record<string, string>;
@@ -63,7 +61,6 @@ function normalizeDateLabel(value: string) {
 
 export function PeopleDirectory({
   tenantKey,
-  basePath,
   canManage,
   people,
   photoByPersonId,
@@ -145,13 +142,6 @@ export function PeopleDirectory({
                   </span>
                   <span>{normalizeDateLabel(person.birthDate)}</span>
                 </p>
-                <Link
-                  href={`${basePath}/people/${person.personId}`}
-                  className="profile-link"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  View Profile
-                </Link>
               </div>
             </article>
           );

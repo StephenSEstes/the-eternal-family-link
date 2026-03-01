@@ -2,7 +2,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { PeopleDirectory } from "@/components/PeopleDirectory";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
-import { getTenantBasePath } from "@/lib/family-group/context";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
 import { getOrLoadWithTtl } from "@/lib/server/route-cache";
@@ -95,7 +94,6 @@ export default async function PeoplePage() {
       }
       return acc;
     }, {});
-  const basePath = getTenantBasePath(tenant.tenantKey);
   logRoute(route, {
     requestId,
     step: "render",
@@ -110,7 +108,6 @@ export default async function PeoplePage() {
       <AppHeader />
       <PeopleDirectory
         tenantKey={tenant.tenantKey}
-        basePath={basePath}
         canManage={tenant.role === "ADMIN"}
         people={people.map((person) => ({
           personId: person.personId,

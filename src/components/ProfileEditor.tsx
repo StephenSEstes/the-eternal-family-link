@@ -66,6 +66,37 @@ function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate
   return parent <= cutoff;
 }
 
+function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonOption>) {
+  let motherId = "";
+  let fatherId = "";
+  const remaining: string[] = [];
+
+  parentIds.forEach((parentId) => {
+    const gender = peopleById.get(parentId)?.gender ?? "unspecified";
+    if (gender === "female" && !motherId) {
+      motherId = parentId;
+      return;
+    }
+    if (gender === "male" && !fatherId) {
+      fatherId = parentId;
+      return;
+    }
+    remaining.push(parentId);
+  });
+
+  remaining.forEach((parentId) => {
+    if (!motherId) {
+      motherId = parentId;
+      return;
+    }
+    if (!fatherId) {
+      fatherId = parentId;
+    }
+  });
+
+  return { motherId, fatherId };
+}
+
 export function ProfileEditor({
   person,
   tenantKey,
@@ -111,6 +142,11 @@ export function ProfileEditor({
     const normalized = marker.valueText.trim().toLowerCase();
     return normalized === "true" || normalized === "yes" || normalized === "1";
   }, [initialAttributes]);
+  const peopleById = useMemo(() => new Map(people.map((item) => [item.personId, item])), [people]);
+  const initialParentSelection = useMemo(
+    () => assignParentSlots(Array.from(new Set(initialParentIds)).slice(0, 2), peopleById),
+    [initialParentIds, peopleById],
+  );
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [firstName, setFirstName] = useState(person.firstName || initialNameParts.firstName);
   const [middleName, setMiddleName] = useState(person.middleName || initialNameParts.middleName);
@@ -119,8 +155,8 @@ export function ProfileEditor({
   const [displayName, setDisplayName] = useState(person.displayName);
   const [birthDate, setBirthDate] = useState(person.birthDate);
   const [gender, setGender] = useState<"male" | "female" | "unspecified">(person.gender || "unspecified");
-  const [parent1Id, setParent1Id] = useState(initialParentIds[0] ?? "");
-  const [parent2Id, setParent2Id] = useState(initialParentIds[1] ?? "");
+  const [parent1Id, setParent1Id] = useState(initialParentSelection.motherId);
+  const [parent2Id, setParent2Id] = useState(initialParentSelection.fatherId);
   const [spouseId, setSpouseId] = useState(initialSpouseId);
   const [isInLaw, setIsInLaw] = useState(initialInLaw);
   const [relationStatus, setRelationStatus] = useState("");
@@ -198,24 +234,36 @@ export function ProfileEditor({
     () => availablePeople.filter((option) => option.personId !== person.personId),
     [availablePeople, person.personId],
   );
-  const motherOptions = useMemo(
-    () =>
-      parentOptions.filter(
-        (option) =>
-          (option.gender ?? "unspecified") === "female" &&
-          isEligibleParentAge(option.birthDate, birthDate),
-      ),
-    [birthDate, parentOptions],
-  );
-  const fatherOptions = useMemo(
-    () =>
-      parentOptions.filter(
-        (option) =>
-          (option.gender ?? "unspecified") === "male" &&
-          isEligibleParentAge(option.birthDate, birthDate),
-      ),
-    [birthDate, parentOptions],
-  );
+  const motherOptions = useMemo(() => {
+    const base = parentOptions.filter(
+      (option) =>
+        (option.gender ?? "unspecified") === "female" &&
+        isEligibleParentAge(option.birthDate, birthDate) &&
+        option.personId !== parent2Id,
+    );
+    if (parent1Id && !base.some((option) => option.personId === parent1Id)) {
+      const selected = parentOptions.find((option) => option.personId === parent1Id);
+      if (selected) {
+        return [selected, ...base];
+      }
+    }
+    return base;
+  }, [birthDate, parent1Id, parent2Id, parentOptions]);
+  const fatherOptions = useMemo(() => {
+    const base = parentOptions.filter(
+      (option) =>
+        (option.gender ?? "unspecified") === "male" &&
+        isEligibleParentAge(option.birthDate, birthDate) &&
+        option.personId !== parent1Id,
+    );
+    if (parent2Id && !base.some((option) => option.personId === parent2Id)) {
+      const selected = parentOptions.find((option) => option.personId === parent2Id);
+      if (selected) {
+        return [selected, ...base];
+      }
+    }
+    return base;
+  }, [birthDate, parent1Id, parent2Id, parentOptions]);
 
   const spouseOptions = useMemo(
     () =>
@@ -840,9 +888,7 @@ export function ProfileEditor({
                 disabled={!canEdit}
               >
                 <option value="">Not set</option>
-                {motherOptions
-                  .filter((option) => option.personId !== parent2Id)
-                  .map((option) => (
+                {motherOptions.map((option) => (
                     <option key={option.personId} value={option.personId}>
                       {option.displayName}
                     </option>
@@ -857,9 +903,7 @@ export function ProfileEditor({
                 disabled={!canEdit}
               >
                 <option value="">Not set</option>
-                {fatherOptions
-                  .filter((option) => option.personId !== parent1Id)
-                  .map((option) => (
+                {fatherOptions.map((option) => (
                     <option key={option.personId} value={option.personId}>
                       {option.displayName}
                     </option>
