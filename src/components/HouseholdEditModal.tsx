@@ -53,7 +53,9 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, { cache: "no-store" });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.household) {
-      setStatus(`Load failed: ${res.status}`);
+      const hint = typeof body?.hint === "string" ? body.hint : "";
+      const message = typeof body?.message === "string" ? body.message : "";
+      setStatus(`Load failed: ${res.status}${message ? ` ${message}` : ""}${hint ? ` | ${hint}` : ""}`);
       setLoading(false);
       return;
     }

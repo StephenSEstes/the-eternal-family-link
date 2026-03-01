@@ -4,21 +4,6 @@ import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/google/sheets";
-import { getOrLoadWithTtl } from "@/lib/server/route-cache";
-
-const TREE_ROUTE_CACHE_TTL_MS = 20_000;
-
-async function loadTreePageBundle(tenantKey: string) {
-  return getOrLoadWithTtl(`tree_page_bundle:${tenantKey}`, TREE_ROUTE_CACHE_TTL_MS, async () => {
-    const people = await getPeople(tenantKey);
-    const peopleInFamily = new Set(people.map((person) => person.personId));
-    const [allRelationships, households] = await Promise.all([getRelationships(), getHouseholds(tenantKey)]);
-    const relationships = allRelationships.filter(
-      (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
-    );
-    return { people, relationships, households };
-  });
-}
 
 export default async function TreePage() {
   const { tenant, session } = await requireFamilyGroupSession();
@@ -62,7 +47,15 @@ export default async function TreePage() {
   let households: Awaited<ReturnType<typeof getHouseholds>> = [];
 
   try {
-    ({ people, relationships, households } = await runStep("load_tree_page_data", () => loadTreePageBundle(tenant.tenantKey)));
+    ({ people, relationships, households } = await runStep("load_tree_page_data", async () => {
+      const people = await getPeople(tenant.tenantKey);
+      const peopleInFamily = new Set(people.map((person) => person.personId));
+      const [allRelationships, households] = await Promise.all([getRelationships(), getHouseholds(tenant.tenantKey)]);
+      const relationships = allRelationships.filter(
+        (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
+      );
+      return { people, relationships, households };
+    }));
   } catch (error) {
     const classified = classifyOperationalError(error);
     return (

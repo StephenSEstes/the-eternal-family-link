@@ -869,8 +869,10 @@ export function PersonEditModal({
                     },
                   );
                   if (!relationshipRes.ok) {
-                    const body = await relationshipRes.text();
-                    setStatus(`Saved person, relationship save failed: ${relationshipRes.status} ${body.slice(0, 150)}`);
+                    const body = await relationshipRes.json().catch(() => null);
+                    const message = body?.message || body?.error || "";
+                    const hint = body?.hint ? ` | ${body.hint}` : "";
+                    setStatus(`Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`);
                     setSaving(false);
                     return;
                   }
