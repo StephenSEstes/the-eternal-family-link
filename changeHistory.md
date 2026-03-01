@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Added incremental Sheets hardening by disabling nav prefetch fan-out and adding Sheets read de-duplication/throttled schema checks to reduce quota pressure. See `docs/change-summary.md`.
+- 2026-03-01: Fixed duplicate route renders on family-group switch by removing redundant refresh after navigation, reducing duplicated tree reads. See `docs/change-summary.md`.

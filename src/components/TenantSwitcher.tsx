@@ -82,7 +82,6 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
       const nextPath = buildSwitchPath(pathname || "/", nextKey);
       const query = searchParams?.toString() ?? "";
       router.push(query ? `${nextPath}?${query}` : nextPath);
-      router.refresh();
     });
   };
 

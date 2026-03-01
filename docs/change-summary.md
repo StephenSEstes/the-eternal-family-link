@@ -418,3 +418,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Concurrent same-tab reads in one request path collapse to one in-flight read.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (family-group switch duplicate tree render fix)
+
+- `Change`: Removed redundant `router.refresh()` after `router.push()` in family-group switch flow to prevent duplicate page renders on switch.
+- `Type`: UI, Routing, Performance
+- `Why`: Vercel logs showed one family-group switch action causing two `/tree` renders with different request IDs, doubling Sheets reads for the same transition.
+- `Files`:
+  - `src/components/TenantSwitcher.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Family-group switch generates one route render instead of two for the destination page.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
