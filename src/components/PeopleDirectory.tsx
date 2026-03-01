@@ -143,7 +143,11 @@ export function PeopleDirectory({
                   </span>
                   <span>{normalizeDateLabel(person.birthDate)}</span>
                 </p>
-                <Link href={`${basePath}/people/${person.personId}`} className="profile-link">
+                <Link
+                  href={`${basePath}/people/${person.personId}`}
+                  className="profile-link"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   View Profile
                 </Link>
               </div>

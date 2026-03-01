@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { PersonAttributeRecord, PersonRecord } from "@/lib/google/types";
 import { PrimaryButton } from "@/components/ui/primitives";
@@ -30,6 +30,12 @@ type TabKey = "overview" | "photos" | "attributes" | "permissions";
 type AttributeDraft = {
   valueText: string;
   label: string;
+};
+
+type PersonOption = {
+  personId: string;
+  displayName: string;
+  gender?: "male" | "female" | "unspecified";
 };
 
 export function ProfileEditor({
@@ -112,6 +118,19 @@ export function ProfileEditor({
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, AttributeDraft>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<Status>({ type: "idle" });
+  const [availablePeople, setAvailablePeople] = useState<PersonOption[]>(people);
+  const [showAddSpouse, setShowAddSpouse] = useState(false);
+  const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
+  const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
+  const [newSpouseLastName, setNewSpouseLastName] = useState("");
+  const [newSpouseNickName, setNewSpouseNickName] = useState("");
+  const [newSpouseDisplayName, setNewSpouseDisplayName] = useState("");
+  const [newSpouseBirthDate, setNewSpouseBirthDate] = useState("");
+  const [newSpouseGender, setNewSpouseGender] = useState<"male" | "female" | "unspecified">(
+    person.gender === "male" ? "female" : person.gender === "female" ? "male" : "unspecified",
+  );
+  const [newSpouseInLaw, setNewSpouseInLaw] = useState(true);
+  const [creatingSpouse, setCreatingSpouse] = useState(false);
 
   const payload = useMemo(
     () => ({
@@ -143,9 +162,13 @@ export function ProfileEditor({
     ],
   );
 
+  useEffect(() => {
+    setAvailablePeople(people);
+  }, [people]);
+
   const parentOptions = useMemo(
-    () => people.filter((option) => option.personId !== person.personId),
-    [people, person.personId],
+    () => availablePeople.filter((option) => option.personId !== person.personId),
+    [availablePeople, person.personId],
   );
   const motherOptions = useMemo(
     () => parentOptions.filter((option) => (option.gender ?? "unspecified") === "female"),
@@ -158,15 +181,117 @@ export function ProfileEditor({
 
   const spouseOptions = useMemo(
     () =>
-      people.filter((option) => {
+      availablePeople.filter((option) => {
         if (option.personId === person.personId) {
           return false;
         }
         const marriedTo = marriedToByPersonId[option.personId];
         return !marriedTo || marriedTo === person.personId;
       }),
-    [marriedToByPersonId, people, person.personId],
+    [availablePeople, marriedToByPersonId, person.personId],
   );
+
+  const resetNewSpouseDraft = () => {
+    setNewSpouseFirstName("");
+    setNewSpouseMiddleName("");
+    setNewSpouseLastName("");
+    setNewSpouseNickName("");
+    setNewSpouseDisplayName("");
+    setNewSpouseBirthDate("");
+    setNewSpouseGender(person.gender === "male" ? "female" : person.gender === "female" ? "male" : "unspecified");
+    setNewSpouseInLaw(true);
+  };
+
+  const createSpouseInline = async () => {
+    if (!newSpouseFirstName.trim() || !newSpouseLastName.trim() || !newSpouseBirthDate.trim()) {
+      setRelationStatus("Spouse first name, last name, and birthday are required.");
+      return;
+    }
+    setCreatingSpouse(true);
+    setRelationStatus("Creating spouse...");
+
+    const createBodyBase = {
+      first_name: newSpouseFirstName.trim(),
+      middle_name: newSpouseMiddleName.trim(),
+      last_name: newSpouseLastName.trim(),
+      nick_name: newSpouseNickName.trim(),
+      display_name: newSpouseDisplayName.trim(),
+      birth_date: newSpouseBirthDate.trim(),
+      gender: newSpouseGender,
+    };
+
+    try {
+      let response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...createBodyBase, allow_duplicate_similar: false }),
+      });
+      let body = await response.json().catch(() => null);
+
+      if (!response.ok && response.status === 409 && body?.error === "duplicate_similar_birthdate_name") {
+        const confirmAdd = window.confirm(
+          "Possible duplicate found (same birthdate, similar name). Press OK to Add New anyway, or Cancel to review existing people.",
+        );
+        if (confirmAdd) {
+          response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...createBodyBase, allow_duplicate_similar: true }),
+          });
+          body = await response.json().catch(() => null);
+        }
+      }
+
+      if (!response.ok) {
+        const message = body?.message || body?.error || `Spouse create failed: ${response.status}`;
+        setRelationStatus(String(message));
+        setCreatingSpouse(false);
+        return;
+      }
+
+      const createdPersonId = String(body?.person?.person_id ?? "").trim();
+      const createdDisplayName = String(
+        body?.person?.display_name ||
+        `${newSpouseFirstName.trim()} ${newSpouseLastName.trim()}`.trim(),
+      );
+      if (!createdPersonId) {
+        setRelationStatus("Spouse created but returned person ID was empty.");
+        setCreatingSpouse(false);
+        return;
+      }
+
+      if (newSpouseInLaw) {
+        await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(createdPersonId)}/attributes`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              attributeType: "in_law",
+              valueText: "TRUE",
+              label: "in-law",
+              visibility: "family",
+              sortOrder: 0,
+              isPrimary: false,
+            }),
+          },
+        ).catch(() => undefined);
+      }
+
+      setAvailablePeople((current) => {
+        if (current.some((entry) => entry.personId === createdPersonId)) {
+          return current;
+        }
+        return [...current, { personId: createdPersonId, displayName: createdDisplayName, gender: newSpouseGender }];
+      });
+      setSpouseId(createdPersonId);
+      setShowAddSpouse(false);
+      resetNewSpouseDraft();
+      setRelationStatus("Spouse created and selected. Click Save Profile to persist relationship.");
+    } finally {
+      setCreatingSpouse(false);
+    }
+  };
 
   const photoAttributes = useMemo(
     () => attributes.filter((item) => item.attributeType === "photo"),
@@ -717,10 +842,65 @@ export function ProfileEditor({
             <option value="">Not married / not set</option>
             {spouseOptions.map((option) => (
               <option key={option.personId} value={option.personId}>
-                {option.displayName}
-              </option>
-            ))}
+              {option.displayName}
+            </option>
+          ))}
           </select>
+          {canEdit ? (
+            <>
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={() => {
+                  const next = !showAddSpouse;
+                  setShowAddSpouse(next);
+                  if (next) {
+                    resetNewSpouseDraft();
+                  }
+                }}
+              >
+                {showAddSpouse ? "Close Add Spouse" : "Add New Spouse"}
+              </button>
+              {showAddSpouse ? (
+                <div className="card" style={{ marginTop: "0.75rem" }}>
+                  <h4 style={{ marginTop: 0 }}>Add Spouse</h4>
+                  <label className="label">First Name</label>
+                  <input className="input" value={newSpouseFirstName} onChange={(event) => setNewSpouseFirstName(event.target.value)} />
+                  <label className="label">Middle Name</label>
+                  <input className="input" value={newSpouseMiddleName} onChange={(event) => setNewSpouseMiddleName(event.target.value)} />
+                  <label className="label">Last Name</label>
+                  <input className="input" value={newSpouseLastName} onChange={(event) => setNewSpouseLastName(event.target.value)} />
+                  <label className="label">Nickname</label>
+                  <input className="input" value={newSpouseNickName} onChange={(event) => setNewSpouseNickName(event.target.value)} />
+                  <label className="label">Display Name (optional)</label>
+                  <input className="input" value={newSpouseDisplayName} onChange={(event) => setNewSpouseDisplayName(event.target.value)} />
+                  <label className="label">Birthday</label>
+                  <input className="input" value={newSpouseBirthDate} onChange={(event) => setNewSpouseBirthDate(event.target.value)} placeholder="YYYY-MM-DD" />
+                  <label className="label">Gender</label>
+                  <select
+                    className="input"
+                    value={newSpouseGender}
+                    onChange={(event) => setNewSpouseGender(event.target.value as "male" | "female" | "unspecified")}
+                  >
+                    <option value="unspecified">Unspecified</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                  <label className="label">
+                    <input
+                      type="checkbox"
+                      checked={newSpouseInLaw}
+                      onChange={(event) => setNewSpouseInLaw(event.target.checked)}
+                    />{" "}
+                    Default to in-law mode (no parents in this family group)
+                  </label>
+                  <button type="button" className="button tap-button" onClick={createSpouseInline} disabled={creatingSpouse}>
+                    {creatingSpouse ? "Creating..." : "Create Spouse"}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <p className="page-subtitle">
             Contact and personal details are managed in the Attributes tab.
           </p>
