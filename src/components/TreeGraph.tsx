@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
 import { FocusPanel } from "@/components/familyTree/FocusPanel";
@@ -47,6 +48,7 @@ type TreeGraphProps = {
 };
 
 export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] }: TreeGraphProps) {
+  const router = useRouter();
   const NODE_CARD_WIDTH = 208;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
   const NODE_HALF_HEIGHT = 30;
@@ -859,7 +861,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
         edges={edges}
         households={households}
         onClose={() => setEditPersonId("")}
-        onSaved={() => window.location.reload()}
+        onSaved={() => router.refresh()}
         onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
       />
       <HouseholdEditModal
@@ -867,7 +869,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
         tenantKey={tenantKey}
         householdId={selectedHouseholdId}
         onClose={() => setSelectedHouseholdId("")}
-        onSaved={() => window.location.reload()}
+        onSaved={() => router.refresh()}
       />
     </div>
   );

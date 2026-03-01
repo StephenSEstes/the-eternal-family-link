@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Added profile crash diagnostics/fallback, reduced relationship save quota pressure, enforced parent age eligibility in profile editors, and centered children under parent households in tree view. See `docs/change-summary.md`.
+- 2026-03-01: Added quota hotfix for People/Tree routes (TTL read caching + graceful fallback diagnostics) and switched post-save refreshes to router refresh to reduce read bursts. See `docs/change-summary.md`.

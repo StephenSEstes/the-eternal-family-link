@@ -1,17 +1,88 @@
 import { AppHeader } from "@/components/AppHeader";
 import { TreeGraph } from "@/components/TreeGraph";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
+import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/google/sheets";
+import { getOrLoadWithTtl } from "@/lib/server/route-cache";
+
+const TREE_ROUTE_CACHE_TTL_MS = 20_000;
+
+async function loadTreePageBundle(tenantKey: string) {
+  return getOrLoadWithTtl(`tree_page_bundle:${tenantKey}`, TREE_ROUTE_CACHE_TTL_MS, async () => {
+    const people = await getPeople(tenantKey);
+    const peopleInFamily = new Set(people.map((person) => person.personId));
+    const [allRelationships, households] = await Promise.all([getRelationships(), getHouseholds(tenantKey)]);
+    const relationships = allRelationships.filter(
+      (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
+    );
+    return { people, relationships, households };
+  });
+}
 
 export default async function TreePage() {
-  const { tenant } = await requireFamilyGroupSession();
-  const people = await getPeople(tenant.tenantKey);
-  const peopleInFamily = new Set(people.map((person) => person.personId));
-  const relationships = (await getRelationships()).filter(
-    (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
-  );
-  const households = await getHouseholds(tenant.tenantKey);
+  const { tenant, session } = await requireFamilyGroupSession();
+  const requestId = createRequestId();
+  const route = "page/tree";
+  const userEmailMasked = maskEmail(session.user?.email ?? "");
+  const routeStart = Date.now();
+
+  const runStep = async <T,>(step: string, fn: () => Promise<T>) => {
+    const stepStart = Date.now();
+    logRoute(route, { requestId, step, status: "start", tenantKey: tenant.tenantKey, userEmailMasked });
+    try {
+      const result = await fn();
+      logRoute(route, {
+        requestId,
+        step,
+        status: "ok",
+        durationMs: Date.now() - stepStart,
+        tenantKey: tenant.tenantKey,
+        userEmailMasked,
+      });
+      return result;
+    } catch (error) {
+      const classified = classifyOperationalError(error);
+      logRoute(route, {
+        requestId,
+        step,
+        status: "error",
+        durationMs: Date.now() - stepStart,
+        tenantKey: tenant.tenantKey,
+        userEmailMasked,
+        errorCode: classified.errorCode,
+        message: classified.message,
+      });
+      throw error;
+    }
+  };
+
+  let people: Awaited<ReturnType<typeof getPeople>> = [];
+  let relationships: Awaited<ReturnType<typeof getRelationships>> = [];
+  let households: Awaited<ReturnType<typeof getHouseholds>> = [];
+
+  try {
+    ({ people, relationships, households } = await runStep("load_tree_page_data", () => loadTreePageBundle(tenant.tenantKey)));
+  } catch (error) {
+    const classified = classifyOperationalError(error);
+    return (
+      <>
+        <AppHeader />
+        <main className="section">
+          <section className="card">
+            <h1 className="page-title">Family Tree Unavailable</h1>
+            <p className="status-warn">We could not load the family tree right now. Please retry in 30-60 seconds.</p>
+            {classified.status === 429 ? (
+              <p className="page-subtitle">Quota is temporarily exhausted. Close workbook if open, wait 60-90 seconds, then retry.</p>
+            ) : null}
+            <p className="page-subtitle">
+              requestId: {requestId} | errorCode: {classified.errorCode}
+            </p>
+          </section>
+        </main>
+      </>
+    );
+  }
 
   const edges = [
     ...relationships.map((rel) => ({
@@ -27,6 +98,15 @@ export default async function TreePage() {
       label: "family",
     })),
   ];
+
+  logRoute(route, {
+    requestId,
+    step: "render",
+    status: "ok",
+    durationMs: Date.now() - routeStart,
+    tenantKey: tenant.tenantKey,
+    userEmailMasked,
+  });
 
   return (
     <>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AddPersonCard } from "@/components/AddPersonCard";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
@@ -69,6 +70,7 @@ export function PeopleDirectory({
   edges,
   households,
 }: PeopleDirectoryProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
@@ -165,7 +167,7 @@ export function PeopleDirectory({
         edges={edges}
         households={households}
         onClose={() => setSelectedPersonId("")}
-        onSaved={() => window.location.reload()}
+        onSaved={() => router.refresh()}
         onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
       />
       <HouseholdEditModal
@@ -173,7 +175,7 @@ export function PeopleDirectory({
         tenantKey={tenantKey}
         householdId={selectedHouseholdId}
         onClose={() => setSelectedHouseholdId("")}
-        onSaved={() => window.location.reload()}
+        onSaved={() => router.refresh()}
       />
     </main>
   );
