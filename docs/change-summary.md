@@ -433,3 +433,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Family-group switch generates one route render instead of two for the destination page.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (family-group switch deterministic navigation)
+
+- `Change`: Updated family-group switch navigation to perform deterministic full-page navigation (`window.location.assign`) after active-family update, removing remaining App Router transition duplicates.
+- `Type`: UI, Routing, Performance
+- `Why`: Logs still showed multiple `/tree` renders from one switch event after removing `router.refresh`; this change enforces one destination navigation.
+- `Files`:
+  - `src/components/TenantSwitcher.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - One family-group switch should produce one destination page render request.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

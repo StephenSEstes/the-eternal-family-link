@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
@@ -16,7 +16,6 @@ type TenantSwitcherProps = {
 };
 
 export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState(activeTenantKey);
@@ -81,7 +80,8 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
 
       const nextPath = buildSwitchPath(pathname || "/", nextKey);
       const query = searchParams?.toString() ?? "";
-      router.push(query ? `${nextPath}?${query}` : nextPath);
+      const destination = query ? `${nextPath}?${query}` : nextPath;
+      window.location.assign(destination);
     });
   };
 

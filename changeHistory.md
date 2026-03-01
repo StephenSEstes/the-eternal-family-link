@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Fixed duplicate route renders on family-group switch by removing redundant refresh after navigation, reducing duplicated tree reads. See `docs/change-summary.md`.
+- 2026-03-01: Made family-group switching deterministic via full-page navigation after active-group update to eliminate remaining duplicate tree renders. See `docs/change-summary.md`.
