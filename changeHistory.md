@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-02-28: Added crash diagnosis instrumentation/runbook and relationship-save/profile-edit hardening updates. See `docs/change-summary.md`.
+- 2026-03-01: Refreshed Settings UI with compact tab hierarchy, cleaner Users card view, and consolidated Data & System tools (CSV Import + Integrity). See `docs/change-summary.md`.

@@ -1244,34 +1244,27 @@ export function SettingsClient({
 
   return (
     <div className="settings-stack">
-      <div className="settings-chip-list">
+      <div className="settings-top-tabs" role="tablist" aria-label="Settings sections">
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "user_admin" ? "game-option-selected" : ""}`}
+          className={`settings-top-tab ${activeTab === "user_admin" ? "active" : ""}`}
           onClick={() => setActiveTab("user_admin")}
         >
-          User Administration
+          Users &amp; Access
         </button>
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "family_groups" ? "game-option-selected" : ""}`}
+          className={`settings-top-tab ${activeTab === "family_groups" ? "active" : ""}`}
           onClick={() => setActiveTab("family_groups")}
         >
           Family Groups
         </button>
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "import" ? "game-option-selected" : ""}`}
-          onClick={() => setActiveTab("import")}
-        >
-          CSV Import
-        </button>
-        <button
-          type="button"
-          className={`button secondary tap-button ${activeTab === "integrity" ? "game-option-selected" : ""}`}
+          className={`settings-top-tab ${activeTab === "integrity" ? "active" : ""}`}
           onClick={() => setActiveTab("integrity")}
         >
-          Integrity Checker
+          Data &amp; System
         </button>
       </div>
 
@@ -1356,51 +1349,23 @@ export function SettingsClient({
       ) : null}
 
       {activeTab === "user_admin" ? (
-        <section className="card">
-        <h2 style={{ marginTop: 0 }}>User Administration</h2>
-        <p className="page-subtitle">Manage users from one directory with local and optional Google access.</p>
-        <label className="label">Target Family Group</label>
-        <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
-          {tenantOptions.map((option) => (
-            <option key={option.tenantKey} value={option.tenantKey}>
-              {option.tenantName} ({option.role})
-            </option>
-          ))}
-        </select>
-        <div className="settings-chip-list">
+        <section className="card settings-panel">
+        <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Users &amp; Access</h2>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>Manage users, family access, and password policy.</p>
+        <div className="settings-toolbar-row">
+          <div className="settings-toolbar-field">
+            <label className="label">Family Group</label>
+            <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
+              {tenantOptions.map((option) => (
+                <option key={option.tenantKey} value={option.tenantKey}>
+                  {option.tenantName} ({option.role})
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             type="button"
-            className={`button secondary tap-button ${userAdminSubTab === "directory" ? "game-option-selected" : ""}`}
-            onClick={() => {
-              setUserAdminSubTab("directory");
-              setShowAddUserForm(false);
-            }}
-          >
-            User Directory
-          </button>
-          <button
-            type="button"
-            className={`button secondary tap-button ${userAdminSubTab === "family_access" ? "game-option-selected" : ""}`}
-            onClick={() => {
-              setUserAdminSubTab("family_access");
-              setShowAddUserForm(false);
-            }}
-          >
-            Family Access
-          </button>
-          <button
-            type="button"
-            className={`button secondary tap-button ${userAdminSubTab === "password_policy" ? "game-option-selected" : ""}`}
-            onClick={() => {
-              setUserAdminSubTab("password_policy");
-              setShowAddUserForm(false);
-            }}
-          >
-            Password Policy
-          </button>
-          <button
-            type="button"
-            className={`button secondary tap-button ${showAddUserForm ? "game-option-selected" : ""}`}
+            className="button tap-button settings-toolbar-action"
             onClick={() => {
               setUserAdminSubTab("directory");
               const next = !showAddUserForm;
@@ -1411,6 +1376,38 @@ export function SettingsClient({
             }}
           >
             {showAddUserForm ? "Hide Add User" : "Add User"}
+          </button>
+        </div>
+        <div className="settings-subtabs">
+          <button
+            type="button"
+            className={`settings-subtab ${userAdminSubTab === "directory" ? "active" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("directory");
+              setShowAddUserForm(false);
+            }}
+          >
+            User Directory
+          </button>
+          <button
+            type="button"
+            className={`settings-subtab ${userAdminSubTab === "family_access" ? "active" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("family_access");
+              setShowAddUserForm(false);
+            }}
+          >
+            Family Access
+          </button>
+          <button
+            type="button"
+            className={`settings-subtab ${userAdminSubTab === "password_policy" ? "active" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("password_policy");
+              setShowAddUserForm(false);
+            }}
+          >
+            Password Policy
           </button>
         </div>
 
@@ -1472,7 +1469,9 @@ export function SettingsClient({
               </div>
             ) : null}
 
-            <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+            <div className="card settings-users-card" style={{ marginTop: "0.75rem" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "0.75rem" }}>Users</h3>
+              <div className="settings-table-wrap">
               <table className="settings-table">
                 <thead>
                   <tr><th>Person</th><th>Google Access</th><th>Local Access</th><th>Actions</th></tr>
@@ -1491,8 +1490,16 @@ export function SettingsClient({
                       <Fragment key={person.personId}>
                         <tr key={`${person.personId}-row`}>
                           <td>{person.displayName}</td>
-                          <td>{hasGoogle ? "TRUE" : "FALSE"}</td>
-                          <td>{hasLocal ? "TRUE" : "FALSE"}</td>
+                          <td>
+                            <span className={`settings-status-chip ${hasGoogle ? "is-on" : "is-off"}`}>
+                              {hasGoogle ? "Connected" : "Disabled"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`settings-status-chip ${hasLocal ? "is-on" : "is-off"}`}>
+                              {hasLocal ? "Enabled" : "Disabled"}
+                            </span>
+                          </td>
                           <td>
                             <button
                               type="button"
@@ -1705,6 +1712,7 @@ export function SettingsClient({
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
             {directoryPeople.length === 0 ? (
               <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
@@ -1786,18 +1794,25 @@ export function SettingsClient({
       ) : null}
 
       {activeTab === "integrity" ? (
-        <section className="card">
-        <h2 style={{ marginTop: 0 }}>Integrity Checker</h2>
-        <p className="page-subtitle">Run diagnostics and repair common worksheet integrity issues.</p>
-        <label className="label">Target Family Group</label>
-        <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
-          {tenantOptions.map((option) => (
-            <option key={option.tenantKey} value={option.tenantKey}>
-              {option.tenantName} ({option.role})
-            </option>
-          ))}
-        </select>
-        <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+        <section className="card settings-panel">
+        <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Data &amp; System</h2>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>Import worksheet data and run system integrity diagnostics.</p>
+        <div className="settings-toolbar-row">
+          <div className="settings-toolbar-field">
+            <label className="label">Family Group</label>
+            <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
+              {tenantOptions.map((option) => (
+                <option key={option.tenantKey} value={option.tenantKey}>
+                  {option.tenantName} ({option.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginTop: "0.75rem" }}>
+        <h3 style={{ marginTop: 0 }}>Integrity Checker</h3>
+        <div className="settings-chip-list" style={{ marginTop: "0.5rem" }}>
           <button type="button" className="button tap-button" onClick={runIntegrityCheck}>
             Run Integrity Check
           </button>
@@ -1846,24 +1861,22 @@ export function SettingsClient({
             )}
           </div>
         ) : null}
-        </section>
-      ) : null}
+        </div>
 
-      {activeTab === "import" ? (
-        <section className="card">
-        <h2 style={{ marginTop: 0 }}>CSV Import (Paste)</h2>
+        <div className="card" style={{ marginTop: "0.75rem" }}>
+        <h3 style={{ marginTop: 0 }}>CSV Import (Paste)</h3>
         <p className="page-subtitle">Initial data load into selected family group. CSV header must match exactly.</p>
-        <div className="settings-chip-list">
+        <div className="settings-subtabs">
           <button
             type="button"
-            className={`button secondary tap-button ${importSubTab === "target" ? "game-option-selected" : ""}`}
+            className={`settings-subtab ${importSubTab === "target" ? "active" : ""}`}
             onClick={() => setImportSubTab("target")}
           >
-            Target & Format
+            Target &amp; Format
           </button>
           <button
             type="button"
-            className={`button secondary tap-button ${importSubTab === "csv" ? "game-option-selected" : ""}`}
+            className={`settings-subtab ${importSubTab === "csv" ? "active" : ""}`}
             onClick={() => setImportSubTab("csv")}
           >
             Paste CSV
@@ -1871,12 +1884,6 @@ export function SettingsClient({
         </div>
         {importSubTab === "target" ? (
           <>
-            <label className="label">Target Family Group</label>
-            <select className="input" value={selectedTenantKey} onChange={(e) => setSelectedTenantKey(e.target.value)}>
-              {tenantOptions.map((option) => (
-                <option key={option.tenantKey} value={option.tenantKey}>{option.tenantName}</option>
-              ))}
-            </select>
             <label className="label">Target Table</label>
             <select
               className="input"
@@ -1905,6 +1912,7 @@ export function SettingsClient({
           </>
         ) : null}
         {importStatus ? <p>{importStatus}</p> : null}
+        </div>
         </section>
       ) : null}
 

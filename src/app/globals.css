@@ -1472,3 +1472,111 @@ main,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.settings-panel {
+  border-radius: 18px;
+  padding: 1rem;
+}
+
+.settings-top-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.6rem;
+  overflow-x: auto;
+}
+
+.settings-top-tab {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0 0.75rem;
+  white-space: nowrap;
+}
+
+.settings-top-tab.active {
+  color: #111827;
+  border-color: #d1d5db;
+  background: #f3f4f6;
+}
+
+.settings-subtabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.8rem;
+  overflow-x: auto;
+}
+
+.settings-subtab {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.87rem;
+  font-weight: 600;
+  padding: 0 0.7rem;
+  white-space: nowrap;
+}
+
+.settings-subtab.active {
+  color: #111827;
+  border-color: #d1d5db;
+  background: #f3f4f6;
+}
+
+.settings-toolbar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.settings-toolbar-field .input {
+  margin-bottom: 0;
+}
+
+.settings-toolbar-action {
+  width: auto;
+  justify-self: start;
+  margin-bottom: 0;
+}
+
+.settings-users-card .settings-table-wrap {
+  margin-bottom: 0;
+}
+
+.settings-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0 0.55rem;
+  border: 1px solid var(--border);
+}
+
+.settings-status-chip.is-on {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.settings-status-chip.is-off {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+@media (min-width: 900px) {
+  .settings-toolbar-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
