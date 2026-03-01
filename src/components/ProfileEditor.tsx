@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { PersonAttributeRecord, PersonRecord } from "@/lib/google/types";
+import { PrimaryButton } from "@/components/ui/primitives";
 
 type TenantOption = {
   tenantKey: string;
@@ -544,24 +545,24 @@ export function ProfileEditor({
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Edit Person</h2>
-      <div className="settings-chip-list" style={{ marginBottom: "1rem" }}>
+      <div className="app-tab-strip">
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "overview" ? "game-option-selected" : ""}`}
+          className={`app-tab-button ${activeTab === "overview" ? "active" : ""}`}
           onClick={() => setActiveTab("overview")}
         >
           Overview
         </button>
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "photos" ? "game-option-selected" : ""}`}
+          className={`app-tab-button ${activeTab === "photos" ? "active" : ""}`}
           onClick={() => setActiveTab("photos")}
         >
           Photos
         </button>
         <button
           type="button"
-          className={`button secondary tap-button ${activeTab === "attributes" ? "game-option-selected" : ""}`}
+          className={`app-tab-button ${activeTab === "attributes" ? "active" : ""}`}
           onClick={() => setActiveTab("attributes")}
         >
           Attributes
@@ -569,7 +570,7 @@ export function ProfileEditor({
         {canManagePermissions ? (
           <button
             type="button"
-            className={`button secondary tap-button ${activeTab === "permissions" ? "game-option-selected" : ""}`}
+            className={`app-tab-button ${activeTab === "permissions" ? "active" : ""}`}
             onClick={() => setActiveTab("permissions")}
           >
             Permissions
@@ -726,9 +727,9 @@ export function ProfileEditor({
 
           {canEdit ? (
             <>
-              <button type="button" className="button tap-button" disabled={isSaving} onClick={handleSaveProfile}>
+              <PrimaryButton type="button" className="tap-button" disabled={isSaving} onClick={handleSaveProfile}>
                 {isSaving ? "Saving..." : "Save Profile"}
-              </button>
+              </PrimaryButton>
             </>
           ) : (
             <p className="status-warn">You have read-only access to this profile.</p>

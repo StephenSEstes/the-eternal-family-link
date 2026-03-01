@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 
 type PersonItem = {
   personId: string;
@@ -199,88 +200,105 @@ export function PersonEditModal({
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 90, display: "grid", placeItems: "center", padding: "1rem" }}
+      className="person-modal-backdrop"
       onClick={onClose}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div
-        className="card"
-        style={{ width: "min(920px, 100%)", maxHeight: "90vh", overflowY: "auto" }}
+        className="person-modal-panel"
         onClick={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "112px minmax(0, 1fr) auto", gap: "0.9rem", alignItems: "center" }}>
+        <div className="person-modal-sticky-head">
+          <div className="person-modal-header">
           <img
             src={headerAvatar}
             alt={person.displayName}
-            style={{ width: 112, height: 112, borderRadius: 14, objectFit: "cover", border: "1px solid var(--line)" }}
+            className="person-modal-avatar"
           />
           <div>
-            <h3 style={{ margin: 0 }}>{displayName || person.displayName}</h3>
-            <p className="page-subtitle" style={{ marginTop: "0.3rem", marginBottom: "0.3rem" }}>
-              {toMonthDay(birthDate || person.birthDate || "")} | {person.personId}
+            <h3 className="person-modal-title">{displayName || person.displayName}</h3>
+            <p className="person-modal-meta">
+              Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>
-            <p className="page-subtitle" style={{ margin: 0 }}>
+            <p className="person-modal-meta">
               Email: Managed in User Administration | Phone: {phones || "-"}
             </p>
           </div>
-          <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
+          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
+          </div>
         </div>
 
-        <div className="settings-chip-list" style={{ marginTop: "0.8rem", flexWrap: "nowrap", overflowX: "auto" }}>
-          <button type="button" className={`button secondary tap-button ${activeTab === "contact" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("contact")}>Contact Info</button>
-          <button type="button" className={`button secondary tap-button ${activeTab === "attributes" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("attributes")}>Attributes</button>
-          <button type="button" className={`button secondary tap-button ${activeTab === "photos" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
+        <div className="person-modal-tabs">
+          <button type="button" className={`tab-pill ${activeTab === "contact" ? "active" : ""}`} onClick={() => setActiveTab("contact")}>Contact Info</button>
+          <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => setActiveTab("attributes")}>Attributes</button>
+          <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
         </div>
+        <div className="person-modal-content">
 
         {activeTab === "contact" ? (
           <>
-            <div className="settings-chip-list">
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label className="label">Display Name</label>
-                <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
+            <div className="person-section-grid">
+              <div className="card">
+                <h4 className="ui-section-title">Identity</h4>
+                <div className="field-grid">
+                  <div>
+                    <label className="label">Display Name</label>
+                    <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div>
+                    <label className="label">Birthdate</label>
+                    <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div className="field-span-2">
+                    <label className="label">Gender</label>
+                    <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")} disabled={showReadOnly}>
+                      <option value="unspecified">Unspecified</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label className="label">Birthdate</label>
-                <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
+
+              <div className="card">
+                <h4 className="ui-section-title">Basics</h4>
+                <div className="field-grid">
+                  <div>
+                    <label className="label">First Name</label>
+                    <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div>
+                    <label className="label">Middle Name</label>
+                    <input className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div>
+                    <label className="label">Last Name</label>
+                    <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div>
+                    <label className="label">Nick Name</label>
+                    <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label className="label">Gender</label>
-                <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")} disabled={showReadOnly}>
-                  <option value="unspecified">Unspecified</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                </select>
+
+              <div className="card">
+                <h4 className="ui-section-title">Contact</h4>
+                <label className="label">Phone</label>
+                <input className="input" value={phones} onChange={(e) => setPhones(e.target.value)} disabled={showReadOnly} />
+              </div>
+
+              <div className="card">
+                <h4 className="ui-section-title">Address</h4>
+                <label className="label">Address</label>
+                <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
+                <label className="label">Hobbies</label>
+                <input className="input" value={hobbies} onChange={(e) => setHobbies(e.target.value)} disabled={showReadOnly} />
+                <label className="label">Notes</label>
+                <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
               </div>
             </div>
-
-            <div className="settings-chip-list">
-              <div style={{ flex: 1, minWidth: 170 }}>
-                <label className="label">First Name</label>
-                <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={showReadOnly} />
-              </div>
-              <div style={{ flex: 1, minWidth: 170 }}>
-                <label className="label">Middle Name</label>
-                <input className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} disabled={showReadOnly} />
-              </div>
-              <div style={{ flex: 1, minWidth: 170 }}>
-                <label className="label">Last Name</label>
-                <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
-              </div>
-              <div style={{ flex: 1, minWidth: 170 }}>
-                <label className="label">Nick Name</label>
-                <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
-              </div>
-            </div>
-
-            <label className="label">Phone</label>
-            <input className="input" value={phones} onChange={(e) => setPhones(e.target.value)} disabled={showReadOnly} />
-            <label className="label">Address</label>
-            <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
-            <label className="label">Hobbies</label>
-            <input className="input" value={hobbies} onChange={(e) => setHobbies(e.target.value)} disabled={showReadOnly} />
-            <label className="label">Notes</label>
-            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
 
             {canManage ? (
               <>
@@ -477,9 +495,9 @@ export function PersonEditModal({
         ) : null}
 
         <div className="settings-chip-list" style={{ marginTop: "1rem" }}>
-          <button
+          <PrimaryButton
             type="button"
-            className="button tap-button"
+            className="tap-button"
             disabled={showReadOnly || saving}
             onClick={() =>
               void (async () => {
@@ -541,11 +559,12 @@ export function PersonEditModal({
             }
           >
             {saving ? "Saving..." : "Save"}
-          </button>
-          <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
+          </PrimaryButton>
+          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
         </div>
 
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+        </div>
       </div>
     </div>
   );

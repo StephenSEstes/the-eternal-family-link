@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { Nunito, Source_Sans_3 } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const nunito = Nunito({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
-
-const sourceSans = Source_Sans_3({
+const inter = Inter({
   variable: "--font-body",
   subsets: ["latin"],
 });
@@ -33,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${nunito.variable} ${sourceSans.variable}`}>
+      <body className={`${inter.variable}`}>
         {children}
       </body>
     </html>
