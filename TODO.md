@@ -85,3 +85,4 @@ I will update this list as we add, complete, or remove work.
 - [x] Improve multi-family group switching for shared users
 - [x] Document data structure (tables, columns, joins, indexes, media links, entity IDs)
 - [x] Develop Add Family screen
+- [x] Crash diagnosis runbook + requestId/errorCode instrumentation for core APIs
