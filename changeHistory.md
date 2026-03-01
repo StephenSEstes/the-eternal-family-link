@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Refreshed Settings UI with compact tab hierarchy, cleaner Users card view, and consolidated Data & System tools (CSV Import + Integrity). See `docs/change-summary.md`.
+- 2026-03-01: Added profile crash diagnostics/fallback, reduced relationship save quota pressure, enforced parent age eligibility in profile editors, and centered children under parent households in tree view. See `docs/change-summary.md`.

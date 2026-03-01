@@ -5,7 +5,6 @@ import {
   createTableRecord,
   deleteTableRecordById,
   getTableRecords,
-  updateTableRecordById,
 } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
@@ -32,7 +31,7 @@ function readField(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-async function upsertRelation(
+async function createRelation(
   fromPersonId: string,
   toPersonId: string,
   relType: string,
@@ -46,23 +45,7 @@ async function upsertRelation(
     to_person_id: toPersonId,
     rel_type: relType,
   };
-
-  let updated = null;
-  const idColumns = ["rel_id", "relationship_id", "id"] as const;
-  for (const idColumn of idColumns) {
-    try {
-      updated = await updateTableRecordById("Relationships", relId, payload, idColumn);
-      break;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (!message.includes("No id column found")) {
-        throw error;
-      }
-    }
-  }
-  if (!updated) {
-    await createTableRecord("Relationships", payload);
-  }
+  await createTableRecord("Relationships", payload);
 }
 
 function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
@@ -71,7 +54,7 @@ function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
   return clean.replace(/[^a-z0-9_-]+/g, "-");
 }
 
-async function upsertFamilyUnit(tenantKey: string, personA: string, personB: string) {
+async function createFamilyUnit(tenantKey: string, personA: string, personB: string) {
   const familyUnitId = makeFamilyUnitId(tenantKey, personA, personB);
   const [husband, wife] = [personA, personB].sort();
   const payload: Record<string, string> = {
@@ -80,11 +63,7 @@ async function upsertFamilyUnit(tenantKey: string, personA: string, personB: str
     wife_person_id: wife,
     family_group_key: tenantKey,
   };
-
-  const updated = await updateTableRecordById("Households", familyUnitId, payload, "household_id", tenantKey);
-  if (!updated) {
-    await createTableRecord("Households", payload, tenantKey);
-  }
+  await createTableRecord("Households", payload, tenantKey);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
@@ -131,9 +110,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       desiredIds.add(makeRelId(parsed.data.personId, childId, "parent")),
     );
 
+    const existingParentEdgeIds = new Set<string>();
+    for (const row of existing) {
+      const relId = readField(row.data, "rel_id", "relationship_id", "id");
+      const relType = readField(row.data, "rel_type");
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      if (relType.toLowerCase() !== "parent" || !relId) {
+        continue;
+      }
+      const isParentEdge = toPersonId === parsed.data.personId;
+      const isChildEdge = fromPersonId === parsed.data.personId;
+      if (!isParentEdge && !isChildEdge) {
+        continue;
+      }
+      existingParentEdgeIds.add(relId);
+    }
+
     debugContext.phase = "prune_existing_relationships";
     for (const row of existing) {
-      const relId = readField(row.data, "rel_id");
+      const relId = readField(row.data, "rel_id", "relationship_id", "id");
       const relType = readField(row.data, "rel_type");
       const fromPersonId = readField(row.data, "from_person_id");
       const toPersonId = readField(row.data, "to_person_id");
@@ -169,11 +165,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "upsert_parent_edges";
     for (const parentId of parentIds) {
-      await upsertRelation(parentId, parsed.data.personId, "parent");
+      const relId = makeRelId(parentId, parsed.data.personId, "parent");
+      if (!existingParentEdgeIds.has(relId)) {
+        await createRelation(parentId, parsed.data.personId, "parent");
+      }
     }
     debugContext.phase = "upsert_child_edges";
     for (const childId of childIds) {
-      await upsertRelation(parsed.data.personId, childId, "parent");
+      const relId = makeRelId(parsed.data.personId, childId, "parent");
+      if (!existingParentEdgeIds.has(relId)) {
+        await createRelation(parsed.data.personId, childId, "parent");
+      }
     }
 
     debugContext.phase = "load_households";
@@ -231,7 +233,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "upsert_household";
     if (spouseId) {
-      await upsertFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
+      const hasDesiredUnit = households.some((row) => {
+        const partner1 = readField(row.data, "husband_person_id");
+        const partner2 = readField(row.data, "wife_person_id");
+        const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
+        return (
+          rowTenantKey === normalizedTenantKey &&
+          ((partner1 === parsed.data.personId && partner2 === spouseId) ||
+            (partner2 === parsed.data.personId && partner1 === spouseId))
+        );
+      });
+      if (!hasDesiredUnit) {
+        await createFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
+      }
     }
 
     debugContext.phase = "done";
@@ -244,6 +258,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unexpected_error";
-    return NextResponse.json({ error: "relationship_save_failed", message, debug: debugContext }, { status: 500 });
+    const lower = message.toLowerCase();
+    const isQuota = lower.includes("quota") || lower.includes("rate limit") || lower.includes("read requests per minute");
+    return NextResponse.json(
+      {
+        error: isQuota ? "relationship_save_quota_exceeded" : "relationship_save_failed",
+        message,
+        debug: debugContext,
+        hint: isQuota ? "Close the workbook if open, wait 60-90 seconds, and retry." : undefined,
+      },
+      { status: isQuota ? 429 : 500 },
+    );
   }
 }

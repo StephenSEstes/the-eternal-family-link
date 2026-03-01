@@ -13,7 +13,12 @@ type TenantOption = {
 type ProfileEditorProps = {
   person: PersonRecord;
   tenantKey: string;
-  people: { personId: string; displayName: string; gender?: "male" | "female" | "unspecified" }[];
+  people: {
+    personId: string;
+    displayName: string;
+    gender?: "male" | "female" | "unspecified";
+    birthDate?: string;
+  }[];
   marriedToByPersonId: Record<string, string>;
   initialParentIds: string[];
   initialSpouseId: string;
@@ -36,7 +41,30 @@ type PersonOption = {
   personId: string;
   displayName: string;
   gender?: "male" | "female" | "unspecified";
+  birthDate?: string;
 };
+
+function parseDate(value?: string) {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate: string | undefined, minYears = 15) {
+  const parent = parseDate(parentBirthDate);
+  const child = parseDate(childBirthDate);
+  if (!child) {
+    return true;
+  }
+  if (!parent) {
+    return false;
+  }
+  const cutoff = new Date(child);
+  cutoff.setFullYear(cutoff.getFullYear() - minYears);
+  return parent <= cutoff;
+}
 
 export function ProfileEditor({
   person,
@@ -171,12 +199,22 @@ export function ProfileEditor({
     [availablePeople, person.personId],
   );
   const motherOptions = useMemo(
-    () => parentOptions.filter((option) => (option.gender ?? "unspecified") === "female"),
-    [parentOptions],
+    () =>
+      parentOptions.filter(
+        (option) =>
+          (option.gender ?? "unspecified") === "female" &&
+          isEligibleParentAge(option.birthDate, birthDate),
+      ),
+    [birthDate, parentOptions],
   );
   const fatherOptions = useMemo(
-    () => parentOptions.filter((option) => (option.gender ?? "unspecified") === "male"),
-    [parentOptions],
+    () =>
+      parentOptions.filter(
+        (option) =>
+          (option.gender ?? "unspecified") === "male" &&
+          isEligibleParentAge(option.birthDate, birthDate),
+      ),
+    [birthDate, parentOptions],
   );
 
   const spouseOptions = useMemo(

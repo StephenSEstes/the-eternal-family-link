@@ -65,6 +65,28 @@ function toMonthDay(value: string) {
   return raw || "-";
 }
 
+function parseDate(value?: string) {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate: string | undefined, minYears = 15) {
+  const parent = parseDate(parentBirthDate);
+  const child = parseDate(childBirthDate);
+  if (!child) {
+    return true;
+  }
+  if (!parent) {
+    return false;
+  }
+  const cutoff = new Date(child);
+  cutoff.setFullYear(cutoff.getFullYear() - minYears);
+  return parent <= cutoff;
+}
+
 export function PersonEditModal({
   open,
   tenantKey,
@@ -194,8 +216,12 @@ export function PersonEditModal({
   }
 
   const personOptions = people.filter((item) => item.personId !== person.personId);
-  const motherOptions = personOptions.filter((item) => (item.gender ?? "unspecified") === "female");
-  const fatherOptions = personOptions.filter((item) => (item.gender ?? "unspecified") === "male");
+  const motherOptions = personOptions.filter(
+    (item) => (item.gender ?? "unspecified") === "female" && isEligibleParentAge(item.birthDate, birthDate || person.birthDate),
+  );
+  const fatherOptions = personOptions.filter(
+    (item) => (item.gender ?? "unspecified") === "male" && isEligibleParentAge(item.birthDate, birthDate || person.birthDate),
+  );
   const showReadOnly = !canManage;
 
   return (

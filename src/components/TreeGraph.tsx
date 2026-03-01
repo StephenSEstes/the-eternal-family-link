@@ -259,6 +259,66 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     });
   });
 
+  // Nudge child nodes to center beneath the midpoint of their parent household cluster.
+  const childrenByPairKey = new Map<string, string[]>();
+  for (const connector of familyChildConnectors) {
+    const bucket = childrenByPairKey.get(connector.pairKey) ?? [];
+    bucket.push(connector.childId);
+    childrenByPairKey.set(connector.pairKey, bucket);
+  }
+  const desiredChildX = new Map<string, number>();
+  childrenByPairKey.forEach((childIds, pairKey) => {
+    const pair = spousePairMeta.get(pairKey);
+    if (!pair) {
+      return;
+    }
+    const left = positions.get(pair.leftId);
+    const right = positions.get(pair.rightId);
+    if (!left || !right) {
+      return;
+    }
+    const centerX = (left.x + right.x) / 2;
+    const sortedChildIds = childIds
+      .slice()
+      .sort((a, b) => (nodeMap.get(a)?.displayName ?? a).localeCompare(nodeMap.get(b)?.displayName ?? b));
+    const spacing = NODE_CARD_WIDTH + 26;
+    const start = centerX - ((sortedChildIds.length - 1) * spacing) / 2;
+    sortedChildIds.forEach((childId, index) => {
+      desiredChildX.set(childId, start + index * spacing);
+    });
+  });
+
+  levelsSorted.forEach((level) => {
+    const row = orderedByLevel.get(level) ?? [];
+    if (row.length === 0) {
+      return;
+    }
+    const withDesired = row.filter((node) => desiredChildX.has(node.personId));
+    if (withDesired.length === 0) {
+      return;
+    }
+    const orderedRow = row
+      .slice()
+      .sort((a, b) => {
+        const ax = desiredChildX.get(a.personId) ?? positions.get(a.personId)?.x ?? 0;
+        const bx = desiredChildX.get(b.personId) ?? positions.get(b.personId)?.x ?? 0;
+        return ax - bx;
+      });
+
+    let cursor = Number.NEGATIVE_INFINITY;
+    orderedRow.forEach((node) => {
+      const pos = positions.get(node.personId);
+      if (!pos) {
+        return;
+      }
+      const preferred = desiredChildX.get(node.personId) ?? pos.x;
+      const minX = cursor + NODE_CARD_WIDTH + 22;
+      const nextX = Math.max(preferred, minX);
+      positions.set(node.personId, { x: nextX, y: pos.y });
+      cursor = nextX;
+    });
+  });
+
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     pointerId: number;
