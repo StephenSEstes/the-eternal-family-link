@@ -102,6 +102,15 @@ type DeleteHouseholdPreview = {
   };
 };
 
+type HouseholdDeleteOption = {
+  householdId: string;
+  label: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  husbandName: string;
+  wifeName: string;
+};
+
 type SettingsClientProps = {
   tenantKey: string;
   tenantName: string;
@@ -301,6 +310,9 @@ export function SettingsClient({
   const [deleteHouseholdPreview, setDeleteHouseholdPreview] = useState<DeleteHouseholdPreview | null>(null);
   const [deleteHouseholdStatus, setDeleteHouseholdStatus] = useState("");
   const [deleteHouseholdBusy, setDeleteHouseholdBusy] = useState(false);
+  const [deleteHouseholdOptions, setDeleteHouseholdOptions] = useState<HouseholdDeleteOption[]>([]);
+  const [deleteHouseholdOptionsStatus, setDeleteHouseholdOptionsStatus] = useState("");
+  const [deleteHouseholdOptionsBusy, setDeleteHouseholdOptionsBusy] = useState(false);
   const [policy, setPolicy] = useState<SecurityPolicy>(DEFAULT_POLICY);
   const [policyStatus, setPolicyStatus] = useState("");
   const [localUsers, setLocalUsers] = useState<LocalUserItem[]>([]);
@@ -331,6 +343,7 @@ export function SettingsClient({
     buildDirectoryPeople(accessItems, [], people),
   );
   const existingPeopleOptionsLoadedKeyRef = useRef("");
+  const deleteHouseholdOptionsLoadedTenantRef = useRef("");
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
   const allPeopleById = useMemo(
@@ -491,6 +504,9 @@ export function SettingsClient({
       setDeleteHouseholdId("");
       setDeleteHouseholdPreview(null);
       setDeleteHouseholdStatus("");
+      setDeleteHouseholdOptions([]);
+      setDeleteHouseholdOptionsStatus("");
+      deleteHouseholdOptionsLoadedTenantRef.current = "";
       await loadTenantAdminData(selectedTenantKey);
       await loadFamilyAccessRows(selectedTenantKey);
       if (cancelled) {
@@ -1157,6 +1173,37 @@ export function SettingsClient({
     setDeleteHouseholdPreview(body.preview as DeleteHouseholdPreview);
     setDeleteHouseholdStatus("Preview loaded.");
     setDeleteHouseholdBusy(false);
+  };
+
+  const loadDeleteHouseholdOptions = async () => {
+    const tenantKey = selectedTenantKey.trim().toLowerCase();
+    if (!tenantKey) {
+      setDeleteHouseholdOptionsStatus("Select a family group first.");
+      return;
+    }
+    if (
+      deleteHouseholdOptionsLoadedTenantRef.current === tenantKey &&
+      deleteHouseholdOptions.length > 0
+    ) {
+      setDeleteHouseholdOptionsStatus("Households already loaded.");
+      return;
+    }
+    setDeleteHouseholdOptionsBusy(true);
+    setDeleteHouseholdOptionsStatus("Loading households...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/households`, {
+      cache: "no-store",
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !Array.isArray(body?.households)) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeleteHouseholdOptionsStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeleteHouseholdOptionsBusy(false);
+      return;
+    }
+    setDeleteHouseholdOptions(body.households as HouseholdDeleteOption[]);
+    deleteHouseholdOptionsLoadedTenantRef.current = tenantKey;
+    setDeleteHouseholdOptionsStatus(`Loaded ${body.households.length} household(s).`);
+    setDeleteHouseholdOptionsBusy(false);
   };
 
   const executeDeleteHousehold = async () => {
@@ -2160,7 +2207,42 @@ export function SettingsClient({
 
           <div className="settings-delete-card">
             <h4 style={{ marginTop: 0 }}>Delete Household</h4>
-            <label className="label">Household ID</label>
+            <div className="settings-chip-list">
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={loadDeleteHouseholdOptions}
+                disabled={deleteHouseholdOptionsBusy}
+              >
+                Load Households
+              </button>
+            </div>
+            <label className="label">Select Household</label>
+            <select
+              className="input"
+              value={deleteHouseholdId}
+              onChange={(e) => {
+                setDeleteHouseholdId(e.target.value);
+                setDeleteHouseholdPreview(null);
+                setDeleteHouseholdStatus("");
+              }}
+            >
+              <option value="">Select household</option>
+              {deleteHouseholdOptions.map((option) => {
+                const labelBits = [
+                  option.label || option.householdId,
+                  [option.husbandName || option.husbandPersonId, option.wifeName || option.wifePersonId]
+                    .filter(Boolean)
+                    .join(" / "),
+                ].filter(Boolean);
+                return (
+                  <option key={`delete-household-option-${option.householdId}`} value={option.householdId}>
+                    {`${labelBits.join(" - ")} (${option.householdId})`}
+                  </option>
+                );
+              })}
+            </select>
+            <label className="label">Or Enter Household ID</label>
             <input
               className="input"
               value={deleteHouseholdId}
@@ -2189,6 +2271,7 @@ export function SettingsClient({
                 Confirm Delete Household
               </button>
             </div>
+            {deleteHouseholdOptionsStatus ? <p style={{ marginTop: "0.5rem" }}>{deleteHouseholdOptionsStatus}</p> : null}
             {deleteHouseholdPreview ? (
               <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
                 <table className="settings-table">

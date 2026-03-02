@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Hotfix made Settings cross-family people fetch lazy (Family Groups only) to reduce read fan-out and quota pressure. See `docs/change-summary.md`.
+- 2026-03-02: Added delete-household usability hotfix with on-demand household loader and dropdown selection in Admin Data & System. See `docs/change-summary.md`.

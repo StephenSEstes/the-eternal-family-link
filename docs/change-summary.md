@@ -63,6 +63,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this hotfix commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (delete household UX: on-demand list + dropdown)
+
+- `Change`: Added admin households list API and wired Delete Household UI with `Load Households` on-demand button plus selectable dropdown (manual ID input kept as fallback).
+- `Type`: API, UI
+- `Why`: Users do not know household IDs; previous delete-household input-only UX was not usable.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/households/route.ts`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Admin > Data & System > Delete Household shows `Load Households`.
+  - Clicking `Load Households` populates dropdown with household label/spouse names/ID.
+  - Selecting a household fills delete target and preview/confirm still work.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.
