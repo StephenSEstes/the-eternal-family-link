@@ -8,7 +8,6 @@ import {
   ensurePersonFamilyGroupMembership,
   getPersonById,
   getTableRecords,
-  updateTableRecordById,
 } from "@/lib/google/sheets";
 
 type RouteProps = {
@@ -27,6 +26,12 @@ const childSchema = z.object({
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function isEnabledLike(value: string | undefined) {
+  const raw = normalize(value);
+  if (!raw) return true;
+  return raw === "true" || raw === "1" || raw === "yes";
 }
 
 function readCell(record: Record<string, string>, ...keys: string[]) {
@@ -120,40 +125,56 @@ export async function POST(request: Request, { params }: RouteProps) {
   await upsertParent(fatherPersonId, personId);
   await upsertParent(motherPersonId, personId);
 
-  const familyKey = normalize(resolved.tenant.tenantKey);
-  const familyName = resolved.tenant.tenantName;
-  const userGroupRows = await getTableRecords("UserFamilyGroups").catch(() => []);
-  const parentHasAccess = userGroupRows.some((row) => {
-    const rowKey = normalize(readCell(row.data, "family_group_key", "tenant_key"));
-    if (rowKey !== familyKey) {
-      return false;
-    }
+  const parentIds = new Set([fatherPersonId, motherPersonId]);
+  const personFamilyRows = await getTableRecords("PersonFamilyGroups").catch(() => []);
+  const inheritedFamilyKeys = new Set<string>();
+  for (const row of personFamilyRows) {
     const rowPersonId = readCell(row.data, "person_id");
-    const rowEnabled = normalize(readCell(row.data, "is_enabled"));
-    if (!rowPersonId || (rowEnabled && rowEnabled !== "true" && rowEnabled !== "1" && rowEnabled !== "yes")) {
-      return false;
+    if (!parentIds.has(rowPersonId)) {
+      continue;
     }
-    return rowPersonId === fatherPersonId || rowPersonId === motherPersonId;
+    if (!isEnabledLike(readCell(row.data, "is_enabled"))) {
+      continue;
+    }
+    const familyGroupKey = normalize(readCell(row.data, "family_group_key"));
+    if (familyGroupKey) {
+      inheritedFamilyKeys.add(familyGroupKey);
+    }
+  }
+  if (inheritedFamilyKeys.size === 0) {
+    inheritedFamilyKeys.add(normalize(resolved.tenant.tenantKey));
+  }
+
+  for (const familyGroupKey of inheritedFamilyKeys) {
+    await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
+  }
+
+  const userGroupRows = await getTableRecords("UserFamilyGroups").catch(() => []);
+  const existingChildUserGroupKeys = new Set(
+    userGroupRows
+      .filter((row) => readCell(row.data, "person_id") === personId)
+      .map((row) => normalize(readCell(row.data, "family_group_key", "tenant_key")))
+      .filter(Boolean),
+  );
+  const parentUserGroupRows = userGroupRows.filter((row) => {
+    const rowPersonId = readCell(row.data, "person_id");
+    return parentIds.has(rowPersonId) && isEnabledLike(readCell(row.data, "is_enabled"));
   });
 
-  if (parentHasAccess) {
-    const existingChildLink = userGroupRows.find((row) => {
-      const rowKey = normalize(readCell(row.data, "family_group_key", "tenant_key"));
-      return rowKey === familyKey && readCell(row.data, "person_id") === personId;
-    });
-    const payload = {
-      user_email: readCell(existingChildLink?.data ?? {}, "user_email"),
-      family_group_key: familyKey,
-      family_group_name: familyName,
+  for (const row of parentUserGroupRows) {
+    const familyGroupKey = normalize(readCell(row.data, "family_group_key", "tenant_key"));
+    if (!familyGroupKey || existingChildUserGroupKeys.has(familyGroupKey)) {
+      continue;
+    }
+    await createTableRecord("UserFamilyGroups", {
+      user_email: "",
+      family_group_key: familyGroupKey,
+      family_group_name: readCell(row.data, "family_group_name") || familyGroupKey,
       role: "USER",
       person_id: personId,
       is_enabled: "TRUE",
-    };
-    if (existingChildLink) {
-      await updateTableRecordById("UserFamilyGroups", personId, payload, "person_id", familyKey);
-    } else {
-      await createTableRecord("UserFamilyGroups", payload);
-    }
+    });
+    existingChildUserGroupKeys.add(familyGroupKey);
   }
 
   await appendAuditLog({
@@ -170,7 +191,6 @@ export async function POST(request: Request, { params }: RouteProps) {
   return NextResponse.json({
     ok: true,
     personId,
-    defaultFamilyAccessEnabled: parentHasAccess,
+    inheritedFamilyGroups: Array.from(inheritedFamilyKeys).sort(),
   });
 }
-

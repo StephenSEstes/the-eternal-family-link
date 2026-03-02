@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added delete-household usability hotfix with on-demand household loader and dropdown selection in Admin Data & System. See `docs/change-summary.md`.
+- 2026-03-02: Fixed tree household spacing/label behavior and updated add-child flow to inherit parent-enabled family-group memberships across families. See `docs/change-summary.md`.

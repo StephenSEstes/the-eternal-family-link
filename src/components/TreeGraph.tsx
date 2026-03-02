@@ -83,7 +83,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     partnerMap.set(rightId, leftId);
     const pairKey = [leftId, rightId].sort().join("::");
     spousePairIds.add(pairKey);
-    spousePairMeta.set(pairKey, { leftId, rightId, label: unit.label?.trim() ?? "" });
+    spousePairMeta.set(pairKey, { leftId, rightId, label: unit.label?.trim() || unit.id?.trim() || "" });
   });
 
   edges.forEach((edge) => {
@@ -298,26 +298,77 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     if (withDesired.length === 0) {
       return;
     }
-    const orderedRow = row
-      .slice()
-      .sort((a, b) => {
-        const ax = desiredChildX.get(a.personId) ?? positions.get(a.personId)?.x ?? 0;
-        const bx = desiredChildX.get(b.personId) ?? positions.get(b.personId)?.x ?? 0;
-        return ax - bx;
-      });
 
-    let cursor = Number.NEGATIVE_INFINITY;
-    orderedRow.forEach((node) => {
+    const rowPersonIds = new Set(row.map((node) => node.personId));
+    const consumed = new Set<string>();
+    const units: Array<{ ids: string[]; preferredCenterX: number; unitWidth: number }> = [];
+    for (const node of row) {
+      if (consumed.has(node.personId)) {
+        continue;
+      }
+      const partnerId = partnerMap.get(node.personId);
+      const hasPartnerInRow = Boolean(partnerId && rowPersonIds.has(partnerId) && !consumed.has(partnerId));
+      if (hasPartnerInRow && partnerId) {
+        const leftId = node.personId;
+        const rightId = partnerId;
+        const leftPos = positions.get(leftId);
+        const rightPos = positions.get(rightId);
+        if (!leftPos || !rightPos) {
+          consumed.add(leftId);
+          continue;
+        }
+        const leftPreferred = desiredChildX.get(leftId) ?? leftPos.x;
+        const rightPreferred = desiredChildX.get(rightId) ?? rightPos.x;
+        units.push({
+          ids: [leftId, rightId],
+          preferredCenterX: (leftPreferred + rightPreferred) / 2,
+          unitWidth: NODE_CARD_WIDTH * 2 + SPOUSE_GAP,
+        });
+        consumed.add(leftId);
+        consumed.add(rightId);
+        continue;
+      }
+
       const pos = positions.get(node.personId);
       if (!pos) {
-        return;
+        consumed.add(node.personId);
+        continue;
       }
-      const preferred = desiredChildX.get(node.personId) ?? pos.x;
-      const minX = cursor + NODE_CARD_WIDTH + 22;
-      const nextX = Math.max(preferred, minX);
-      positions.set(node.personId, { x: nextX, y: pos.y });
-      cursor = nextX;
-    });
+      units.push({
+        ids: [node.personId],
+        preferredCenterX: desiredChildX.get(node.personId) ?? pos.x,
+        unitWidth: NODE_CARD_WIDTH,
+      });
+      consumed.add(node.personId);
+    }
+
+    const sortedUnits = units.slice().sort((a, b) => a.preferredCenterX - b.preferredCenterX);
+    let lastRightEdge = Number.NEGATIVE_INFINITY;
+    for (const unit of sortedUnits) {
+      const unitHalf = unit.unitWidth / 2;
+      const minCenter = Number.isFinite(lastRightEdge)
+        ? lastRightEdge + NON_SPOUSE_GAP + unitHalf
+        : unit.preferredCenterX;
+      const centerX = Math.max(unit.preferredCenterX, minCenter);
+      if (unit.ids.length === 2) {
+        const halfSpan = (NODE_CARD_WIDTH + SPOUSE_GAP) / 2;
+        const leftPos = positions.get(unit.ids[0]);
+        const rightPos = positions.get(unit.ids[1]);
+        if (leftPos) {
+          positions.set(unit.ids[0], { x: centerX - halfSpan, y: leftPos.y });
+        }
+        if (rightPos) {
+          positions.set(unit.ids[1], { x: centerX + halfSpan, y: rightPos.y });
+        }
+      } else {
+        const onlyId = unit.ids[0];
+        const pos = positions.get(onlyId);
+        if (pos) {
+          positions.set(onlyId, { x: centerX, y: pos.y });
+        }
+      }
+      lastRightEdge = centerX + unitHalf;
+    }
   });
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -655,7 +706,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const midX = (a.x + b.x) / 2;
           const midY = (a.y + b.y) / 2;
           const distance = Math.hypot(a.x - b.x, a.y - b.y);
-          const halfWidth = Math.max(112, distance / 2 + NODE_HALF_WIDTH + 24);
+          const halfWidth = Math.max(96, distance / 2 + NODE_HALF_WIDTH + 12);
           const halfHeight = NODE_HALF_HEIGHT + 26;
           const labelLines = label ? wrapHouseholdLabel(label) : [];
 

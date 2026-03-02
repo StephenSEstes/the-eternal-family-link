@@ -80,6 +80,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (tree spacing/label fixes + child family-group inheritance)
+
+- `Change`: Tuned tree spouse-cluster geometry and row nudge logic to keep spouse pairs adjacent/overlapping consistently, reduced household box over-width pressure, and ensured household label fallback shows household ID when label is blank; also updated add-child flow to inherit all enabled family-group memberships from either parent.
+- `Type`: UI, API
+- `Why`: Household cards showed inconsistent spouse spacing/overlap and missing top household label in some clusters; child add was only attaching child to active family instead of parent-access families.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: No migration. New child-create operations now write additional `PersonFamilyGroups`/`UserFamilyGroups` links when parents are enabled in multiple families.
+- `Verify`:
+  - Tree households render tighter (less over-wide), spouse pairs remain adjacent/overlapped consistently.
+  - Household label area shows content for previously blank-label clusters (falls back to household ID).
+  - Adding child from household in one family results in child membership in all enabled parent family groups.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.
