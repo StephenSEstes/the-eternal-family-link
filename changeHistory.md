@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Made tenant-route header/nav route-aware so `/t/[tenantKey]` mobile page links and family context stay on the route tenant. See `docs/change-summary.md`.
+- 2026-03-02: Added mobile tenant-access diagnostics (`/access-denied` + `/api/debug/tenant-access`) to expose exact session/tenant mismatch behind 403 route failures. See `docs/change-summary.md`.

@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (tenant access diagnostics for mobile 403s)
+
+- `Change`: Added explicit tenant-access diagnostics (`/api/debug/tenant-access`) and a user-facing `/access-denied` page; middleware now redirects tenant-access denials there with requested tenant/path context.
+- `Type`: Ops, Routing, Diagnostics
+- `Why`: Root cause investigation for mobile-only failures needed definitive evidence when `/t/[tenantKey]/*` is blocked by session access mismatch (`403`) rather than data/render issues.
+- `Files`:
+  - `src/middleware.ts`
+  - `src/app/api/debug/tenant-access/route.ts`
+  - `src/app/access-denied/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Accessing a tenant route without membership redirects to `/access-denied` instead of generic plain `Forbidden`.
+  - `/api/debug/tenant-access?tenantKey=<key>` returns current user email, active tenant cookies, tenantAccesses, and `hasRequestedTenantAccess`.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (tenant header/navigation now route-tenant aware)
 
 - `Change`: Made `AppHeader` accept an optional route tenant key and updated all tenant-scoped pages to pass it, so header family switch context and mobile page-selector links are built from the route tenant.

@@ -76,7 +76,12 @@ export default async function middleware(request: NextRequest) {
   }
 
   if (!hasTenantAccess(token, tenantPath.tenantKey)) {
-    return new NextResponse("Forbidden", { status: 403 });
+    const deniedUrl = request.nextUrl.clone();
+    deniedUrl.pathname = "/access-denied";
+    deniedUrl.searchParams.set("tenantKey", tenantPath.tenantKey);
+    deniedUrl.searchParams.set("from", pathname);
+    deniedUrl.searchParams.set("reason", "missing_tenant_access");
+    return NextResponse.redirect(deniedUrl);
   }
 
   return response;
