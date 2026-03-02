@@ -11,12 +11,14 @@ type FamilyGroupOption = {
 type FamilyGroupSwitcherProps = {
   activeFamilyGroupKey: string;
   familyGroups: FamilyGroupOption[];
+  showRole?: boolean;
 };
 
-export function FamilyGroupSwitcher({ activeFamilyGroupKey, familyGroups }: FamilyGroupSwitcherProps) {
+export function FamilyGroupSwitcher({ activeFamilyGroupKey, familyGroups, showRole = true }: FamilyGroupSwitcherProps) {
   return (
     <TenantSwitcher
       activeTenantKey={activeFamilyGroupKey}
+      showRole={showRole}
       tenants={familyGroups.map((item) => ({
         tenantKey: item.familyGroupKey,
         tenantName: item.familyGroupName,

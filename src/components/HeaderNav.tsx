@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 type HeaderNavProps = {
@@ -86,9 +86,10 @@ function LogoutIcon() {
 }
 
 export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
+  const router = useRouter();
   const pathname = usePathname() || "/";
 
-  const items: NavItem[] = [
+  const sectionItems: NavItem[] = [
     {
       label: "Home",
       href: basePath || "/",
@@ -122,14 +123,15 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
   ];
 
   if (isAdmin) {
-    items.push({
-      label: "Settings",
+    sectionItems.push({
+      label: "Admin",
       href: `${basePath}/settings`,
       match: (path) => path.startsWith(`${basePath}/settings`),
       icon: <SettingsIcon />,
     });
   }
 
+  const items: NavItem[] = [...sectionItems];
   items.push({
     label: "Sign out",
     href: "/api/auth/signout",
@@ -137,8 +139,24 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
     icon: <LogoutIcon />,
   });
 
+  const activeSection = sectionItems.find((item) => item.match(pathname)) ?? sectionItems[0];
+
   return (
     <nav className="app-nav-row">
+      <div className="app-nav-mobile">
+        <select
+          className="app-nav-mobile-select"
+          aria-label="Select page"
+          value={activeSection?.href ?? sectionItems[0]?.href}
+          onChange={(event) => router.push(event.target.value)}
+        >
+          {sectionItems.map((item) => (
+            <option key={`mobile-nav-${item.label}`} value={item.href}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="app-nav">
         {items.map((item) => {
           const active = item.match(pathname);

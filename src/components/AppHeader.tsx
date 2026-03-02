@@ -41,32 +41,42 @@ export async function AppHeader() {
               />
             </span>
             <span className="app-brand-copy">
-              <span className="app-brand">{appTitle}</span>
+              <span className="app-brand app-brand-desktop">{appTitle}</span>
+              <span className="app-brand app-brand-mobile">EFL</span>
               <span className="app-brand-subtitle">Keep your family story alive.</span>
             </span>
           </Link>
 
+          <div className="app-mobile-family-switch">
+            <FamilyGroupSwitcher
+              activeFamilyGroupKey={tenant.tenantKey}
+              showRole={false}
+              familyGroups={tenant.tenants.map((item) => ({
+                familyGroupKey: item.tenantKey,
+                familyGroupName: item.tenantName,
+                role: item.role,
+              }))}
+            />
+          </div>
+
           <div className="app-user">
-            <button type="button" className="icon-chip" aria-label="Notifications">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3a5 5 0 0 0-5 5v2.7c0 .8-.3 1.6-.9 2.2L4.5 14.5A1 1 0 0 0 5.2 16H19a1 1 0 0 0 .7-1.7l-1.6-1.6a3.2 3.2 0 0 1-.9-2.2V8a5 5 0 0 0-5-5z" />
-                <path d="M9.5 17a2.5 2.5 0 0 0 5 0" />
-              </svg>
-            </button>
             <span className="user-avatar" aria-hidden="true">
               {avatarInitials || "FM"}
             </span>
             <div className="app-user-copy">
               <strong>{displayName}</strong>
-              <span>{session?.user?.email ? session.user.email : "Not signed in"}</span>
+              <span>
+                {session?.user?.email ? `${session.user.email} | ${tenant.role}` : tenant.role}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="app-meta-row">
+        <div className="app-meta-row app-meta-row-desktop">
           <label className="app-meta-label">Family Group</label>
           <FamilyGroupSwitcher
             activeFamilyGroupKey={tenant.tenantKey}
+            showRole={false}
             familyGroups={tenant.tenants.map((item) => ({
               familyGroupKey: item.tenantKey,
               familyGroupName: item.tenantName,

@@ -13,9 +13,10 @@ type TenantOption = {
 type TenantSwitcherProps = {
   activeTenantKey: string;
   tenants: TenantOption[];
+  showRole?: boolean;
 };
 
-export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps) {
+export function TenantSwitcher({ activeTenantKey, tenants, showRole = true }: TenantSwitcherProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState(activeTenantKey);
@@ -96,7 +97,7 @@ export function TenantSwitcher({ activeTenantKey, tenants }: TenantSwitcherProps
       >
         {tenants.map((tenant) => (
           <option key={tenant.tenantKey} value={tenant.tenantKey}>
-            {formatFamilyGroupName(tenant.tenantName)} ({tenant.role})
+            {showRole ? `${formatFamilyGroupName(tenant.tenantName)} (${tenant.role})` : formatFamilyGroupName(tenant.tenantName)}
           </option>
         ))}
       </select>

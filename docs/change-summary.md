@@ -113,6 +113,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (mobile header compact variant + page switcher)
+
+- `Change`: Added mobile-specific header layout with compact top row (`logo`, `EFL`, family dropdown, user avatar) and a second-row page selector showing current section options (`Home`, `People`, `Family Tree`, `Today`, `Games`, `Admin` for admins).
+- `Type`: UI
+- `Why`: Existing mobile header consumed too much vertical space and duplicated desktop structure; needed a denser mobile-first control layout.
+- `Files`:
+  - `src/components/AppHeader.tsx`
+  - `src/components/HeaderNav.tsx`
+  - `src/components/FamilyGroupSwitcher.tsx`
+  - `src/components/TenantSwitcher.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - On mobile width, header is shorter and subtitle `Keep your family story alive` is hidden.
+  - Top row shows `logo`, `EFL`, family dropdown (without role text), and avatar.
+  - Second row shows page selector with current section selected and navigation works.
+  - Desktop header/nav remain unchanged.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.
