@@ -8,6 +8,7 @@ import {
   ensurePersonFamilyGroupMembership,
   getPersonById,
   getTableRecords,
+  updateTableRecordById,
 } from "@/lib/google/sheets";
 
 type RouteProps = {
