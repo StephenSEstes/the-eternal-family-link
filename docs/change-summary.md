@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (admin delete person + household workflow)
+
+- `Change`: Added admin delete workflows for person and household with preview-first impact reporting and explicit confirm actions in Admin > Data & System.
+- `Type`: API, UI
+- `Why`: Admin had no built-in way to safely remove incorrect people/households; deletes needed dependency cleanup and clear impact visibility before execution.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/components/SettingsClient.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: No migration. Runtime delete actions now remove dependent rows tied to target person/household (relationships, memberships/access, attributes, and related household/spouse rows per preview).
+- `Verify`:
+  - Admin > Data & System shows `Delete Person / Household` section.
+  - Person delete supports preview and removes targeted dependent rows on confirm.
+  - Household delete supports preview and removes targeted household plus spouse/family relationship rows on confirm.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.

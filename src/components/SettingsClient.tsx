@@ -74,6 +74,34 @@ type DeleteFamilyPreview = {
   };
 };
 
+type DeletePersonPreview = {
+  personId: string;
+  displayName: string;
+  counts: {
+    peopleRowsToDelete: number;
+    personFamilyRowsToDelete: number;
+    userFamilyRowsToDelete: number;
+    userAccessRowsToDelete: number;
+    relationshipRowsToDelete: number;
+    householdRowsToDelete: number;
+    attributeRowsToDelete: number;
+    importantDateRowsToDelete: number;
+    enabledMembershipsInOtherFamilies: number;
+  };
+  householdIds: string[];
+};
+
+type DeleteHouseholdPreview = {
+  householdId: string;
+  householdLabel: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  counts: {
+    householdRowsToDelete: number;
+    spouseRelationshipRowsToDelete: number;
+  };
+};
+
 type SettingsClientProps = {
   tenantKey: string;
   tenantName: string;
@@ -265,6 +293,14 @@ export function SettingsClient({
   const [deleteFamilyBusy, setDeleteFamilyBusy] = useState(false);
   const [disableOrphanedUsers, setDisableOrphanedUsers] = useState(true);
   const [deleteFamilyPreview, setDeleteFamilyPreview] = useState<DeleteFamilyPreview | null>(null);
+  const [deletePersonId, setDeletePersonId] = useState("");
+  const [deletePersonPreview, setDeletePersonPreview] = useState<DeletePersonPreview | null>(null);
+  const [deletePersonStatus, setDeletePersonStatus] = useState("");
+  const [deletePersonBusy, setDeletePersonBusy] = useState(false);
+  const [deleteHouseholdId, setDeleteHouseholdId] = useState("");
+  const [deleteHouseholdPreview, setDeleteHouseholdPreview] = useState<DeleteHouseholdPreview | null>(null);
+  const [deleteHouseholdStatus, setDeleteHouseholdStatus] = useState("");
+  const [deleteHouseholdBusy, setDeleteHouseholdBusy] = useState(false);
   const [policy, setPolicy] = useState<SecurityPolicy>(DEFAULT_POLICY);
   const [policyStatus, setPolicyStatus] = useState("");
   const [localUsers, setLocalUsers] = useState<LocalUserItem[]>([]);
@@ -448,6 +484,12 @@ export function SettingsClient({
     const run = async () => {
       setSelectedDirectoryPersonId("");
       setSelectedLocalUsername("");
+      setDeletePersonId("");
+      setDeletePersonPreview(null);
+      setDeletePersonStatus("");
+      setDeleteHouseholdId("");
+      setDeleteHouseholdPreview(null);
+      setDeleteHouseholdStatus("");
       await loadTenantAdminData(selectedTenantKey);
       await loadFamilyAccessRows(selectedTenantKey);
       if (cancelled) {
@@ -1015,6 +1057,129 @@ export function SettingsClient({
     }
 
     setShowDeleteFamilyModal(false);
+    await loadTenantAdminData(selectedTenantKey);
+    await runIntegrityCheck();
+    router.refresh();
+  };
+
+  const previewDeletePerson = async () => {
+    if (!deletePersonId.trim()) {
+      setDeletePersonStatus("Select a person first.");
+      setDeletePersonPreview(null);
+      return;
+    }
+    setDeletePersonBusy(true);
+    setDeletePersonStatus("Loading delete preview...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(selectedTenantKey)}/people/${encodeURIComponent(deletePersonId)}?preview=1`,
+      { method: "DELETE" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.preview) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeletePersonStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeletePersonPreview(null);
+      setDeletePersonBusy(false);
+      return;
+    }
+    setDeletePersonPreview(body.preview as DeletePersonPreview);
+    setDeletePersonStatus("Preview loaded.");
+    setDeletePersonBusy(false);
+  };
+
+  const executeDeletePerson = async () => {
+    if (!deletePersonId.trim()) {
+      setDeletePersonStatus("Select a person first.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Delete this person and all dependent rows (relationships, households, attributes, memberships, access rows)?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletePersonBusy(true);
+    setDeletePersonStatus("Deleting person...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(selectedTenantKey)}/people/${encodeURIComponent(deletePersonId)}`,
+      { method: "DELETE" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeletePersonStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeletePersonBusy(false);
+      return;
+    }
+    const deleted = body?.deleted ?? {};
+    setDeletePersonStatus(
+      `Deleted. People: ${Number(deleted.deletedPeopleRows ?? 0)}, relationships: ${Number(deleted.deletedRelationshipRows ?? 0)}, households: ${Number(deleted.deletedHouseholdRows ?? 0)}, attributes: ${Number(deleted.deletedAttributeRows ?? 0)}.`,
+    );
+    setDeletePersonBusy(false);
+    setDeletePersonPreview(null);
+    setDeletePersonId("");
+    await loadTenantAdminData(selectedTenantKey);
+    await loadFamilyAccessRows(selectedTenantKey);
+    await runIntegrityCheck();
+    router.refresh();
+  };
+
+  const previewDeleteHousehold = async () => {
+    if (!deleteHouseholdId.trim()) {
+      setDeleteHouseholdStatus("Enter a household ID first.");
+      setDeleteHouseholdPreview(null);
+      return;
+    }
+    setDeleteHouseholdBusy(true);
+    setDeleteHouseholdStatus("Loading delete preview...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(selectedTenantKey)}/households/${encodeURIComponent(deleteHouseholdId)}?preview=1`,
+      { method: "DELETE" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.preview) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeleteHouseholdStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeleteHouseholdPreview(null);
+      setDeleteHouseholdBusy(false);
+      return;
+    }
+    setDeleteHouseholdPreview(body.preview as DeleteHouseholdPreview);
+    setDeleteHouseholdStatus("Preview loaded.");
+    setDeleteHouseholdBusy(false);
+  };
+
+  const executeDeleteHousehold = async () => {
+    if (!deleteHouseholdId.trim()) {
+      setDeleteHouseholdStatus("Enter a household ID first.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Delete this household and matching spouse/family relationship rows between the two partners?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeleteHouseholdBusy(true);
+    setDeleteHouseholdStatus("Deleting household...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(selectedTenantKey)}/households/${encodeURIComponent(deleteHouseholdId)}`,
+      { method: "DELETE" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDeleteHouseholdStatus(`Failed: ${res.status} ${text.slice(0, 220)}`);
+      setDeleteHouseholdBusy(false);
+      return;
+    }
+    const deleted = body?.deleted ?? {};
+    setDeleteHouseholdStatus(
+      `Deleted. Households: ${Number(deleted.deletedHouseholdRows ?? 0)}, spouse/family links: ${Number(deleted.deletedSpouseRelationshipRows ?? 0)}.`,
+    );
+    setDeleteHouseholdBusy(false);
+    setDeleteHouseholdPreview(null);
+    setDeleteHouseholdId("");
     await loadTenantAdminData(selectedTenantKey);
     await runIntegrityCheck();
     router.refresh();
@@ -1912,6 +2077,130 @@ export function SettingsClient({
           </>
         ) : null}
         {importStatus ? <p>{importStatus}</p> : null}
+        </div>
+
+        <div className="card" style={{ marginTop: "0.75rem" }}>
+        <h3 style={{ marginTop: 0 }}>Delete Person / Household</h3>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>
+          Admin-only destructive actions. Always preview first.
+        </p>
+        <div className="settings-delete-grid">
+          <div className="settings-delete-card">
+            <h4 style={{ marginTop: 0 }}>Delete Person</h4>
+            <label className="label">Person</label>
+            <select
+              className="input"
+              value={deletePersonId}
+              onChange={(e) => {
+                setDeletePersonId(e.target.value);
+                setDeletePersonPreview(null);
+                setDeletePersonStatus("");
+              }}
+            >
+              <option value="">Select person</option>
+              {familyPeople.map((person) => (
+                <option key={`delete-person-${person.personId}`} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+            <div className="settings-chip-list">
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={previewDeletePerson}
+                disabled={deletePersonBusy}
+              >
+                Preview Delete
+              </button>
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={executeDeletePerson}
+                disabled={deletePersonBusy || !deletePersonPreview}
+              >
+                Confirm Delete Person
+              </button>
+            </div>
+            {deletePersonPreview ? (
+              <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                <table className="settings-table">
+                  <thead>
+                    <tr><th>Impact</th><th>Count</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>People rows</td><td>{deletePersonPreview.counts.peopleRowsToDelete}</td></tr>
+                    <tr><td>PersonFamilyGroups rows</td><td>{deletePersonPreview.counts.personFamilyRowsToDelete}</td></tr>
+                    <tr><td>UserFamilyGroups rows</td><td>{deletePersonPreview.counts.userFamilyRowsToDelete}</td></tr>
+                    <tr><td>UserAccess rows</td><td>{deletePersonPreview.counts.userAccessRowsToDelete}</td></tr>
+                    <tr><td>Relationships rows</td><td>{deletePersonPreview.counts.relationshipRowsToDelete}</td></tr>
+                    <tr><td>Households rows</td><td>{deletePersonPreview.counts.householdRowsToDelete}</td></tr>
+                    <tr><td>PersonAttributes rows</td><td>{deletePersonPreview.counts.attributeRowsToDelete}</td></tr>
+                    <tr><td>ImportantDates rows</td><td>{deletePersonPreview.counts.importantDateRowsToDelete}</td></tr>
+                    <tr><td>Other family memberships (enabled)</td><td>{deletePersonPreview.counts.enabledMembershipsInOtherFamilies}</td></tr>
+                  </tbody>
+                </table>
+                {deletePersonPreview.householdIds.length > 0 ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                    Household IDs impacted: {deletePersonPreview.householdIds.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {deletePersonStatus ? <p style={{ marginTop: "0.5rem" }}>{deletePersonStatus}</p> : null}
+          </div>
+
+          <div className="settings-delete-card">
+            <h4 style={{ marginTop: 0 }}>Delete Household</h4>
+            <label className="label">Household ID</label>
+            <input
+              className="input"
+              value={deleteHouseholdId}
+              onChange={(e) => {
+                setDeleteHouseholdId(e.target.value);
+                setDeleteHouseholdPreview(null);
+                setDeleteHouseholdStatus("");
+              }}
+              placeholder="fu-..."
+            />
+            <div className="settings-chip-list">
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={previewDeleteHousehold}
+                disabled={deleteHouseholdBusy}
+              >
+                Preview Delete
+              </button>
+              <button
+                type="button"
+                className="button tap-button"
+                onClick={executeDeleteHousehold}
+                disabled={deleteHouseholdBusy || !deleteHouseholdPreview}
+              >
+                Confirm Delete Household
+              </button>
+            </div>
+            {deleteHouseholdPreview ? (
+              <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                <table className="settings-table">
+                  <thead>
+                    <tr><th>Impact</th><th>Value</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Household ID</td><td>{deleteHouseholdPreview.householdId}</td></tr>
+                    <tr><td>Label</td><td>{deleteHouseholdPreview.householdLabel || "-"}</td></tr>
+                    <tr><td>Husband</td><td>{deleteHouseholdPreview.husbandPersonId || "-"}</td></tr>
+                    <tr><td>Wife</td><td>{deleteHouseholdPreview.wifePersonId || "-"}</td></tr>
+                    <tr><td>Household rows</td><td>{deleteHouseholdPreview.counts.householdRowsToDelete}</td></tr>
+                    <tr><td>Spouse/family relationship rows</td><td>{deleteHouseholdPreview.counts.spouseRelationshipRowsToDelete}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {deleteHouseholdStatus ? <p style={{ marginTop: "0.5rem" }}>{deleteHouseholdStatus}</p> : null}
+          </div>
+        </div>
         </div>
         </section>
       ) : null}

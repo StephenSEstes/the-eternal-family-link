@@ -4,6 +4,7 @@ import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 import {
   appendAuditLog,
+  deleteTableRows,
   ensureResolvedTabColumns,
   getPeople,
   getTableRecords,
@@ -12,6 +13,17 @@ import {
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string }>;
+};
+
+type DeleteHouseholdPreview = {
+  householdId: string;
+  householdLabel: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  counts: {
+    householdRowsToDelete: number;
+    spouseRelationshipRowsToDelete: number;
+  };
 };
 
 const patchSchema = z.object({
@@ -57,6 +69,67 @@ async function resolveHousehold(tenantKey: string, householdId: string, peopleBy
       label: readCell(match.data, "label", "family_label", "family_name"),
       notes: readCell(match.data, "notes", "family_notes"),
       weddingPhotoFileId: readCell(match.data, "wedding_photo_file_id"),
+    },
+  };
+}
+
+async function buildDeleteHouseholdPreview(tenantKey: string, householdId: string): Promise<{
+  preview: DeleteHouseholdPreview;
+  rowNumbers: {
+    households: number[];
+    spouseRelationships: number[];
+  };
+} | null> {
+  const targetHouseholdId = householdId.trim();
+  if (!targetHouseholdId) {
+    return null;
+  }
+  const targetTenantKey = normalize(tenantKey);
+  const [householdRows, relationshipRows] = await Promise.all([
+    getTableRecords("Households", tenantKey).catch(() => []),
+    getTableRecords("Relationships").catch(() => []),
+  ]);
+  const householdMatches = householdRows.filter((row) => {
+    const rowId = readCell(row.data, "household_id", "id");
+    if (rowId !== targetHouseholdId) {
+      return false;
+    }
+    const rowTenantKey = normalize(readCell(row.data, "family_group_key"));
+    return !rowTenantKey || rowTenantKey === targetTenantKey;
+  });
+  if (householdMatches.length === 0) {
+    return null;
+  }
+
+  const firstMatch = householdMatches[0];
+  const husbandPersonId = readCell(firstMatch.data, "husband_person_id");
+  const wifePersonId = readCell(firstMatch.data, "wife_person_id");
+  const spouseRelationshipRows = relationshipRows.filter((row) => {
+    const relType = normalize(row.data.rel_type);
+    if (relType !== "spouse" && relType !== "family") {
+      return false;
+    }
+    const fromPersonId = String(row.data.from_person_id ?? "").trim();
+    const toPersonId = String(row.data.to_person_id ?? "").trim();
+    const directMatch = fromPersonId === husbandPersonId && toPersonId === wifePersonId;
+    const reverseMatch = fromPersonId === wifePersonId && toPersonId === husbandPersonId;
+    return Boolean(husbandPersonId && wifePersonId && (directMatch || reverseMatch));
+  });
+
+  return {
+    preview: {
+      householdId: targetHouseholdId,
+      householdLabel: readCell(firstMatch.data, "label", "family_label", "family_name"),
+      husbandPersonId,
+      wifePersonId,
+      counts: {
+        householdRowsToDelete: householdMatches.length,
+        spouseRelationshipRowsToDelete: spouseRelationshipRows.length,
+      },
+    },
+    rowNumbers: {
+      households: householdMatches.map((row) => row.rowNumber),
+      spouseRelationships: spouseRelationshipRows.map((row) => row.rowNumber),
     },
   };
 }
@@ -168,6 +241,67 @@ export async function PATCH(request: Request, { params }: RouteProps) {
     return NextResponse.json(
       {
         error: isQuota ? "household_save_quota_exceeded" : "household_save_failed",
+        message: classified.message,
+        hint: isQuota ? "Close the workbook if open, wait 60-90 seconds, and retry." : undefined,
+      },
+      { status: isQuota ? 429 : 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteProps) {
+  try {
+    const { tenantKey, householdId } = await params;
+    const resolved = await requireTenantAdmin(tenantKey);
+    if ("error" in resolved) {
+      return resolved.error;
+    }
+
+    const previewOnly = new URL(request.url).searchParams.get("preview") === "1";
+    const built = await buildDeleteHouseholdPreview(resolved.tenant.tenantKey, householdId);
+    if (!built) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    if (previewOnly) {
+      return NextResponse.json({ ok: true, preview: built.preview });
+    }
+
+    const deletedHouseholdRows = await deleteTableRows(
+      "Households",
+      built.rowNumbers.households,
+      resolved.tenant.tenantKey,
+    );
+    const deletedSpouseRelationshipRows = await deleteTableRows(
+      "Relationships",
+      built.rowNumbers.spouseRelationships,
+    );
+
+    await appendAuditLog({
+      actorEmail: resolved.session.user?.email ?? "",
+      actorPersonId: resolved.session.user?.person_id ?? "",
+      action: "DELETE",
+      entityType: "HOUSEHOLD",
+      entityId: householdId,
+      familyGroupKey: resolved.tenant.tenantKey,
+      status: "SUCCESS",
+      details: `Deleted household ${householdId}; households=${deletedHouseholdRows}, spouseRel=${deletedSpouseRelationshipRows}.`,
+    }).catch(() => undefined);
+
+    return NextResponse.json({
+      ok: true,
+      tenantKey: resolved.tenant.tenantKey,
+      deleted: {
+        deletedHouseholdRows,
+        deletedSpouseRelationshipRows,
+      },
+      preview: built.preview,
+    });
+  } catch (error) {
+    const classified = classifyOperationalError(error);
+    const isQuota = classified.status === 429;
+    return NextResponse.json(
+      {
+        error: isQuota ? "household_delete_quota_exceeded" : "household_delete_failed",
         message: classified.message,
         hint: isQuota ? "Close the workbook if open, wait 60-90 seconds, and retry." : undefined,
       },
