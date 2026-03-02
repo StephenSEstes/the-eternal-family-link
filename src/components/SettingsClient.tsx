@@ -330,6 +330,7 @@ export function SettingsClient({
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
     buildDirectoryPeople(accessItems, [], people),
   );
+  const existingPeopleOptionsLoadedKeyRef = useRef("");
 
   const template = useMemo(() => CSV_TEMPLATES[target], [target]);
   const allPeopleById = useMemo(
@@ -504,6 +505,17 @@ export function SettingsClient({
   }, [selectedTenantKey]);
 
   useEffect(() => {
+    const shouldLoadExistingPeople = activeTab === "family_groups" || showCreateFamilyModal;
+    if (!shouldLoadExistingPeople) {
+      return;
+    }
+    const tenantOptionsKey = tenantOptions
+      .map((option) => option.tenantKey.trim().toLowerCase())
+      .sort()
+      .join("|");
+    if (existingPeopleOptionsLoadedKeyRef.current === tenantOptionsKey) {
+      return;
+    }
     let cancelled = false;
     const run = async () => {
       const responses = await Promise.all(
@@ -535,12 +547,13 @@ export function SettingsClient({
         }
       }
       setExistingPeopleOptions(Array.from(dedupe.values()).sort((a, b) => a.displayName.localeCompare(b.displayName)));
+      existingPeopleOptionsLoadedKeyRef.current = tenantOptionsKey;
     };
     void run();
     return () => {
       cancelled = true;
     };
-  }, [tenantOptions]);
+  }, [tenantOptions, activeTab, showCreateFamilyModal]);
 
   const upsertAccess = async () => {
     setAccessStatus("Saving...");

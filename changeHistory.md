@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Hotfix reduced post-delete read fan-out to prevent quota spikes by removing automatic family-access/integrity reloads after delete actions. See `docs/change-summary.md`.
+- 2026-03-02: Hotfix made Settings cross-family people fetch lazy (Family Groups only) to reduce read fan-out and quota pressure. See `docs/change-summary.md`.

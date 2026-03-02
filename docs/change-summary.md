@@ -48,6 +48,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this hotfix commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (settings quota hotfix: lazy cross-family people fetch)
+
+- `Change`: Made cross-family people fetch in Settings lazy and one-time per tenant set, loading only when `Family Groups` tab/modal needs it.
+- `Type`: UI, Performance, Reliability
+- `Why`: Root cause of extra Sheets reads after unrelated actions was eager `tenantOptions -> /api/t/{tenant}/people` fan-out on Settings mount.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Opening Settings no longer immediately triggers `/api/t/*/people` for all tenants unless entering Family Groups/create flow.
+  - Family Groups existing-person/import options still load when that tab/modal is used.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this hotfix commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.
