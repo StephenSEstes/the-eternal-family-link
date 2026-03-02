@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
+import { buildEntityId } from "@/lib/entity-id";
 import {
   createTableRecord,
   getPrimaryPhotoFileIdFromAttributes,
@@ -18,7 +19,7 @@ type PersonAttributeRouteProps = {
 
 function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
   const typeKey = attributeType.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
-  return `${tenantKey}-${personId}-${typeKey}-${Date.now()}`;
+  return buildEntityId("attr", `${tenantKey}|${personId}|${typeKey}|${Date.now()}`);
 }
 
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string) {

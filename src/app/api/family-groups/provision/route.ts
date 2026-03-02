@@ -13,6 +13,7 @@ import {
   upsertTenantAccess,
 } from "@/lib/google/sheets";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
+import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 
@@ -89,7 +90,7 @@ function extractLastName(fullName: string) {
 
 function buildSeedPersonId(familyGroupKey: string, role: "patriarch" | "matriarch", fullName: string) {
   const slug = normalizeNameSlug(fullName) || role;
-  return `fg-${familyGroupKey}-${role}-${slug}`;
+  return buildEntityId("p", `${familyGroupKey}|${role}|${slug}`);
 }
 
 function isTrueLike(value: string | undefined) {
@@ -110,14 +111,12 @@ function readValue(record: Record<string, string>, ...keys: string[]) {
 }
 
 function makeRelationId(fromPersonId: string, toPersonId: string, relType: string) {
-  const raw = `${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
-  return raw.replace(/[^a-z0-9_-]+/g, "-");
+  return buildEntityId("rel", `${fromPersonId}|${toPersonId}|${relType}`);
 }
 
 function makeFamilyUnitId(familyGroupKey: string, personA: string, personB: string) {
-  const pair = [personA, personB].sort().join("-");
-  const raw = `${familyGroupKey}-fu-${pair}`.toLowerCase();
-  return raw.replace(/[^a-z0-9_-]+/g, "-");
+  const pair = [personA, personB].sort().join("|").toLowerCase();
+  return buildEntityId("h", `${familyGroupKey}|${pair}`);
 }
 
 async function upsertParentRelation(

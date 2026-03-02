@@ -12,6 +12,7 @@ import {
   updateTableRecordById,
 } from "@/lib/google/sheets";
 import { requireTenantAccess, requireTenantAdmin } from "@/lib/family-group/guard";
+import { buildEntityId } from "@/lib/entity-id";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 import { personUpdateSchema } from "@/lib/validation/person";
 
@@ -197,7 +198,7 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
       await createTableRecord(
         PERSON_ATTRIBUTES_TAB,
         {
-          attribute_id: `${resolved.tenant.tenantKey}-${personId}-birthday`,
+          attribute_id: buildEntityId("attr", `${resolved.tenant.tenantKey}|${personId}|birthday`),
           person_id: personId,
           attribute_type: "birthday",
           value_text: parsed.data.birth_date,

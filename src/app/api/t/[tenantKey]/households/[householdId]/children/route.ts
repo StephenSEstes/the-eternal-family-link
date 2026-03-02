@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 import {
   appendAuditLog,
@@ -51,7 +52,7 @@ function fullName(firstName: string, middleName: string, lastName: string) {
 }
 
 function relId(parentPersonId: string, childPersonId: string) {
-  return `${parentPersonId}-${childPersonId}-parent`.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  return buildEntityId("rel", `${parentPersonId}|${childPersonId}|parent`);
 }
 
 async function upsertParent(parentPersonId: string, childPersonId: string) {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
+import { buildEntityId } from "@/lib/entity-id";
 import {
   createTableRecord,
   createTableRecords,
@@ -18,8 +19,11 @@ const payloadSchema = z.object({
 });
 
 function makeRelId(fromPersonId: string, toPersonId: string, relType: string) {
-  const clean = `${fromPersonId}-${toPersonId}-${relType}`.toLowerCase();
-  return clean.replace(/[^a-z0-9_-]+/g, "-");
+  return buildEntityId("rel", `${fromPersonId}|${toPersonId}|${relType}`);
+}
+
+function makeParentEdgeKey(fromPersonId: string, toPersonId: string) {
+  return `${fromPersonId}=>${toPersonId}=>parent`.toLowerCase();
 }
 
 function readField(record: Record<string, string>, ...keys: string[]) {
@@ -52,9 +56,8 @@ function relationPayload(
 }
 
 function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
-  const pair = [personA, personB].sort().join("-");
-  const clean = `${tenantKey}-fu-${pair}`.toLowerCase();
-  return clean.replace(/[^a-z0-9_-]+/g, "-");
+  const pair = [personA, personB].sort().join("|").toLowerCase();
+  return buildEntityId("h", `${tenantKey}|${pair}`);
 }
 
 async function createFamilyUnit(tenantKey: string, personA: string, personB: string) {
@@ -105,15 +108,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "load_relationships";
     const existing = await getTableRecords("Relationships", normalizedTenantKey);
-    const desiredIds = new Set<string>();
+    const desiredParentEdgeKeys = new Set<string>();
     parentIds.forEach((parentId) =>
-      desiredIds.add(makeRelId(parentId, parsed.data.personId, "parent")),
+      desiredParentEdgeKeys.add(makeParentEdgeKey(parentId, parsed.data.personId)),
     );
     childIds.forEach((childId) =>
-      desiredIds.add(makeRelId(parsed.data.personId, childId, "parent")),
+      desiredParentEdgeKeys.add(makeParentEdgeKey(parsed.data.personId, childId)),
     );
 
-    const existingParentEdgeIds = new Set<string>();
+    const existingParentEdgeKeys = new Set<string>();
     const relationshipRowNumbersToDelete: number[] = [];
     for (const row of existing) {
       const relId = readField(row.data, "rel_id", "relationship_id", "id");
@@ -128,7 +131,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (!isParentEdge && !isChildEdge) {
         continue;
       }
-      existingParentEdgeIds.add(relId);
+      existingParentEdgeKeys.add(makeParentEdgeKey(fromPersonId, toPersonId));
     }
 
     debugContext.phase = "prune_existing_relationships";
@@ -146,7 +149,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (!isParentEdge && !isChildEdge) {
         continue;
       }
-      if (desiredIds.has(relId)) {
+      if (desiredParentEdgeKeys.has(makeParentEdgeKey(fromPersonId, toPersonId))) {
         continue;
       }
       relationshipRowNumbersToDelete.push(row.rowNumber);
@@ -158,15 +161,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     debugContext.phase = "upsert_parent_edges";
     const relationsToCreate: Record<string, string>[] = [];
     for (const parentId of parentIds) {
-      const relId = makeRelId(parentId, parsed.data.personId, "parent");
-      if (!existingParentEdgeIds.has(relId)) {
+      const edgeKey = makeParentEdgeKey(parentId, parsed.data.personId);
+      if (!existingParentEdgeKeys.has(edgeKey)) {
         relationsToCreate.push(relationPayload(normalizedTenantKey, parentId, parsed.data.personId, "parent"));
       }
     }
     debugContext.phase = "upsert_child_edges";
     for (const childId of childIds) {
-      const relId = makeRelId(parsed.data.personId, childId, "parent");
-      if (!existingParentEdgeIds.has(relId)) {
+      const edgeKey = makeParentEdgeKey(parsed.data.personId, childId);
+      if (!existingParentEdgeKeys.has(edgeKey)) {
         relationsToCreate.push(relationPayload(normalizedTenantKey, parsed.data.personId, childId, "parent"));
       }
     }

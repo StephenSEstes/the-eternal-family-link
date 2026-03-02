@@ -13,6 +13,36 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (typed opaque IDs + migration endpoint)
+
+- `Change`: Implemented typed 8-character opaque IDs for new entities (`p-`, `rel-`, `h-`, `attr-`, `date-`) and added admin migration endpoint to remap existing IDs and cross-table references.
+- `Type`: API, Data, Schema, Ops
+- `Why`: Replace long human-readable IDs with stable typed IDs while preserving entity-type readability and enabling full historical ID migration.
+- `Files`:
+  - `src/lib/entity-id.ts`
+  - `src/lib/person/id.ts`
+  - `src/app/api/t/[tenantKey]/people/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/app/api/t/[tenantKey]/import/csv/route.ts`
+  - `src/app/api/family-groups/provision/route.ts`
+  - `src/app/api/admin/migrate-entity-ids/route.ts`
+  - `docs/design-decisions.md`
+- `Data Changes`: No automatic runtime migration. Migration available via admin endpoint:
+  - dry-run: `POST /api/admin/migrate-entity-ids?dryRun=1`
+  - execute: `POST /api/admin/migrate-entity-ids?dryRun=0` with body `{"confirm":"MIGRATE_ENTITY_IDS"}`
+- `Verify`:
+  - New people IDs are created as `p-xxxxxxxx`.
+  - New relationships/households/attributes follow `rel-`, `h-`, `attr-` prefixes.
+  - CSV imports auto-generate IDs for relationships/households/important dates when missing.
+  - Migration dry-run returns remap counts and samples without writing.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit; if migration executed, restore workbook backup.
+- `Design Decision Change`: Updated entity ID decision in `docs/design-decisions.md`.
+
 ## 2026-03-02 (header user modal with sign-out + account/app info)
 
 - `Change`: Replaced static top-right user chip with a clickable user modal showing name, role, login type, app version, and a direct `Sign out` action.

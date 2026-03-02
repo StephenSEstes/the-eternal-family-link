@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
+import { buildEntityId } from "@/lib/entity-id";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import {
   createTableRecord,
@@ -17,7 +18,7 @@ type UploadRouteProps = {
 };
 
 function buildAttributeId(tenantKey: string, personId: string) {
-  return `${tenantKey}-${personId}-photo-${Date.now()}`;
+  return buildEntityId("attr", `${tenantKey}|${personId}|photo|${Date.now()}`);
 }
 
 export async function POST(request: Request, { params }: UploadRouteProps) {

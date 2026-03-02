@@ -1,9 +1,4 @@
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { buildEntityId } from "@/lib/entity-id";
 
 function normalizeDate(input: string) {
   const raw = input.trim();
@@ -25,10 +20,10 @@ function normalizeDate(input: string) {
 }
 
 export function buildPersonId(fullName: string, birthDate: string) {
-  const nameSlug = slugify(fullName);
   const normalizedBirthDate = normalizeDate(birthDate).replace(/-/g, "");
-  if (!nameSlug || !normalizedBirthDate) {
+  const normalizedName = fullName.trim().toLowerCase();
+  if (!normalizedName || !normalizedBirthDate) {
     return "";
   }
-  return `${normalizedBirthDate}-${nameSlug}`;
+  return buildEntityId("p", `${normalizedBirthDate}|${normalizedName}`);
 }

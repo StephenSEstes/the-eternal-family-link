@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added header user modal with sign-out plus role/login/app-version details from the top-right avatar. See `docs/change-summary.md`.
+- 2026-03-02: Added typed opaque entity IDs (`p/rel/h/attr/date`) for new writes plus admin dry-run/execute migration endpoint for existing IDs. See `docs/change-summary.md`.
