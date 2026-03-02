@@ -1,6 +1,10 @@
 {
   "name": "The Eternal Family Link",
-  "short_name": "Eternal Family",
+  "short_name": "EFL",
+  "description": "Keep your family story alive.",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -13,8 +17,7 @@
       "type": "image/png"
     }
   ],
-  "background_color": "#ffffff",
-  "theme_color": "#0B7285",
+  "background_color": "#f7f8fa",
+  "theme_color": "#111827",
   "display": "standalone"
 }
-

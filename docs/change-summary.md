@@ -134,6 +134,41 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (person modal parent defaulting from spouse)
+
+- `Change`: Updated Person Edit modal parent selectors so choosing Mother auto-defaults Father to her known spouse, and choosing Father auto-defaults Mother similarly.
+- `Type`: UI
+- `Why`: Parent entry flow was only defaulting `Spouse` field but not auto-populating the opposite parent field.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In person modal `Family` section, selecting Mother auto-sets Father when selected Mother has a spouse link.
+  - Selecting Father auto-sets Mother when selected Father has a spouse link.
+  - `Spouse` field continues to default from selected parent.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-02 (PWA installability + standalone launch splash)
+
+- `Change`: Updated web manifest for install-friendly app metadata and added a standalone-launch splash overlay (`logo`, app name, tagline) shown once per session when launched in installed app mode.
+- `Type`: UI, PWA
+- `Why`: Support phone home-screen install behavior with app-like launch experience and branded tagline.
+- `Files`:
+  - `public/site.webmanifest`
+  - `src/app/layout.tsx`
+  - `src/components/AppLaunchSplash.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - iOS Safari `Add to Home Screen` / Android Chrome `Install app` available.
+  - App launches in standalone mode with icon/name from manifest.
+  - On first standalone launch per session, branded splash appears briefly with `Keep your family story alive.`.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.

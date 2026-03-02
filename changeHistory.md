@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added compact mobile header variant with top-row family selector and second-row current-page switcher navigation. See `docs/change-summary.md`.
+- 2026-03-02: Added install-focused PWA manifest updates and standalone launch splash with logo + tagline. See `docs/change-summary.md`.
