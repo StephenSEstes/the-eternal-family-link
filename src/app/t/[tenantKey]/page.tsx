@@ -22,7 +22,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <h1 className="page-title">{tenant.tenantName}</h1>
         <p className="page-subtitle">Family group workspace.</p>

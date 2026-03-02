@@ -2,12 +2,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { getAppSession } from "@/lib/auth/session";
 import { FamilyGroupSwitcher } from "@/components/FamilyGroupSwitcher";
-import { getFamilyGroupBasePath, getRequestFamilyGroupContext } from "@/lib/family-group/context";
+import { getFamilyGroupBasePath, getFamilyGroupContext, getRequestFamilyGroupContext } from "@/lib/family-group/context";
 import { HeaderNav } from "@/components/HeaderNav";
 
-export async function AppHeader() {
+type AppHeaderProps = {
+  tenantKey?: string;
+};
+
+export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
   const session = await getAppSession();
-  const tenant = await getRequestFamilyGroupContext(session);
+  const tenant = tenantKey ? getFamilyGroupContext(session, tenantKey) : await getRequestFamilyGroupContext(session);
   const basePath = getFamilyGroupBasePath(tenant.tenantKey);
   const formattedFamilyName = (() => {
     const trimmed = tenant.tenantName.trim();

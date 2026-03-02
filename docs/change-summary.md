@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (tenant header/navigation now route-tenant aware)
+
+- `Change`: Made `AppHeader` accept an optional route tenant key and updated all tenant-scoped pages to pass it, so header family switch context and mobile page-selector links are built from the route tenant.
+- `Type`: UI, Routing, Reliability
+- `Why`: Root cause was mixed tenant resolution: page data on `/t/[tenantKey]/*` used the route tenant, but header/nav still used cookie-selected tenant. On mobile this could navigate to the wrong family path and show incorrect/empty tree results.
+- `Files`:
+  - `src/components/AppHeader.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
+  - `src/app/t/[tenantKey]/today/page.tsx`
+  - `src/app/t/[tenantKey]/games/page.tsx`
+  - `src/app/t/[tenantKey]/settings/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `/t/meldrumclark/tree` on mobile and confirm page selector links stay under `/t/meldrumclark/*`.
+  - Switch family via header dropdown and confirm destination and data remain aligned to selected route family.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (admin delete person + household workflow)
 
 - `Change`: Added admin delete workflows for person and household with preview-first impact reporting and explicit confirm actions in Admin > Data & System.

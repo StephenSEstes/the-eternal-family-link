@@ -58,7 +58,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
     const classified = classifyOperationalError(error);
     return (
       <>
-        <AppHeader />
+        <AppHeader tenantKey={tenant.tenantKey} />
         <main className="section">
           <section className="card">
             <h1 className="page-title">Family Tree Unavailable</h1>
@@ -101,7 +101,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <h1 className="page-title">Family Tree</h1>
         <p className="page-subtitle">Graph view from Relationships + Households.</p>

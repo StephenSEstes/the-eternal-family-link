@@ -15,7 +15,7 @@ export default async function TenantGamesPage({ params }: TenantGamesPageProps) 
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <h1 className="page-title">Games</h1>
         <p className="page-subtitle">Tenant-scoped memory games.</p>

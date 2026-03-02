@@ -20,7 +20,7 @@ export default async function TenantTodayPage({ params }: TenantTodayPageProps) 
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <h1 className="page-title">Today</h1>
         <p className="page-subtitle">{date}</p>

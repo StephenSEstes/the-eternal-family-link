@@ -69,7 +69,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
     const classified = classifyOperationalError(error);
     return (
       <>
-        <AppHeader />
+        <AppHeader tenantKey={tenant.tenantKey} />
         <main className="section">
           <section className="card">
             <h1 className="page-title">People Unavailable</h1>
@@ -110,7 +110,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <PeopleDirectory
         tenantKey={tenant.tenantKey}
         canManage={tenant.role === "ADMIN"}

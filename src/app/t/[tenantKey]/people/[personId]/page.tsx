@@ -75,7 +75,7 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
     const classified = classifyOperationalError(error);
     return (
       <>
-        <AppHeader />
+        <AppHeader tenantKey={tenant.tenantKey} />
         <main className="section">
           <section className="card">
             <h1 className="page-title">Profile Unavailable</h1>
@@ -125,7 +125,7 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <div className="profile-header-row">
           <div>

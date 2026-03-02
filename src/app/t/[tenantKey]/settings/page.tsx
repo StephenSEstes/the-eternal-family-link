@@ -14,7 +14,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
   if (tenant.role !== "ADMIN") {
     return (
       <>
-        <AppHeader />
+        <AppHeader tenantKey={tenant.tenantKey} />
         <main className="section">
           <h1 className="page-title">Admin</h1>
           <p className="status-warn">Forbidden. Administrator access required.</p>
@@ -31,7 +31,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 
   return (
     <>
-      <AppHeader />
+      <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
         <h1 className="page-title">Admin</h1>
         <p className="page-subtitle">Administer family-group users and import data.</p>
