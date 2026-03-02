@@ -159,6 +159,102 @@ main {
   gap: 0.6rem;
 }
 
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.user-menu-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.user-menu-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.user-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(8, 18, 28, 0.28);
+  cursor: pointer;
+}
+
+.user-menu-modal {
+  position: relative;
+  width: min(360px, calc(100vw - 2rem));
+  border: 1px solid color-mix(in oklab, var(--line) 72%, #fff 28%);
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 36px rgba(20, 47, 64, 0.2);
+  padding: 0.8rem;
+}
+
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.user-menu-close {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 72%, #fff 28%);
+  background: #fff;
+  color: var(--text-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.user-menu-name {
+  margin: 0 0 0.3rem;
+  font-size: 0.93rem;
+  font-weight: 800;
+}
+
+.user-menu-meta {
+  margin: 0 0 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.user-menu-signout {
+  margin-top: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 72%, #fff 28%);
+  background: color-mix(in oklab, var(--accent) 10%, #fff 90%);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.user-menu-signout:hover {
+  border-color: color-mix(in oklab, var(--accent) 26%, #fff 74%);
+  background: color-mix(in oklab, var(--accent) 16%, #fff 84%);
+}
+
 .icon-chip {
   width: 2.5rem;
   height: 2.5rem;
@@ -1150,6 +1246,11 @@ main {
     justify-self: end;
   }
 
+  .user-menu-modal {
+    width: min(330px, calc(100vw - 1.4rem));
+    padding: 0.72rem;
+  }
+
   .app-user-copy {
     display: none;
   }
@@ -1191,6 +1292,11 @@ main {
   .add-person-popover {
     right: auto;
     left: 0;
+  }
+
+  .album-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
   }
 }
 

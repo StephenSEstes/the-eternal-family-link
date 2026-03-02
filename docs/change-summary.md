@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (header user modal with sign-out + account/app info)
+
+- `Change`: Replaced static top-right user chip with a clickable user modal showing name, role, login type, app version, and a direct `Sign out` action.
+- `Type`: UI
+- `Why`: Users needed a clear sign-out path and quick account/session diagnostics in the header, especially on mobile.
+- `Files`:
+  - `src/components/AppHeader.tsx`
+  - `src/components/UserMenu.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Tapping/clicking the upper-right avatar opens the user menu.
+  - Menu shows display name, role, login type (`Google` or `Local`), and app version.
+  - `Sign out` in the modal routes to `/api/auth/signout`.
+  - Menu works on desktop and mobile header layouts.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (tenant access diagnostics for mobile 403s)
 
 - `Change`: Added explicit tenant-access diagnostics (`/api/debug/tenant-access`) and a user-facing `/access-denied` page; middleware now redirects tenant-access denials there with requested tenant/path context.

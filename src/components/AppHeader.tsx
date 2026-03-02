@@ -4,6 +4,7 @@ import { getAppSession } from "@/lib/auth/session";
 import { FamilyGroupSwitcher } from "@/components/FamilyGroupSwitcher";
 import { getFamilyGroupBasePath, getFamilyGroupContext, getRequestFamilyGroupContext } from "@/lib/family-group/context";
 import { HeaderNav } from "@/components/HeaderNav";
+import { UserMenu } from "@/components/UserMenu";
 
 type AppHeaderProps = {
   tenantKey?: string;
@@ -28,6 +29,12 @@ export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+  const role = session?.user?.role === "ADMIN" ? "ADMIN" : "USER";
+  const loginType = (session?.user?.email ?? "").endsWith("@local") ? "Local" : "Google";
+  const appVersion =
+    process.env.NEXT_PUBLIC_APP_VERSION?.trim() ||
+    (process.env.VERCEL_GIT_COMMIT_SHA ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : "") ||
+    "dev";
 
   return (
     <header className="app-header">
@@ -63,17 +70,14 @@ export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
             />
           </div>
 
-          <div className="app-user">
-            <span className="user-avatar" aria-hidden="true">
-              {avatarInitials || "FM"}
-            </span>
-            <div className="app-user-copy">
-              <strong>{displayName}</strong>
-              <span>
-                {session?.user?.email ? `${session.user.email} | ${tenant.role}` : tenant.role}
-              </span>
-            </div>
-          </div>
+          <UserMenu
+            displayName={displayName}
+            email={session?.user?.email ?? ""}
+            role={role}
+            loginType={loginType}
+            appVersion={appVersion}
+            avatarInitials={avatarInitials}
+          />
         </div>
 
         <div className="app-meta-row app-meta-row-desktop">
