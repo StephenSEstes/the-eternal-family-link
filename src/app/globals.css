@@ -640,7 +640,8 @@ main {
 }
 
 .tree-family-label {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
   fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
   text-anchor: middle;
   transition: opacity 160ms ease;
@@ -667,18 +668,17 @@ main {
 }
 
 .tree-person-card {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  min-width: 176px;
-  max-width: 230px;
+  gap: 0.32rem;
+  width: 132px;
   border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
   border-radius: 16px;
   background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
   box-shadow: 0 8px 18px color-mix(in oklab, #124564 12%, transparent 88%);
-  padding: 0.46rem 0.56rem;
-  text-align: left;
+  padding: 0.5rem 0.45rem 0.58rem;
+  text-align: center;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
   cursor: pointer;
 }
@@ -700,8 +700,8 @@ main {
 }
 
 .tree-person-avatar {
-  width: 42px;
-  height: 42px;
+  width: 54px;
+  height: 54px;
   border-radius: 999px;
   object-fit: cover;
   border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
@@ -709,61 +709,34 @@ main {
 }
 
 .tree-person-meta {
-  min-width: 0;
-  display: grid;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .tree-person-name {
   display: block;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1.2;
   color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .tree-person-secondary {
   display: block;
-  font-size: 0.73rem;
+  font-size: 0.71rem;
   line-height: 1.15;
   color: var(--text-muted);
   margin-top: 0.15rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.tree-person-actions {
-  display: grid;
-  gap: 0.18rem;
-  align-content: center;
-  justify-items: center;
-}
-
-.tree-person-dot-button {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.tree-person-dot-button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.tree-person-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+  max-width: 100%;
 }
 
 .tree-household-action-dot {

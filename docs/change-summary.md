@@ -480,3 +480,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Tree/People load external API calls no longer include a second `People!A1:ZZ` read from this path.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (tree UX simplification: direct person modal flow)
+
+- `Change`: Updated tree person cards to vertical format (photo, first name, birthdate), removed per-card dot actions, removed non-editable focus panel flow, and routed person-card click directly to the person modal. Also moved household label text to top-center inside household cluster box.
+- `Type`: UI
+- `Why`: Improve tree readability and reduce interaction complexity by using a single person-detail interaction path.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/components/familyTree/PersonNodeCard.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Clicking a person card opens person modal directly.
+  - Person cards render vertical with image, first name, and birthdate.
+  - Household label appears top-center in household box.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
-import { FocusPanel } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
 
@@ -49,9 +48,9 @@ type TreeGraphProps = {
 
 export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] }: TreeGraphProps) {
   const router = useRouter();
-  const NODE_CARD_WIDTH = 208;
+  const NODE_CARD_WIDTH = 136;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
-  const NODE_HALF_HEIGHT = 30;
+  const NODE_HALF_HEIGHT = 72;
   const SPOUSE_GAP = 0;
   const NON_SPOUSE_GAP = 56;
   const MIN_SCALE = 0.18;
@@ -237,7 +236,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   };
 
   const maxRowWidth = Math.max(0, ...Array.from(orderedByLevel.values()).map((row) => rowWidth(row)));
-  const rowGap = 130;
+  const rowGap = 176;
   const xPadding = 90;
   const yPadding = 70;
   const width = Math.max(980, xPadding * 2 + maxRowWidth);
@@ -339,7 +338,6 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const [selectedPersonId, setSelectedPersonId] = useState("");
   const [editPersonId, setEditPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const scaleRef = useRef(scale);
@@ -379,16 +377,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   });
 
   const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
-  const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) ?? null : null;
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
-  const householdByPersonId = useMemo(() => {
-    const out = new Map<string, HouseholdLink>();
-    households.forEach((unit) => {
-      out.set(unit.partner1PersonId, unit);
-      out.set(unit.partner2PersonId, unit);
-    });
-    return out;
-  }, [households]);
 
   const getAvatarUrl = useCallback(
     (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
@@ -497,34 +486,10 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     [clampScale],
   );
 
-  const selectedParents = selectedPerson
-    ? Array.from(parentIdsByChild.get(selectedPerson.personId) ?? [])
-        .map((id) => peopleById.get(id))
-        .filter((item): item is PersonNode => Boolean(item))
-    : [];
-
-  const selectedSpouses = selectedPerson
-    ? (() => {
-        const partner = partnerMap.get(selectedPerson.personId);
-        if (!partner) {
-          return [];
-        }
-        const person = peopleById.get(partner);
-        return person ? [person] : [];
-      })()
-    : [];
-
-  const selectedChildren = selectedPerson
-    ? Array.from(childIdsByParent.get(selectedPerson.personId) ?? [])
-        .map((id) => peopleById.get(id))
-        .filter((item): item is PersonNode => Boolean(item))
-    : [];
-
   return (
     <div
       ref={viewportRef}
       className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}`}
-      onClick={() => setSelectedPersonId("")}
       onWheel={(event) => {
         event.preventDefault();
         const factor = event.deltaY < 0 ? 1.1 : 0.9;
@@ -662,14 +627,9 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const halfWidth = Math.max(112, distance / 2 + NODE_HALF_WIDTH + 24);
           const halfHeight = NODE_HALF_HEIGHT + 26;
 
-          const dimmed =
-            Boolean(selectedPersonId) &&
-            selectedPersonId !== leftId &&
-            selectedPersonId !== rightId;
-
           return (
             <g key={`cluster-${pairKey}`} className="tree-household-group">
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`tree-line ${dimmed ? "tree-dimmed" : ""}`} />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
               <rect
                 x={midX - halfWidth}
                 y={midY - halfHeight}
@@ -677,7 +637,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
                 height={halfHeight * 2}
                 rx={22}
                 ry={22}
-                className={`tree-spouse-cluster ${dimmed ? "tree-dimmed" : ""}`}
+                className="tree-spouse-cluster"
                 onClick={(event) => {
                   event.stopPropagation();
                   if (!canManage) {
@@ -694,7 +654,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
                 }}
               />
               {label ? (
-                <text x={midX} y={midY + 4} className="tree-family-label">
+                <text x={midX} y={midY - halfHeight + 14} className="tree-family-label">
                   {label}
                 </text>
               ) : null}
@@ -754,15 +714,11 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const midY = (from.y + to.y) / 2;
           const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
           const isParentEdge = edge.label.trim().toLowerCase() === "parent";
-          const dimmed =
-            Boolean(selectedPersonId) &&
-            edge.fromPersonId !== selectedPersonId &&
-            edge.toPersonId !== selectedPersonId;
           return (
             <g key={edge.id}>
-              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className={`tree-line ${dimmed ? "tree-dimmed" : ""}`} />
+              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
               {!isFamilyEdge && !isParentEdge ? (
-                <text x={midX} y={midY} className={`tree-line-label ${dimmed ? "tree-dimmed" : ""}`}>
+                <text x={midX} y={midY} className="tree-line-label">
                   {edge.label}
                 </text>
               ) : null}
@@ -784,7 +740,6 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const midY = (a.y + b.y) / 2;
           const startY = midY + NODE_HALF_HEIGHT + 16;
           const endY = child.y - NODE_HALF_HEIGHT;
-          const dimmed = Boolean(selectedPersonId) && connector.childId !== selectedPersonId && pair.leftId !== selectedPersonId && pair.rightId !== selectedPersonId;
           return (
             <line
               key={`family-child-${connector.pairKey}-${connector.childId}`}
@@ -792,7 +747,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
               y1={startY}
               x2={child.x}
               y2={endY}
-              className={`tree-line ${dimmed ? "tree-dimmed" : ""}`}
+              className="tree-line"
             />
           );
         })}
@@ -803,9 +758,8 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
         if (!pos) {
           return null;
         }
-        const isSelected = selectedPersonId === node.personId;
-        const isDimmed = Boolean(selectedPersonId) && !isSelected;
         const secondaryText = toMonthDay(node.birthDate);
+        const firstNameOnly = (node.firstName ?? "").trim() || node.displayName.trim().split(/\s+/)[0] || node.displayName;
         return (
           <div
             key={node.personId}
@@ -814,44 +768,16 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           >
             <PersonNodeCard
               personId={node.personId}
-              displayName={toTreeDisplayName(node.displayName)}
+              displayName={firstNameOnly}
               secondaryText={secondaryText}
               avatarUrl={getAvatarUrl(node)}
-              selected={isSelected}
-              dimmed={isDimmed}
-              hasHousehold={householdByPersonId.has(node.personId)}
-              onSelect={setSelectedPersonId}
-              onEditPerson={(personId) => {
-                if (canManage) {
-                  setEditPersonId(personId);
-                }
-              }}
-              onEditHousehold={(personId) => {
-                if (!canManage) {
-                  return;
-                }
-                const unit = householdByPersonId.get(personId);
-                if (unit) {
-                  setSelectedHouseholdId(unit.id);
-                }
-              }}
+              onOpenPerson={(personId) => setEditPersonId(personId)}
             />
           </div>
         );
       })}
       </div>
       <GraphControls onZoomIn={() => zoomFromCenter(1.15)} onZoomOut={() => zoomFromCenter(0.87)} onFit={fitToView} />
-      {selectedPerson ? (
-        <FocusPanel
-          selectedPerson={selectedPerson}
-          parents={selectedParents}
-          spouses={selectedSpouses}
-          childrenList={selectedChildren}
-          getAvatarUrl={getAvatarUrl}
-          onSelectPerson={setSelectedPersonId}
-          onClose={() => setSelectedPersonId("")}
-        />
-      ) : null}
       <PersonEditModal
         open={Boolean(editPerson)}
         tenantKey={tenantKey}
