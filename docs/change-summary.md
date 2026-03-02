@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (household child add guardrails: required gender/birthdate + save lock)
+
+- `Change`: Enforced required `birth_date` and explicit `gender` when adding a child from household modal, and blocked household save while child-add is in progress until child is saved or canceled.
+- `Type`: UI, API, Validation
+- `Why`: Root cause was permissive child form defaults (`gender=unspecified`) and missing workflow lock, which allowed partial/inconsistent household edits during child creation.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Child save is blocked if `birth_date` is empty.
+  - Child save is blocked if `gender` is not selected (`male` or `female`).
+  - `Save Household` is disabled while Add Child form is open.
+  - Canceling Add Child clears child draft and re-enables household save.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (photo access decoupled from single family folder)
 
 - `Change`: Updated photo proxy resolution so authorized users can load person/household photos regardless of which family photo folder currently contains the file.

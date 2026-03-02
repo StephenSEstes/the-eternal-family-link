@@ -54,7 +54,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [nickName, setNickName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
+  const [gender, setGender] = useState<"" | "male" | "female">("");
 
   const refresh = async () => {
     setLoading(true);
@@ -87,6 +87,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     }
     setActiveTab("info");
     setAddChildOpen(false);
+    setGender("");
     setStatus("Loading household...");
     void refresh();
   }, [open, householdId, tenantKey]);
@@ -178,7 +179,22 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     </tbody>
                   </table>
                 </div>
-                <button type="button" className="button secondary tap-button" onClick={() => setAddChildOpen((value) => !value)}>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    if (addChildOpen) {
+                      setFirstName("");
+                      setMiddleName("");
+                      setLastName("");
+                      setNickName("");
+                      setDisplayName("");
+                      setBirthDate("");
+                      setGender("");
+                    }
+                    setAddChildOpen((value) => !value);
+                  }}
+                >
                   {addChildOpen ? "Cancel Add Child" : "Add Child"}
                 </button>
 
@@ -214,8 +230,8 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       </div>
                     </div>
                     <label className="label">Gender</label>
-                    <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")}>
-                      <option value="unspecified">Unspecified</option>
+                    <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "" | "male" | "female")}>
+                      <option value="">Select gender</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                     </select>
@@ -226,6 +242,14 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       style={{ marginTop: "0.75rem" }}
                       onClick={() =>
                         void (async () => {
+                          if (!birthDate.trim()) {
+                            setStatus("Birthdate is required before saving child.");
+                            return;
+                          }
+                          if (!gender) {
+                            setStatus("Gender is required before saving child.");
+                            return;
+                          }
                           setStatus("Adding child...");
                           const res = await fetch(
                             `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/children`,
@@ -256,7 +280,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           setNickName("");
                           setDisplayName("");
                           setBirthDate("");
-                          setGender("unspecified");
+                          setGender("");
                           await refresh();
                           onSaved();
                         })()
@@ -287,8 +311,13 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               <button
                 type="button"
                 className="button tap-button"
+                disabled={addChildOpen}
                 onClick={() =>
                   void (async () => {
+                    if (addChildOpen) {
+                      setStatus("Finish saving the child or cancel Add Child before saving household.");
+                      return;
+                    }
                     setStatus("Saving household...");
                     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, {
                       method: "PATCH",

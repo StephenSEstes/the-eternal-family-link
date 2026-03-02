@@ -23,7 +23,7 @@ const childSchema = z.object({
   nick_name: z.string().trim().max(80).optional().default(""),
   display_name: z.string().trim().max(140).optional().default(""),
   birth_date: z.string().trim().min(1).max(64),
-  gender: z.enum(["male", "female", "unspecified"]).optional().default("unspecified"),
+  gender: z.enum(["male", "female"]),
 });
 
 function normalize(value: string | undefined) {

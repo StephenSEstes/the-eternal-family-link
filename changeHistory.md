@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Fixed photo access scoping so authorized users can view photos across family-folder boundaries (no single-tenant folder lock). See `docs/change-summary.md`.
+- 2026-03-02: Added household child-add guardrails: required birthdate and gender, and blocked household save until child add is saved or canceled. See `docs/change-summary.md`.
