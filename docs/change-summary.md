@@ -33,6 +33,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (delete-flow quota hotfix: remove post-delete fan-out reads)
+
+- `Change`: Removed automatic post-delete admin reload fan-out (`loadFamilyAccessRows` + `runIntegrityCheck`) from person/household delete actions.
+- `Type`: UI, Performance, Reliability
+- `Why`: Root cause of immediate post-delete crashes was quota pressure from stacked reads right after a delete request; `family-access` read path was hitting Sheets 429.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Delete person/household still completes and refreshes UI.
+  - Post-delete flow no longer auto-calls integrity/family-access reads.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this hotfix commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.

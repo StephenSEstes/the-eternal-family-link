@@ -1118,9 +1118,6 @@ export function SettingsClient({
     setDeletePersonBusy(false);
     setDeletePersonPreview(null);
     setDeletePersonId("");
-    await loadTenantAdminData(selectedTenantKey);
-    await loadFamilyAccessRows(selectedTenantKey);
-    await runIntegrityCheck();
     router.refresh();
   };
 
@@ -1180,8 +1177,6 @@ export function SettingsClient({
     setDeleteHouseholdBusy(false);
     setDeleteHouseholdPreview(null);
     setDeleteHouseholdId("");
-    await loadTenantAdminData(selectedTenantKey);
-    await runIntegrityCheck();
     router.refresh();
   };
 
