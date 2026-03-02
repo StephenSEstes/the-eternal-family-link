@@ -1,7 +1,10 @@
+import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { getPhotoContent } from "@/lib/google/drive";
-import { getTenantConfig } from "@/lib/google/sheets";
+import { authOptions } from "@/lib/auth/options";
 import { normalizeTenantRouteKey } from "@/lib/family-group/context";
+import { hasTenantAccess } from "@/lib/tenant/context";
+import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 
 type TenantPhotoRouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;
@@ -11,8 +14,15 @@ export async function GET(_: Request, { params }: TenantPhotoRouteProps) {
   try {
     const { fileId, tenantKey } = await params;
     const normalizedTenantKey = normalizeTenantRouteKey(tenantKey);
-    const config = await getTenantConfig(normalizedTenantKey);
-    const photo = await getPhotoContent(fileId, { photosFolderId: config.photosFolderId });
+    const session = await getServerSession(authOptions);
+    const cookieStore = await cookies();
+    const viewerUnlocked = cookieStore.get(`viewer_access_${normalizedTenantKey}`)?.value === "granted";
+    const allowed = viewerUnlocked || hasTenantAccess(session, normalizedTenantKey);
+    if (!allowed) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    const photo = await resolvePhotoContentAcrossFamilies(fileId, normalizedTenantKey);
     const blob = new Blob([photo.data], { type: photo.mimeType });
 
     return new NextResponse(blob, {

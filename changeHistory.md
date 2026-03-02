@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Aligned data ownership and write consistency: household contact fields (`address/city/state/zip`) and people-level `email/hobbies` now persist consistently across edit/create/import/provision flows. See `docs/change-summary.md`.
+- 2026-03-02: Fixed photo access scoping so authorized users can view photos across family-folder boundaries (no single-tenant folder lock). See `docs/change-summary.md`.

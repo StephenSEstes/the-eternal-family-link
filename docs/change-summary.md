@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (photo access decoupled from single family folder)
+
+- `Change`: Updated photo proxy resolution so authorized users can load person/household photos regardless of which family photo folder currently contains the file.
+- `Type`: API, Reliability
+- `Why`: Root cause was tenant-folder coupling in photo routes. The route required file parent to match the route tenant `photos_folder_id`, which blocked valid photos visible through shared person/household access when file storage was in another family folder.
+- `Files`:
+  - `src/lib/google/photo-resolver.ts`
+  - `src/app/t/[tenantKey]/viewer/photo/[fileId]/route.ts`
+  - `src/app/viewer/photo/[fileId]/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Same person/household photo renders when viewed from another authorized family context.
+  - Photo routes still return `403` when caller lacks viewer/session tenant access.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (household contact fields + people email consistency)
 
 - `Change`: Aligned data ownership so household records now read/write `address`, `city`, `state`, `zip`, and people records consistently read/write `email` and `hobbies` across create/edit/import/provision flows.
