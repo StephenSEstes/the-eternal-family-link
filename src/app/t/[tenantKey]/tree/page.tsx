@@ -9,8 +9,8 @@ type TenantTreePageProps = {
 };
 
 export default async function TenantTreePage({ params }: TenantTreePageProps) {
-  await params;
-  const { tenant, session } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant, session } = await requireFamilyGroupSession(tenantKey);
   const requestId = createRequestId();
   const route = "page/t/[tenantKey]/tree";
   const userEmailMasked = maskEmail(session.user?.email ?? "");

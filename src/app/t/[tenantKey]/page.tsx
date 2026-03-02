@@ -8,8 +8,8 @@ type TenantHomeProps = {
 };
 
 export default async function TenantHomePage({ params }: TenantHomeProps) {
-  await params;
-  const { tenant } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant } = await requireFamilyGroupSession(tenantKey);
   const basePath = getTenantBasePath(tenant.tenantKey);
 
   const tiles = [

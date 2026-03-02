@@ -7,8 +7,8 @@ type TenantTodayPageProps = {
 };
 
 export default async function TenantTodayPage({ params }: TenantTodayPageProps) {
-  await params;
-  const { tenant } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant } = await requireFamilyGroupSession(tenantKey);
   const items = await getImportantDates(tenant.tenantKey);
 
   const date = new Date().toLocaleDateString(undefined, {

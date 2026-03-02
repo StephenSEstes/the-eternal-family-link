@@ -15,8 +15,8 @@ type TenantPersonPageProps = {
 };
 
 export default async function TenantPersonPage({ params }: TenantPersonPageProps) {
-  const { personId } = await params;
-  const { session, tenant } = await requireFamilyGroupSession();
+  const { tenantKey, personId } = await params;
+  const { session, tenant } = await requireFamilyGroupSession(tenantKey);
   const requestId = createRequestId();
   const route = "page/t/[tenantKey]/people/[personId]";
   const userEmailMasked = maskEmail(session.user?.email ?? "");

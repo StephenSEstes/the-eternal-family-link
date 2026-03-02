@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added install-focused PWA manifest updates and standalone launch splash with logo + tagline. See `docs/change-summary.md`.
+- 2026-03-02: Fixed tenant-route mismatch so `/t/[tenantKey]` pages load data for route tenant (not stale active-family cookie), resolving mobile tree family inconsistency. See `docs/change-summary.md`.

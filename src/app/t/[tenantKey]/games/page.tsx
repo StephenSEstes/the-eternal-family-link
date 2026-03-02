@@ -8,8 +8,8 @@ type TenantGamesPageProps = {
 };
 
 export default async function TenantGamesPage({ params }: TenantGamesPageProps) {
-  await params;
-  const { tenant } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant } = await requireFamilyGroupSession(tenantKey);
   const people = await getPeople(tenant.tenantKey);
   const importantDates = await getImportantDates(tenant.tenantKey);
 

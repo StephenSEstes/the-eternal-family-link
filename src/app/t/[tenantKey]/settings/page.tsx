@@ -8,15 +8,15 @@ type SettingsPageProps = {
 };
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
-  await params;
-  const { tenant } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant } = await requireFamilyGroupSession(tenantKey);
 
   if (tenant.role !== "ADMIN") {
     return (
       <>
         <AppHeader />
         <main className="section">
-          <h1 className="page-title">Settings</h1>
+          <h1 className="page-title">Admin</h1>
           <p className="status-warn">Forbidden. Administrator access required.</p>
         </main>
       </>
@@ -33,7 +33,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     <>
       <AppHeader />
       <main className="section">
-        <h1 className="page-title">Settings</h1>
+        <h1 className="page-title">Admin</h1>
         <p className="page-subtitle">Administer family-group users and import data.</p>
         <SettingsClient
           tenantKey={tenant.tenantKey}

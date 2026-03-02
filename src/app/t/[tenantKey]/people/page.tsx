@@ -19,8 +19,8 @@ async function loadPeoplePageBundle(tenantKey: string) {
 }
 
 export default async function TenantPeoplePage({ params }: TenantPeoplePageProps) {
-  await params;
-  const { tenant, session } = await requireFamilyGroupSession();
+  const { tenantKey } = await params;
+  const { tenant, session } = await requireFamilyGroupSession(tenantKey);
   const requestId = createRequestId();
   const route = "page/t/[tenantKey]/people";
   const userEmailMasked = maskEmail(session.user?.email ?? "");

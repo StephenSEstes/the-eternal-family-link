@@ -169,6 +169,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (tenant-scoped pages now honor route tenant key)
+
+- `Change`: Updated tenant-scoped app pages (`/t/[tenantKey]/*`) to resolve tenant context from route param rather than active-family cookie/session default.
+- `Type`: UI, Routing, Reliability
+- `Why`: Root cause of incorrect tree/people/settings rendering for one family on mobile was tenant mismatch: page path pointed to one family while data loaded using a different active cookie family.
+- `Files`:
+  - `src/lib/auth/session.ts`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
+  - `src/app/t/[tenantKey]/today/page.tsx`
+  - `src/app/t/[tenantKey]/games/page.tsx`
+  - `src/app/t/[tenantKey]/settings/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Visiting `/t/<family>/tree` consistently loads people for `<family>` regardless of prior active-family cookie state.
+  - Same consistency for `/t/<family>/people`, `/today`, `/games`, `/settings`, and person detail.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.
