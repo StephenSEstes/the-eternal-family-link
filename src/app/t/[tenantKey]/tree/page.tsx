@@ -123,6 +123,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
                 photoFileId: person.photoFileId,
                 birthDate: person.birthDate,
                 phones: person.phones,
+                email: person.email,
                 address: person.address,
                 hobbies: person.hobbies,
                 notes: person.notes,

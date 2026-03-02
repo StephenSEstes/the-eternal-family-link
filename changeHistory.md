@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added typed opaque entity IDs (`p/rel/h/attr/date`) for new writes plus admin dry-run/execute migration endpoint for existing IDs. See `docs/change-summary.md`.
+- 2026-03-02: Aligned data ownership and write consistency: household contact fields (`address/city/state/zip`) and people-level `email/hobbies` now persist consistently across edit/create/import/provision flows. See `docs/change-summary.md`.

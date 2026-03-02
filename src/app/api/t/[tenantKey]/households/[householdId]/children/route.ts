@@ -111,6 +111,7 @@ export async function POST(request: Request, { params }: RouteProps) {
         nick_name: parsed.data.nick_name,
         birth_date: parsed.data.birth_date,
         gender: parsed.data.gender,
+        email: "",
         phones: "",
         address: "",
         hobbies: "",

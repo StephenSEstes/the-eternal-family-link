@@ -18,6 +18,7 @@ type PersonItem = {
   gender: "male" | "female" | "unspecified";
   photoFileId: string;
   phones?: string;
+  email?: string;
   address?: string;
   hobbies?: string;
   notes?: string;

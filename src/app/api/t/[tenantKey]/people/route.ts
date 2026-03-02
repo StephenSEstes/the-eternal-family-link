@@ -4,6 +4,7 @@ import {
   appendAuditLog,
   createTableRecord,
   ensurePersonFamilyGroupMembership,
+  ensureResolvedTabColumns,
   getPersonById,
   getPeople,
   PERSON_ATTRIBUTES_TAB,
@@ -36,6 +37,7 @@ const createPersonSchema = z.object({
   birth_date: z.string().trim().min(1).max(64),
   gender: z.enum(["male", "female", "unspecified"]).optional().default("unspecified"),
   phones: z.string().trim().max(2000).optional().default(""),
+  email: z.string().trim().max(320).optional().default(""),
   address: z.string().trim().max(2000).optional().default(""),
   hobbies: z.string().trim().max(2000).optional().default(""),
   notes: z.string().trim().max(2000).optional().default(""),
@@ -199,6 +201,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         birth_date: existingGlobal.birthDate,
         gender: existingGlobal.gender,
         phones: existingGlobal.phones,
+        email: existingGlobal.email,
         address: existingGlobal.address,
         hobbies: existingGlobal.hobbies,
         notes: existingGlobal.notes,
@@ -207,6 +210,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       },
     };
   } else {
+    await ensureResolvedTabColumns("People", ["email"], resolved.tenant.tenantKey);
     record = await createTableRecord(
       "People",
       {
@@ -219,6 +223,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         birth_date: parsed.data.birth_date,
         gender: parsed.data.gender,
         phones: parsed.data.phones,
+        email: parsed.data.email,
         address: parsed.data.address,
         hobbies: parsed.data.hobbies,
         notes: parsed.data.notes,

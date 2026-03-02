@@ -48,6 +48,7 @@ export type PersonRecord = {
   birthDate: string;
   gender: "male" | "female" | "unspecified";
   phones: string;
+  email: string;
   address: string;
   hobbies: string;
   notes: string;
@@ -65,6 +66,7 @@ export type PersonUpdateInput = {
   birth_date: string;
   gender?: "male" | "female" | "unspecified";
   phones: string;
+  email?: string;
   address: string;
   hobbies: string;
   notes: string;
@@ -142,4 +144,8 @@ export type HouseholdRecord = {
   partner2PersonId: string;
   label?: string;
   notes?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 };

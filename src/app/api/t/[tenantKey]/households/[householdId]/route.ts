@@ -30,6 +30,10 @@ const patchSchema = z.object({
   label: z.string().trim().max(160).optional(),
   notes: z.string().trim().max(4000).optional(),
   weddingPhotoFileId: z.string().trim().max(256).optional(),
+  address: z.string().trim().max(400).optional(),
+  city: z.string().trim().max(120).optional(),
+  state: z.string().trim().max(80).optional(),
+  zip: z.string().trim().max(40).optional(),
 });
 
 function normalize(value: string | undefined) {
@@ -69,6 +73,10 @@ async function resolveHousehold(tenantKey: string, householdId: string, peopleBy
       label: readCell(match.data, "label", "family_label", "family_name"),
       notes: readCell(match.data, "notes", "family_notes"),
       weddingPhotoFileId: readCell(match.data, "wedding_photo_file_id"),
+      address: readCell(match.data, "address", "household_address"),
+      city: readCell(match.data, "city", "household_city"),
+      state: readCell(match.data, "state", "household_state"),
+      zip: readCell(match.data, "zip", "postal_code", "household_zip"),
     },
   };
 }
@@ -207,7 +215,11 @@ export async function PATCH(request: Request, { params }: RouteProps) {
       return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
-    await ensureResolvedTabColumns("Households", ["label", "notes", "wedding_photo_file_id"], resolved.tenant.tenantKey);
+    await ensureResolvedTabColumns(
+      "Households",
+      ["label", "notes", "wedding_photo_file_id", "address", "city", "state", "zip"],
+      resolved.tenant.tenantKey,
+    );
     const updated = await updateTableRecordById(
       "Households",
       householdId,
@@ -215,6 +227,10 @@ export async function PATCH(request: Request, { params }: RouteProps) {
         label: parsed.data.label ?? "",
         notes: parsed.data.notes ?? "",
         wedding_photo_file_id: parsed.data.weddingPhotoFileId ?? "",
+        address: parsed.data.address ?? "",
+        city: parsed.data.city ?? "",
+        state: parsed.data.state ?? "",
+        zip: parsed.data.zip ?? "",
       },
       "household_id",
       resolved.tenant.tenantKey,

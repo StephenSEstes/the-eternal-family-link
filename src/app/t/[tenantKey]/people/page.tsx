@@ -125,6 +125,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
           gender: person.gender,
           photoFileId: person.photoFileId,
           phones: person.phones,
+          email: person.email,
           address: person.address,
           hobbies: person.hobbies,
           notes: person.notes,

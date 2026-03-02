@@ -15,6 +15,7 @@ export const personUpdateSchema = z
     birth_date: z.string().trim().max(64),
     gender: z.enum(["male", "female", "unspecified"]).optional(),
     phones: textField,
+    email: z.string().trim().max(320).optional(),
     address: textField,
     hobbies: textField,
     notes: textField,

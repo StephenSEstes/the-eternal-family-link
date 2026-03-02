@@ -44,6 +44,10 @@ export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[
         partner2PersonId: readCell(data, "wife_person_id"),
         label: readCell(data, "family_label", "label", "family_name"),
         notes: readCell(data, "notes", "family_notes"),
+        address: readCell(data, "address", "household_address"),
+        city: readCell(data, "city", "household_city"),
+        state: readCell(data, "state", "household_state"),
+        zip: readCell(data, "zip", "postal_code", "household_zip"),
       } satisfies HouseholdRecord;
     })
     .filter((row) => row.partner1PersonId && row.partner2PersonId)

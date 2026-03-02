@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (household contact fields + people email consistency)
+
+- `Change`: Aligned data ownership so household records now read/write `address`, `city`, `state`, `zip`, and people records consistently read/write `email` and `hobbies` across create/edit/import/provision flows.
+- `Type`: API, UI, Schema
+- `Why`: Root cause was inconsistent People write paths after introducing `email`; several secondary create/import endpoints omitted `email`, causing data drift. Household contact fields also needed full API/UI wiring.
+- `Files`:
+  - `src/lib/google/types.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/lib/google/family.ts`
+  - `src/lib/validation/person.ts`
+  - `src/app/api/t/[tenantKey]/people/route.ts`
+  - `src/app/api/family-groups/provision/route.ts`
+  - `src/app/api/family-groups/[familyGroupKey]/import-members/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/TreeGraph.tsx`
+  - `src/app/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/tree/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+- `Data Changes`: No migration run. Existing data remains intact; new/updated writes now preserve `People.email` in all covered API paths.
+- `Verify`:
+  - Person modal shows/edit-saves `email` and `hobbies` at people level.
+  - Household modal shows/edit-saves `address`, `city`, `state`, `zip`.
+  - Family provision/import and household-child create flows do not drop `People.email`.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (typed opaque IDs + migration endpoint)
 
 - `Change`: Implemented typed 8-character opaque IDs for new entities (`p-`, `rel-`, `h-`, `attr-`, `date-`) and added admin migration endpoint to remap existing IDs and cross-table references.

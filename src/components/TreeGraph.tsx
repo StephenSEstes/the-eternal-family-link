@@ -18,6 +18,7 @@ type PersonNode = {
   photoFileId?: string;
   birthDate?: string;
   phones?: string;
+  email?: string;
   address?: string;
   hobbies?: string;
   notes?: string;

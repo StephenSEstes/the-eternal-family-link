@@ -72,6 +72,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "birth_date",
     "gender",
     "phones",
+    "email",
     "address",
     "hobbies",
     "notes",
@@ -997,6 +998,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
       return "unspecified";
     })(),
     phones: getCell(row, idx, "phones"),
+    email: getCell(row, idx, "email"),
     address: getCell(row, idx, "address"),
     hobbies: getCell(row, idx, "hobbies"),
     notes: getCell(row, idx, "notes"),
@@ -1706,6 +1708,7 @@ export async function updatePerson(
   updates: PersonUpdateInput,
   tenantKey?: string,
 ): Promise<PersonRecord | null> {
+  await ensureResolvedTabColumns(PEOPLE_TAB, ["email"], tenantKey);
   const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
   const { headers, rows } = await readTab(tabName);
   if (headers.length === 0) {
@@ -1738,6 +1741,9 @@ export async function updatePerson(
     setCell(mutableRow, idx, "gender", updates.gender);
   }
   setCell(mutableRow, idx, "phones", updates.phones);
+  if (updates.email !== undefined) {
+    setCell(mutableRow, idx, "email", updates.email);
+  }
   setCell(mutableRow, idx, "address", updates.address);
   setCell(mutableRow, idx, "hobbies", updates.hobbies);
   setCell(mutableRow, idx, "notes", updates.notes);

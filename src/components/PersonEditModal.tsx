@@ -15,6 +15,7 @@ type PersonItem = {
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   phones?: string;
+  email?: string;
   address?: string;
   hobbies?: string;
   notes?: string;
@@ -140,6 +141,7 @@ export function PersonEditModal({
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [phones, setPhones] = useState("");
+  const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [hobbies, setHobbies] = useState("");
   const [notes, setNotes] = useState("");
@@ -219,11 +221,6 @@ export function PersonEditModal({
   const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, tenantKey) : fallbackAvatar;
   const photoAttributes = attributes.filter((item) => item.attributeType.toLowerCase() === "photo");
   const regularAttributes = attributes.filter((item) => item.attributeType.toLowerCase() !== "photo");
-  const primaryEmail =
-    attributes.find((item) => item.attributeType.toLowerCase() === "email" && item.isPrimary)?.valueText ||
-    attributes.find((item) => item.attributeType.toLowerCase() === "email")?.valueText ||
-    "";
-
   const loadAttributes = async (personId: string) => {
     const res = await fetch(
       `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
@@ -250,6 +247,7 @@ export function PersonEditModal({
     setBirthDate(person.birthDate || "");
     setGender(person.gender || "unspecified");
     setPhones(person.phones || "");
+    setEmail(person.email || "");
     setAddress(person.address || "");
     setHobbies(person.hobbies || "");
     setNotes(person.notes || "");
@@ -447,7 +445,7 @@ export function PersonEditModal({
               Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>
             <p className="person-modal-meta">
-              Email: Managed in User Administration | Phone: {phones || "-"}
+              Email: {email || "-"} | Phone: {phones || "-"}
             </p>
           </div>
           <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
@@ -513,7 +511,7 @@ export function PersonEditModal({
                 <label className="label">Phone</label>
                 <input className="input" value={phones} onChange={(e) => setPhones(e.target.value)} disabled={showReadOnly} />
                 <label className="label">Email</label>
-                <input className="input" value={primaryEmail || "-"} readOnly disabled />
+                <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
                 <label className="label">Address</label>
                 <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
               </div>
@@ -533,6 +531,9 @@ export function PersonEditModal({
                             setParent1Id(next);
                             const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
                             setSpouseId(spouse);
+                            if (spouse && spouse !== person.personId && spouse !== next) {
+                              setParent2Id(spouse);
+                            }
                           }}
                         >
                           <option value="">None</option>
@@ -551,6 +552,9 @@ export function PersonEditModal({
                             setParent2Id(next);
                             const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
                             setSpouseId(spouse);
+                            if (spouse && spouse !== person.personId && spouse !== next) {
+                              setParent1Id(spouse);
+                            }
                           }}
                         >
                           <option value="">None</option>
@@ -849,6 +853,7 @@ export function PersonEditModal({
                       birth_date: birthDate,
                       gender,
                       phones,
+                      email,
                       address,
                       hobbies,
                       notes,

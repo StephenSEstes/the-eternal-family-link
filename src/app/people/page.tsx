@@ -120,6 +120,7 @@ export default async function PeoplePage() {
           gender: person.gender,
           photoFileId: person.photoFileId,
           phones: person.phones,
+          email: person.email,
           address: person.address,
           hobbies: person.hobbies,
           notes: person.notes,

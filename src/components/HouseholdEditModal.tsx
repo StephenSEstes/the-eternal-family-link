@@ -12,6 +12,10 @@ type HouseholdSummary = {
   label: string;
   notes: string;
   weddingPhotoFileId: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
 };
 
 type ChildSummary = {
@@ -39,6 +43,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [weddingPhotoFileId, setWeddingPhotoFileId] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [stateValue, setStateValue] = useState("");
+  const [zip, setZip] = useState("");
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -65,6 +73,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
+    setAddress(String(next.address ?? ""));
+    setCity(String(next.city ?? ""));
+    setStateValue(String(next.state ?? ""));
+    setZip(String(next.zip ?? ""));
     setLoading(false);
     setStatus("");
   };
@@ -126,6 +138,22 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               <>
                 <label className="label">Household Label</label>
                 <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
+                <label className="label">Address</label>
+                <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
+                <div className="settings-chip-list">
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <label className="label">City</label>
+                    <input className="input" value={city} onChange={(e) => setCity(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 110 }}>
+                    <label className="label">State</label>
+                    <input className="input" value={stateValue} onChange={(e) => setStateValue(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 110 }}>
+                    <label className="label">ZIP</label>
+                    <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
+                  </div>
+                </div>
                 <label className="label">Notes</label>
                 <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
               </>
@@ -265,7 +293,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ label, notes, weddingPhotoFileId }),
+                      body: JSON.stringify({ label, notes, weddingPhotoFileId, address, city, state: stateValue, zip }),
                     });
                     if (!res.ok) {
                       const body = await res.text();
