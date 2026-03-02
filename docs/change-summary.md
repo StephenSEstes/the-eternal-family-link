@@ -465,3 +465,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Immediate duplicate tree renders reuse cached/in-flight load and reduce repeated Sheets reads.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (remove hot-path People schema check)
+
+- `Change`: Removed runtime schema-enforcement call from `getPeople()` hot read path.
+- `Type`: API, Performance, Reliability
+- `Why`: Tree/People page reads were still issuing duplicate `People!A1:ZZ` fetches; one source was schema-check work in the same request path.
+- `Files`:
+  - `src/lib/google/sheets.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Tree/People load external API calls no longer include a second `People!A1:ZZ` read from this path.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

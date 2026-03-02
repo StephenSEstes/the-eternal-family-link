@@ -159,11 +159,9 @@ type CachedValue = {
 
 const TAB_RESOLVE_CACHE_TTL_MS = 60_000;
 const SHEET_ID_CACHE_TTL_MS = 60_000;
-const PEOPLE_SCHEMA_CHECK_TTL_MS = 15 * 60_000;
 const tabResolveCache = new Map<string, CachedValue>();
 const sheetIdCache = new Map<string, CachedValue>();
 const inFlightTabReads = new Map<string, Promise<SheetMatrix>>();
-let nextPeopleSchemaCheckAt = 0;
 
 function normalizeHeader(header: string) {
   const normalized = header.trim().toLowerCase();
@@ -960,23 +958,6 @@ async function ensurePersonFamilyGroupsTabSchema(): Promise<SheetMatrix> {
   return { headers: nextHeaders, rows: matrix.rows };
 }
 
-async function ensurePeopleReadSchema(tenantKey?: string) {
-  if (Date.now() < nextPeopleSchemaCheckAt) {
-    return;
-  }
-  try {
-    await ensureResolvedTabColumns(
-      PEOPLE_TAB,
-      ["gender", "first_name", "middle_name", "last_name", "nick_name"],
-      tenantKey,
-    );
-    nextPeopleSchemaCheckAt = Date.now() + PEOPLE_SCHEMA_CHECK_TTL_MS;
-  } catch {
-    // Keep retry window short on failures to avoid repeated metadata reads in hot paths.
-    nextPeopleSchemaCheckAt = Date.now() + 60_000;
-  }
-}
-
 function hasGoogleAccess(row: string[], idx: Map<string, number>) {
   const explicit = getCell(row, idx, "google_access");
   if (explicit.trim()) {
@@ -1523,7 +1504,6 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
-  await ensurePeopleReadSchema(tenantKey);
   const sheets = await createSheetsClient();
 
   const readPeopleFromTab = async (tabName: string) => {

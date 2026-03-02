@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Added tree-page in-flight/short-TTL dedupe loader so immediate duplicate renders reuse one Sheets data load instead of repeated reads. See `docs/change-summary.md`.
+- 2026-03-01: Removed hot-path schema enforcement from `getPeople()` to eliminate extra People reads during page loads. See `docs/change-summary.md`.
