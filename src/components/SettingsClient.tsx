@@ -2179,7 +2179,7 @@ export function SettingsClient({
             </div>
             {deletePersonPreview ? (
               <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
-                <table className="settings-table">
+                <table className="settings-table settings-table-compact">
                   <thead>
                     <tr><th>Impact</th><th>Count</th></tr>
                   </thead>

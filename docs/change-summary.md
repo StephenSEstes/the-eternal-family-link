@@ -97,6 +97,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-02 (delete person preview table compact layout)
+
+- `Change`: Made delete-person preview table use compact fixed layout with wrapping to reduce horizontal overflow/scrolling.
+- `Type`: UI
+- `Why`: Impact labels were too wide, forcing horizontal scroll and hiding values.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Delete Person preview table fits card width on desktop/laptop without left-right scrolling.
+  - Long impact labels wrap cleanly and counts remain visible.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-02-27
 
 - `Change`: Globalized relationship handling and removed legacy household partner compatibility.

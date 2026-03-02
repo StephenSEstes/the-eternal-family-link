@@ -1523,6 +1523,24 @@ main,
   margin-bottom: 0;
 }
 
+.settings-table-compact {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.settings-table-compact th,
+.settings-table-compact td {
+  padding: 0.44rem 0.5rem;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.settings-table-compact th:first-child,
+.settings-table-compact td:first-child {
+  width: 72%;
+}
+
 .settings-delete-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
