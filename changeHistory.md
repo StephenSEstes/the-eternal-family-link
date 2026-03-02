@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-01: Simplified tree UX to direct person-modal interaction with vertical person cards and top-centered household labels. See `docs/change-summary.md`.
+- 2026-03-01: Refined tree density/safety with narrower cards, tighter spouse spacing, wrapped household labels, one household action dot, disabled wheel zoom, and top padding to avoid clipping. See `docs/change-summary.md`.

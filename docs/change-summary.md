@@ -499,3 +499,23 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Household label appears top-center in household box.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-01 (tree visual density + interaction safety refinements)
+
+- `Change`: Reduced person card width, tightened spouse spacing, reduced household actions to one dot, improved household label typography/wrapping (shorter, larger, bold with line-wrap), disabled mouse-wheel zoom, and increased top tree padding to prevent clipping of top household box.
+- `Type`: UI
+- `Why`: Improve tree readability, reduce accidental interactions, and prevent top-of-canvas clipping.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Tree cards are narrower, spouse pairs are visually tighter.
+  - Household shows one action dot.
+  - Long household labels wrap cleanly within top-center label area.
+  - Mouse wheel no longer zooms.
+  - Top household cluster no longer clips at viewport top.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

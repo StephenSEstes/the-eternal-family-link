@@ -48,10 +48,10 @@ type TreeGraphProps = {
 
 export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] }: TreeGraphProps) {
   const router = useRouter();
-  const NODE_CARD_WIDTH = 136;
+  const NODE_CARD_WIDTH = 116;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
   const NODE_HALF_HEIGHT = 72;
-  const SPOUSE_GAP = 0;
+  const SPOUSE_GAP = -16;
   const NON_SPOUSE_GAP = 56;
   const MIN_SCALE = 0.18;
   const MAX_SCALE = 2.8;
@@ -238,7 +238,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   const maxRowWidth = Math.max(0, ...Array.from(orderedByLevel.values()).map((row) => rowWidth(row)));
   const rowGap = 176;
   const xPadding = 90;
-  const yPadding = 70;
+  const yPadding = 118;
   const width = Math.max(980, xPadding * 2 + maxRowWidth);
   const height = Math.max(440, yPadding * 2 + Math.max(0, levelsSorted.length - 1) * rowGap);
 
@@ -486,15 +486,46 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     [clampScale],
   );
 
+  const wrapHouseholdLabel = (value: string) => {
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      return [];
+    }
+    const maxChars = 14;
+    const maxLines = 2;
+    const lines: string[] = [];
+    let current = "";
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length <= maxChars) {
+        current = next;
+        continue;
+      }
+      if (current) {
+        lines.push(current);
+      }
+      current = word;
+      if (lines.length >= maxLines - 1) {
+        break;
+      }
+    }
+    if (current && lines.length < maxLines) {
+      lines.push(current);
+    }
+    if (lines.length === 0) {
+      lines.push(words.join(" ").slice(0, maxChars));
+    }
+    if (words.join(" ").length > lines.join(" ").length) {
+      const last = lines.length - 1;
+      lines[last] = `${lines[last].slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+    }
+    return lines;
+  };
+
   return (
     <div
       ref={viewportRef}
       className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}`}
-      onWheel={(event) => {
-        event.preventDefault();
-        const factor = event.deltaY < 0 ? 1.1 : 0.9;
-        zoomAtPoint(event.clientX, event.clientY, factor);
-      }}
       onPointerDown={(event) => {
         if (event.pointerType !== "touch" && event.button !== 0) {
           return;
@@ -626,6 +657,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
           const distance = Math.hypot(a.x - b.x, a.y - b.y);
           const halfWidth = Math.max(112, distance / 2 + NODE_HALF_WIDTH + 24);
           const halfHeight = NODE_HALF_HEIGHT + 26;
+          const labelLines = label ? wrapHouseholdLabel(label) : [];
 
           return (
             <g key={`cluster-${pairKey}`} className="tree-household-group">
@@ -653,50 +685,34 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
                   }
                 }}
               />
-              {label ? (
+              {labelLines.length > 0 ? (
                 <text x={midX} y={midY - halfHeight + 14} className="tree-family-label">
-                  {label}
+                  {labelLines.map((line, index) => (
+                    <tspan key={`${pairKey}-label-${index}`} x={midX} dy={index === 0 ? 0 : 12}>
+                      {line}
+                    </tspan>
+                  ))}
                 </text>
               ) : null}
               {canManage ? (
-                <>
-                  <circle
-                    cx={midX + halfWidth - 18}
-                    cy={midY - halfHeight + 18}
-                    r={7}
-                    className="tree-household-action-dot"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      const unit = households.find((item) => {
-                        const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
-                        const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
-                        return matchForward || matchReverse;
-                      });
-                      if (unit) {
-                        setSelectedHouseholdId(unit.id);
-                      }
-                    }}
-                  />
-                  <circle
-                    cx={midX + halfWidth - 36}
-                    cy={midY - halfHeight + 18}
-                    r={7}
-                    className="tree-household-action-dot"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      const unit = households.find((item) => {
-                        const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
-                        const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
-                        return matchForward || matchReverse;
-                      });
-                      if (unit) {
-                        setSelectedHouseholdId(unit.id);
-                      }
-                    }}
-                  />
-                </>
+                <circle
+                  cx={midX + halfWidth - 18}
+                  cy={midY - halfHeight + 18}
+                  r={7}
+                  className="tree-household-action-dot"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const unit = households.find((item) => {
+                      const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
+                      const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
+                      return matchForward || matchReverse;
+                    });
+                    if (unit) {
+                      setSelectedHouseholdId(unit.id);
+                    }
+                  }}
+                />
               ) : null}
             </g>
           );

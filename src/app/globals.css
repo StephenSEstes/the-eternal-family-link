@@ -640,8 +640,8 @@ main {
 }
 
 .tree-family-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
   text-anchor: middle;
   transition: opacity 160ms ease;
@@ -672,7 +672,7 @@ main {
   flex-direction: column;
   align-items: center;
   gap: 0.32rem;
-  width: 132px;
+  width: 114px;
   border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
   border-radius: 16px;
   background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
@@ -717,7 +717,7 @@ main {
 
 .tree-person-name {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.2;
   color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
@@ -729,7 +729,7 @@ main {
 
 .tree-person-secondary {
   display: block;
-  font-size: 0.71rem;
+  font-size: 0.69rem;
   line-height: 1.15;
   color: var(--text-muted);
   margin-top: 0.15rem;
