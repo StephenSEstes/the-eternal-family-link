@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-03: Refactored Person Pictures tab to gallery-first UX with mobile full-screen detail plus dedicated library-picker and upload flows, preserving existing handlers/APIs. See `docs/change-summary.md`.
+- 2026-03-03: Added staged upload preview in Person Pictures flow with explicit `Save`, `Cancel`, and `Choose Another Photo` actions. See `docs/change-summary.md`.

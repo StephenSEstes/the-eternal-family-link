@@ -170,6 +170,8 @@ export function PersonEditModal({
   const [newPhotoDescription, setNewPhotoDescription] = useState("");
   const [newPhotoDate, setNewPhotoDate] = useState("");
   const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
+  const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
+  const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
   const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
   const [editPhotoName, setEditPhotoName] = useState("");
   const [editPhotoDescription, setEditPhotoDescription] = useState("");
@@ -295,6 +297,8 @@ export function PersonEditModal({
     setNewPhotoDescription("");
     setNewPhotoDate("");
     setNewPhotoHeadshot(false);
+    setPendingUploadPhotoFile(null);
+    setPendingUploadPhotoPreviewUrl("");
     setSelectedPhotoAttributeId("");
     setEditPhotoName("");
     setEditPhotoDescription("");
@@ -326,6 +330,14 @@ export function PersonEditModal({
     setStatus("");
     void loadAttributes(person.personId);
   }, [open, person, households, parentSelection, tenantKey]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingUploadPhotoPreviewUrl) {
+        URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+      }
+    };
+  }, [pendingUploadPhotoPreviewUrl]);
 
   const personOptions = localPeople.filter((item) => item.personId !== person?.personId);
   const childBirthDate = birthDate || person?.birthDate;
@@ -541,6 +553,55 @@ export function PersonEditModal({
     setSelectedLibraryFileIds([]);
     setStatus("Photo linked.");
     setPhotoBusy(false);
+    await loadAttributes(person.personId);
+    onSaved();
+  };
+
+  const clearPendingUploadPhoto = () => {
+    if (pendingUploadPhotoPreviewUrl) {
+      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+    }
+    setPendingUploadPhotoFile(null);
+    setPendingUploadPhotoPreviewUrl("");
+  };
+
+  const setPendingUploadFromInput = (file: File | null) => {
+    if (!file) return;
+    if (pendingUploadPhotoPreviewUrl) {
+      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setPendingUploadPhotoFile(file);
+    setPendingUploadPhotoPreviewUrl(previewUrl);
+  };
+
+  const submitPendingUploadPhoto = async () => {
+    if (!pendingUploadPhotoFile || !person) {
+      setStatus("Choose a photo first.");
+      return;
+    }
+    const form = new FormData();
+    form.append("file", pendingUploadPhotoFile);
+    form.append("label", newPhotoLabel.trim() || "gallery");
+    form.append("isHeadshot", String(newPhotoHeadshot));
+    form.append("description", newPhotoDescription.trim());
+    form.append("photoDate", newPhotoDate.trim());
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
+      method: "POST",
+      body: form,
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      return;
+    }
+    setStatus("Photo uploaded.");
+    clearPendingUploadPhoto();
+    setShowPhotoUploadPicker(false);
+    setNewPhotoHeadshot(false);
+    setNewPhotoDescription("");
+    setNewPhotoDate("");
     await loadAttributes(person.personId);
     onSaved();
   };
@@ -1213,7 +1274,14 @@ export function PersonEditModal({
                 <div className="person-photo-picker-card">
                   <div className="person-photo-picker-head">
                     <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Upload Photo</h4>
-                    <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoUploadPicker(false)}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        clearPendingUploadPhoto();
+                        setShowPhotoUploadPicker(false);
+                      }}
+                    >
                       Close
                     </button>
                   </div>
@@ -1226,52 +1294,61 @@ export function PersonEditModal({
                   <label className="label" style={{ marginTop: "0.5rem" }}>
                     <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
                   </label>
+                  {pendingUploadPhotoPreviewUrl ? (
+                    <div className="person-upload-preview-card">
+                      <img
+                        src={pendingUploadPhotoPreviewUrl}
+                        alt="Selected upload preview"
+                        className="person-upload-preview-image"
+                      />
+                      <div className="person-upload-preview-meta">
+                        <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
+                        <span>This photo will be uploaded with the metadata above.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+                      No photo selected yet.
+                    </p>
+                  )}
                   <input
                     id={`person-photo-upload-${person.personId}`}
                     type="file"
                     accept="image/*"
                     style={{ display: "none" }}
-                    onChange={(e) =>
-                      void (async () => {
-                        const file = e.target.files?.[0] ?? null;
-                        e.currentTarget.value = "";
-                        if (!file) {
-                          return;
-                        }
-                        const form = new FormData();
-                        form.append("file", file);
-                        form.append("label", newPhotoLabel.trim() || "gallery");
-                        form.append("isHeadshot", String(newPhotoHeadshot));
-                        form.append("description", newPhotoDescription.trim());
-                        form.append("photoDate", newPhotoDate.trim());
-                        const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
-                          method: "POST",
-                          body: form,
-                        });
-                        const body = await res.json().catch(() => null);
-                        if (!res.ok) {
-                          const message = body?.message || body?.error || "";
-                          setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-                          return;
-                        }
-                        setStatus("Photo uploaded.");
-                        setShowPhotoUploadPicker(false);
-                        setNewPhotoHeadshot(false);
-                        setNewPhotoDescription("");
-                        setNewPhotoDate("");
-                        await loadAttributes(person.personId);
-                        onSaved();
-                      })()
-                    }
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      setPendingUploadFromInput(file);
+                    }}
                   />
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    style={{ marginTop: "0.75rem" }}
-                    onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
-                  >
-                    Add Photo
-                  </button>
+                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
+                    >
+                      {pendingUploadPhotoFile ? "Choose Another Photo" : "Choose Photo"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      disabled={!pendingUploadPhotoFile}
+                      onClick={() => void submitPendingUploadPhoto()}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        clearPendingUploadPhoto();
+                        setShowPhotoUploadPicker(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}

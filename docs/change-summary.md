@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (upload photo staged preview + explicit save/cancel actions)
+
+- `Change`: Updated Person `Pictures` upload flow to stage selected file before upload, show thumbnail/file preview, and provide explicit `Save`, `Cancel`, and `Choose Another Photo` actions.
+- `Type`: UI
+- `Why`: Prevent metadata mistakes by confirming the selected image before upload and make upload intent/actions explicit.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Selecting a photo in upload flow shows thumbnail preview and filename.
+  - Metadata can be edited while preview is shown.
+  - `Save` uploads the staged file with the same existing endpoint/payload.
+  - `Cancel` clears staged file and closes upload flow.
+  - `Choose Another Photo` replaces the staged file and updates preview.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (person pictures tab option-2 UX: gallery + mobile full-screen detail)
 
 - `Change`: Refactored Person modal `Pictures` tab UI to an Option-2 flow: gallery-first grid, mobile full-screen Photo Detail editor, dedicated Browse/Search Library picker, and dedicated Upload flow panel.

@@ -1778,6 +1778,40 @@ main,
   color: var(--text-muted);
 }
 
+.person-upload-preview-card {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.5rem;
+}
+
+.person-upload-preview-image {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+}
+
+.person-upload-preview-meta {
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+}
+
+.person-upload-preview-meta strong {
+  font-size: 0.85rem;
+}
+
+.person-upload-preview-meta span {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
 .person-section-grid {
   display: grid;
   gap: 0.9rem;
