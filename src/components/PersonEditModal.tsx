@@ -40,6 +40,8 @@ type PersonAttribute = {
   valueText: string;
   label: string;
   isPrimary: boolean;
+  startDate?: string;
+  notes?: string;
 };
 
 type Props = {
@@ -155,10 +157,11 @@ export function PersonEditModal({
   const [newAttrType, setNewAttrType] = useState("note");
   const [newAttrLabel, setNewAttrLabel] = useState("");
   const [newAttrValue, setNewAttrValue] = useState("");
-  const [newPhotoFileId, setNewPhotoFileId] = useState("");
   const [newPhotoLabel, setNewPhotoLabel] = useState("portrait");
-  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
+  const [newPhotoDescription, setNewPhotoDescription] = useState("");
+  const [newPhotoDate, setNewPhotoDate] = useState("");
   const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
+  const [selectedPhotoAttributeIds, setSelectedPhotoAttributeIds] = useState<string[]>([]);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("existing");
   const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
@@ -264,10 +267,11 @@ export function PersonEditModal({
     setNewAttrType("note");
     setNewAttrLabel("");
     setNewAttrValue("");
-    setNewPhotoFileId("");
     setNewPhotoLabel("portrait");
-    setNewPhotoFile(null);
+    setNewPhotoDescription("");
+    setNewPhotoDate("");
     setNewPhotoHeadshot(false);
+    setSelectedPhotoAttributeIds([]);
     setShowAddSpouse(false);
     setAddSpouseMode("existing");
     setExistingSpouseQuery("");
@@ -771,10 +775,23 @@ export function PersonEditModal({
           <>
             <div className="settings-table-wrap">
               <table className="settings-table">
-                <thead><tr><th>Preview</th><th>Label</th><th>File ID</th><th>Primary</th></tr></thead>
+                <thead><tr><th>Remove</th><th>Preview</th><th>Name</th><th>Description</th><th>Date</th><th>Primary</th></tr></thead>
                 <tbody>
                   {photoAttributes.length > 0 ? photoAttributes.map((item) => (
                     <tr key={item.attributeId}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedPhotoAttributeIds.includes(item.attributeId)}
+                          onChange={(e) => {
+                            setSelectedPhotoAttributeIds((current) =>
+                              e.target.checked
+                                ? [...current, item.attributeId]
+                                : current.filter((id) => id !== item.attributeId),
+                            );
+                          }}
+                        />
+                      </td>
                       <td>
                         <img
                           src={getPhotoProxyPath(item.valueText, tenantKey)}
@@ -783,42 +800,44 @@ export function PersonEditModal({
                         />
                       </td>
                       <td>{item.label || "-"}</td>
-                      <td>{item.valueText}</td>
+                      <td>{item.notes || "-"}</td>
+                      <td>{item.startDate || "-"}</td>
                       <td>{item.isPrimary ? "Yes" : "No"}</td>
                     </tr>
-                  )) : <tr><td colSpan={4}>No photos recorded.</td></tr>}
+                  )) : <tr><td colSpan={6}>No photos recorded.</td></tr>}
                 </tbody>
               </table>
             </div>
             {canManage ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
                 <h4 style={{ marginTop: 0 }}>Upload Photo</h4>
-                <label className="label">Choose Photo</label>
-                <input
-                  className="input"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setNewPhotoFile(e.target.files?.[0] ?? null)}
-                />
                 <label className="label">Label</label>
                 <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
+                <label className="label">Description</label>
+                <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
+                <label className="label">Date</label>
+                <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
                 <label className="label" style={{ marginTop: "0.5rem" }}>
                   <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
                 </label>
-                <button
-                  type="button"
-                  className="button tap-button"
-                  style={{ marginTop: "0.75rem" }}
-                  onClick={() =>
+                <input
+                  id={`person-photo-upload-${person.personId}`}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) =>
                     void (async () => {
-                      if (!newPhotoFile) {
-                        setStatus("Choose an image file first.");
+                      const file = e.target.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      if (!file) {
                         return;
                       }
                       const form = new FormData();
-                      form.append("file", newPhotoFile);
+                      form.append("file", file);
                       form.append("label", newPhotoLabel.trim() || "gallery");
                       form.append("isHeadshot", String(newPhotoHeadshot));
+                      form.append("description", newPhotoDescription.trim());
+                      form.append("photoDate", newPhotoDate.trim());
                       const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
                         method: "POST",
                         body: form,
@@ -830,63 +849,47 @@ export function PersonEditModal({
                         return;
                       }
                       setStatus("Photo uploaded.");
-                      setNewPhotoFile(null);
                       setNewPhotoHeadshot(false);
+                      setNewPhotoDescription("");
+                      setNewPhotoDate("");
                       await loadAttributes(person.personId);
                       onSaved();
                     })()
                   }
-                >
-                  Upload Photo
-                </button>
-              </div>
-            ) : null}
-            {canManage ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Add Photo By File ID</h4>
-                <label className="label">Photo File ID</label>
-                <input className="input" value={newPhotoFileId} onChange={(e) => setNewPhotoFileId(e.target.value)} placeholder="Google Drive file id" />
-                <label className="label">Label</label>
-                <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
+                />
                 <button
                   type="button"
                   className="button tap-button"
                   style={{ marginTop: "0.75rem" }}
-                  onClick={() =>
-                    void (async () => {
-                      if (!newPhotoFileId.trim()) {
-                        setStatus("Photo file ID is required.");
-                        return;
-                      }
-                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          attributeType: "photo",
-                          valueText: newPhotoFileId.trim(),
-                          label: newPhotoLabel.trim() || "portrait",
-                          visibility: "family",
-                          shareScope: "both_families",
-                          shareFamilyGroupKey: "",
-                          sortOrder: 0,
-                          isPrimary: photoAttributes.length === 0,
-                        }),
-                      });
-                      const body = await res.text();
-                      if (!res.ok) {
-                        setStatus(`Add photo failed: ${res.status} ${body.slice(0, 120)}`);
-                        return;
-                      }
-                      setStatus("Photo saved.");
-                      setNewPhotoFileId("");
-                      await loadAttributes(person.personId);
-                      onSaved();
-                    })()
-                  }
+                  onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
                 >
                   Add Photo
                 </button>
               </div>
+            ) : null}
+            {canManage ? (
+              <button
+                type="button"
+                className="button secondary tap-button"
+                disabled={selectedPhotoAttributeIds.length === 0}
+                onClick={() =>
+                  void (async () => {
+                    setStatus("Removing selected photo links...");
+                    for (const attributeId of selectedPhotoAttributeIds) {
+                      await fetch(
+                        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(attributeId)}`,
+                        { method: "DELETE" },
+                      );
+                    }
+                    setSelectedPhotoAttributeIds([]);
+                    setStatus("Selected photo links removed.");
+                    await loadAttributes(person.personId);
+                    onSaved();
+                  })()
+                }
+              >
+                Remove Selected Links
+              </button>
             ) : null}
           </>
         ) : null}

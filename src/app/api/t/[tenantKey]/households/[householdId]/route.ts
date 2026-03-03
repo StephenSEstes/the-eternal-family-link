@@ -15,6 +15,15 @@ type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string }>;
 };
 
+type HouseholdPhotoLink = {
+  photoId: string;
+  fileId: string;
+  name: string;
+  description: string;
+  photoDate: string;
+  isPrimary: boolean;
+};
+
 type DeleteHouseholdPreview = {
   householdId: string;
   householdLabel: string;
@@ -183,11 +192,28 @@ export async function GET(_: Request, { params }: RouteProps) {
         birthDate: person?.birthDate || "",
       };
     });
+    await ensureResolvedTabColumns(
+      "HouseholdPhotos",
+      ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary"],
+      resolved.tenant.tenantKey,
+    );
+    const householdPhotos: HouseholdPhotoLink[] = (await getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []))
+      .filter((row) => readCell(row.data, "household_id") === householdId)
+      .map((row) => ({
+        photoId: readCell(row.data, "photo_id"),
+        fileId: readCell(row.data, "file_id"),
+        name: readCell(row.data, "name"),
+        description: readCell(row.data, "description"),
+        photoDate: readCell(row.data, "photo_date"),
+        isPrimary: normalize(readCell(row.data, "is_primary")) === "true",
+      }))
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
 
     return NextResponse.json({
       tenantKey: resolved.tenant.tenantKey,
       household: household.dto,
       children,
+      photos: householdPhotos,
     });
   } catch (error) {
     const classified = classifyOperationalError(error);

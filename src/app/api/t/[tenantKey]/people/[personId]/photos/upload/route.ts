@@ -46,6 +46,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
 
     const label = String(formData?.get("label") ?? "gallery").trim() || "gallery";
     const requestedHeadshot = String(formData?.get("isHeadshot") ?? "").trim().toLowerCase() === "true";
+    const description = String(formData?.get("description") ?? "").trim();
+    const photoDate = String(formData?.get("photoDate") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
     if (bytes.length === 0) {
@@ -93,12 +95,12 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         label: shouldBePrimary ? "headshot" : label,
         is_primary: shouldBePrimary ? "TRUE" : "FALSE",
         sort_order: "0",
-        start_date: "",
+        start_date: photoDate,
         end_date: "",
         visibility: "family",
         share_scope: "both_families",
         share_family_group_key: "",
-        notes: "",
+        notes: description,
       },
       resolved.tenant.tenantKey,
     );

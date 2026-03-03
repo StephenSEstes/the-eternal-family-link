@@ -13,6 +13,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (unified photo-link workflow for person + household)
+
+- `Change`: Replaced file-ID-centric photo actions with a unified `Add Photo` upload/link workflow on person and household modals, added inline linked-photo galleries with metadata (`name`, `description`, `date`), and added checkbox-based link dissociation (without deleting files from Drive library).
+- `Type`: UI, API, Schema
+- `Why`: Users do not know file IDs; the old flow made photo add appear broken in real usage. Product requirement is one add action (camera/file), visible linked photos, and dissociation-only behavior.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/lib/google/sheets.ts`
+- `Data Changes`: Added `HouseholdPhotos` table support with columns:
+  - `family_group_key`, `photo_id`, `household_id`, `file_id`, `name`, `description`, `photo_date`, `is_primary`
+- `Verify`:
+  - Person modal Photos tab: one `Add Photo` action opens camera/file picker on mobile and uploads file.
+  - Person modal photo gallery displays preview + metadata and supports checkbox-based `Remove Selected Links`.
+  - Household modal Pictures tab supports same add/gallery/remove-link behavior.
+  - Dissociation removes only links (attribute/household photo row), not Drive file.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (birthday tile date fix + person modal photo upload/gallery)
 
 - `Change`: Fixed date rendering on people tiles to prevent one-day birthday shifts, and upgraded Person modal Photos tab to support direct image upload plus inline photo previews in the catalog.

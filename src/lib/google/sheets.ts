@@ -90,6 +90,16 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "notes",
     "wedding_photo_file_id",
   ],
+  HouseholdPhotos: [
+    "family_group_key",
+    "photo_id",
+    "household_id",
+    "file_id",
+    "name",
+    "description",
+    "photo_date",
+    "is_primary",
+  ],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
     "attribute_id",
@@ -428,9 +438,14 @@ export async function ensureResolvedTabColumns(
   tenantKey?: string,
 ) {
   const sheets = await createSheetsClient();
-  const resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
+  let resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
   if (!resolved) {
-    return;
+    if (typeof tabName === "string") {
+      await ensureTabWithHeaders(sheets, tabName, requiredHeaders);
+      resolved = tabName;
+    } else {
+      return;
+    }
   }
   const matrix = await readTabWithClient(sheets, resolved);
   if (matrix.headers.length === 0) {

@@ -24,6 +24,15 @@ type ChildSummary = {
   birthDate: string;
 };
 
+type HouseholdPhoto = {
+  photoId: string;
+  fileId: string;
+  name: string;
+  description: string;
+  photoDate: string;
+  isPrimary: boolean;
+};
+
 type Props = {
   open: boolean;
   tenantKey: string;
@@ -47,6 +56,13 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [city, setCity] = useState("");
   const [stateValue, setStateValue] = useState("");
   const [zip, setZip] = useState("");
+  const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [newPhotoName, setNewPhotoName] = useState("");
+  const [newPhotoDescription, setNewPhotoDescription] = useState("");
+  const [newPhotoDate, setNewPhotoDate] = useState("");
+  const [newPhotoPrimary, setNewPhotoPrimary] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -71,6 +87,8 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     const next = body.household as HouseholdSummary;
     setHousehold(next);
     setChildren(Array.isArray(body.children) ? (body.children as ChildSummary[]) : []);
+    setPhotos(Array.isArray(body.photos) ? (body.photos as HouseholdPhoto[]) : []);
+    setSelectedPhotoIds([]);
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
@@ -307,15 +325,134 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
 
             {activeTab === "pictures" ? (
               <>
-                <label className="label">Wedding Photo File ID</label>
-                <input className="input" value={weddingPhotoFileId} onChange={(e) => setWeddingPhotoFileId(e.target.value)} placeholder="Google Drive file id" />
-                <div style={{ marginTop: "0.75rem" }}>
-                  <img
-                    src={imageSrc}
-                    alt="Wedding placeholder"
-                    style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 12, border: "1px solid var(--line)" }}
-                  />
+                <div className="settings-table-wrap">
+                  <table className="settings-table">
+                    <thead>
+                      <tr>
+                        <th>Remove</th>
+                        <th>Preview</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Primary</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {photos.length > 0 ? photos.map((photo) => (
+                        <tr key={photo.photoId}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedPhotoIds.includes(photo.photoId)}
+                              onChange={(e) => {
+                                setSelectedPhotoIds((current) =>
+                                  e.target.checked
+                                    ? [...current, photo.photoId]
+                                    : current.filter((id) => id !== photo.photoId),
+                                );
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <img
+                              src={getPhotoProxyPath(photo.fileId, tenantKey)}
+                              alt={photo.name || "photo"}
+                              style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
+                            />
+                          </td>
+                          <td>{photo.name || "-"}</td>
+                          <td>{photo.description || "-"}</td>
+                          <td>{photo.photoDate || "-"}</td>
+                          <td>{photo.isPrimary ? "Yes" : "No"}</td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={6}>No linked photos yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
+                <div className="card" style={{ marginTop: "0.75rem" }}>
+                  <h4 style={{ marginTop: 0 }}>Add Photo</h4>
+                  <label className="label">Name</label>
+                  <input className="input" value={newPhotoName} onChange={(e) => setNewPhotoName(e.target.value)} placeholder="Photo name" />
+                  <label className="label">Description</label>
+                  <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
+                  <label className="label">Date</label>
+                  <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
+                  <label className="label" style={{ marginTop: "0.5rem" }}>
+                    <input type="checkbox" checked={newPhotoPrimary} onChange={(e) => setNewPhotoPrimary(e.target.checked)} /> Set as primary
+                  </label>
+                  <input
+                    id={`household-photo-upload-${householdId}`}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) =>
+                      void (async () => {
+                        const file = e.target.files?.[0];
+                        e.currentTarget.value = "";
+                        if (!file) return;
+                        setUploadingPhoto(true);
+                        setStatus("Adding photo...");
+                        const form = new FormData();
+                        form.append("file", file);
+                        form.append("name", newPhotoName.trim() || file.name || "photo");
+                        form.append("description", newPhotoDescription.trim());
+                        form.append("photoDate", newPhotoDate.trim());
+                        form.append("isPrimary", String(newPhotoPrimary));
+                        const res = await fetch(
+                          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/upload`,
+                          { method: "POST", body: form },
+                        );
+                        const body = await res.json().catch(() => null);
+                        if (!res.ok) {
+                          const message = body?.message || body?.error || "";
+                          setStatus(`Add photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+                          setUploadingPhoto(false);
+                          return;
+                        }
+                        setNewPhotoName("");
+                        setNewPhotoDescription("");
+                        setNewPhotoDate("");
+                        setNewPhotoPrimary(false);
+                        setStatus("Photo linked.");
+                        setUploadingPhoto(false);
+                        await refresh();
+                        onSaved();
+                      })()
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    disabled={uploadingPhoto}
+                    onClick={() => document.getElementById(`household-photo-upload-${householdId}`)?.click()}
+                  >
+                    {uploadingPhoto ? "Adding..." : "Add Photo"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={selectedPhotoIds.length === 0}
+                  onClick={() =>
+                    void (async () => {
+                      setStatus("Removing selected photo links...");
+                      for (const photoId of selectedPhotoIds) {
+                        await fetch(
+                          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(photoId)}`,
+                          { method: "DELETE" },
+                        );
+                      }
+                      setSelectedPhotoIds([]);
+                      setStatus("Selected photo links removed.");
+                      await refresh();
+                      onSaved();
+                    })()
+                  }
+                >
+                  Remove Selected Links
+                </button>
               </>
             ) : null}
 
