@@ -170,7 +170,6 @@ export function PersonEditModal({
   const [newPhotoDescription, setNewPhotoDescription] = useState("");
   const [newPhotoDate, setNewPhotoDate] = useState("");
   const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
-  const [selectedPhotoAttributeIds, setSelectedPhotoAttributeIds] = useState<string[]>([]);
   const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
   const [editPhotoName, setEditPhotoName] = useState("");
   const [editPhotoDescription, setEditPhotoDescription] = useState("");
@@ -179,9 +178,14 @@ export function PersonEditModal({
   const [linkTargetPersonId, setLinkTargetPersonId] = useState("");
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [personPhotoQuery, setPersonPhotoQuery] = useState("");
   const [photoSearchQuery, setPhotoSearchQuery] = useState("");
   const [photoSearchResults, setPhotoSearchResults] = useState<PhotoLibraryItem[]>([]);
+  const [selectedLibraryFileIds, setSelectedLibraryFileIds] = useState<string[]>([]);
   const [photoSearchBusy, setPhotoSearchBusy] = useState(false);
+  const [showPhotoDetail, setShowPhotoDetail] = useState(false);
+  const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
+  const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("existing");
   const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
@@ -291,7 +295,6 @@ export function PersonEditModal({
     setNewPhotoDescription("");
     setNewPhotoDate("");
     setNewPhotoHeadshot(false);
-    setSelectedPhotoAttributeIds([]);
     setSelectedPhotoAttributeId("");
     setEditPhotoName("");
     setEditPhotoDescription("");
@@ -300,9 +303,14 @@ export function PersonEditModal({
     setLinkTargetPersonId("");
     setLargePhotoFileId("");
     setPhotoBusy(false);
+    setPersonPhotoQuery("");
     setPhotoSearchQuery("");
     setPhotoSearchResults([]);
+    setSelectedLibraryFileIds([]);
     setPhotoSearchBusy(false);
+    setShowPhotoDetail(false);
+    setShowPhotoLibraryPicker(false);
+    setShowPhotoUploadPicker(false);
     setShowAddSpouse(false);
     setAddSpouseMode("existing");
     setExistingSpouseQuery("");
@@ -370,10 +378,27 @@ export function PersonEditModal({
     [photoAttributes, selectedPhotoAttributeId],
   );
   const linkedPhotoFileIds = useMemo(() => new Set(photoAttributes.map((item) => item.valueText.trim()).filter(Boolean)), [photoAttributes]);
+  const filteredPhotoAttributes = useMemo(() => {
+    const query = personPhotoQuery.trim().toLowerCase();
+    if (!query) return photoAttributes;
+    return photoAttributes.filter((item) =>
+      [item.label, item.notes, item.startDate, item.valueText].some((value) => (value || "").toLowerCase().includes(query)),
+    );
+  }, [personPhotoQuery, photoAttributes]);
   const linkablePeople = useMemo(
     () => personOptions.sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [personOptions],
   );
+  const selectedPhotoAssociations = useMemo(() => {
+    if (!selectedPhoto) {
+      return { people: [] as Array<{ personId: string; displayName: string }>, households: [] as Array<{ householdId: string; label: string }> };
+    }
+    const byFile = photoSearchResults.find((item) => item.fileId === selectedPhoto.valueText);
+    return {
+      people: byFile?.people ?? [],
+      households: byFile?.households ?? [],
+    };
+  }, [photoSearchResults, selectedPhoto]);
 
   useEffect(() => {
     if (!selectedPhoto) {
@@ -400,6 +425,124 @@ export function PersonEditModal({
     }
     setPhotoSearchResults(Array.isArray(body?.items) ? (body.items as PhotoLibraryItem[]) : []);
     setPhotoSearchBusy(false);
+  };
+
+  const openPhotoDetail = (attributeId: string) => {
+    setSelectedPhotoAttributeId(attributeId);
+    setShowPhotoDetail(true);
+  };
+
+  const saveSelectedPhotoMetadata = async () => {
+    if (!selectedPhoto || !person) return;
+    setPhotoBusy(true);
+    setStatus("Saving photo metadata...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: editPhotoName,
+          notes: editPhotoDescription,
+          startDate: editPhotoDate,
+          isPrimary: editPhotoPrimary,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Save photo metadata failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoBusy(false);
+      return;
+    }
+    setStatus("Photo metadata saved.");
+    setPhotoBusy(false);
+    await loadAttributes(person.personId);
+    onSaved();
+  };
+
+  const linkSelectedPhotoToPerson = async () => {
+    if (!selectedPhoto || !linkTargetPersonId || !person) return;
+    setPhotoBusy(true);
+    setStatus("Linking photo to selected person...");
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(linkTargetPersonId)}/attributes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        attributeType: "photo",
+        valueText: selectedPhoto.valueText,
+        label: editPhotoName || selectedPhoto.label || "photo",
+        notes: editPhotoDescription || selectedPhoto.notes || "",
+        startDate: editPhotoDate || selectedPhoto.startDate || "",
+        visibility: "family",
+        shareScope: "both_families",
+        shareFamilyGroupKey: "",
+        sortOrder: 0,
+        isPrimary: false,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoBusy(false);
+      return;
+    }
+    setStatus("Photo linked to selected person.");
+    setPhotoBusy(false);
+  };
+
+  const unlinkSelectedPhotoFromCurrentPerson = async () => {
+    if (!selectedPhoto || !person) return;
+    setStatus("Removing photo link...");
+    await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
+      { method: "DELETE" },
+    );
+    setSelectedPhotoAttributeId("");
+    setShowPhotoDetail(false);
+    setStatus("Photo link removed.");
+    await loadAttributes(person.personId);
+    onSaved();
+  };
+
+  const linkSelectedLibraryPhotos = async () => {
+    if (selectedLibraryFileIds.length === 0 || !person) return;
+    setPhotoBusy(true);
+    setStatus("Linking selected search photo...");
+    for (const fileId of selectedLibraryFileIds) {
+      const item = photoSearchResults.find((result) => result.fileId === fileId);
+      if (!item) continue;
+      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attributeType: "photo",
+          valueText: item.fileId,
+          label: item.name || "photo",
+          notes: item.description || "",
+          startDate: item.date || "",
+          visibility: "family",
+          shareScope: "both_families",
+          shareFamilyGroupKey: "",
+          sortOrder: 0,
+          isPrimary: photoAttributes.length === 0,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = body?.message || body?.error || "";
+        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+        setPhotoBusy(false);
+        return;
+      }
+    }
+    setSelectedLibraryFileIds([]);
+    setStatus("Photo linked.");
+    setPhotoBusy(false);
+    await loadAttributes(person.personId);
+    onSaved();
   };
 
   if (!open || !person) {
@@ -840,355 +983,297 @@ export function PersonEditModal({
 
         {activeTab === "photos" ? (
           <>
-            <div className="settings-table-wrap">
-              <table className="settings-table">
-                <thead><tr><th>Remove</th><th>Select</th><th>Preview</th><th>Name</th><th>Description</th><th>Date</th><th>Primary</th></tr></thead>
-                <tbody>
-                  {photoAttributes.length > 0 ? photoAttributes.map((item) => (
-                    <tr key={item.attributeId}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selectedPhotoAttributeIds.includes(item.attributeId)}
-                          onChange={(e) => {
-                            setSelectedPhotoAttributeIds((current) =>
-                              e.target.checked
-                                ? [...current, item.attributeId]
-                                : current.filter((id) => id !== item.attributeId),
-                            );
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="radio"
-                          name="selected-photo"
-                          checked={selectedPhotoAttributeId === item.attributeId}
-                          onChange={() => setSelectedPhotoAttributeId(item.attributeId)}
-                        />
-                      </td>
-                      <td>
+            <div className="card person-photo-gallery-card">
+              <div className="person-photo-gallery-toolbar">
+                <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Gallery</h4>
+                <div className="person-photo-gallery-actions">
+                  {canManage ? (
+                    <button type="button" className="button tap-button" onClick={() => setShowPhotoUploadPicker(true)}>
+                      + Add Photo
+                    </button>
+                  ) : null}
+                  <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoLibraryPicker(true)}>
+                    Browse Library
+                  </button>
+                </div>
+              </div>
+              <label className="label">Search this person&apos;s photos</label>
+              <input
+                className="input"
+                value={personPhotoQuery}
+                onChange={(e) => setPersonPhotoQuery(e.target.value)}
+                placeholder="Search by label, description, date, or file ID"
+              />
+              {filteredPhotoAttributes.length > 0 ? (
+                <div className="person-photo-grid">
+                  {filteredPhotoAttributes.map((item) => (
+                    <button
+                      key={item.attributeId}
+                      type="button"
+                      className="person-photo-tile"
+                      onClick={() => openPhotoDetail(item.attributeId)}
+                    >
+                      <img
+                        src={getPhotoProxyPath(item.valueText, tenantKey)}
+                        alt={item.label || "photo"}
+                        className="person-photo-tile-image"
+                      />
+                      <div className="person-photo-tile-meta">
+                        <span className="person-photo-tile-label">{item.label || "photo"}</span>
+                        {item.isPrimary ? <span className="person-photo-primary-badge">Primary</span> : null}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+                  No photos recorded.
+                </p>
+              )}
+            </div>
+
+            {selectedPhoto && showPhotoDetail ? (
+              <div className="person-photo-detail-shell">
+                <div className="person-photo-detail-card">
+                  <div className="person-photo-detail-head">
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => setShowPhotoDetail(false)}
+                    >
+                      Back
+                    </button>
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => setLargePhotoFileId(selectedPhoto.valueText)}
+                    >
+                      View Large
+                    </button>
+                  </div>
+                  <img
+                    src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                    alt={selectedPhoto.label || "photo"}
+                    className="person-photo-detail-preview"
+                  />
+                  <div className="person-photo-detail-fields">
+                    <label className="label">Name</label>
+                    <input className="input" value={editPhotoName} onChange={(e) => setEditPhotoName(e.target.value)} disabled={!canManage} />
+                    <label className="label">Description</label>
+                    <input className="input" value={editPhotoDescription} onChange={(e) => setEditPhotoDescription(e.target.value)} disabled={!canManage} />
+                    <label className="label">Date</label>
+                    <input className="input" type="date" value={editPhotoDate} onChange={(e) => setEditPhotoDate(e.target.value)} disabled={!canManage} />
+                    <label className="label" style={{ marginTop: "0.5rem" }}>
+                      <input type="checkbox" checked={editPhotoPrimary} onChange={(e) => setEditPhotoPrimary(e.target.checked)} disabled={!canManage} /> Set as primary
+                    </label>
+                    <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                      {canManage ? (
                         <button
                           type="button"
-                          className="button secondary tap-button"
-                          style={{ padding: 0, border: "none", background: "transparent" }}
-                          onClick={() => setLargePhotoFileId(item.valueText)}
+                          className="button tap-button"
+                          disabled={photoBusy}
+                          onClick={() => void saveSelectedPhotoMetadata()}
                         >
-                          <img
-                            src={getPhotoProxyPath(item.valueText, tenantKey)}
-                            alt={item.label || "photo"}
-                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
-                          />
+                          Save Photo Metadata
                         </button>
-                      </td>
-                      <td>{item.label || "-"}</td>
-                      <td>{item.notes || "-"}</td>
-                      <td>{item.startDate || "-"}</td>
-                      <td>{item.isPrimary ? "Yes" : "No"}</td>
-                    </tr>
-                  )) : <tr><td colSpan={7}>No photos recorded.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-            {selectedPhoto && canManage ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Edit Selected Photo Link</h4>
-                <label className="label">Name</label>
-                <input className="input" value={editPhotoName} onChange={(e) => setEditPhotoName(e.target.value)} />
-                <label className="label">Description</label>
-                <input className="input" value={editPhotoDescription} onChange={(e) => setEditPhotoDescription(e.target.value)} />
-                <label className="label">Date</label>
-                <input className="input" type="date" value={editPhotoDate} onChange={(e) => setEditPhotoDate(e.target.value)} />
-                <label className="label" style={{ marginTop: "0.5rem" }}>
-                  <input type="checkbox" checked={editPhotoPrimary} onChange={(e) => setEditPhotoPrimary(e.target.checked)} /> Set as primary
-                </label>
-                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    disabled={photoBusy}
-                    onClick={() =>
-                      void (async () => {
-                        setPhotoBusy(true);
-                        setStatus("Saving photo metadata...");
-                        const res = await fetch(
-                          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
-                          {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              label: editPhotoName,
-                              notes: editPhotoDescription,
-                              startDate: editPhotoDate,
-                              isPrimary: editPhotoPrimary,
-                            }),
-                          },
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="person-photo-tags-card">
+                    <h5 style={{ margin: "0 0 0.5rem" }}>People in this photo</h5>
+                    <div className="settings-chip-list">
+                      <span className="status-chip status-chip--neutral">{person.displayName} (current)</span>
+                      {selectedPhotoAssociations.people
+                        .filter((item) => item.personId !== person.personId)
+                        .map((item) => (
+                          <span key={`photo-associated-${item.personId}`} className="status-chip status-chip--neutral">
+                            {item.displayName}
+                          </span>
+                        ))}
+                    </div>
+                    {canManage ? (
+                      <>
+                        <label className="label" style={{ marginTop: "0.75rem" }}>Add Person</label>
+                        <select className="input" value={linkTargetPersonId} onChange={(e) => setLinkTargetPersonId(e.target.value)}>
+                          <option value="">Choose person</option>
+                          {linkablePeople.map((item) => (
+                            <option key={`link-photo-${item.personId}`} value={item.personId}>{item.displayName}</option>
+                          ))}
+                        </select>
+                        <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                          <button
+                            type="button"
+                            className="button tap-button"
+                            disabled={!linkTargetPersonId || photoBusy}
+                            onClick={() => void linkSelectedPhotoToPerson()}
+                          >
+                            Add To Selected Person
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            disabled={photoBusy}
+                            onClick={() => void unlinkSelectedPhotoFromCurrentPerson()}
+                          >
+                            Remove From {person.displayName}
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {showPhotoLibraryPicker ? (
+              <div className="person-photo-picker-shell">
+                <div className="person-photo-picker-card">
+                  <div className="person-photo-picker-head">
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Browse/Search Library</h4>
+                    <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoLibraryPicker(false)}>
+                      Close
+                    </button>
+                  </div>
+                  <label className="label">Search by name, description, date, person, household, or file ID</label>
+                  <input
+                    className="input"
+                    value={photoSearchQuery}
+                    onChange={(e) => setPhotoSearchQuery(e.target.value)}
+                    placeholder="e.g. wedding 1998 Ruth Clark"
+                  />
+                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={photoSearchBusy}
+                      onClick={() => void searchPhotoLibrary()}
+                    >
+                      {photoSearchBusy ? "Searching..." : "Search Photos"}
+                    </button>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        disabled={selectedLibraryFileIds.length === 0 || photoBusy}
+                        onClick={() => void linkSelectedLibraryPhotos()}
+                      >
+                        Link To {person.displayName}
+                      </button>
+                    ) : null}
+                  </div>
+                  {photoSearchResults.length > 0 ? (
+                    <div className="person-library-grid">
+                      {photoSearchResults.map((item) => {
+                        const alreadyLinked = linkedPhotoFileIds.has(item.fileId);
+                        const checked = selectedLibraryFileIds.includes(item.fileId);
+                        return (
+                          <label key={`search-${item.fileId}`} className="person-library-tile">
+                            <img
+                              src={getPhotoProxyPath(item.fileId, tenantKey)}
+                              alt={item.name || "photo"}
+                              className="person-library-image"
+                            />
+                            <div className="person-library-meta">
+                              <strong>{item.name || "-"}</strong>
+                              <span>{item.date || "-"}</span>
+                            </div>
+                            <div className="settings-chip-list">
+                              {alreadyLinked ? <span className="status-chip status-chip--neutral">Already linked</span> : null}
+                              {canManage ? (
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={alreadyLinked}
+                                  onChange={(e) => {
+                                    setSelectedLibraryFileIds((current) =>
+                                      e.target.checked
+                                        ? [...current, item.fileId]
+                                        : current.filter((id) => id !== item.fileId),
+                                    );
+                                  }}
+                                />
+                              ) : null}
+                            </div>
+                          </label>
                         );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+                      No search results yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {showPhotoUploadPicker && canManage ? (
+              <div className="person-photo-picker-shell">
+                <div className="person-photo-picker-card">
+                  <div className="person-photo-picker-head">
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Upload Photo</h4>
+                    <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoUploadPicker(false)}>
+                      Close
+                    </button>
+                  </div>
+                  <label className="label">Label</label>
+                  <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
+                  <label className="label">Description</label>
+                  <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
+                  <label className="label">Date</label>
+                  <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
+                  <label className="label" style={{ marginTop: "0.5rem" }}>
+                    <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
+                  </label>
+                  <input
+                    id={`person-photo-upload-${person.personId}`}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) =>
+                      void (async () => {
+                        const file = e.target.files?.[0] ?? null;
+                        e.currentTarget.value = "";
+                        if (!file) {
+                          return;
+                        }
+                        const form = new FormData();
+                        form.append("file", file);
+                        form.append("label", newPhotoLabel.trim() || "gallery");
+                        form.append("isHeadshot", String(newPhotoHeadshot));
+                        form.append("description", newPhotoDescription.trim());
+                        form.append("photoDate", newPhotoDate.trim());
+                        const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
+                          method: "POST",
+                          body: form,
+                        });
                         const body = await res.json().catch(() => null);
                         if (!res.ok) {
                           const message = body?.message || body?.error || "";
-                          setStatus(`Save photo metadata failed: ${res.status} ${String(message).slice(0, 160)}`);
-                          setPhotoBusy(false);
+                          setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
                           return;
                         }
-                        setStatus("Photo metadata saved.");
-                        setPhotoBusy(false);
+                        setStatus("Photo uploaded.");
+                        setShowPhotoUploadPicker(false);
+                        setNewPhotoHeadshot(false);
+                        setNewPhotoDescription("");
+                        setNewPhotoDate("");
                         await loadAttributes(person.personId);
                         onSaved();
                       })()
                     }
+                  />
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    style={{ marginTop: "0.75rem" }}
+                    onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
                   >
-                    Save Photo Metadata
+                    Add Photo
                   </button>
                 </div>
               </div>
-            ) : null}
-            {selectedPhoto && canManage ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Add To Another Person</h4>
-                <label className="label">Select Person</label>
-                <select className="input" value={linkTargetPersonId} onChange={(e) => setLinkTargetPersonId(e.target.value)}>
-                  <option value="">Choose person</option>
-                  {linkablePeople.map((item) => (
-                    <option key={`link-photo-${item.personId}`} value={item.personId}>{item.displayName}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="button tap-button"
-                  style={{ marginTop: "0.75rem" }}
-                  disabled={!linkTargetPersonId || photoBusy}
-                  onClick={() =>
-                    void (async () => {
-                      setPhotoBusy(true);
-                      setStatus("Linking photo to selected person...");
-                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(linkTargetPersonId)}/attributes`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          attributeType: "photo",
-                          valueText: selectedPhoto.valueText,
-                          label: editPhotoName || selectedPhoto.label || "photo",
-                          notes: editPhotoDescription || selectedPhoto.notes || "",
-                          startDate: editPhotoDate || selectedPhoto.startDate || "",
-                          visibility: "family",
-                          shareScope: "both_families",
-                          shareFamilyGroupKey: "",
-                          sortOrder: 0,
-                          isPrimary: false,
-                        }),
-                      });
-                      const body = await res.json().catch(() => null);
-                      if (!res.ok) {
-                        const message = body?.message || body?.error || "";
-                        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-                        setPhotoBusy(false);
-                        return;
-                      }
-                      setStatus("Photo linked to selected person.");
-                      setPhotoBusy(false);
-                    })()
-                  }
-                >
-                  Add To Selected Person
-                </button>
-              </div>
-            ) : null}
-            <div className="card" style={{ marginTop: "0.75rem" }}>
-              <h4 style={{ marginTop: 0 }}>Search Photo Library</h4>
-              <label className="label">Search by name, description, date, person, household, or file ID</label>
-              <input
-                className="input"
-                value={photoSearchQuery}
-                onChange={(e) => setPhotoSearchQuery(e.target.value)}
-                placeholder="e.g. wedding 1998 Ruth Clark"
-              />
-              <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  disabled={photoSearchBusy}
-                  onClick={() => void searchPhotoLibrary()}
-                >
-                  {photoSearchBusy ? "Searching..." : "Search Photos"}
-                </button>
-              </div>
-              {photoSearchResults.length > 0 ? (
-                <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
-                  <table className="settings-table">
-                    <thead>
-                      <tr>
-                        <th>Preview</th>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Date</th>
-                        <th>Associations</th>
-                        {canManage ? <th>Action</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {photoSearchResults.map((item) => {
-                        const alreadyLinked = linkedPhotoFileIds.has(item.fileId);
-                        const peopleText = item.people.map((person) => person.displayName).join(", ");
-                        const householdsText = item.households.map((household) => household.label).join(", ");
-                        return (
-                          <tr key={`search-${item.fileId}`}>
-                            <td>
-                              <button
-                                type="button"
-                                className="button secondary tap-button"
-                                style={{ padding: 0, border: "none", background: "transparent" }}
-                                onClick={() => setLargePhotoFileId(item.fileId)}
-                              >
-                                <img
-                                  src={getPhotoProxyPath(item.fileId, tenantKey)}
-                                  alt={item.name || "photo"}
-                                  style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
-                                />
-                              </button>
-                            </td>
-                            <td>{item.name || "-"}</td>
-                            <td>{item.description || "-"}</td>
-                            <td>{item.date || "-"}</td>
-                            <td>{[peopleText, householdsText].filter(Boolean).join(" | ") || "-"}</td>
-                            {canManage ? (
-                              <td>
-                                <button
-                                  type="button"
-                                  className="button secondary tap-button"
-                                  disabled={alreadyLinked || photoBusy}
-                                  onClick={() =>
-                                    void (async () => {
-                                      setPhotoBusy(true);
-                                      setStatus("Linking selected search photo...");
-                                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({
-                                          attributeType: "photo",
-                                          valueText: item.fileId,
-                                          label: item.name || "photo",
-                                          notes: item.description || "",
-                                          startDate: item.date || "",
-                                          visibility: "family",
-                                          shareScope: "both_families",
-                                          shareFamilyGroupKey: "",
-                                          sortOrder: 0,
-                                          isPrimary: photoAttributes.length === 0,
-                                        }),
-                                      });
-                                      const body = await res.json().catch(() => null);
-                                      if (!res.ok) {
-                                        const message = body?.message || body?.error || "";
-                                        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-                                        setPhotoBusy(false);
-                                        return;
-                                      }
-                                      setStatus("Photo linked.");
-                                      setPhotoBusy(false);
-                                      await loadAttributes(person.personId);
-                                      onSaved();
-                                    })()
-                                  }
-                                >
-                                  {alreadyLinked ? "Already Linked" : "Link To This Person"}
-                                </button>
-                              </td>
-                            ) : null}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-                  No search results yet.
-                </p>
-              )}
-            </div>
-            {canManage ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Upload Photo</h4>
-                <label className="label">Label</label>
-                <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
-                <label className="label">Description</label>
-                <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
-                <label className="label">Date</label>
-                <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
-                <label className="label" style={{ marginTop: "0.5rem" }}>
-                  <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
-                </label>
-                <input
-                  id={`person-photo-upload-${person.personId}`}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) =>
-                    void (async () => {
-                      const file = e.target.files?.[0] ?? null;
-                      e.currentTarget.value = "";
-                      if (!file) {
-                        return;
-                      }
-                      const form = new FormData();
-                      form.append("file", file);
-                      form.append("label", newPhotoLabel.trim() || "gallery");
-                      form.append("isHeadshot", String(newPhotoHeadshot));
-                      form.append("description", newPhotoDescription.trim());
-                      form.append("photoDate", newPhotoDate.trim());
-                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
-                        method: "POST",
-                        body: form,
-                      });
-                      const body = await res.json().catch(() => null);
-                      if (!res.ok) {
-                        const message = body?.message || body?.error || "";
-                        setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-                        return;
-                      }
-                      setStatus("Photo uploaded.");
-                      setNewPhotoHeadshot(false);
-                      setNewPhotoDescription("");
-                      setNewPhotoDate("");
-                      await loadAttributes(person.personId);
-                      onSaved();
-                    })()
-                  }
-                />
-                <button
-                  type="button"
-                  className="button tap-button"
-                  style={{ marginTop: "0.75rem" }}
-                  onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
-                >
-                  Add Photo
-                </button>
-              </div>
-            ) : null}
-            {canManage ? (
-              <button
-                type="button"
-                className="button secondary tap-button"
-                disabled={selectedPhotoAttributeIds.length === 0}
-                onClick={() =>
-                  void (async () => {
-                    setStatus("Removing selected photo links...");
-                    for (const attributeId of selectedPhotoAttributeIds) {
-                      await fetch(
-                        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(attributeId)}`,
-                        { method: "DELETE" },
-                      );
-                    }
-                    setSelectedPhotoAttributeIds([]);
-                    setStatus("Selected photo links removed.");
-                    await loadAttributes(person.personId);
-                    onSaved();
-                  })()
-                }
-              >
-                Remove Selected Links
-              </button>
             ) : null}
             {largePhotoFileId ? (
               <div

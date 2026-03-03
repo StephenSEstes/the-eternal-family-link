@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (person pictures tab option-2 UX: gallery + mobile full-screen detail)
+
+- `Change`: Refactored Person modal `Pictures` tab UI to an Option-2 flow: gallery-first grid, mobile full-screen Photo Detail editor, dedicated Browse/Search Library picker, and dedicated Upload flow panel.
+- `Type`: UI
+- `Why`: Improve mobile-first photo management clarity without changing photo business logic, API behavior, or data contracts.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Pictures tab loads same linked photos as before.
+  - Tapping a photo opens detail editor with same metadata fields (name/description/date/primary).
+  - Save metadata uses same save behavior and persists correctly.
+  - Add-to-another-person action still links via existing handler.
+  - Remove-from-current-person still unlinks via existing handler.
+  - Browse Library search + link works as before.
+  - Upload flow still uploads and links using existing endpoint and payload.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (photo library metadata search + association-based linking)
 
 - `Change`: Added tenant photo-library search endpoint and integrated search UI in Person modal Pictures tab to find photos by metadata and existing associations, then link results to the current person.
