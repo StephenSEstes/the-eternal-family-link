@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (photo library metadata search + association-based linking)
+
+- `Change`: Added tenant photo-library search endpoint and integrated search UI in Person modal Pictures tab to find photos by metadata and existing associations, then link results to the current person.
+- `Type`: API, UI
+- `Why`: Users needed to discover existing library photos by name/description/date and association context (people/households) before linking, instead of browsing blindly.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Person `Pictures` tab shows `Search Photo Library` with query input.
+  - Search matches include metadata and association text (people + households).
+  - Search result action can link an existing file to the current person.
+  - Already-linked files are clearly disabled from duplicate-link action.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (unified photo-link workflow for person + household)
 
 - `Change`: Replaced file-ID-centric photo actions with a unified `Add Photo` upload/link workflow on person and household modals, added inline linked-photo galleries with metadata (`name`, `description`, `date`), and added checkbox-based link dissociation (without deleting files from Drive library).

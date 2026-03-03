@@ -44,6 +44,15 @@ type PersonAttribute = {
   notes?: string;
 };
 
+type PhotoLibraryItem = {
+  fileId: string;
+  name: string;
+  description: string;
+  date: string;
+  people: Array<{ personId: string; displayName: string }>;
+  households: Array<{ householdId: string; label: string }>;
+};
+
 type Props = {
   open: boolean;
   tenantKey: string;
@@ -162,6 +171,17 @@ export function PersonEditModal({
   const [newPhotoDate, setNewPhotoDate] = useState("");
   const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
   const [selectedPhotoAttributeIds, setSelectedPhotoAttributeIds] = useState<string[]>([]);
+  const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
+  const [editPhotoName, setEditPhotoName] = useState("");
+  const [editPhotoDescription, setEditPhotoDescription] = useState("");
+  const [editPhotoDate, setEditPhotoDate] = useState("");
+  const [editPhotoPrimary, setEditPhotoPrimary] = useState(false);
+  const [linkTargetPersonId, setLinkTargetPersonId] = useState("");
+  const [largePhotoFileId, setLargePhotoFileId] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoSearchQuery, setPhotoSearchQuery] = useState("");
+  const [photoSearchResults, setPhotoSearchResults] = useState<PhotoLibraryItem[]>([]);
+  const [photoSearchBusy, setPhotoSearchBusy] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("existing");
   const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
@@ -272,6 +292,17 @@ export function PersonEditModal({
     setNewPhotoDate("");
     setNewPhotoHeadshot(false);
     setSelectedPhotoAttributeIds([]);
+    setSelectedPhotoAttributeId("");
+    setEditPhotoName("");
+    setEditPhotoDescription("");
+    setEditPhotoDate("");
+    setEditPhotoPrimary(false);
+    setLinkTargetPersonId("");
+    setLargePhotoFileId("");
+    setPhotoBusy(false);
+    setPhotoSearchQuery("");
+    setPhotoSearchResults([]);
+    setPhotoSearchBusy(false);
     setShowAddSpouse(false);
     setAddSpouseMode("existing");
     setExistingSpouseQuery("");
@@ -334,6 +365,42 @@ export function PersonEditModal({
     if (!query) return spouseOptions;
     return spouseOptions.filter((option) => option.displayName.toLowerCase().includes(query));
   }, [existingSpouseQuery, spouseOptions]);
+  const selectedPhoto = useMemo(
+    () => photoAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
+    [photoAttributes, selectedPhotoAttributeId],
+  );
+  const linkedPhotoFileIds = useMemo(() => new Set(photoAttributes.map((item) => item.valueText.trim()).filter(Boolean)), [photoAttributes]);
+  const linkablePeople = useMemo(
+    () => personOptions.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [personOptions],
+  );
+
+  useEffect(() => {
+    if (!selectedPhoto) {
+      return;
+    }
+    setEditPhotoName(selectedPhoto.label || "");
+    setEditPhotoDescription(selectedPhoto.notes || "");
+    setEditPhotoDate(selectedPhoto.startDate || "");
+    setEditPhotoPrimary(selectedPhoto.isPrimary);
+  }, [selectedPhoto]);
+
+  const searchPhotoLibrary = async () => {
+    setPhotoSearchBusy(true);
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(photoSearchQuery.trim())}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Photo search failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoSearchBusy(false);
+      return;
+    }
+    setPhotoSearchResults(Array.isArray(body?.items) ? (body.items as PhotoLibraryItem[]) : []);
+    setPhotoSearchBusy(false);
+  };
 
   if (!open || !person) {
     return null;
@@ -775,7 +842,7 @@ export function PersonEditModal({
           <>
             <div className="settings-table-wrap">
               <table className="settings-table">
-                <thead><tr><th>Remove</th><th>Preview</th><th>Name</th><th>Description</th><th>Date</th><th>Primary</th></tr></thead>
+                <thead><tr><th>Remove</th><th>Select</th><th>Preview</th><th>Name</th><th>Description</th><th>Date</th><th>Primary</th></tr></thead>
                 <tbody>
                   {photoAttributes.length > 0 ? photoAttributes.map((item) => (
                     <tr key={item.attributeId}>
@@ -793,20 +860,252 @@ export function PersonEditModal({
                         />
                       </td>
                       <td>
-                        <img
-                          src={getPhotoProxyPath(item.valueText, tenantKey)}
-                          alt={item.label || "photo"}
-                          style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
+                        <input
+                          type="radio"
+                          name="selected-photo"
+                          checked={selectedPhotoAttributeId === item.attributeId}
+                          onChange={() => setSelectedPhotoAttributeId(item.attributeId)}
                         />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          style={{ padding: 0, border: "none", background: "transparent" }}
+                          onClick={() => setLargePhotoFileId(item.valueText)}
+                        >
+                          <img
+                            src={getPhotoProxyPath(item.valueText, tenantKey)}
+                            alt={item.label || "photo"}
+                            style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
+                          />
+                        </button>
                       </td>
                       <td>{item.label || "-"}</td>
                       <td>{item.notes || "-"}</td>
                       <td>{item.startDate || "-"}</td>
                       <td>{item.isPrimary ? "Yes" : "No"}</td>
                     </tr>
-                  )) : <tr><td colSpan={6}>No photos recorded.</td></tr>}
+                  )) : <tr><td colSpan={7}>No photos recorded.</td></tr>}
                 </tbody>
               </table>
+            </div>
+            {selectedPhoto && canManage ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 style={{ marginTop: 0 }}>Edit Selected Photo Link</h4>
+                <label className="label">Name</label>
+                <input className="input" value={editPhotoName} onChange={(e) => setEditPhotoName(e.target.value)} />
+                <label className="label">Description</label>
+                <input className="input" value={editPhotoDescription} onChange={(e) => setEditPhotoDescription(e.target.value)} />
+                <label className="label">Date</label>
+                <input className="input" type="date" value={editPhotoDate} onChange={(e) => setEditPhotoDate(e.target.value)} />
+                <label className="label" style={{ marginTop: "0.5rem" }}>
+                  <input type="checkbox" checked={editPhotoPrimary} onChange={(e) => setEditPhotoPrimary(e.target.checked)} /> Set as primary
+                </label>
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    disabled={photoBusy}
+                    onClick={() =>
+                      void (async () => {
+                        setPhotoBusy(true);
+                        setStatus("Saving photo metadata...");
+                        const res = await fetch(
+                          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              label: editPhotoName,
+                              notes: editPhotoDescription,
+                              startDate: editPhotoDate,
+                              isPrimary: editPhotoPrimary,
+                            }),
+                          },
+                        );
+                        const body = await res.json().catch(() => null);
+                        if (!res.ok) {
+                          const message = body?.message || body?.error || "";
+                          setStatus(`Save photo metadata failed: ${res.status} ${String(message).slice(0, 160)}`);
+                          setPhotoBusy(false);
+                          return;
+                        }
+                        setStatus("Photo metadata saved.");
+                        setPhotoBusy(false);
+                        await loadAttributes(person.personId);
+                        onSaved();
+                      })()
+                    }
+                  >
+                    Save Photo Metadata
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {selectedPhoto && canManage ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 style={{ marginTop: 0 }}>Add To Another Person</h4>
+                <label className="label">Select Person</label>
+                <select className="input" value={linkTargetPersonId} onChange={(e) => setLinkTargetPersonId(e.target.value)}>
+                  <option value="">Choose person</option>
+                  {linkablePeople.map((item) => (
+                    <option key={`link-photo-${item.personId}`} value={item.personId}>{item.displayName}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  style={{ marginTop: "0.75rem" }}
+                  disabled={!linkTargetPersonId || photoBusy}
+                  onClick={() =>
+                    void (async () => {
+                      setPhotoBusy(true);
+                      setStatus("Linking photo to selected person...");
+                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(linkTargetPersonId)}/attributes`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          attributeType: "photo",
+                          valueText: selectedPhoto.valueText,
+                          label: editPhotoName || selectedPhoto.label || "photo",
+                          notes: editPhotoDescription || selectedPhoto.notes || "",
+                          startDate: editPhotoDate || selectedPhoto.startDate || "",
+                          visibility: "family",
+                          shareScope: "both_families",
+                          shareFamilyGroupKey: "",
+                          sortOrder: 0,
+                          isPrimary: false,
+                        }),
+                      });
+                      const body = await res.json().catch(() => null);
+                      if (!res.ok) {
+                        const message = body?.message || body?.error || "";
+                        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+                        setPhotoBusy(false);
+                        return;
+                      }
+                      setStatus("Photo linked to selected person.");
+                      setPhotoBusy(false);
+                    })()
+                  }
+                >
+                  Add To Selected Person
+                </button>
+              </div>
+            ) : null}
+            <div className="card" style={{ marginTop: "0.75rem" }}>
+              <h4 style={{ marginTop: 0 }}>Search Photo Library</h4>
+              <label className="label">Search by name, description, date, person, household, or file ID</label>
+              <input
+                className="input"
+                value={photoSearchQuery}
+                onChange={(e) => setPhotoSearchQuery(e.target.value)}
+                placeholder="e.g. wedding 1998 Ruth Clark"
+              />
+              <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={photoSearchBusy}
+                  onClick={() => void searchPhotoLibrary()}
+                >
+                  {photoSearchBusy ? "Searching..." : "Search Photos"}
+                </button>
+              </div>
+              {photoSearchResults.length > 0 ? (
+                <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                  <table className="settings-table">
+                    <thead>
+                      <tr>
+                        <th>Preview</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Associations</th>
+                        {canManage ? <th>Action</th> : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {photoSearchResults.map((item) => {
+                        const alreadyLinked = linkedPhotoFileIds.has(item.fileId);
+                        const peopleText = item.people.map((person) => person.displayName).join(", ");
+                        const householdsText = item.households.map((household) => household.label).join(", ");
+                        return (
+                          <tr key={`search-${item.fileId}`}>
+                            <td>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                style={{ padding: 0, border: "none", background: "transparent" }}
+                                onClick={() => setLargePhotoFileId(item.fileId)}
+                              >
+                                <img
+                                  src={getPhotoProxyPath(item.fileId, tenantKey)}
+                                  alt={item.name || "photo"}
+                                  style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
+                                />
+                              </button>
+                            </td>
+                            <td>{item.name || "-"}</td>
+                            <td>{item.description || "-"}</td>
+                            <td>{item.date || "-"}</td>
+                            <td>{[peopleText, householdsText].filter(Boolean).join(" | ") || "-"}</td>
+                            {canManage ? (
+                              <td>
+                                <button
+                                  type="button"
+                                  className="button secondary tap-button"
+                                  disabled={alreadyLinked || photoBusy}
+                                  onClick={() =>
+                                    void (async () => {
+                                      setPhotoBusy(true);
+                                      setStatus("Linking selected search photo...");
+                                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          attributeType: "photo",
+                                          valueText: item.fileId,
+                                          label: item.name || "photo",
+                                          notes: item.description || "",
+                                          startDate: item.date || "",
+                                          visibility: "family",
+                                          shareScope: "both_families",
+                                          shareFamilyGroupKey: "",
+                                          sortOrder: 0,
+                                          isPrimary: photoAttributes.length === 0,
+                                        }),
+                                      });
+                                      const body = await res.json().catch(() => null);
+                                      if (!res.ok) {
+                                        const message = body?.message || body?.error || "";
+                                        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+                                        setPhotoBusy(false);
+                                        return;
+                                      }
+                                      setStatus("Photo linked.");
+                                      setPhotoBusy(false);
+                                      await loadAttributes(person.personId);
+                                      onSaved();
+                                    })()
+                                  }
+                                >
+                                  {alreadyLinked ? "Already Linked" : "Link To This Person"}
+                                </button>
+                              </td>
+                            ) : null}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+                  No search results yet.
+                </p>
+              )}
             </div>
             {canManage ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
@@ -890,6 +1189,18 @@ export function PersonEditModal({
               >
                 Remove Selected Links
               </button>
+            ) : null}
+            {largePhotoFileId ? (
+              <div
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
+                onClick={() => setLargePhotoFileId("")}
+              >
+                <img
+                  src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                  alt="Large preview"
+                  style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                />
+              </div>
             ) : null}
           </>
         ) : null}

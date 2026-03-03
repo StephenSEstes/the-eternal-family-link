@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Implemented unified Add Photo flow (camera/file), photo galleries with metadata, and checkbox-based dissociation for person + household links (no library deletes). See `docs/change-summary.md`.
+- 2026-03-02: Added photo-library metadata search (name/description/date + people/household associations) with direct link-to-person action in Person Pictures view. See `docs/change-summary.md`.
