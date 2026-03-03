@@ -55,9 +55,20 @@ function BirthdayIcon() {
 function normalizeDateLabel(value: string) {
   const raw = value.trim();
   if (!raw) return "Birthdate not set";
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const y = match[1] ?? "";
+    const m = match[2] ?? "";
+    const d = match[3] ?? "";
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthIndex = Number.parseInt(m, 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${monthNames[monthIndex]} ${Number.parseInt(d, 10)}, ${y}`;
+    }
+  }
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
-  return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 export function PeopleDirectory({

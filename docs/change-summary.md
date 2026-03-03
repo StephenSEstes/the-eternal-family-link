@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (birthday tile date fix + person modal photo upload/gallery)
+
+- `Change`: Fixed date rendering on people tiles to prevent one-day birthday shifts, and upgraded Person modal Photos tab to support direct image upload plus inline photo previews in the catalog.
+- `Type`: UI, API Integration
+- `Why`: Root causes were timezone-sensitive date parsing (`new Date('YYYY-MM-DD')`) and a Photos tab that only accepted manual file IDs, creating a no-op experience for expected upload behavior.
+- `Files`:
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Birthday shown on people tiles matches stored date exactly (no +/- 1 day shift).
+  - Person modal `Photos` tab allows choosing an image file and successfully uploads it.
+  - Uploaded photos appear in the same tab with visible preview thumbnails.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (child personal address in household add-child flow)
 
 - `Change`: Added optional child personal address capture in household add-child flow and persist to `People.address` when child is created.

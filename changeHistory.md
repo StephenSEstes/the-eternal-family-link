@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-02: Added child personal address field to household add-child flow (saved to person-level address) while keeping required child validations. See `docs/change-summary.md`.
+- 2026-03-02: Fixed birthday tile date offset and added working photo upload + inline photo previews in Person modal Photos tab. See `docs/change-summary.md`.

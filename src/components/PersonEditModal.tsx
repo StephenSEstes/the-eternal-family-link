@@ -157,6 +157,8 @@ export function PersonEditModal({
   const [newAttrValue, setNewAttrValue] = useState("");
   const [newPhotoFileId, setNewPhotoFileId] = useState("");
   const [newPhotoLabel, setNewPhotoLabel] = useState("portrait");
+  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
+  const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("existing");
   const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
@@ -264,6 +266,8 @@ export function PersonEditModal({
     setNewAttrValue("");
     setNewPhotoFileId("");
     setNewPhotoLabel("portrait");
+    setNewPhotoFile(null);
+    setNewPhotoHeadshot(false);
     setShowAddSpouse(false);
     setAddSpouseMode("existing");
     setExistingSpouseQuery("");
@@ -767,18 +771,76 @@ export function PersonEditModal({
           <>
             <div className="settings-table-wrap">
               <table className="settings-table">
-                <thead><tr><th>Label</th><th>File ID</th><th>Primary</th></tr></thead>
+                <thead><tr><th>Preview</th><th>Label</th><th>File ID</th><th>Primary</th></tr></thead>
                 <tbody>
                   {photoAttributes.length > 0 ? photoAttributes.map((item) => (
                     <tr key={item.attributeId}>
+                      <td>
+                        <img
+                          src={getPhotoProxyPath(item.valueText, tenantKey)}
+                          alt={item.label || "photo"}
+                          style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
+                        />
+                      </td>
                       <td>{item.label || "-"}</td>
                       <td>{item.valueText}</td>
                       <td>{item.isPrimary ? "Yes" : "No"}</td>
                     </tr>
-                  )) : <tr><td colSpan={3}>No photos recorded.</td></tr>}
+                  )) : <tr><td colSpan={4}>No photos recorded.</td></tr>}
                 </tbody>
               </table>
             </div>
+            {canManage ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 style={{ marginTop: 0 }}>Upload Photo</h4>
+                <label className="label">Choose Photo</label>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setNewPhotoFile(e.target.files?.[0] ?? null)}
+                />
+                <label className="label">Label</label>
+                <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
+                <label className="label" style={{ marginTop: "0.5rem" }}>
+                  <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
+                </label>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  style={{ marginTop: "0.75rem" }}
+                  onClick={() =>
+                    void (async () => {
+                      if (!newPhotoFile) {
+                        setStatus("Choose an image file first.");
+                        return;
+                      }
+                      const form = new FormData();
+                      form.append("file", newPhotoFile);
+                      form.append("label", newPhotoLabel.trim() || "gallery");
+                      form.append("isHeadshot", String(newPhotoHeadshot));
+                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
+                        method: "POST",
+                        body: form,
+                      });
+                      const body = await res.json().catch(() => null);
+                      if (!res.ok) {
+                        const message = body?.message || body?.error || "";
+                        setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+                        return;
+                      }
+                      setStatus("Photo uploaded.");
+                      setNewPhotoFile(null);
+                      setNewPhotoHeadshot(false);
+                      await loadAttributes(person.personId);
+                      onSaved();
+                    })()
+                  }
+                >
+                  Upload Photo
+                </button>
+              </div>
+            ) : null}
             {canManage ? (
               <div className="card" style={{ marginTop: "0.75rem" }}>
                 <h4 style={{ marginTop: 0 }}>Add Photo By File ID</h4>
