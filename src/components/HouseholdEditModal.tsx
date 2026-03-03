@@ -57,12 +57,17 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [stateValue, setStateValue] = useState("");
   const [zip, setZip] = useState("");
   const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
-  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [selectedPhotoId, setSelectedPhotoId] = useState("");
+  const [showPhotoDetail, setShowPhotoDetail] = useState(false);
   const [newPhotoName, setNewPhotoName] = useState("");
   const [newPhotoDescription, setNewPhotoDescription] = useState("");
   const [newPhotoDate, setNewPhotoDate] = useState("");
   const [newPhotoPrimary, setNewPhotoPrimary] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
+  const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
+  const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
+  const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -88,7 +93,9 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setHousehold(next);
     setChildren(Array.isArray(body.children) ? (body.children as ChildSummary[]) : []);
     setPhotos(Array.isArray(body.photos) ? (body.photos as HouseholdPhoto[]) : []);
-    setSelectedPhotoIds([]);
+    setSelectedPhotoId("");
+    setShowPhotoDetail(false);
+    setLargePhotoFileId("");
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
@@ -99,6 +106,62 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setLoading(false);
     setStatus("");
   };
+
+  const clearPendingUploadPhoto = () => {
+    if (pendingUploadPhotoPreviewUrl) {
+      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+    }
+    setPendingUploadPhotoFile(null);
+    setPendingUploadPhotoPreviewUrl("");
+  };
+
+  const setPendingUploadFromInput = (file: File | null) => {
+    if (!file) return;
+    if (pendingUploadPhotoPreviewUrl) {
+      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setPendingUploadPhotoFile(file);
+    setPendingUploadPhotoPreviewUrl(previewUrl);
+  };
+
+  const submitPendingUploadPhoto = async () => {
+    if (!pendingUploadPhotoFile) {
+      setStatus("Choose a photo first.");
+      return;
+    }
+    setUploadingPhoto(true);
+    setStatus("Adding photo...");
+    const form = new FormData();
+    form.append("file", pendingUploadPhotoFile);
+    form.append("name", newPhotoName.trim() || pendingUploadPhotoFile.name || "photo");
+    form.append("description", newPhotoDescription.trim());
+    form.append("photoDate", newPhotoDate.trim());
+    form.append("isPrimary", String(newPhotoPrimary));
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/upload`,
+      { method: "POST", body: form },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Add photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setUploadingPhoto(false);
+      return;
+    }
+    clearPendingUploadPhoto();
+    setShowPhotoUploadPicker(false);
+    setNewPhotoName("");
+    setNewPhotoDescription("");
+    setNewPhotoDate("");
+    setNewPhotoPrimary(false);
+    setStatus("Photo linked.");
+    setUploadingPhoto(false);
+    await refresh();
+    onSaved();
+  };
+
+  const selectedPhoto = photos.find((photo) => photo.photoId === selectedPhotoId) ?? null;
 
   useEffect(() => {
     if (!open || !householdId) {
@@ -112,6 +175,14 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     void refresh();
   }, [open, householdId, tenantKey]);
 
+  useEffect(() => {
+    return () => {
+      if (pendingUploadPhotoPreviewUrl) {
+        URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
+      }
+    };
+  }, [pendingUploadPhotoPreviewUrl]);
+
   if (!open) {
     return null;
   }
@@ -120,36 +191,40 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 95, display: "grid", placeItems: "center", padding: "1rem" }}
+      className="person-modal-backdrop"
       onClick={onClose}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div
-        className="card"
-        style={{ width: "min(900px, 100%)", maxHeight: "90vh", overflowY: "auto" }}
+        className="person-modal-panel"
         onClick={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr) auto", gap: "0.8rem", alignItems: "center" }}>
-          <img
-            src={imageSrc}
-            alt="Household cover"
-            style={{ width: 140, height: 98, borderRadius: 12, objectFit: "cover", border: "1px solid var(--line)" }}
-          />
-          <div>
-            <h3 style={{ margin: 0 }}>{household?.label || "Household"}</h3>
-            <p className="page-subtitle" style={{ margin: 0 }}>
-              Mother: {household?.wifeName || "-"} | Father: {household?.husbandName || "-"}
-            </p>
+        <div className="person-modal-sticky-head">
+          <div className="person-modal-header">
+            <img
+              src={imageSrc}
+              alt="Household cover"
+              className="person-modal-avatar"
+              style={{ width: 84, height: 64 }}
+            />
+            <div>
+              <h3 className="person-modal-title">{household?.label || "Household"}</h3>
+              <p className="person-modal-meta">
+                Mother: {household?.wifeName || "-"} | Father: {household?.husbandName || "-"}
+              </p>
+              <p className="person-modal-meta">Household ID: {householdId}</p>
+            </div>
+            <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
           </div>
-          <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
         </div>
 
-        <div className="settings-chip-list" style={{ marginTop: "0.8rem", flexWrap: "nowrap", overflowX: "auto" }}>
-          <button type="button" className={`button secondary tap-button ${activeTab === "info" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("info")}>Info</button>
-          <button type="button" className={`button secondary tap-button ${activeTab === "children" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("children")}>Children</button>
-          <button type="button" className={`button secondary tap-button ${activeTab === "pictures" ? "game-option-selected" : ""}`} onClick={() => setActiveTab("pictures")}>Pictures</button>
+        <div className="person-modal-tabs">
+          <button type="button" className={`tab-pill ${activeTab === "info" ? "active" : ""}`} onClick={() => setActiveTab("info")}>Info</button>
+          <button type="button" className={`tab-pill ${activeTab === "children" ? "active" : ""}`} onClick={() => setActiveTab("children")}>Children</button>
+          <button type="button" className={`tab-pill ${activeTab === "pictures" ? "active" : ""}`} onClick={() => setActiveTab("pictures")}>Pictures</button>
         </div>
+        <div className="person-modal-content">
 
         {loading ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
 
@@ -157,47 +232,53 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
           <>
             {activeTab === "info" ? (
               <>
-                <label className="label">Household Label</label>
-                <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
-                <label className="label">Address</label>
-                <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
-                <div className="settings-chip-list">
-                  <div style={{ flex: 1, minWidth: 140 }}>
-                    <label className="label">City</label>
-                    <input className="input" value={city} onChange={(e) => setCity(e.target.value)} />
+                <div className="card">
+                  <h4 className="ui-section-title">Household Info</h4>
+                  <label className="label">Household Label</label>
+                  <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
+                  <label className="label">Address</label>
+                  <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
+                  <div className="settings-chip-list">
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <label className="label">City</label>
+                      <input className="input" value={city} onChange={(e) => setCity(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 110 }}>
+                      <label className="label">State</label>
+                      <input className="input" value={stateValue} onChange={(e) => setStateValue(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 110 }}>
+                      <label className="label">ZIP</label>
+                      <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 110 }}>
-                    <label className="label">State</label>
-                    <input className="input" value={stateValue} onChange={(e) => setStateValue(e.target.value)} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 110 }}>
-                    <label className="label">ZIP</label>
-                    <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
-                  </div>
+                  <label className="label">Notes</label>
+                  <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
                 </div>
-                <label className="label">Notes</label>
-                <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
               </>
             ) : null}
 
             {activeTab === "children" ? (
               <>
-                <div className="settings-table-wrap">
-                  <table className="settings-table">
-                    <thead>
-                      <tr><th>Name</th><th>Birthdate</th></tr>
-                    </thead>
-                    <tbody>
-                      {children.length > 0 ? children.map((child) => (
-                        <tr key={child.personId}>
-                          <td>{child.displayName}</td>
-                          <td>{child.birthDate || "-"}</td>
-                        </tr>
-                      )) : (
-                        <tr><td colSpan={2}>No children linked yet.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                <div className="card">
+                  <h4 className="ui-section-title">Children</h4>
+                  <div className="settings-table-wrap">
+                    <table className="settings-table">
+                      <thead>
+                        <tr><th>Name</th><th>Birthdate</th></tr>
+                      </thead>
+                      <tbody>
+                        {children.length > 0 ? children.map((child) => (
+                          <tr key={child.personId}>
+                            <td>{child.displayName}</td>
+                            <td>{child.birthDate || "-"}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={2}>No children linked yet.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -325,134 +406,196 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
 
             {activeTab === "pictures" ? (
               <>
-                <div className="settings-table-wrap">
-                  <table className="settings-table">
-                    <thead>
-                      <tr>
-                        <th>Remove</th>
-                        <th>Preview</th>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Date</th>
-                        <th>Primary</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {photos.length > 0 ? photos.map((photo) => (
-                        <tr key={photo.photoId}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedPhotoIds.includes(photo.photoId)}
-                              onChange={(e) => {
-                                setSelectedPhotoIds((current) =>
-                                  e.target.checked
-                                    ? [...current, photo.photoId]
-                                    : current.filter((id) => id !== photo.photoId),
-                                );
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <img
-                              src={getPhotoProxyPath(photo.fileId, tenantKey)}
-                              alt={photo.name || "photo"}
-                              style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--line)" }}
-                            />
-                          </td>
-                          <td>{photo.name || "-"}</td>
-                          <td>{photo.description || "-"}</td>
-                          <td>{photo.photoDate || "-"}</td>
-                          <td>{photo.isPrimary ? "Yes" : "No"}</td>
-                        </tr>
-                      )) : (
-                        <tr><td colSpan={6}>No linked photos yet.</td></tr>
+                <div className="card person-photo-gallery-card">
+                  <div className="person-photo-gallery-toolbar">
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Gallery</h4>
+                    <div className="person-photo-gallery-actions">
+                      <button type="button" className="button tap-button" onClick={() => setShowPhotoUploadPicker(true)}>
+                        + Add Photo
+                      </button>
+                    </div>
+                  </div>
+                  {photos.length > 0 ? (
+                    <div className="person-photo-grid">
+                      {photos.map((photo) => (
+                        <button
+                          key={photo.photoId}
+                          type="button"
+                          className="person-photo-tile"
+                          onClick={() => {
+                            setSelectedPhotoId(photo.photoId);
+                            setShowPhotoDetail(true);
+                          }}
+                        >
+                          <img
+                            src={getPhotoProxyPath(photo.fileId, tenantKey)}
+                            alt={photo.name || "photo"}
+                            className="person-photo-tile-image"
+                          />
+                          <div className="person-photo-tile-meta">
+                            <span className="person-photo-tile-label">{photo.name || "photo"}</span>
+                            {photo.isPrimary ? <span className="person-photo-primary-badge">Primary</span> : null}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="page-subtitle">No linked photos yet.</p>
+                  )}
+                </div>
+                {selectedPhoto && showPhotoDetail ? (
+                  <div className="person-photo-detail-shell">
+                    <div className="person-photo-detail-card">
+                      <div className="person-photo-detail-head">
+                        <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoDetail(false)}>
+                          Back
+                        </button>
+                        <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
+                        <button type="button" className="button secondary tap-button" onClick={() => setLargePhotoFileId(selectedPhoto.fileId)}>
+                          View Large
+                        </button>
+                      </div>
+                      <div className="card">
+                        <img
+                          src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
+                          alt={selectedPhoto.name || "photo"}
+                          className="person-photo-detail-preview"
+                        />
+                      </div>
+                      <div className="card">
+                        <h5 style={{ margin: "0 0 0.5rem" }}>Photo Info</h5>
+                        <label className="label">Name</label>
+                        <input className="input" value={selectedPhoto.name || ""} disabled />
+                        <label className="label">Description</label>
+                        <input className="input" value={selectedPhoto.description || ""} disabled />
+                        <label className="label">Date</label>
+                        <input className="input" value={selectedPhoto.photoDate || ""} disabled />
+                        <label className="label">Primary</label>
+                        <input className="input" value={selectedPhoto.isPrimary ? "Yes" : "No"} disabled />
+                      </div>
+                      <div className="card" style={{ borderColor: "#fecaca" }}>
+                        <h5 style={{ margin: "0 0 0.5rem" }}>Danger Zone</h5>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          disabled={uploadingPhoto}
+                          onClick={() =>
+                            void (async () => {
+                              const ok = window.confirm("Remove this photo from this household? This won't delete the photo from the library.");
+                              if (!ok) return;
+                              setUploadingPhoto(true);
+                              setStatus("Removing photo link...");
+                              await fetch(
+                                `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(selectedPhoto.photoId)}`,
+                                { method: "DELETE" },
+                              );
+                              setStatus("Photo link removed.");
+                              setUploadingPhoto(false);
+                              setShowPhotoDetail(false);
+                              setSelectedPhotoId("");
+                              await refresh();
+                              onSaved();
+                            })()
+                          }
+                        >
+                          {uploadingPhoto ? "Saving..." : "Remove from Household"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {showPhotoUploadPicker ? (
+                  <div className="person-photo-picker-shell">
+                    <div className="person-photo-picker-card">
+                      <div className="person-photo-picker-head">
+                        <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Upload Photo</h4>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => {
+                            clearPendingUploadPhoto();
+                            setShowPhotoUploadPicker(false);
+                          }}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <label className="label">Name</label>
+                      <input className="input" value={newPhotoName} onChange={(e) => setNewPhotoName(e.target.value)} placeholder="Photo name" />
+                      <label className="label">Description</label>
+                      <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
+                      <label className="label">Date</label>
+                      <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
+                      <label className="label" style={{ marginTop: "0.5rem" }}>
+                        <input type="checkbox" checked={newPhotoPrimary} onChange={(e) => setNewPhotoPrimary(e.target.checked)} /> Set as primary
+                      </label>
+                      {pendingUploadPhotoPreviewUrl ? (
+                        <div className="person-upload-preview-card">
+                          <img src={pendingUploadPhotoPreviewUrl} alt="Selected upload preview" className="person-upload-preview-image" />
+                          <div className="person-upload-preview-meta">
+                            <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
+                            <span>This photo will be uploaded with the metadata above.</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>No photo selected yet.</p>
                       )}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="card" style={{ marginTop: "0.75rem" }}>
-                  <h4 style={{ marginTop: 0 }}>Add Photo</h4>
-                  <label className="label">Name</label>
-                  <input className="input" value={newPhotoName} onChange={(e) => setNewPhotoName(e.target.value)} placeholder="Photo name" />
-                  <label className="label">Description</label>
-                  <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
-                  <label className="label">Date</label>
-                  <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
-                  <label className="label" style={{ marginTop: "0.5rem" }}>
-                    <input type="checkbox" checked={newPhotoPrimary} onChange={(e) => setNewPhotoPrimary(e.target.checked)} /> Set as primary
-                  </label>
-                  <input
-                    id={`household-photo-upload-${householdId}`}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) =>
-                      void (async () => {
-                        const file = e.target.files?.[0];
-                        e.currentTarget.value = "";
-                        if (!file) return;
-                        setUploadingPhoto(true);
-                        setStatus("Adding photo...");
-                        const form = new FormData();
-                        form.append("file", file);
-                        form.append("name", newPhotoName.trim() || file.name || "photo");
-                        form.append("description", newPhotoDescription.trim());
-                        form.append("photoDate", newPhotoDate.trim());
-                        form.append("isPrimary", String(newPhotoPrimary));
-                        const res = await fetch(
-                          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/upload`,
-                          { method: "POST", body: form },
-                        );
-                        const body = await res.json().catch(() => null);
-                        if (!res.ok) {
-                          const message = body?.message || body?.error || "";
-                          setStatus(`Add photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-                          setUploadingPhoto(false);
-                          return;
-                        }
-                        setNewPhotoName("");
-                        setNewPhotoDescription("");
-                        setNewPhotoDate("");
-                        setNewPhotoPrimary(false);
-                        setStatus("Photo linked.");
-                        setUploadingPhoto(false);
-                        await refresh();
-                        onSaved();
-                      })()
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="button tap-button"
-                    disabled={uploadingPhoto}
-                    onClick={() => document.getElementById(`household-photo-upload-${householdId}`)?.click()}
+                      <input
+                        id={`household-photo-upload-${householdId}`}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          e.currentTarget.value = "";
+                          setPendingUploadFromInput(file);
+                        }}
+                      />
+                      <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          disabled={uploadingPhoto}
+                          onClick={() => document.getElementById(`household-photo-upload-${householdId}`)?.click()}
+                        >
+                          {pendingUploadPhotoFile ? "Choose Another Photo" : "Choose Photo"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button tap-button"
+                          disabled={!pendingUploadPhotoFile || uploadingPhoto}
+                          onClick={() => void submitPendingUploadPhoto()}
+                        >
+                          {uploadingPhoto ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          disabled={uploadingPhoto}
+                          onClick={() => {
+                            clearPendingUploadPhoto();
+                            setShowPhotoUploadPicker(false);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {largePhotoFileId ? (
+                  <div
+                    style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
+                    onClick={() => setLargePhotoFileId("")}
                   >
-                    {uploadingPhoto ? "Adding..." : "Add Photo"}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  disabled={selectedPhotoIds.length === 0}
-                  onClick={() =>
-                    void (async () => {
-                      setStatus("Removing selected photo links...");
-                      for (const photoId of selectedPhotoIds) {
-                        await fetch(
-                          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(photoId)}`,
-                          { method: "DELETE" },
-                        );
-                      }
-                      setSelectedPhotoIds([]);
-                      setStatus("Selected photo links removed.");
-                      await refresh();
-                      onSaved();
-                    })()
-                  }
-                >
-                  Remove Selected Links
-                </button>
+                    <img
+                      src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                      alt="Large preview"
+                      style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                    />
+                  </div>
+                ) : null}
               </>
             ) : null}
 
@@ -492,6 +635,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         ) : null}
 
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+      </div>
       </div>
     </div>
   );

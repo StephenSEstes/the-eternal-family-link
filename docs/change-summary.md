@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (household modal visual parity + pictures UX alignment)
+
+- `Change`: Updated `HouseholdEditModal` to use the same modern modal shell and card-based visual language as person modal, and refactored household pictures tab to gallery/detail/upload overlay flows with staged upload preview actions.
+- `Type`: UI
+- `Why`: Align household and person editing experiences, improve mobile clarity, and make household photo workflows consistent without changing backend behavior.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Household modal uses sticky header/tabs/content styling consistent with person modal.
+  - Pictures tab shows gallery tiles and opens photo detail overlay.
+  - Upload flow shows thumbnail preview and explicit `Choose Photo / Save / Cancel`.
+  - Remove photo from household still uses existing delete route and does not delete library file.
+  - No API routes/payloads/sheet schema changed.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (photo detail typeahead + chips + single save UX)
 
 - `Change`: Refactored Person Photo Detail into componentized Option-2 detail UX with `PhotoDetailHeader`, `PhotoInfoForm`, `PeopleTagger` (typeahead + chips), and `StickySaveBar` (single metadata save control).

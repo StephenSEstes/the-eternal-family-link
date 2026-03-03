@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-03: Refactored Photo Detail to typeahead tagging + chips + single sticky save UX while preserving existing backend routes/payloads. See `docs/change-summary.md`.
+- 2026-03-03: Applied person-style modal design and gallery/detail/upload picture UX to Household modal with existing routes/payloads preserved. See `docs/change-summary.md`.
