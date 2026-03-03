@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (photo detail typeahead + chips + single save UX)
+
+- `Change`: Refactored Person Photo Detail into componentized Option-2 detail UX with `PhotoDetailHeader`, `PhotoInfoForm`, `PeopleTagger` (typeahead + chips), and `StickySaveBar` (single metadata save control).
+- `Type`: UI
+- `Why`: Simplify photo-detail interaction by replacing multiple scattered actions with mobile-first staged metadata editing, instant tag feedback, and one clear save path for metadata.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Photo Detail shows `Back | Photo Detail | View Large` header and large preview.
+  - Label/description/date/primary edits are staged in draft metadata and saved by one sticky `Save Changes` button.
+  - Tagging uses in-memory typeahead results; selecting a person updates chips immediately and calls existing link behavior.
+  - Removing non-current-person chips unlinks and updates chips immediately; failures rollback visual state.
+  - `Remove from {CurrentPerson}` action remains explicit with confirmation.
+  - No API routes, payload shapes, or sheet/data schema changed.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (photo association management: add/remove with live save-state feedback)
 
 - `Change`: Enhanced person-level photo association management in Photo Detail with explicit remove actions for linked people/households, duplicate-link prevention, and live association refresh/status after saves/removals.

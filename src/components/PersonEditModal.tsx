@@ -68,6 +68,12 @@ type Props = {
 
 type TabKey = "contact" | "attributes" | "photos";
 type AddSpouseMode = "existing" | "new";
+type DraftMeta = {
+  label: string;
+  description: string;
+  date: string;
+  isPrimary: boolean;
+};
 
 function toMonthDay(value: string) {
   const raw = value.trim();
@@ -131,6 +137,209 @@ function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonIt
   return { motherId, fatherId };
 }
 
+function PhotoDetailHeader({
+  onBack,
+  onViewLarge,
+}: {
+  onBack: () => void;
+  onViewLarge: () => void;
+}) {
+  return (
+    <div className="person-photo-detail-head">
+      <button type="button" className="button secondary tap-button" onClick={onBack}>
+        Back
+      </button>
+      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
+      <button type="button" className="button secondary tap-button" onClick={onViewLarge}>
+        View Large
+      </button>
+    </div>
+  );
+}
+
+function PhotoInfoForm({
+  draftMeta,
+  onChange,
+  disabled,
+}: {
+  draftMeta: DraftMeta;
+  onChange: (next: DraftMeta) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="person-photo-detail-fields card">
+      <h5 style={{ margin: "0 0 0.5rem" }}>Photo Info</h5>
+      <label className="label">Label</label>
+      <input
+        className="input"
+        value={draftMeta.label}
+        onChange={(e) => onChange({ ...draftMeta, label: e.target.value })}
+        disabled={disabled}
+      />
+      <label className="label">Description</label>
+      <input
+        className="input"
+        value={draftMeta.description}
+        onChange={(e) => onChange({ ...draftMeta, description: e.target.value })}
+        disabled={disabled}
+      />
+      <label className="label">Date</label>
+      <input
+        className="input"
+        type="date"
+        value={draftMeta.date}
+        onChange={(e) => onChange({ ...draftMeta, date: e.target.value })}
+        disabled={disabled}
+      />
+      <label className="label" style={{ marginTop: "0.5rem" }}>
+        <input
+          type="checkbox"
+          checked={draftMeta.isPrimary}
+          onChange={(e) => onChange({ ...draftMeta, isPrimary: e.target.checked })}
+          disabled={disabled}
+        /> Set as primary
+      </label>
+    </div>
+  );
+}
+
+function StickySaveBar({
+  dirty,
+  saving,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+}) {
+  const label = saving ? "Saving..." : dirty ? "Save Changes" : "Saved";
+  return (
+    <div className="photo-save-sticky-bar">
+      <button
+        type="button"
+        className="button tap-button"
+        disabled={!dirty || saving}
+        onClick={onSave}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
+function PeopleTagger({
+  currentPerson,
+  taggedPeople,
+  taggedHouseholds,
+  tagQuery,
+  onTagQueryChange,
+  results,
+  pendingOps,
+  canManage,
+  onAddTag,
+  onRemoveTag,
+  onRemoveHousehold,
+  busy,
+  statusText,
+}: {
+  currentPerson: PersonItem;
+  taggedPeople: Array<{ personId: string; displayName: string }>;
+  taggedHouseholds: Array<{ householdId: string; label: string }>;
+  tagQuery: string;
+  onTagQueryChange: (value: string) => void;
+  results: PersonItem[];
+  pendingOps: Set<string>;
+  canManage: boolean;
+  onAddTag: (person: PersonItem) => void;
+  onRemoveTag: (personId: string) => void;
+  onRemoveHousehold: (householdId: string) => void;
+  busy: boolean;
+  statusText: string;
+}) {
+  return (
+    <div className="person-photo-tags-card card">
+      <h5 style={{ margin: "0 0 0.5rem" }}>People Tagged In This Photo</h5>
+      <div className="person-chip-row">
+        <span className="person-tag-chip">
+          <span>{currentPerson.displayName}</span>
+        </span>
+        {taggedPeople
+          .filter((item) => item.personId !== currentPerson.personId)
+          .map((item) => (
+            <span key={`chip-${item.personId}`} className="person-tag-chip">
+              <span>{item.displayName}</span>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="person-chip-remove"
+                  disabled={busy || pendingOps.has(item.personId)}
+                  onClick={() => onRemoveTag(item.personId)}
+                  aria-label={`Remove ${item.displayName}`}
+                >
+                  {pendingOps.has(item.personId) ? "..." : "x"}
+                </button>
+              ) : null}
+            </span>
+          ))}
+      </div>
+      {canManage ? (
+        <>
+          <label className="label" style={{ marginTop: "0.75rem" }}>Search people to tag in this photo</label>
+          <input
+            className="input"
+            value={tagQuery}
+            onChange={(e) => onTagQueryChange(e.target.value)}
+            placeholder="Start typing a name..."
+          />
+          {tagQuery.trim() ? (
+            <div className="person-typeahead-list">
+              {results.length > 0 ? (
+                results.map((entry) => (
+                  <button
+                    key={`tag-result-${entry.personId}`}
+                    type="button"
+                    className="person-typeahead-item"
+                    onClick={() => onAddTag(entry)}
+                    disabled={busy || pendingOps.has(entry.personId)}
+                  >
+                    <span>{entry.displayName}</span>
+                  </button>
+                ))
+              ) : (
+                <p className="page-subtitle" style={{ margin: 0 }}>No matching people.</p>
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      <h5 style={{ margin: "0.75rem 0 0.5rem" }}>Linked Households</h5>
+      <div className="person-chip-row">
+        {taggedHouseholds.length > 0 ? (
+          taggedHouseholds.map((household) => (
+            <span key={`h-chip-${household.householdId}`} className="person-tag-chip">
+              <span>{household.label || household.householdId}</span>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="person-chip-remove"
+                  disabled={busy || pendingOps.has(`h-${household.householdId}`)}
+                  onClick={() => onRemoveHousehold(household.householdId)}
+                  aria-label={`Remove ${household.label || household.householdId}`}
+                >
+                  {pendingOps.has(`h-${household.householdId}`) ? "..." : "x"}
+                </button>
+              ) : null}
+            </span>
+          ))
+        ) : (
+          <span className="status-chip status-chip--neutral">None</span>
+        )}
+      </div>
+      {statusText ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{statusText}</p> : null}
+    </div>
+  );
+}
+
 export function PersonEditModal({
   open,
   tenantKey,
@@ -173,11 +382,10 @@ export function PersonEditModal({
   const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
   const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
   const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
-  const [editPhotoName, setEditPhotoName] = useState("");
-  const [editPhotoDescription, setEditPhotoDescription] = useState("");
-  const [editPhotoDate, setEditPhotoDate] = useState("");
-  const [editPhotoPrimary, setEditPhotoPrimary] = useState(false);
-  const [linkTargetPersonId, setLinkTargetPersonId] = useState("");
+  const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
+  const [tagQuery, setTagQuery] = useState("");
+  const [taggedPeople, setTaggedPeople] = useState<Array<{ personId: string; displayName: string }>>([]);
+  const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
   const [personPhotoQuery, setPersonPhotoQuery] = useState("");
@@ -306,11 +514,10 @@ export function PersonEditModal({
     setPendingUploadPhotoFile(null);
     setPendingUploadPhotoPreviewUrl("");
     setSelectedPhotoAttributeId("");
-    setEditPhotoName("");
-    setEditPhotoDescription("");
-    setEditPhotoDate("");
-    setEditPhotoPrimary(false);
-    setLinkTargetPersonId("");
+    setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
+    setTagQuery("");
+    setTaggedPeople([]);
+    setPendingOps(new Set());
     setLargePhotoFileId("");
     setPhotoBusy(false);
     setPersonPhotoQuery("");
@@ -405,22 +612,37 @@ export function PersonEditModal({
     );
   }, [personPhotoQuery, photoAttributes]);
   const linkablePeople = useMemo(
-    () => personOptions.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    () => personOptions.slice().sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [personOptions],
   );
   const linkedPersonIdsForSelectedPhoto = useMemo(
-    () => new Set(selectedPhotoAssociations.people.map((entry) => entry.personId)),
-    [selectedPhotoAssociations.people],
+    () => new Set(taggedPeople.map((entry) => entry.personId)),
+    [taggedPeople],
   );
+  const tagSearchResults = useMemo(() => {
+    const q = tagQuery.trim().toLowerCase();
+    if (!q) return [] as PersonItem[];
+    return linkablePeople
+      .filter((item) => item.displayName.toLowerCase().includes(q) && !linkedPersonIdsForSelectedPhoto.has(item.personId))
+      .slice(0, 8);
+  }, [linkablePeople, linkedPersonIdsForSelectedPhoto, tagQuery]);
   useEffect(() => {
     if (!selectedPhoto) {
       return;
     }
-    setEditPhotoName(selectedPhoto.label || "");
-    setEditPhotoDescription(selectedPhoto.notes || "");
-    setEditPhotoDate(selectedPhoto.startDate || "");
-    setEditPhotoPrimary(selectedPhoto.isPrimary);
+    setDraftMeta({
+      label: selectedPhoto.label || "",
+      description: selectedPhoto.notes || "",
+      date: selectedPhoto.startDate || "",
+      isPrimary: selectedPhoto.isPrimary,
+    });
+    setTagQuery("");
+    setPhotoAssociationStatus("");
   }, [selectedPhoto]);
+
+  useEffect(() => {
+    setTaggedPeople(selectedPhotoAssociations.people);
+  }, [selectedPhotoAssociations.people]);
 
   const refreshSelectedPhotoAssociations = async (fileId: string) => {
     setSelectedPhotoAssociationsBusy(true);
@@ -484,10 +706,10 @@ export function PersonEditModal({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          label: editPhotoName,
-          notes: editPhotoDescription,
-          startDate: editPhotoDate,
-          isPrimary: editPhotoPrimary,
+          label: draftMeta.label,
+          notes: draftMeta.description,
+          startDate: draftMeta.date,
+          isPrimary: draftMeta.isPrimary,
         }),
       },
     );
@@ -501,23 +723,23 @@ export function PersonEditModal({
     setStatus("Photo metadata saved.");
     setPhotoBusy(false);
     await loadAttributes(person.personId);
+    await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
     onSaved();
   };
 
-  const linkSelectedPhotoToPerson = async () => {
-    if (!selectedPhoto || !linkTargetPersonId || !person) return;
-    setPhotoBusy(true);
+  const linkSelectedPhotoToPerson = async (targetPersonId: string) => {
+    if (!selectedPhoto || !targetPersonId || !person) return false;
     setPhotoAssociationStatus("Saving association...");
     setStatus("Linking photo to selected person...");
-    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(linkTargetPersonId)}/attributes`, {
+    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         attributeType: "photo",
         valueText: selectedPhoto.valueText,
-        label: editPhotoName || selectedPhoto.label || "photo",
-        notes: editPhotoDescription || selectedPhoto.notes || "",
-        startDate: editPhotoDate || selectedPhoto.startDate || "",
+        label: draftMeta.label || selectedPhoto.label || "photo",
+        notes: draftMeta.description || selectedPhoto.notes || "",
+        startDate: draftMeta.date || selectedPhoto.startDate || "",
         visibility: "family",
         shareScope: "both_families",
         shareFamilyGroupKey: "",
@@ -530,17 +752,16 @@ export function PersonEditModal({
       const message = body?.message || body?.error || "";
       setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
       setPhotoAssociationStatus("Association save failed.");
-      setPhotoBusy(false);
-      return;
+      return false;
     }
     setStatus("Photo linked to selected person.");
     await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
     setPhotoAssociationStatus("Association saved.");
-    setPhotoBusy(false);
+    return true;
   };
 
   const removePhotoAssociationFromPerson = async (targetPersonId: string, fileId: string) => {
-    if (!person) return;
+    if (!person) return false;
     setPhotoBusy(true);
     setPhotoAssociationStatus("Removing association...");
     const attrsRes = await fetch(
@@ -551,7 +772,7 @@ export function PersonEditModal({
     if (!attrsRes.ok) {
       setPhotoAssociationStatus("Association remove failed.");
       setPhotoBusy(false);
-      return;
+      return false;
     }
     const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as PersonAttribute[]) : [];
     const matches = attrs.filter(
@@ -572,6 +793,7 @@ export function PersonEditModal({
     }
     setPhotoAssociationStatus("Association removed.");
     setPhotoBusy(false);
+    return true;
   };
 
   const removePhotoAssociationFromHousehold = async (householdIdToUnlink: string, fileId: string) => {
@@ -584,11 +806,68 @@ export function PersonEditModal({
     if (!res.ok) {
       setPhotoAssociationStatus("Association remove failed.");
       setPhotoBusy(false);
-      return;
+      return false;
     }
     await refreshSelectedPhotoAssociations(fileId);
     setPhotoAssociationStatus("Association removed.");
     setPhotoBusy(false);
+    return true;
+  };
+
+  const addTagByTypeahead = async (candidate: PersonItem) => {
+    if (!selectedPhoto || linkedPersonIdsForSelectedPhoto.has(candidate.personId)) {
+      setPhotoAssociationStatus("Already tagged.");
+      return;
+    }
+    setTagQuery("");
+    setTaggedPeople((current) => [...current, { personId: candidate.personId, displayName: candidate.displayName }]);
+    setPendingOps((current) => new Set(current).add(candidate.personId));
+    try {
+      const ok = await linkSelectedPhotoToPerson(candidate.personId);
+      if (!ok) {
+        setTaggedPeople((current) => current.filter((item) => item.personId !== candidate.personId));
+      }
+    } finally {
+      setPendingOps((current) => {
+        const next = new Set(current);
+        next.delete(candidate.personId);
+        return next;
+      });
+    }
+  };
+
+  const removeTagByChip = async (personIdToRemove: string) => {
+    if (!selectedPhoto || !personIdToRemove) return;
+    const previous = taggedPeople;
+    setTaggedPeople((current) => current.filter((item) => item.personId !== personIdToRemove));
+    setPendingOps((current) => new Set(current).add(personIdToRemove));
+    try {
+      const ok = await removePhotoAssociationFromPerson(personIdToRemove, selectedPhoto.valueText);
+      if (!ok) {
+        setTaggedPeople(previous);
+      }
+    } finally {
+      setPendingOps((current) => {
+        const next = new Set(current);
+        next.delete(personIdToRemove);
+        return next;
+      });
+    }
+  };
+
+  const removeHouseholdByChip = async (householdIdToRemove: string) => {
+    if (!selectedPhoto || !householdIdToRemove) return;
+    const key = `h-${householdIdToRemove}`;
+    setPendingOps((current) => new Set(current).add(key));
+    try {
+      await removePhotoAssociationFromHousehold(householdIdToRemove, selectedPhoto.valueText);
+    } finally {
+      setPendingOps((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
   };
 
   const linkSelectedLibraryPhotos = async () => {
@@ -1174,149 +1453,71 @@ export function PersonEditModal({
             {selectedPhoto && showPhotoDetail ? (
               <div className="person-photo-detail-shell">
                 <div className="person-photo-detail-card">
-                  <div className="person-photo-detail-head">
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => setShowPhotoDetail(false)}
-                    >
-                      Back
-                    </button>
-                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => setLargePhotoFileId(selectedPhoto.valueText)}
-                    >
-                      View Large
-                    </button>
-                  </div>
-                  <img
-                    src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
-                    alt={selectedPhoto.label || "photo"}
-                    className="person-photo-detail-preview"
+                  <PhotoDetailHeader
+                    onBack={() => setShowPhotoDetail(false)}
+                    onViewLarge={() => setLargePhotoFileId(selectedPhoto.valueText)}
                   />
-                  <div className="person-photo-detail-fields">
-                    <label className="label">Name</label>
-                    <input className="input" value={editPhotoName} onChange={(e) => setEditPhotoName(e.target.value)} disabled={!canManage} />
-                    <label className="label">Description</label>
-                    <input className="input" value={editPhotoDescription} onChange={(e) => setEditPhotoDescription(e.target.value)} disabled={!canManage} />
-                    <label className="label">Date</label>
-                    <input className="input" type="date" value={editPhotoDate} onChange={(e) => setEditPhotoDate(e.target.value)} disabled={!canManage} />
-                    <label className="label" style={{ marginTop: "0.5rem" }}>
-                      <input type="checkbox" checked={editPhotoPrimary} onChange={(e) => setEditPhotoPrimary(e.target.checked)} disabled={!canManage} /> Set as primary
-                    </label>
-                    <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="button tap-button"
-                          disabled={photoBusy}
-                          onClick={() => void saveSelectedPhotoMetadata()}
-                        >
-                          {photoBusy ? "Saving..." : "Save Photo Metadata"}
-                        </button>
-                      ) : null}
-                    </div>
+                  <div className="card">
+                    <img
+                      src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                      alt={selectedPhoto.label || "photo"}
+                      className="person-photo-detail-preview"
+                    />
                   </div>
-                  <div className="person-photo-tags-card">
-                    <h5 style={{ margin: "0 0 0.5rem" }}>Linked People</h5>
-                    {selectedPhotoAssociationsBusy ? (
-                      <p className="page-subtitle" style={{ marginTop: 0 }}>Loading linked entities...</p>
-                    ) : null}
-                    <div className="person-association-list">
-                      <div className="person-association-row">
-                        <span className="status-chip status-chip--neutral">{person.displayName} (current)</span>
-                        {canManage ? (
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            disabled={photoBusy}
-                            onClick={() => {
-                              if (selectedPhoto) {
-                                void removePhotoAssociationFromPerson(person.personId, selectedPhoto.valueText);
-                              }
-                            }}
-                          >
-                            {photoBusy ? "Saving..." : "Remove"}
-                          </button>
-                        ) : null}
-                      </div>
-                      {selectedPhotoAssociations.people
-                        .filter((item) => item.personId !== person.personId)
-                        .map((item) => (
-                          <div key={`photo-associated-${item.personId}`} className="person-association-row">
-                            <span className="status-chip status-chip--neutral">{item.displayName}</span>
-                            {canManage ? (
-                              <button
-                                type="button"
-                                className="button secondary tap-button"
-                                disabled={photoBusy}
-                                onClick={() => {
-                                  if (selectedPhoto) {
-                                    void removePhotoAssociationFromPerson(item.personId, selectedPhoto.valueText);
-                                  }
-                                }}
-                              >
-                                {photoBusy ? "Saving..." : "Remove"}
-                              </button>
-                            ) : null}
-                          </div>
-                        ))}
+                  <PhotoInfoForm draftMeta={draftMeta} onChange={setDraftMeta} disabled={!canManage || photoBusy} />
+                  <PeopleTagger
+                    currentPerson={person}
+                    taggedPeople={taggedPeople}
+                    taggedHouseholds={selectedPhotoAssociations.households}
+                    tagQuery={tagQuery}
+                    onTagQueryChange={setTagQuery}
+                    results={tagSearchResults}
+                    pendingOps={pendingOps}
+                    canManage={canManage}
+                    onAddTag={(candidate) => {
+                      void addTagByTypeahead(candidate);
+                    }}
+                    onRemoveTag={(personIdToRemove) => {
+                      if (personIdToRemove === person.personId) {
+                        return;
+                      }
+                      void removeTagByChip(personIdToRemove);
+                    }}
+                    onRemoveHousehold={(householdIdToRemove) => {
+                      void removeHouseholdByChip(householdIdToRemove);
+                    }}
+                    busy={photoBusy || selectedPhotoAssociationsBusy}
+                    statusText={photoAssociationStatus}
+                  />
+                  {canManage ? (
+                    <div className="card" style={{ borderColor: "#fecaca" }}>
+                      <h5 style={{ margin: "0 0 0.5rem" }}>Danger Zone</h5>
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        disabled={photoBusy}
+                        onClick={() => {
+                          const ok = window.confirm(`Remove this photo from ${person.displayName}? This won't delete the photo from the library.`);
+                          if (!ok) return;
+                          void removePhotoAssociationFromPerson(person.personId, selectedPhoto.valueText);
+                        }}
+                      >
+                        Remove from {person.displayName}
+                      </button>
                     </div>
-                    <h5 style={{ margin: "0.75rem 0 0.5rem" }}>Linked Households</h5>
-                    <div className="person-association-list">
-                      {selectedPhotoAssociations.households.length > 0 ? (
-                        selectedPhotoAssociations.households.map((household) => (
-                          <div key={`photo-household-${household.householdId}`} className="person-association-row">
-                            <span className="status-chip status-chip--neutral">{household.label || household.householdId}</span>
-                            {canManage ? (
-                              <button
-                                type="button"
-                                className="button secondary tap-button"
-                                disabled={photoBusy || !selectedPhoto}
-                                onClick={() => {
-                                  if (selectedPhoto) {
-                                    void removePhotoAssociationFromHousehold(household.householdId, selectedPhoto.valueText);
-                                  }
-                                }}
-                              >
-                                {photoBusy ? "Saving..." : "Remove"}
-                              </button>
-                            ) : null}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="person-association-row">
-                          <span className="status-chip status-chip--neutral">None</span>
-                        </div>
-                      )}
-                    </div>
-                    {photoAssociationStatus ? (
-                      <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p>
-                    ) : null}
-                    {canManage ? (
-                      <>
-                        <label className="label" style={{ marginTop: "0.75rem" }}>Add Person</label>
-                        <select className="input" value={linkTargetPersonId} onChange={(e) => setLinkTargetPersonId(e.target.value)}>
-                          <option value="">Choose person</option>
-                          {linkablePeople.map((item) => (
-                            <option key={`link-photo-${item.personId}`} value={item.personId}>{item.displayName}</option>
-                          ))}
-                        </select>
-                        <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                          <button
-                            type="button"
-                            className="button tap-button"
-                            disabled={!linkTargetPersonId || photoBusy || linkedPersonIdsForSelectedPhoto.has(linkTargetPersonId)}
-                            onClick={() => void linkSelectedPhotoToPerson()}
-                          >
-                            {photoBusy ? "Saving..." : linkedPersonIdsForSelectedPhoto.has(linkTargetPersonId) ? "Already Linked" : "Add To Selected Person"}
-                          </button>
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
+                  ) : null}
+                  <StickySaveBar
+                    dirty={
+                      draftMeta.label !== (selectedPhoto.label || "") ||
+                      draftMeta.description !== (selectedPhoto.notes || "") ||
+                      draftMeta.date !== (selectedPhoto.startDate || "") ||
+                      draftMeta.isPrimary !== selectedPhoto.isPrimary
+                    }
+                    saving={photoBusy}
+                    onSave={() => {
+                      void saveSelectedPhotoMetadata();
+                    }}
+                  />
                 </div>
               </div>
             ) : null}
