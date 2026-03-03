@@ -79,6 +79,7 @@ export type PersonAttributeRecord = {
   attributeType: string;
   valueText: string;
   valueJson: string;
+  mediaMetadata: string;
   label: string;
   isPrimary: boolean;
   sortOrder: number;

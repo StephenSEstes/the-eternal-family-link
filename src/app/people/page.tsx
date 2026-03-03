@@ -136,6 +136,7 @@ export default async function PeoplePage() {
           id: item.id,
           partner1PersonId: item.partner1PersonId,
           partner2PersonId: item.partner2PersonId,
+          label: item.label ?? "",
         }))}
       />
     </>

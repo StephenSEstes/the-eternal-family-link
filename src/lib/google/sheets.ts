@@ -99,6 +99,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "description",
     "photo_date",
     "is_primary",
+    "media_metadata",
   ],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   PersonAttributes: [
@@ -107,6 +108,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "attribute_type",
     "value_text",
     "value_json",
+    "media_metadata",
     "label",
     "is_primary",
     "sort_order",
@@ -1049,6 +1051,7 @@ function rowToPersonAttribute(headers: string[], row: string[], tenantKey: strin
     attributeType,
     valueText,
     valueJson: getCell(row, idx, "value_json").trim(),
+    mediaMetadata: getCell(row, idx, "media_metadata").trim(),
     label: getCell(row, idx, "label").trim(),
     isPrimary: parseBool(getCell(row, idx, "is_primary")),
     sortOrder: parseNumber(getCell(row, idx, "sort_order")),
@@ -1683,7 +1686,7 @@ export async function getPersonAttributes(
   try {
     await ensureResolvedTabColumns(
       PERSON_ATTRIBUTES_TAB,
-      ["share_scope", "share_family_group_key"],
+      ["share_scope", "share_family_group_key", "media_metadata"],
       normalizedTenantKey,
     );
     const tabName = await resolveTenantTabName(PERSON_ATTRIBUTES_TAB, normalizedTenantKey);

@@ -31,6 +31,7 @@ type HouseholdPhoto = {
   description: string;
   photoDate: string;
   isPrimary: boolean;
+  mediaMetadata?: string;
 };
 
 type Props = {
@@ -42,6 +43,23 @@ type Props = {
 };
 
 type TabKey = "info" | "children" | "pictures";
+
+function parseMediaMetadata(raw?: string) {
+  const text = (raw ?? "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as { mimeType?: string; fileName?: string };
+  } catch {
+    return null;
+  }
+}
+
+function isVideoMediaByMetadata(raw?: string) {
+  const parsed = parseMediaMetadata(raw);
+  const mime = (parsed?.mimeType ?? "").toLowerCase();
+  const fileName = (parsed?.fileName ?? "").toLowerCase();
+  return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
+}
 
 export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
@@ -68,6 +86,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
+  const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -96,6 +115,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setSelectedPhotoId("");
     setShowPhotoDetail(false);
     setLargePhotoFileId("");
+    setLargePhotoIsVideo(false);
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
@@ -123,6 +143,9 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     const previewUrl = URL.createObjectURL(file);
     setPendingUploadPhotoFile(file);
     setPendingUploadPhotoPreviewUrl(previewUrl);
+    if (!newPhotoDate && file.lastModified) {
+      setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
+    }
   };
 
   const submitPendingUploadPhoto = async () => {
@@ -138,6 +161,9 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     form.append("description", newPhotoDescription.trim());
     form.append("photoDate", newPhotoDate.trim());
     form.append("isPrimary", String(newPhotoPrimary));
+    if (pendingUploadPhotoFile.lastModified) {
+      form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
+    }
     const res = await fetch(
       `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/upload`,
       { method: "POST", body: form },
@@ -427,11 +453,20 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             setShowPhotoDetail(true);
                           }}
                         >
-                          <img
-                            src={getPhotoProxyPath(photo.fileId, tenantKey)}
-                            alt={photo.name || "photo"}
-                            className="person-photo-tile-image"
-                          />
+                          {isVideoMediaByMetadata(photo.mediaMetadata) ? (
+                            <video
+                              src={getPhotoProxyPath(photo.fileId, tenantKey)}
+                              className="person-photo-tile-image"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={getPhotoProxyPath(photo.fileId, tenantKey)}
+                              alt={photo.name || "photo"}
+                              className="person-photo-tile-image"
+                            />
+                          )}
                           <div className="person-photo-tile-meta">
                             <span className="person-photo-tile-label">{photo.name || "photo"}</span>
                             {photo.isPrimary ? <span className="person-photo-primary-badge">Primary</span> : null}
@@ -451,16 +486,32 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           Back
                         </button>
                         <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
-                        <button type="button" className="button secondary tap-button" onClick={() => setLargePhotoFileId(selectedPhoto.fileId)}>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => {
+                            setLargePhotoFileId(selectedPhoto.fileId);
+                            setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata));
+                          }}
+                        >
                           View Large
                         </button>
                       </div>
                       <div className="card">
-                        <img
-                          src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
-                          alt={selectedPhoto.name || "photo"}
-                          className="person-photo-detail-preview"
-                        />
+                        {isVideoMediaByMetadata(selectedPhoto.mediaMetadata) ? (
+                          <video
+                            src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
+                            className="person-photo-detail-preview"
+                            controls
+                            playsInline
+                          />
+                        ) : (
+                          <img
+                            src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
+                            alt={selectedPhoto.name || "photo"}
+                            className="person-photo-detail-preview"
+                          />
+                        )}
                       </div>
                       <div className="card">
                         <h5 style={{ margin: "0 0 0.5rem" }}>Photo Info</h5>
@@ -532,7 +583,11 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       </label>
                       {pendingUploadPhotoPreviewUrl ? (
                         <div className="person-upload-preview-card">
-                          <img src={pendingUploadPhotoPreviewUrl} alt="Selected upload preview" className="person-upload-preview-image" />
+                          {pendingUploadPhotoFile?.type?.startsWith("video/") ? (
+                            <video src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls playsInline />
+                          ) : (
+                            <img src={pendingUploadPhotoPreviewUrl} alt="Selected upload preview" className="person-upload-preview-image" />
+                          )}
                           <div className="person-upload-preview-meta">
                             <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
                             <span>This photo will be uploaded with the metadata above.</span>
@@ -544,7 +599,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       <input
                         id={`household-photo-upload-${householdId}`}
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         style={{ display: "none" }}
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null;
@@ -587,13 +642,25 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                 {largePhotoFileId ? (
                   <div
                     style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
-                    onClick={() => setLargePhotoFileId("")}
+                    onClick={() => {
+                      setLargePhotoFileId("");
+                      setLargePhotoIsVideo(false);
+                    }}
                   >
-                    <img
-                      src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                      alt="Large preview"
-                      style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                    />
+                    {largePhotoIsVideo ? (
+                      <video
+                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                        controls
+                        playsInline
+                        style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                      />
+                    ) : (
+                      <img
+                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                        alt="Large preview"
+                        style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                      />
+                    )}
                   </div>
                 ) : null}
               </>

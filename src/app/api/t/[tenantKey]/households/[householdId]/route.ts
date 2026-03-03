@@ -22,6 +22,7 @@ type HouseholdPhotoLink = {
   description: string;
   photoDate: string;
   isPrimary: boolean;
+  mediaMetadata: string;
 };
 
 type DeleteHouseholdPreview = {
@@ -194,7 +195,7 @@ export async function GET(_: Request, { params }: RouteProps) {
     });
     await ensureResolvedTabColumns(
       "HouseholdPhotos",
-      ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary"],
+      ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
       resolved.tenant.tenantKey,
     );
     const householdPhotos: HouseholdPhotoLink[] = (await getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []))
@@ -206,6 +207,7 @@ export async function GET(_: Request, { params }: RouteProps) {
         description: readCell(row.data, "description"),
         photoDate: readCell(row.data, "photo_date"),
         isPrimary: normalize(readCell(row.data, "is_primary")) === "true",
+        mediaMetadata: readCell(row.data, "media_metadata"),
       }))
       .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
 

@@ -141,6 +141,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
           id: item.id,
           partner1PersonId: item.partner1PersonId,
           partner2PersonId: item.partner2PersonId,
+          label: item.label ?? "",
         }))}
       />
     </>

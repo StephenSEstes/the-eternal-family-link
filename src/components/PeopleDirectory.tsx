@@ -30,8 +30,10 @@ type PeopleDirectoryProps = {
   people: PersonItem[];
   photoByPersonId: Record<string, string>;
   edges: { id: string; fromPersonId: string; toPersonId: string; label: string }[];
-  households: { id: string; partner1PersonId: string; partner2PersonId: string }[];
+  households: { id: string; partner1PersonId: string; partner2PersonId: string; label?: string }[];
 };
+
+type DirectoryMode = "people" | "households";
 
 function SearchIcon() {
   return (
@@ -81,8 +83,10 @@ export function PeopleDirectory({
 }: PeopleDirectoryProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<DirectoryMode>("people");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -91,6 +95,26 @@ export function PeopleDirectory({
     }
     return people.filter((person) => person.displayName.toLowerCase().includes(normalized));
   }, [people, query]);
+  const householdCards = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return households
+      .map((household) => {
+        const partner1 = peopleById.get(household.partner1PersonId);
+        const partner2 = peopleById.get(household.partner2PersonId);
+        const partner1Name = partner1?.displayName || "Unknown";
+        const partner2Name = partner2?.displayName || "Unknown";
+        const label = household.label?.trim() || `${partner1Name} + ${partner2Name}`;
+        const searchBlob = `${label} ${partner1Name} ${partner2Name} ${household.id}`.toLowerCase();
+        return {
+          id: household.id,
+          label,
+          partner1Name,
+          partner2Name,
+          searchBlob,
+        };
+      })
+      .filter((item) => (normalized ? item.searchBlob.includes(normalized) : true));
+  }, [households, peopleById, query]);
   const selectedPerson = useMemo(
     () => people.find((item) => item.personId === selectedPersonId) ?? null,
     [people, selectedPersonId],
@@ -115,50 +139,99 @@ export function PeopleDirectory({
           className="search-input"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search family members"
+          placeholder={mode === "people" ? "Search family members" : "Search households"}
         />
       </label>
+      <div className="settings-chip-list" style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className={`button secondary tap-button ${mode === "people" ? "active" : ""}`}
+          onClick={() => setMode("people")}
+        >
+          People
+        </button>
+        <button
+          type="button"
+          className={`button secondary tap-button ${mode === "households" ? "active" : ""}`}
+          onClick={() => setMode("households")}
+        >
+          Households
+        </button>
+      </div>
 
-      <section className="people-grid album-grid">
-        {filtered.map((person) => {
-          const photoFileId = photoByPersonId[person.personId] || person.photoFileId;
-          const fallbackAvatar =
-            person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
-          return (
+      {mode === "people" ? (
+        <section className="people-grid album-grid">
+          {filtered.map((person) => {
+            const photoFileId = photoByPersonId[person.personId] || person.photoFileId;
+            const fallbackAvatar =
+              person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
+            return (
+              <article
+                key={person.personId}
+                className="person-card album-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedPersonId(person.personId)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedPersonId(person.personId);
+                  }
+                }}
+              >
+                <div className="person-photo-wrap">
+                  <img
+                    src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
+                    alt={person.displayName}
+                    className="person-photo"
+                  />
+                </div>
+
+                <div className="person-card-content">
+                  <h3>{person.displayName}</h3>
+                  <p className="person-meta-row">
+                    <span className="person-meta-icon">
+                      <BirthdayIcon />
+                    </span>
+                    <span>{normalizeDateLabel(person.birthDate)}</span>
+                  </p>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="people-grid album-grid">
+          {householdCards.map((household) => (
             <article
-              key={person.personId}
+              key={household.id}
               className="person-card album-card"
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedPersonId(person.personId)}
+              onClick={() => setSelectedHouseholdId(household.id)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  setSelectedPersonId(person.personId);
+                  setSelectedHouseholdId(household.id);
                 }
               }}
             >
               <div className="person-photo-wrap">
-                <img
-                  src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
-                  alt={person.displayName}
-                  className="person-photo"
-                />
+                <img src="/WeddingAvatar1.png" alt={household.label} className="person-photo" />
               </div>
-
               <div className="person-card-content">
-                <h3>{person.displayName}</h3>
+                <h3>{household.label}</h3>
                 <p className="person-meta-row">
-                  <span className="person-meta-icon">
-                    <BirthdayIcon />
-                  </span>
-                  <span>{normalizeDateLabel(person.birthDate)}</span>
+                  <span>{household.partner1Name}</span>
+                </p>
+                <p className="person-meta-row">
+                  <span>{household.partner2Name}</span>
                 </p>
               </div>
             </article>
-          );
-        })}
-      </section>
+          ))}
+        </section>
+      )}
 
       <PersonEditModal
         open={Boolean(selectedPerson)}

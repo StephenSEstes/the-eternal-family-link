@@ -20,6 +20,14 @@ function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function normalizeDateFromTimestamp(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
 export async function POST(request: Request, { params }: UploadRouteProps) {
   try {
     const { tenantKey, householdId } = await params;
@@ -43,13 +51,25 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
 
     const name = String(formData?.get("name") ?? "").trim();
     const description = String(formData?.get("description") ?? "").trim();
-    const photoDate = String(formData?.get("photoDate") ?? "").trim();
+    const requestedPhotoDate = String(formData?.get("photoDate") ?? "").trim();
+    const fileCreatedAt = String(formData?.get("fileCreatedAt") ?? "").trim();
     const requestedPrimary = String(formData?.get("isPrimary") ?? "").trim().toLowerCase() === "true";
 
     const bytes = Buffer.from(await file.arrayBuffer());
     if (bytes.length === 0) {
       return NextResponse.json({ error: "invalid_payload", message: "file is empty" }, { status: 400 });
     }
+
+    const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
+      ? new Date(fileCreatedAt).toISOString()
+      : new Date().toISOString();
+    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
+    const mediaMetadata = JSON.stringify({
+      fileName: file.name || "",
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: bytes.length,
+      createdAt: createdAtIso,
+    });
 
     const config = await getTenantConfig(resolved.tenant.tenantKey);
     const uploaded = await uploadPhotoToFolder({
@@ -61,7 +81,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
 
     await ensureResolvedTabColumns(
       HOUSEHOLD_PHOTOS_TAB,
-      ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary"],
+      ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
       resolved.tenant.tenantKey,
     );
 
@@ -95,8 +115,9 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         file_id: uploaded.fileId,
         name: name || file.name || "photo",
         description,
-        photo_date: photoDate,
+        photo_date: effectivePhotoDate,
         is_primary: shouldBePrimary ? "TRUE" : "FALSE",
+        media_metadata: mediaMetadata,
       },
       resolved.tenant.tenantKey,
     );

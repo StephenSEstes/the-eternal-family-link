@@ -38,6 +38,8 @@ type PersonAttribute = {
   attributeId: string;
   attributeType: string;
   valueText: string;
+  valueJson?: string;
+  mediaMetadata?: string;
   label: string;
   isPrimary: boolean;
   startDate?: string;
@@ -90,6 +92,24 @@ function parseDate(value?: string) {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function parseMediaMetadata(raw?: string) {
+  const text = (raw ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as { mimeType?: string; fileName?: string };
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function isVideoMediaByMetadata(raw?: string) {
+  const parsed = parseMediaMetadata(raw);
+  const mime = (parsed?.mimeType ?? "").toLowerCase();
+  const fileName = (parsed?.fileName ?? "").toLowerCase();
+  return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
 }
 
 function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate: string | undefined, minYears = 15) {
@@ -387,6 +407,7 @@ export function PersonEditModal({
   const [taggedPeople, setTaggedPeople] = useState<Array<{ personId: string; displayName: string }>>([]);
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
+  const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [personPhotoQuery, setPersonPhotoQuery] = useState("");
   const [photoSearchQuery, setPhotoSearchQuery] = useState("");
@@ -519,6 +540,7 @@ export function PersonEditModal({
     setTaggedPeople([]);
     setPendingOps(new Set());
     setLargePhotoFileId("");
+    setLargePhotoIsVideo(false);
     setPhotoBusy(false);
     setPersonPhotoQuery("");
     setPhotoSearchQuery("");
@@ -924,6 +946,9 @@ export function PersonEditModal({
     const previewUrl = URL.createObjectURL(file);
     setPendingUploadPhotoFile(file);
     setPendingUploadPhotoPreviewUrl(previewUrl);
+    if (!newPhotoDate && file.lastModified) {
+      setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
+    }
   };
 
   const submitPendingUploadPhoto = async () => {
@@ -940,6 +965,9 @@ export function PersonEditModal({
       form.append("isHeadshot", String(newPhotoHeadshot));
       form.append("description", newPhotoDescription.trim());
       form.append("photoDate", newPhotoDate.trim());
+      if (pendingUploadPhotoFile.lastModified) {
+        form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
+      }
       const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
         method: "POST",
         body: form,
@@ -1431,11 +1459,20 @@ export function PersonEditModal({
                       className="person-photo-tile"
                       onClick={() => openPhotoDetail(item.attributeId)}
                     >
-                      <img
-                        src={getPhotoProxyPath(item.valueText, tenantKey)}
-                        alt={item.label || "photo"}
-                        className="person-photo-tile-image"
-                      />
+                      {isVideoMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                        <video
+                          src={getPhotoProxyPath(item.valueText, tenantKey)}
+                          className="person-photo-tile-image"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={getPhotoProxyPath(item.valueText, tenantKey)}
+                          alt={item.label || "photo"}
+                          className="person-photo-tile-image"
+                        />
+                      )}
                       <div className="person-photo-tile-meta">
                         <span className="person-photo-tile-label">{item.label || "photo"}</span>
                         {item.isPrimary ? <span className="person-photo-primary-badge">Primary</span> : null}
@@ -1455,14 +1492,26 @@ export function PersonEditModal({
                 <div className="person-photo-detail-card">
                   <PhotoDetailHeader
                     onBack={() => setShowPhotoDetail(false)}
-                    onViewLarge={() => setLargePhotoFileId(selectedPhoto.valueText)}
+                    onViewLarge={() => {
+                      setLargePhotoFileId(selectedPhoto.valueText);
+                      setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                    }}
                   />
                   <div className="card">
-                    <img
-                      src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
-                      alt={selectedPhoto.label || "photo"}
-                      className="person-photo-detail-preview"
-                    />
+                    {isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
+                      <video
+                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        className="person-photo-detail-preview"
+                        controls
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        alt={selectedPhoto.label || "photo"}
+                        className="person-photo-detail-preview"
+                      />
+                    )}
                   </div>
                   <PhotoInfoForm draftMeta={draftMeta} onChange={setDraftMeta} disabled={!canManage || photoBusy} />
                   <PeopleTagger
@@ -1631,11 +1680,20 @@ export function PersonEditModal({
                   </label>
                   {pendingUploadPhotoPreviewUrl ? (
                     <div className="person-upload-preview-card">
-                      <img
-                        src={pendingUploadPhotoPreviewUrl}
-                        alt="Selected upload preview"
-                        className="person-upload-preview-image"
-                      />
+                      {pendingUploadPhotoFile?.type?.startsWith("video/") ? (
+                        <video
+                          src={pendingUploadPhotoPreviewUrl}
+                          className="person-upload-preview-image"
+                          controls
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={pendingUploadPhotoPreviewUrl}
+                          alt="Selected upload preview"
+                          className="person-upload-preview-image"
+                        />
+                      )}
                       <div className="person-upload-preview-meta">
                         <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
                         <span>This photo will be uploaded with the metadata above.</span>
@@ -1649,7 +1707,7 @@ export function PersonEditModal({
                   <input
                     id={`person-photo-upload-${person.personId}`}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     style={{ display: "none" }}
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
@@ -1692,13 +1750,25 @@ export function PersonEditModal({
             {largePhotoFileId ? (
               <div
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
-                onClick={() => setLargePhotoFileId("")}
+                onClick={() => {
+                  setLargePhotoFileId("");
+                  setLargePhotoIsVideo(false);
+                }}
               >
-                <img
-                  src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                  alt="Large preview"
-                  style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                />
+                {largePhotoIsVideo ? (
+                  <video
+                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    controls
+                    playsInline
+                    style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                  />
+                ) : (
+                  <img
+                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    alt="Large preview"
+                    style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                  />
+                )}
               </div>
             ) : null}
           </>

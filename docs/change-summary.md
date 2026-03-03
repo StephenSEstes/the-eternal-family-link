@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (people+households tiles + video media support + metadata capture)
+
+- `Change`: Expanded People page to support both `People` and `Households` tile modes, added video-capable rendering in person/household media galleries/detail/upload previews, and captured file metadata into a dedicated `media_metadata` column with created timestamp fallback for default media date.
+- `Type`: UI, API, Schema
+- `Why`: Support mixed entity browsing on People page and make media workflows handle both photos and movies while preserving existing handlers/routes and sheet-backed storage patterns.
+- `Files`:
+  - `src/components/PeopleDirectory.tsx`
+  - `src/app/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/lib/google/types.ts`
+  - `docs/data-schema.md`
+- `Data Changes`:
+  - Added `media_metadata` column support for:
+    - `PersonAttributes`
+    - `HouseholdPhotos`
+  - Upload routes now persist JSON metadata (`fileName`, `mimeType`, `sizeBytes`, `createdAt`) in `media_metadata`.
+  - If media date is omitted on upload, API defaults date from provided file-created timestamp (or current timestamp fallback).
+- `Verify`:
+  - People page toggles between `People` and `Households` card grids and household cards open existing household modal.
+  - Person and household gallery/detail views can render video media with controls.
+  - Upload picker accepts image/video and shows selected media preview before save.
+  - Upload persists metadata to `media_metadata` and date defaults correctly when date input is blank.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (household modal visual parity + pictures UX alignment)
 
 - `Change`: Updated `HouseholdEditModal` to use the same modern modal shell and card-based visual language as person modal, and refactored household pictures tab to gallery/detail/upload overlay flows with staged upload preview actions.

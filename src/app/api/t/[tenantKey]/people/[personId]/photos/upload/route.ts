@@ -4,6 +4,7 @@ import { buildEntityId } from "@/lib/entity-id";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import {
   createTableRecord,
+  ensureResolvedTabColumns,
   getPersonAttributes,
   getPersonById,
   getTenantConfig,
@@ -19,6 +20,14 @@ type UploadRouteProps = {
 
 function buildAttributeId(tenantKey: string, personId: string) {
   return buildEntityId("attr", `${tenantKey}|${personId}|photo|${Date.now()}`);
+}
+
+function normalizeDateFromTimestamp(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 export async function POST(request: Request, { params }: UploadRouteProps) {
@@ -47,7 +56,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const label = String(formData?.get("label") ?? "gallery").trim() || "gallery";
     const requestedHeadshot = String(formData?.get("isHeadshot") ?? "").trim().toLowerCase() === "true";
     const description = String(formData?.get("description") ?? "").trim();
-    const photoDate = String(formData?.get("photoDate") ?? "").trim();
+    const requestedPhotoDate = String(formData?.get("photoDate") ?? "").trim();
+    const fileCreatedAt = String(formData?.get("fileCreatedAt") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
     if (bytes.length === 0) {
@@ -60,6 +70,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       filename: file.name || `${personId}-${Date.now()}.jpg`,
       mimeType: file.type || "application/octet-stream",
       data: bytes,
+    });
+
+    const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
+      ? new Date(fileCreatedAt).toISOString()
+      : new Date().toISOString();
+    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
+    const mediaMetadata = JSON.stringify({
+      fileName: file.name || "",
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: bytes.length,
+      createdAt: createdAtIso,
     });
 
     const existingPhotos = (await getPersonAttributes(resolved.tenant.tenantKey, personId)).filter(
@@ -84,6 +105,11 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     }
 
     const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId);
+    await ensureResolvedTabColumns(
+      PERSON_ATTRIBUTES_TAB,
+      ["media_metadata"],
+      resolved.tenant.tenantKey,
+    );
     await createTableRecord(
       PERSON_ATTRIBUTES_TAB,
       {
@@ -91,11 +117,12 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         person_id: personId,
         attribute_type: "photo",
         value_text: uploaded.fileId,
-        value_json: "",
+        value_json: mediaMetadata,
+        media_metadata: mediaMetadata,
         label: shouldBePrimary ? "headshot" : label,
         is_primary: shouldBePrimary ? "TRUE" : "FALSE",
         sort_order: "0",
-        start_date: photoDate,
+        start_date: effectivePhotoDate,
         end_date: "",
         visibility: "family",
         share_scope: "both_families",

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-03: Applied person-style modal design and gallery/detail/upload picture UX to Household modal with existing routes/payloads preserved. See `docs/change-summary.md`.
+- 2026-03-03: Added People/Households dual tile mode on People page, video-capable media handling, and `media_metadata` capture with created-date defaulting in upload flows. See `docs/change-summary.md`.
