@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-03: Added staged upload preview in Person Pictures flow with explicit `Save`, `Cancel`, and `Choose Another Photo` actions. See `docs/change-summary.md`.
+- 2026-03-03: Enhanced person-level photo association management with add/remove controls, duplicate-link protection, and live save-state feedback. See `docs/change-summary.md`.

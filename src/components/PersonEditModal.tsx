@@ -185,6 +185,12 @@ export function PersonEditModal({
   const [photoSearchResults, setPhotoSearchResults] = useState<PhotoLibraryItem[]>([]);
   const [selectedLibraryFileIds, setSelectedLibraryFileIds] = useState<string[]>([]);
   const [photoSearchBusy, setPhotoSearchBusy] = useState(false);
+  const [selectedPhotoAssociationsBusy, setSelectedPhotoAssociationsBusy] = useState(false);
+  const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
+    people: Array<{ personId: string; displayName: string }>;
+    households: Array<{ householdId: string; label: string }>;
+  }>({ people: [], households: [] });
+  const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
   const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
@@ -312,6 +318,7 @@ export function PersonEditModal({
     setPhotoSearchResults([]);
     setSelectedLibraryFileIds([]);
     setPhotoSearchBusy(false);
+    setPhotoAssociationStatus("");
     setShowPhotoDetail(false);
     setShowPhotoLibraryPicker(false);
     setShowPhotoUploadPicker(false);
@@ -401,17 +408,10 @@ export function PersonEditModal({
     () => personOptions.sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [personOptions],
   );
-  const selectedPhotoAssociations = useMemo(() => {
-    if (!selectedPhoto) {
-      return { people: [] as Array<{ personId: string; displayName: string }>, households: [] as Array<{ householdId: string; label: string }> };
-    }
-    const byFile = photoSearchResults.find((item) => item.fileId === selectedPhoto.valueText);
-    return {
-      people: byFile?.people ?? [],
-      households: byFile?.households ?? [],
-    };
-  }, [photoSearchResults, selectedPhoto]);
-
+  const linkedPersonIdsForSelectedPhoto = useMemo(
+    () => new Set(selectedPhotoAssociations.people.map((entry) => entry.personId)),
+    [selectedPhotoAssociations.people],
+  );
   useEffect(() => {
     if (!selectedPhoto) {
       return;
@@ -421,6 +421,36 @@ export function PersonEditModal({
     setEditPhotoDate(selectedPhoto.startDate || "");
     setEditPhotoPrimary(selectedPhoto.isPrimary);
   }, [selectedPhoto]);
+
+  const refreshSelectedPhotoAssociations = async (fileId: string) => {
+    setSelectedPhotoAssociationsBusy(true);
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setSelectedPhotoAssociations({ people: [], households: [] });
+      setSelectedPhotoAssociationsBusy(false);
+      return;
+    }
+    const item = (Array.isArray(body?.items) ? (body.items as PhotoLibraryItem[]) : []).find(
+      (entry) => entry.fileId === fileId,
+    );
+    setSelectedPhotoAssociations({
+      people: item?.people ?? [],
+      households: item?.households ?? [],
+    });
+    setSelectedPhotoAssociationsBusy(false);
+  };
+
+  useEffect(() => {
+    if (!selectedPhoto || !showPhotoDetail) {
+      setSelectedPhotoAssociations({ people: [], households: [] });
+      return;
+    }
+    void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
+  }, [selectedPhoto, showPhotoDetail, tenantKey]);
 
   const searchPhotoLibrary = async () => {
     setPhotoSearchBusy(true);
@@ -477,6 +507,7 @@ export function PersonEditModal({
   const linkSelectedPhotoToPerson = async () => {
     if (!selectedPhoto || !linkTargetPersonId || !person) return;
     setPhotoBusy(true);
+    setPhotoAssociationStatus("Saving association...");
     setStatus("Linking photo to selected person...");
     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(linkTargetPersonId)}/attributes`, {
       method: "POST",
@@ -498,25 +529,66 @@ export function PersonEditModal({
     if (!res.ok) {
       const message = body?.message || body?.error || "";
       setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoAssociationStatus("Association save failed.");
       setPhotoBusy(false);
       return;
     }
     setStatus("Photo linked to selected person.");
+    await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
+    setPhotoAssociationStatus("Association saved.");
     setPhotoBusy(false);
   };
 
-  const unlinkSelectedPhotoFromCurrentPerson = async () => {
-    if (!selectedPhoto || !person) return;
-    setStatus("Removing photo link...");
-    await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
+  const removePhotoAssociationFromPerson = async (targetPersonId: string, fileId: string) => {
+    if (!person) return;
+    setPhotoBusy(true);
+    setPhotoAssociationStatus("Removing association...");
+    const attrsRes = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      { cache: "no-store" },
+    );
+    const attrsBody = await attrsRes.json().catch(() => null);
+    if (!attrsRes.ok) {
+      setPhotoAssociationStatus("Association remove failed.");
+      setPhotoBusy(false);
+      return;
+    }
+    const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as PersonAttribute[]) : [];
+    const matches = attrs.filter(
+      (item) => item.attributeType.toLowerCase() === "photo" && item.valueText.trim() === fileId,
+    );
+    for (const match of matches) {
+      await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,
+        { method: "DELETE" },
+      );
+    }
+    await refreshSelectedPhotoAssociations(fileId);
+    if (targetPersonId === person.personId) {
+      setSelectedPhotoAttributeId("");
+      setShowPhotoDetail(false);
+      await loadAttributes(person.personId);
+      onSaved();
+    }
+    setPhotoAssociationStatus("Association removed.");
+    setPhotoBusy(false);
+  };
+
+  const removePhotoAssociationFromHousehold = async (householdIdToUnlink: string, fileId: string) => {
+    setPhotoBusy(true);
+    setPhotoAssociationStatus("Removing association...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdIdToUnlink)}/photos/${encodeURIComponent(fileId)}`,
       { method: "DELETE" },
     );
-    setSelectedPhotoAttributeId("");
-    setShowPhotoDetail(false);
-    setStatus("Photo link removed.");
-    await loadAttributes(person.personId);
-    onSaved();
+    if (!res.ok) {
+      setPhotoAssociationStatus("Association remove failed.");
+      setPhotoBusy(false);
+      return;
+    }
+    await refreshSelectedPhotoAssociations(fileId);
+    setPhotoAssociationStatus("Association removed.");
+    setPhotoBusy(false);
   };
 
   const linkSelectedLibraryPhotos = async () => {
@@ -580,30 +652,36 @@ export function PersonEditModal({
       setStatus("Choose a photo first.");
       return;
     }
-    const form = new FormData();
-    form.append("file", pendingUploadPhotoFile);
-    form.append("label", newPhotoLabel.trim() || "gallery");
-    form.append("isHeadshot", String(newPhotoHeadshot));
-    form.append("description", newPhotoDescription.trim());
-    form.append("photoDate", newPhotoDate.trim());
-    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
-      method: "POST",
-      body: form,
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      const message = body?.message || body?.error || "";
-      setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-      return;
+    setPhotoBusy(true);
+    setStatus("Saving photo...");
+    try {
+      const form = new FormData();
+      form.append("file", pendingUploadPhotoFile);
+      form.append("label", newPhotoLabel.trim() || "gallery");
+      form.append("isHeadshot", String(newPhotoHeadshot));
+      form.append("description", newPhotoDescription.trim());
+      form.append("photoDate", newPhotoDate.trim());
+      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
+        method: "POST",
+        body: form,
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = body?.message || body?.error || "";
+        setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+        return;
+      }
+      setStatus("Photo uploaded.");
+      clearPendingUploadPhoto();
+      setShowPhotoUploadPicker(false);
+      setNewPhotoHeadshot(false);
+      setNewPhotoDescription("");
+      setNewPhotoDate("");
+      await loadAttributes(person.personId);
+      onSaved();
+    } finally {
+      setPhotoBusy(false);
     }
-    setStatus("Photo uploaded.");
-    clearPendingUploadPhoto();
-    setShowPhotoUploadPicker(false);
-    setNewPhotoHeadshot(false);
-    setNewPhotoDescription("");
-    setNewPhotoDate("");
-    await loadAttributes(person.personId);
-    onSaved();
   };
 
   if (!open || !person) {
@@ -1136,23 +1214,87 @@ export function PersonEditModal({
                           disabled={photoBusy}
                           onClick={() => void saveSelectedPhotoMetadata()}
                         >
-                          Save Photo Metadata
+                          {photoBusy ? "Saving..." : "Save Photo Metadata"}
                         </button>
                       ) : null}
                     </div>
                   </div>
                   <div className="person-photo-tags-card">
-                    <h5 style={{ margin: "0 0 0.5rem" }}>People in this photo</h5>
-                    <div className="settings-chip-list">
-                      <span className="status-chip status-chip--neutral">{person.displayName} (current)</span>
+                    <h5 style={{ margin: "0 0 0.5rem" }}>Linked People</h5>
+                    {selectedPhotoAssociationsBusy ? (
+                      <p className="page-subtitle" style={{ marginTop: 0 }}>Loading linked entities...</p>
+                    ) : null}
+                    <div className="person-association-list">
+                      <div className="person-association-row">
+                        <span className="status-chip status-chip--neutral">{person.displayName} (current)</span>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            disabled={photoBusy}
+                            onClick={() => {
+                              if (selectedPhoto) {
+                                void removePhotoAssociationFromPerson(person.personId, selectedPhoto.valueText);
+                              }
+                            }}
+                          >
+                            {photoBusy ? "Saving..." : "Remove"}
+                          </button>
+                        ) : null}
+                      </div>
                       {selectedPhotoAssociations.people
                         .filter((item) => item.personId !== person.personId)
                         .map((item) => (
-                          <span key={`photo-associated-${item.personId}`} className="status-chip status-chip--neutral">
-                            {item.displayName}
-                          </span>
+                          <div key={`photo-associated-${item.personId}`} className="person-association-row">
+                            <span className="status-chip status-chip--neutral">{item.displayName}</span>
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                disabled={photoBusy}
+                                onClick={() => {
+                                  if (selectedPhoto) {
+                                    void removePhotoAssociationFromPerson(item.personId, selectedPhoto.valueText);
+                                  }
+                                }}
+                              >
+                                {photoBusy ? "Saving..." : "Remove"}
+                              </button>
+                            ) : null}
+                          </div>
                         ))}
                     </div>
+                    <h5 style={{ margin: "0.75rem 0 0.5rem" }}>Linked Households</h5>
+                    <div className="person-association-list">
+                      {selectedPhotoAssociations.households.length > 0 ? (
+                        selectedPhotoAssociations.households.map((household) => (
+                          <div key={`photo-household-${household.householdId}`} className="person-association-row">
+                            <span className="status-chip status-chip--neutral">{household.label || household.householdId}</span>
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                disabled={photoBusy || !selectedPhoto}
+                                onClick={() => {
+                                  if (selectedPhoto) {
+                                    void removePhotoAssociationFromHousehold(household.householdId, selectedPhoto.valueText);
+                                  }
+                                }}
+                              >
+                                {photoBusy ? "Saving..." : "Remove"}
+                              </button>
+                            ) : null}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="person-association-row">
+                          <span className="status-chip status-chip--neutral">None</span>
+                        </div>
+                      )}
+                    </div>
+                    {photoAssociationStatus ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p>
+                    ) : null}
                     {canManage ? (
                       <>
                         <label className="label" style={{ marginTop: "0.75rem" }}>Add Person</label>
@@ -1166,18 +1308,10 @@ export function PersonEditModal({
                           <button
                             type="button"
                             className="button tap-button"
-                            disabled={!linkTargetPersonId || photoBusy}
+                            disabled={!linkTargetPersonId || photoBusy || linkedPersonIdsForSelectedPhoto.has(linkTargetPersonId)}
                             onClick={() => void linkSelectedPhotoToPerson()}
                           >
-                            Add To Selected Person
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            disabled={photoBusy}
-                            onClick={() => void unlinkSelectedPhotoFromCurrentPerson()}
-                          >
-                            Remove From {person.displayName}
+                            {photoBusy ? "Saving..." : linkedPersonIdsForSelectedPhoto.has(linkTargetPersonId) ? "Already Linked" : "Add To Selected Person"}
                           </button>
                         </div>
                       </>
@@ -1213,16 +1347,16 @@ export function PersonEditModal({
                       {photoSearchBusy ? "Searching..." : "Search Photos"}
                     </button>
                     {canManage ? (
-                      <button
-                        type="button"
-                        className="button tap-button"
-                        disabled={selectedLibraryFileIds.length === 0 || photoBusy}
-                        onClick={() => void linkSelectedLibraryPhotos()}
-                      >
-                        Link To {person.displayName}
-                      </button>
-                    ) : null}
-                  </div>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      disabled={selectedLibraryFileIds.length === 0 || photoBusy}
+                      onClick={() => void linkSelectedLibraryPhotos()}
+                    >
+                      {photoBusy ? "Saving..." : `Link To ${person.displayName}`}
+                    </button>
+                  ) : null}
+                </div>
                   {photoSearchResults.length > 0 ? (
                     <div className="person-library-grid">
                       {photoSearchResults.map((item) => {
@@ -1326,6 +1460,7 @@ export function PersonEditModal({
                     <button
                       type="button"
                       className="button secondary tap-button"
+                      disabled={photoBusy}
                       onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
                     >
                       {pendingUploadPhotoFile ? "Choose Another Photo" : "Choose Photo"}
@@ -1333,14 +1468,15 @@ export function PersonEditModal({
                     <button
                       type="button"
                       className="button tap-button"
-                      disabled={!pendingUploadPhotoFile}
+                      disabled={!pendingUploadPhotoFile || photoBusy}
                       onClick={() => void submitPendingUploadPhoto()}
                     >
-                      Save
+                      {photoBusy ? "Saving..." : "Save"}
                     </button>
                     <button
                       type="button"
                       className="button secondary tap-button"
+                      disabled={photoBusy}
                       onClick={() => {
                         clearPendingUploadPhoto();
                         setShowPhotoUploadPicker(false);

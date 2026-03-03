@@ -1739,6 +1739,18 @@ main,
   padding: 0.75rem;
 }
 
+.person-association-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.person-association-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .person-library-grid {
   margin-top: 0.75rem;
   display: grid;

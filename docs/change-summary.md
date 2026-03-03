@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-03 (photo association management: add/remove with live save-state feedback)
+
+- `Change`: Enhanced person-level photo association management in Photo Detail with explicit remove actions for linked people/households, duplicate-link prevention, and live association refresh/status after saves/removals.
+- `Type`: UI
+- `Why`: Users need clear confirmation of what is linked, avoid duplicate saves, and know immediately whether association changes persisted.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `Add To Selected Person` disables when already linked and shows `Already Linked`.
+  - Linked people list supports remove actions and updates immediately after removal.
+  - Linked households list supports remove actions and updates immediately after removal.
+  - Photo action buttons show `Saving...` and are disabled while requests are in flight.
+  - Association status text updates for save/remove success/failure.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (upload photo staged preview + explicit save/cancel actions)
 
 - `Change`: Updated Person `Pictures` upload flow to stage selected file before upload, show thumbnail/file preview, and provide explicit `Save`, `Cancel`, and `Choose Another Photo` actions.
