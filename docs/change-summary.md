@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-02 (child personal address in household add-child flow)
+
+- `Change`: Added optional child personal address capture in household add-child flow and persist to `People.address` when child is created.
+- `Type`: UI, API
+- `Why`: Unmarried children who do not live at household address need a person-level physical address at creation time.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: None. New child-create requests may include `address`.
+- `Verify`:
+  - Add Child form shows `Child Address (optional)` input.
+  - Saving child persists provided address on the created person record.
+  - Existing required child validations (birthdate + gender) still enforced.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-02 (household child add guardrails: required gender/birthdate + save lock)
 
 - `Change`: Enforced required `birth_date` and explicit `gender` when adding a child from household modal, and blocked household save while child-add is in progress until child is saved or canceled.

@@ -55,6 +55,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"" | "male" | "female">("");
+  const [childAddress, setChildAddress] = useState("");
 
   const refresh = async () => {
     setLoading(true);
@@ -88,6 +89,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setActiveTab("info");
     setAddChildOpen(false);
     setGender("");
+    setChildAddress("");
     setStatus("Loading household...");
     void refresh();
   }, [open, householdId, tenantKey]);
@@ -191,6 +193,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       setDisplayName("");
                       setBirthDate("");
                       setGender("");
+                      setChildAddress("");
                     }
                     setAddChildOpen((value) => !value);
                   }}
@@ -229,6 +232,13 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                       </div>
                     </div>
+                    <label className="label">Child Address (optional)</label>
+                    <input
+                      className="input"
+                      value={childAddress}
+                      onChange={(e) => setChildAddress(e.target.value)}
+                      placeholder="Physical address if different from household"
+                    />
                     <label className="label">Gender</label>
                     <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "" | "male" | "female")}>
                       <option value="">Select gender</option>
@@ -264,6 +274,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                                 display_name: displayName,
                                 birth_date: birthDate,
                                 gender,
+                                address: childAddress,
                               }),
                             },
                           );
@@ -281,6 +292,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           setDisplayName("");
                           setBirthDate("");
                           setGender("");
+                          setChildAddress("");
                           await refresh();
                           onSaved();
                         })()

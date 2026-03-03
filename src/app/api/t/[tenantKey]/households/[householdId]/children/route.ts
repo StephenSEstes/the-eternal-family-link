@@ -24,6 +24,7 @@ const childSchema = z.object({
   display_name: z.string().trim().max(140).optional().default(""),
   birth_date: z.string().trim().min(1).max(64),
   gender: z.enum(["male", "female"]),
+  address: z.string().trim().max(400).optional().default(""),
 });
 
 function normalize(value: string | undefined) {
@@ -113,7 +114,7 @@ export async function POST(request: Request, { params }: RouteProps) {
         gender: parsed.data.gender,
         email: "",
         phones: "",
-        address: "",
+        address: parsed.data.address,
         hobbies: "",
         notes: "",
         photo_file_id: "",
