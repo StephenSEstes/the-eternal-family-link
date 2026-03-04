@@ -23,17 +23,46 @@ type OciConnection = {
 
 let cachedWalletDir: string | null = null;
 
+function readWalletJsonPayload() {
+  const single = process.env.OCI_WALLET_FILES_JSON;
+  if (single && single.trim()) {
+    return single;
+  }
+
+  const partCountRaw = process.env.OCI_WALLET_FILES_JSON_PART_COUNT;
+  const partCount = Number.parseInt(partCountRaw ?? "", 10);
+  if (!Number.isFinite(partCount) || partCount <= 0) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  for (let i = 1; i <= partCount; i += 1) {
+    const key = `OCI_WALLET_FILES_JSON_PART_${i}`;
+    const value = process.env[key];
+    if (!value) {
+      throw new Error(`Missing wallet env chunk: ${key}`);
+    }
+    parts.push(value);
+  }
+  return parts.join("");
+}
+
 function ensureWalletDirFromEnv(): string | null {
   if (cachedWalletDir) {
     return cachedWalletDir;
   }
 
-  const walletFilesJson = process.env.OCI_WALLET_FILES_JSON;
+  const walletFilesJson = readWalletJsonPayload();
   if (!walletFilesJson) {
     return null;
   }
 
-  const parsed = JSON.parse(walletFilesJson) as Record<string, string>;
+  let parsed: Record<string, string>;
+  try {
+    parsed = JSON.parse(walletFilesJson) as Record<string, string>;
+  } catch (error) {
+    throw new Error(`Failed to parse OCI wallet env payload: ${(error as Error).message}`);
+  }
   const baseDir = path.join(os.tmpdir(), "efl-oci-wallet");
   fs.mkdirSync(baseDir, { recursive: true });
 
