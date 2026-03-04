@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (Person modal spouse flow: upfront choice with default create-new)
+
+- `Change`: Refined Add Spouse UI so the first step is an explicit choice between `Create New Person` (default) and `Select Existing Person`, and only the relevant panel is shown for the selected choice.
+- `Type`: UI
+- `Why`: Keep spouse-add flow consistent and clear across person modal usage; avoid showing the add-person form when the user intends to pick an existing person.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In person modal Family section, `Add Spouse` opens with `Create New Person` selected by default.
+  - Switching to `Select Existing Person` hides new-person fields and shows existing lookup/select only.
+  - Switching back to `Create New Person` restores new-person spouse form.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (Person modal: default new in-law spouse + immediate spouse/household persistence)
 
 - `Change`: Updated person modal spouse flow to default to creating a new spouse (in-law), default spouse gender to opposite of the edited person, and immediately persist spouse relationship + household creation after spouse record creation.

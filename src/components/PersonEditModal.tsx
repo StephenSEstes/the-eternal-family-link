@@ -622,6 +622,18 @@ export function PersonEditModal({
       }),
     [person?.personId, personOptions, spouseByPersonId],
   );
+  const hasVisibleSpouseSelection = useMemo(
+    () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
+    [spouseId, spouseOptions],
+  );
+  useEffect(() => {
+    if (!spouseId) {
+      return;
+    }
+    if (!spouseOptions.some((option) => option.personId === spouseId)) {
+      setSpouseId("");
+    }
+  }, [spouseId, spouseOptions]);
   const existingSpouseOptions = useMemo(() => {
     const query = existingSpouseQuery.trim().toLowerCase();
     if (!query) return spouseOptions;
@@ -1273,7 +1285,7 @@ export function PersonEditModal({
                         </select>
                       </div>
                     </div>
-                    {!spouseId ? (
+                    {!hasVisibleSpouseSelection ? (
                       <div style={{ marginTop: "0.75rem" }}>
                         <button
                           type="button"
@@ -1298,15 +1310,23 @@ export function PersonEditModal({
                     {showAddSpouse ? (
                       <div className="card" style={{ marginTop: "0.75rem" }}>
                         <h4 style={{ marginTop: 0 }}>Add Spouse</h4>
-                        <label className="label">Mode</label>
-                        <select
-                          className="input"
-                          value={addSpouseMode}
-                          onChange={(e) => setAddSpouseMode(e.target.value as AddSpouseMode)}
-                        >
-                          <option value="existing">Use Existing Person</option>
-                          <option value="new">Create New Person</option>
-                        </select>
+                        <label className="label">Choose how to add spouse</label>
+                        <div className="settings-chip-list" style={{ marginBottom: "0.75rem" }}>
+                          <button
+                            type="button"
+                            className={`button tap-button ${addSpouseMode === "new" ? "" : "secondary"}`}
+                            onClick={() => setAddSpouseMode("new")}
+                          >
+                            Create New Person
+                          </button>
+                          <button
+                            type="button"
+                            className={`button tap-button ${addSpouseMode === "existing" ? "" : "secondary"}`}
+                            onClick={() => setAddSpouseMode("existing")}
+                          >
+                            Select Existing Person
+                          </button>
+                        </div>
 
                         {addSpouseMode === "existing" ? (
                           <>

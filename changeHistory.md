@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Person modal spouse flow now defaults to new in-law creation and auto-persists spouse+household immediately after create. See `docs/change-summary.md`.
+- 2026-03-04: Person modal Add Spouse now starts with explicit choice (`Create New Person` default, or `Select Existing Person`) and shows only the matching panel. See `docs/change-summary.md`.
