@@ -4,6 +4,10 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Eliminate data-as-identifier usage across app and schema
+  Priority: High
+  Est date: 2026-03-08
+  Desc: Audit and replace all mutable/data-derived identifiers (email/name/date/composites) with stable opaque IDs, including access/auth joins and migration compatibility steps.
 - [ ] Multi-photo uploads in photo flow
   Priority: Med
   Est date: 2026-03-03
@@ -52,14 +56,6 @@ I will update this list as we add, complete, or remove work.
   Priority: High
   Est date: 2026-04-02
   Desc: Implement safe delete flow for a person with dependency checks, confirmations, and relationship cleanup rules.
-- [ ] Develop delete family workflow
-  Priority: High
-  Est date: 2026-04-03
-  Desc: Implement safe delete flow for a family group with membership/access cleanup and scoped data removal.
-- [ ] Develop delete household workflow
-  Priority: High
-  Est date: 2026-04-04
-  Desc: Implement safe delete flow for a household with spouse/relationship impact checks and confirmation safeguards.
 - [ ] Develop user invitation flow with launch icon support
   Priority: Med
   Est date: 2026-04-05
@@ -79,6 +75,7 @@ I will update this list as we add, complete, or remove work.
 
 ## Completed
 - [x] Create project TODO tracker (`TODO.md`)
+- [x] OCI migration readiness + first load milestone (OCI preflight, schema bootstrap, Sheets->OCI migration tooling, initial data load verification)
 - [x] Simplify admin screen with sub-tabs under each main admin tab
 - [x] Review Viewer tile visibility on family home
 - [x] Gender-based fallback headshots for missing profile photos
@@ -86,3 +83,5 @@ I will update this list as we add, complete, or remove work.
 - [x] Document data structure (tables, columns, joins, indexes, media links, entity IDs)
 - [x] Develop Add Family screen
 - [x] Crash diagnosis runbook + requestId/errorCode instrumentation for core APIs
+- [x] Develop delete family workflow
+- [x] Develop delete household workflow (Untested)

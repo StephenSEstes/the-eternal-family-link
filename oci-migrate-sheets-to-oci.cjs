@@ -234,10 +234,10 @@ function normalizeBoolean(value) {
   }
   const raw = String(value).trim().toLowerCase();
   if (["true", "yes", "1", "y"].includes(raw)) {
-    return "Y";
+    return "TRUE";
   }
   if (["false", "no", "0", "n"].includes(raw)) {
-    return "N";
+    return "FALSE";
   }
   return String(value).trim();
 }

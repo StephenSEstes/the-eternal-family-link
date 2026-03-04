@@ -4,6 +4,14 @@ import { google, sheets_v4 } from "googleapis";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
 import { viewerPinHash } from "@/lib/security/pin";
+import {
+  createOciTableRecords,
+  deleteOciTableRecordById,
+  deleteOciTableRows,
+  getOciTableRecordById,
+  getOciTableRecords,
+  updateOciTableRecordById,
+} from "@/lib/oci/tables";
 import type {
   AppRole,
   ImportantDateRecord,
@@ -176,6 +184,10 @@ const tabResolveCache = new Map<string, CachedValue>();
 const sheetIdCache = new Map<string, CachedValue>();
 const inFlightTabReads = new Map<string, Promise<SheetMatrix>>();
 
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
+
 function normalizeHeader(header: string) {
   const normalized = header.trim().toLowerCase();
   if (normalized === "tenant_key") {
@@ -193,7 +205,7 @@ function parseBool(value: string | undefined) {
   }
 
   const normalized = value.trim().toLowerCase();
-  return normalized === "true" || normalized === "yes" || normalized === "1";
+  return normalized === "true" || normalized === "yes" || normalized === "1" || normalized === "y";
 }
 
 function toRole(value: string | undefined): AppRole {
@@ -507,6 +519,10 @@ async function ensureAuditLogTab() {
 }
 
 export async function appendAuditLog(input: AuditLogInput) {
+  if (isOciDataSource()) {
+    void input;
+    return;
+  }
   await ensureAuditLogTab();
   const now = new Date().toISOString();
   const eventId = `${now}-${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -630,6 +646,10 @@ export function matrixToRecords(matrix: SheetMatrix): SheetRecord[] {
 }
 
 export async function getTableRecords(tabName: string | string[], tenantKey?: string): Promise<SheetRecord[]> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return getOciTableRecords(tabName);
+  }
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   return matrixToRecords(matrix);
@@ -641,6 +661,10 @@ export async function getTableRecordById(
   idColumn?: string,
   tenantKey?: string,
 ): Promise<SheetRecord | null> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return getOciTableRecordById(tabName, recordId, idColumn);
+  }
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
@@ -683,6 +707,10 @@ export async function createTableRecords(
   payloads: Record<string, string>[],
   tenantKey?: string,
 ): Promise<SheetRecord[]> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return createOciTableRecords(tabName, payloads);
+  }
   if (!payloads.length) {
     return [];
   }
@@ -726,6 +754,10 @@ export async function updateTableRecordById(
   idColumn?: string,
   tenantKey?: string,
 ): Promise<SheetRecord | null> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return updateOciTableRecordById(tabName, recordId, payload, idColumn);
+  }
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
@@ -778,6 +810,10 @@ export async function deleteTableRecordById(
   idColumn?: string,
   tenantKey?: string,
 ): Promise<boolean> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return deleteOciTableRecordById(tabName, recordId, idColumn);
+  }
   const resolvedTab = await resolveTenantTabName(tabName, tenantKey);
   const matrix = await readTab(resolvedTab);
   if (matrix.headers.length === 0) {
@@ -826,6 +862,10 @@ export async function deleteTableRows(
   rowNumbers: number[],
   tenantKey?: string,
 ): Promise<number> {
+  if (isOciDataSource()) {
+    void tenantKey;
+    return deleteOciTableRows(tabName, rowNumbers);
+  }
   const uniqueRows = Array.from(
     new Set(rowNumbers.filter((value) => Number.isInteger(value) && value >= 2)),
   ).sort((a, b) => b - a);
@@ -877,6 +917,13 @@ async function readTab(tabName: string): Promise<SheetMatrix> {
 }
 
 async function ensureUserAccessTabSchema(): Promise<SheetMatrix> {
+  if (isOciDataSource()) {
+    const records = await getOciTableRecords(USER_ACCESS_TAB);
+    return {
+      headers: USER_ACCESS_HEADERS,
+      rows: records.map((record) => USER_ACCESS_HEADERS.map((header) => record.data[header] ?? "")),
+    };
+  }
   const sheets = await createSheetsClient();
   await ensureTabWithHeaders(sheets, USER_ACCESS_TAB, USER_ACCESS_HEADERS);
   const matrix = await readTabWithClient(sheets, USER_ACCESS_TAB);
@@ -901,6 +948,13 @@ async function ensureUserAccessTabSchema(): Promise<SheetMatrix> {
 }
 
 async function ensureUserFamilyGroupsTabSchema(): Promise<SheetMatrix> {
+  if (isOciDataSource()) {
+    const records = await getOciTableRecords(USER_FAMILY_GROUPS_TAB);
+    return {
+      headers: USER_FAMILY_GROUPS_HEADERS,
+      rows: records.map((record) => USER_FAMILY_GROUPS_HEADERS.map((header) => record.data[header] ?? "")),
+    };
+  }
   const sheets = await createSheetsClient();
   await ensureTabWithHeaders(sheets, USER_FAMILY_GROUPS_TAB, USER_FAMILY_GROUPS_HEADERS);
   const matrix = await readTabWithClient(sheets, USER_FAMILY_GROUPS_TAB);
@@ -925,6 +979,13 @@ async function ensureUserFamilyGroupsTabSchema(): Promise<SheetMatrix> {
 }
 
 async function ensurePersonFamilyGroupsTabSchema(): Promise<SheetMatrix> {
+  if (isOciDataSource()) {
+    const records = await getOciTableRecords(PERSON_FAMILY_GROUPS_TAB);
+    return {
+      headers: PERSON_FAMILY_GROUPS_HEADERS,
+      rows: records.map((record) => PERSON_FAMILY_GROUPS_HEADERS.map((header) => record.data[header] ?? "")),
+    };
+  }
   try {
     const tabName = await resolveTenantTabName(PERSON_FAMILY_GROUPS_TAB);
     const matrix = await readTab(tabName);

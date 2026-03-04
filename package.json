@@ -10,7 +10,8 @@
     "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts",
     "db:preflight": "node scripts/oci-db-preflight.cjs",
     "db:migrate:dry-run": "node oci-migrate-sheets-to-oci.cjs --mode=dry-run",
-    "db:migrate:load": "node oci-migrate-sheets-to-oci.cjs --mode=load --truncate=true"
+    "db:migrate:load": "node oci-migrate-sheets-to-oci.cjs --mode=load --truncate=true",
+    "db:parity": "node oci-verify-parity.cjs"
   },
   "dependencies": {
     "googleapis": "^171.4.0",

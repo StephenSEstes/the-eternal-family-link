@@ -13,6 +13,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI parity verifier + OCI-backed table CRUD seam for cutover)
+
+- `Change`: Added a Sheets-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `src/lib/google/sheets.ts` (enabled by `EFL_DATA_SOURCE=oci`) so existing route imports can switch storage backend without route-by-route rewrites.
+- `Type`: Infra, Data, API
+- `Why`: Accelerate clean cutover by preserving current access-layer interface while replacing storage internals and adding objective migration parity checks.
+- `Files`:
+  - `oci-verify-parity.cjs`
+  - `oci-migrate-sheets-to-oci.cjs`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/types/oracledb.d.ts`
+  - `tsconfig.json`
+  - `package.json`
+- `Data Changes`:
+  - Reloaded OCI data with boolean normalization aligned to Sheets semantics (`TRUE`/`FALSE`).
+  - Revalidated parity after reload.
+- `Verify`:
+  - `npm run db:migrate:load` passes.
+  - `npm run db:parity` returns `Overall parity: PASS`.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and keep `EFL_DATA_SOURCE` unset (Sheets path remains active by default).
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI schema + Sheets-to-OCI migration tooling and first load)
 
 - `Change`: Added OCI schema bootstrap SQL and a migration runner to move Google Sheets tabs into OCI, including dry-run validation, load mode with truncate, and source/target row-count reporting.
