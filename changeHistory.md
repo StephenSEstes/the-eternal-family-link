@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Fixed Steve-access token person_id fallback so migrated IDs resolve correctly (including horoscope birthday lookup). See `docs/change-summary.md`.
+- 2026-03-04: Added OCI DB runtime preflight command (`npm run db:preflight`) and verified wallet/TNS app-layer connectivity as `EFL_APP`. See `docs/change-summary.md`.

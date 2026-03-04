@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI DB preflight gate for repo runtime readiness)
+
+- `Change`: Added a repeatable OCI connection preflight command (`npm run db:preflight`) that validates required OCI env vars and performs a wallet/TNS-backed Oracle connection + `dual` query.
+- `Type`: Infra, Ops
+- `Why`: Confirm OCI database readiness in the same Node runtime path used by the app before making broader repo/database changes.
+- `Files`:
+  - `package.json`
+  - `package-lock.json`
+  - `scripts/oci-db-preflight.cjs`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run db:preflight` returns `OCI preflight OK` and prints connected DB user/time.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (people+households tiles + video media support + metadata capture)
 
 - `Change`: Expanded People page to support both `People` and `Households` tile modes, added video-capable rendering in person/household media galleries/detail/upload previews, and captured file metadata into a dedicated `media_metadata` column with created timestamp fallback for default media date.

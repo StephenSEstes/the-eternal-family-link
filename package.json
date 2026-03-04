@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts"
+    "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts",
+    "db:preflight": "node scripts/oci-db-preflight.cjs"
   },
   "dependencies": {
     "googleapis": "^171.4.0",
     "next": "^15.5.12",
     "next-auth": "^4.24.13",
+    "oracledb": "^6.10.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.3.6"
