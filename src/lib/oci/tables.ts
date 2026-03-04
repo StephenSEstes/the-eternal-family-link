@@ -218,13 +218,17 @@ function fromDbValue(value: unknown) {
 
 async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
   const walletDir = resolveWalletDirectory();
+  const user = (process.env.OCI_DB_USER ?? "").trim();
+  const password = (process.env.OCI_DB_PASSWORD ?? "").trim();
+  const connectString = (process.env.OCI_DB_CONNECT_STRING ?? "").trim();
+  const walletPassword = (process.env.OCI_WALLET_PASSWORD ?? "").trim();
   const connection = (await oracledb.getConnection({
-    user: process.env.OCI_DB_USER,
-    password: process.env.OCI_DB_PASSWORD,
-    connectString: process.env.OCI_DB_CONNECT_STRING,
+    user,
+    password,
+    connectString,
     configDir: walletDir || undefined,
     walletLocation: walletDir || undefined,
-    walletPassword: process.env.OCI_WALLET_PASSWORD,
+    walletPassword,
   })) as OciConnection;
   try {
     return await run(connection);
