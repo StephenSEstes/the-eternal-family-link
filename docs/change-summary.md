@@ -15,7 +15,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-04 (OCI parity verifier + OCI-backed table CRUD seam for cutover)
 
-- `Change`: Added a Sheets-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `src/lib/google/sheets.ts` (enabled by `EFL_DATA_SOURCE=oci`) so existing route imports can switch storage backend without route-by-route rewrites.
+- `Change`: Added a Sheets-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `src/lib/google/sheets.ts` (enabled by `EFL_DATA_SOURCE=oci`) so existing route imports can switch storage backend without route-by-route rewrites. Added runtime wallet-file loading from `OCI_WALLET_FILES_JSON` for server deployments where local `TNS_ADMIN` paths are not available.
 - `Type`: Infra, Data, API
 - `Why`: Accelerate clean cutover by preserving current access-layer interface while replacing storage internals and adding objective migration parity checks.
 - `Files`:

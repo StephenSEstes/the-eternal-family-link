@@ -1,5 +1,8 @@
 import "server-only";
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import oracledb from "oracledb";
 import type { SheetRecord } from "@/lib/google/sheets";
 
@@ -17,6 +20,37 @@ type OciConnection = {
   commit: () => Promise<void>;
   close: () => Promise<void>;
 };
+
+let cachedWalletDir: string | null = null;
+
+function ensureWalletDirFromEnv(): string | null {
+  if (cachedWalletDir) {
+    return cachedWalletDir;
+  }
+
+  const walletFilesJson = process.env.OCI_WALLET_FILES_JSON;
+  if (!walletFilesJson) {
+    return null;
+  }
+
+  const parsed = JSON.parse(walletFilesJson) as Record<string, string>;
+  const baseDir = path.join(os.tmpdir(), "efl-oci-wallet");
+  fs.mkdirSync(baseDir, { recursive: true });
+
+  for (const [fileName, b64] of Object.entries(parsed)) {
+    const target = path.join(baseDir, fileName);
+    if (!fs.existsSync(target)) {
+      fs.writeFileSync(target, Buffer.from(b64, "base64"));
+    }
+  }
+
+  cachedWalletDir = baseDir;
+  return cachedWalletDir;
+}
+
+function resolveWalletDirectory() {
+  return ensureWalletDirFromEnv() ?? process.env.TNS_ADMIN ?? "";
+}
 
 const TABLES: Record<string, TableConfig> = {
   People: {
@@ -154,12 +188,13 @@ function fromDbValue(value: unknown) {
 }
 
 async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
+  const walletDir = resolveWalletDirectory();
   const connection = (await oracledb.getConnection({
     user: process.env.OCI_DB_USER,
     password: process.env.OCI_DB_PASSWORD,
     connectString: process.env.OCI_DB_CONNECT_STRING,
-    configDir: process.env.TNS_ADMIN,
-    walletLocation: process.env.TNS_ADMIN,
+    configDir: walletDir || undefined,
+    walletLocation: walletDir || undefined,
     walletPassword: process.env.OCI_WALLET_PASSWORD,
   })) as OciConnection;
   try {
