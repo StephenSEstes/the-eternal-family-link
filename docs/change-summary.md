@@ -81,6 +81,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-04 (auth token person_id fallback fix for Steve access)
+
+- `Change`: Fixed Steve-access JWT token person resolution to prefer current enabled user-access mapping by email before using legacy fallback person ID.
+- `Type`: Auth, Reliability
+- `Why`: Root cause of horoscope `missing_birthday` despite valid people data was stale legacy person ID (`19660812-stephen-snow-estes`) retained in token/session after ID migration.
+- `Files`:
+  - `src/lib/auth/options.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `GET /api/horoscope/today?tenantKey=<tenant>` resolves logged-in Steve user to current mapped `person_id` (for example `p-ae4081ae`) rather than legacy ID.
+  - Horoscope returns `ok:true` when mapped person has birthdate.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (household modal visual parity + pictures UX alignment)
 
 - `Change`: Updated `HouseholdEditModal` to use the same modern modal shell and card-based visual language as person modal, and refactored household pictures tab to gallery/detail/upload overlay flows with staged upload preview actions.

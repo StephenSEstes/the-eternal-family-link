@@ -184,7 +184,13 @@ export const authOptions: NextAuthOptions = {
 
       const currentEmail = (typeof user?.email === "string" ? user.email : token.email) ?? "";
       if (hasSteveAccess(currentEmail)) {
-        const personId = (typeof token.person_id === "string" ? token.person_id : "") || STEVE_PERSON_ID;
+        const normalizedEmail = currentEmail.trim().toLowerCase();
+        const emailAccesses = normalizedEmail ? await getEnabledUserAccessList(normalizedEmail) : [];
+        const resolvedPersonId =
+          emailAccesses[0]?.personId ||
+          (typeof token.person_id === "string" ? token.person_id : "") ||
+          STEVE_PERSON_ID;
+        const personId = resolvedPersonId.trim();
         const cachedAccesses =
           Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
             ? (token.tenantAccesses as {
@@ -196,7 +202,7 @@ export const authOptions: NextAuthOptions = {
             : [];
         let allAccesses = cachedAccesses;
         // Refresh from sheets only on initial sign-in or when cache is empty.
-        if (user?.email || allAccesses.length === 0) {
+        if (user?.email || allAccesses.length === 0 || emailAccesses.length > 0) {
           try {
             allAccesses = await getAllFamilyGroupAccesses(personId);
           } catch {

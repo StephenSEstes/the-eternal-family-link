@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Added daily horoscope API + Home page horoscope card with graceful missing-birthday/upstream-error states. See `docs/change-summary.md`.
+- 2026-03-04: Fixed Steve-access token person_id fallback so migrated IDs resolve correctly (including horoscope birthday lookup). See `docs/change-summary.md`.
