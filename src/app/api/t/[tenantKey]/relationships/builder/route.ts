@@ -60,13 +60,65 @@ function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
   return buildEntityId("h", `${tenantKey}|${pair}`);
 }
 
-async function createFamilyUnit(tenantKey: string, personA: string, personB: string) {
+function normalizeNamePart(value: string) {
+  const cleaned = value.trim().replace(/[^a-zA-Z\s'-]/g, " ").replace(/\s+/g, " ");
+  if (!cleaned) return "";
+  return cleaned
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function buildHouseholdLabel(wifeLastName: string, husbandLastName: string) {
+  const wife = normalizeNamePart(wifeLastName);
+  const husband = normalizeNamePart(husbandLastName);
+  if (wife && husband) {
+    return `${wife}-${husband} Family`;
+  }
+  if (wife) {
+    return `${wife} Family`;
+  }
+  if (husband) {
+    return `${husband} Family`;
+  }
+  return "Family";
+}
+
+async function createFamilyUnit(
+  tenantKey: string,
+  personA: string,
+  personB: string,
+  peopleById: Map<string, { gender: string; lastName: string }>,
+) {
   const familyUnitId = makeFamilyUnitId(tenantKey, personA, personB);
-  const [husband, wife] = [personA, personB].sort();
+  const personAData = peopleById.get(personA) ?? { gender: "", lastName: "" };
+  const personBData = peopleById.get(personB) ?? { gender: "", lastName: "" };
+  const personAGender = personAData.gender.toLowerCase();
+  const personBGender = personBData.gender.toLowerCase();
+
+  let husband = personA;
+  let wife = personB;
+  if (personAGender === "female" && personBGender === "male") {
+    husband = personB;
+    wife = personA;
+  } else if (personAGender === "male" && personBGender === "female") {
+    husband = personA;
+    wife = personB;
+  } else {
+    // Deterministic fallback when genders are missing/unspecified.
+    const sorted = [personA, personB].sort();
+    husband = sorted[0];
+    wife = sorted[1];
+  }
+
+  const wifeLastName = (peopleById.get(wife)?.lastName ?? "").trim();
+  const husbandLastName = (peopleById.get(husband)?.lastName ?? "").trim();
   const payload: Record<string, string> = {
     household_id: familyUnitId,
     husband_person_id: husband,
     wife_person_id: wife,
+    label: buildHouseholdLabel(wifeLastName, husbandLastName),
     family_group_key: tenantKey,
   };
   await createTableRecord("Households", payload, tenantKey);
@@ -108,6 +160,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "load_relationships";
     const existing = await getTableRecords("Relationships", normalizedTenantKey);
+    const people = await getTableRecords("People", normalizedTenantKey);
+    const peopleById = new Map<string, { gender: string; lastName: string }>();
+    for (const row of people) {
+      const personId = readField(row.data, "person_id", "id");
+      if (!personId) continue;
+      peopleById.set(personId, {
+        gender: readField(row.data, "gender"),
+        lastName: readField(row.data, "last_name"),
+      });
+    }
     const desiredParentEdgeKeys = new Set<string>();
     parentIds.forEach((parentId) =>
       desiredParentEdgeKeys.add(makeParentEdgeKey(parentId, parsed.data.personId)),
@@ -243,7 +305,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         );
       });
       if (!hasDesiredUnit) {
-        await createFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId);
+        await createFamilyUnit(normalizedTenantKey, parsed.data.personId, spouseId, peopleById);
       }
     }
 

@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (default household label on new spouse creation)
+
+- `Change`: When creating a new spouse household, default household label now uses wife maiden last name + husband last name + `Family` (format: `<WifeLastName>-<HusbandLastName> Family`).
+- `Type`: API, UI
+- `Why`: Household rows created from spouse flow had no default label, causing inconsistent naming and extra manual cleanup.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Create new spouse from person modal.
+  - Confirm created household includes default label in expected format.
+  - Confirm spouse/household creation flow still succeeds.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI membership write-path fix + targeted spouse/membership data repair)
 
 - `Change`: Fixed OCI mode membership write path so `ensurePersonFamilyGroupMembership` performs OCI-native upsert instead of Sheets writes. Repaired affected OCI data by inserting missing `person_family_groups` rows and creating missing household for the reported spouse pair.
