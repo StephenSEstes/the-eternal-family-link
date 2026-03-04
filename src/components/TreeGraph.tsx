@@ -237,7 +237,8 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
   };
 
   const maxRowWidth = Math.max(0, ...Array.from(orderedByLevel.values()).map((row) => rowWidth(row)));
-  const rowGap = 176;
+  // Extra vertical separation prevents household cluster boxes/labels from overlapping between generations.
+  const rowGap = 236;
   const xPadding = 90;
   const yPadding = 118;
   const width = Math.max(980, xPadding * 2 + maxRowWidth);

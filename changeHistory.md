@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-03: Added People/Households dual tile mode on People page, video-capable media handling, and `media_metadata` capture with created-date defaulting in upload flows. See `docs/change-summary.md`.
+- 2026-03-03: Increased tree vertical row spacing to prevent household overlap between generations. See `docs/change-summary.md`.

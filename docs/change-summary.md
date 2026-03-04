@@ -45,6 +45,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-03 (tree vertical row spacing increase to prevent household overlap)
+
+- `Change`: Increased family-tree generation row spacing so household clusters and labels do not overlap vertically.
+- `Type`: UI
+- `Why`: Root cause was fixed row gap too small for current household cluster/card footprint, causing row-to-row overlap in dense trees.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Family tree shows clear vertical separation between household rows/generations.
+  - No household box/label overlap from top to bottom.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (household modal visual parity + pictures UX alignment)
 
 - `Change`: Updated `HouseholdEditModal` to use the same modern modal shell and card-based visual language as person modal, and refactored household pictures tab to gallery/detail/upload overlay flows with staged upload preview actions.
