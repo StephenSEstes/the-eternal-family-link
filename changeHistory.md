@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Completed OCI-only cutover for remaining routes/functions and optimized auth/access/people with relational OCI queries + new indexes. See `docs/change-summary.md`.
+- 2026-03-04: Person modal spouse flow now defaults to new in-law creation and auto-persists spouse+household immediately after create. See `docs/change-summary.md`.

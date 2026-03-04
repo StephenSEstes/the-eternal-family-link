@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (Person modal: default new in-law spouse + immediate spouse/household persistence)
+
+- `Change`: Updated person modal spouse flow to default to creating a new spouse (in-law), default spouse gender to opposite of the edited person, and immediately persist spouse relationship + household creation after spouse record creation.
+- `Type`: UI, API
+- `Why`: Current flow required an extra Save step after spouse creation and defaulted to existing-person mode, making new in-law spouse entry from person modal feel unavailable/incomplete.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open person modal -> Family -> Add Spouse defaults to `Create New Person`.
+  - `in-law` defaults checked.
+  - New spouse gender defaults opposite of current person gender.
+  - Creating spouse immediately establishes spouse link and household without extra modal Save.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI-only cutover + relational performance optimization for auth/access/people)
 
 - `Change`: Completed OCI-only cutover for remaining direct Google-client routes/functions and moved high-traffic auth/access/people paths to relational OCI queries (DB-side filtering/joining) with supporting indexes.

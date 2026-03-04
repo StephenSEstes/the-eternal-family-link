@@ -126,6 +126,12 @@ function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate
   return parent <= cutoff;
 }
 
+function oppositeGender(value: "male" | "female" | "unspecified") {
+  if (value === "male") return "female";
+  if (value === "female") return "male";
+  return "unspecified";
+}
+
 function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonItem>) {
   let motherId = "";
   let fatherId = "";
@@ -424,7 +430,7 @@ export function PersonEditModal({
   const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
-  const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("existing");
+  const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("new");
   const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
   const [existingSpouseId, setExistingSpouseId] = useState("");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
@@ -552,7 +558,7 @@ export function PersonEditModal({
     setShowPhotoLibraryPicker(false);
     setShowPhotoUploadPicker(false);
     setShowAddSpouse(false);
-    setAddSpouseMode("existing");
+    setAddSpouseMode("new");
     setExistingSpouseQuery("");
     setExistingSpouseId("");
     setNewSpouseFirstName("");
@@ -561,7 +567,7 @@ export function PersonEditModal({
     setNewSpouseNickName("");
     setNewSpouseDisplayName("");
     setNewSpouseBirthDate("");
-    setNewSpouseGender((person.gender ?? "unspecified") === "male" ? "female" : (person.gender ?? "unspecified") === "female" ? "male" : "unspecified");
+    setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
     setNewSpouseInLaw(true);
     setStatus("");
     void loadAttributes(person.personId);
@@ -1071,6 +1077,31 @@ export function PersonEditModal({
         ).catch(() => undefined);
       }
 
+      let relationSaved = false;
+      if (canManage) {
+        const relationshipRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personId: person.personId,
+              parentIds: [parent1Id, parent2Id].filter(Boolean),
+              childIds,
+              spouseId: createdPersonId,
+            }),
+          },
+        );
+        relationSaved = relationshipRes.ok;
+        if (!relationshipRes.ok) {
+          const relationshipBody = await relationshipRes.json().catch(() => null);
+          const message = relationshipBody?.message || relationshipBody?.error || "";
+          setStatus(
+            `Spouse created, but auto-link failed: ${relationshipRes.status} ${String(message).slice(0, 150)}. Click Save to retry link.`,
+          );
+        }
+      }
+
       setLocalPeople((current) => {
         if (current.some((entry) => entry.personId === createdPersonId)) {
           return current;
@@ -1079,7 +1110,12 @@ export function PersonEditModal({
       });
       setSpouseId(createdPersonId);
       setShowAddSpouse(false);
-      setStatus("Spouse created and selected. Click Save to persist relationship.");
+      if (relationSaved) {
+        setStatus("Spouse created, linked, and household created.");
+        onSaved();
+      } else if (!status) {
+        setStatus("Spouse created and selected. Click Save to persist relationship.");
+      }
     } finally {
       setCreatingSpouse(false);
     }
@@ -1243,7 +1279,15 @@ export function PersonEditModal({
                           type="button"
                           className="button secondary tap-button"
                           onClick={() => {
-                            setShowAddSpouse((value) => !value);
+                            setShowAddSpouse((value) => {
+                              const next = !value;
+                              if (next) {
+                                setAddSpouseMode("new");
+                                setNewSpouseInLaw(true);
+                                setNewSpouseGender(oppositeGender(gender));
+                              }
+                              return next;
+                            });
                             setStatus("");
                           }}
                         >
