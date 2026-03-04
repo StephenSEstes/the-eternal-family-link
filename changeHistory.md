@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Added animated family-group switch loading feedback and shipped spouse-save consistency polish (labels + relationship edge upsert hardening). See `docs/change-summary.md`.
+- 2026-03-04: Restored missing Tree relationship lines by adding safe fallback when tenant-scoped OCI relationship reads return empty/error. See `docs/change-summary.md`.

@@ -20,10 +20,24 @@ function isOciDataSource() {
 }
 
 export async function getRelationships(tenantKey?: string): Promise<RelationshipRecord[]> {
-  const rows =
-    tenantKey && isOciDataSource()
-      ? await getOciRelationshipsForTenant(tenantKey).catch(() => [])
-      : await getTableRecords("Relationships");
+  let rows = await getTableRecords("Relationships");
+  if (tenantKey && isOciDataSource()) {
+    try {
+      const tenantRows = await getOciRelationshipsForTenant(tenantKey);
+      if (tenantRows.length > 0) {
+        rows = tenantRows;
+      } else if (rows.length > 0) {
+        console.warn(
+          `[family:getRelationships] Tenant-scoped OCI relationships returned 0 rows for tenant '${tenantKey}'. Falling back to global relationships.`,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `[family:getRelationships] Tenant-scoped OCI relationships failed for tenant '${tenantKey}'. Falling back to global relationships.`,
+        error,
+      );
+    }
+  }
   const normalizedTenantKey = (tenantKey ?? "").trim().toLowerCase();
   return rows
     .map((row, idx) => {

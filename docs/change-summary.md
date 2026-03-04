@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (tree relationship lines restore: safe fallback on tenant-scoped read)
+
+- `Change`: Restored Tree relationship rendering robustness by adding a safe fallback in relationship reads: if tenant-scoped OCI relationship load fails or returns zero rows, fall back to global relationship rows and rely on existing in-family filtering.
+- `Type`: API, Reliability
+- `Why`: Relationship lines could disappear in Tree even when OCI relationship data existed because tenant-scoped reads could resolve to an empty result silently.
+- `Files`:
+  - `src/lib/google/family.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Tree view shows relationship lines again for affected families.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (family-group switch feedback + spouse save consistency polish)
 
 - `Change`: Added animated loading feedback in the family-group switcher, updated spouse-action labels for clarity, and strengthened spouse/family relationship upsert logic to keep spouse edges consistent with household saves.
