@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
-import { createTableRecord, deleteTableRows, getPeople, getTableRecords, getTenantConfig, listTabs } from "@/lib/google/sheets";
+import { buildEntityId } from "@/lib/entity-id";
+import {
+  createTableRecord,
+  createTableRecords,
+  deleteTableRows,
+  getPeople,
+  getTableRecords,
+  getTenantConfig,
+  listTabs,
+  updateTableRecordById,
+} from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type IntegritySeverity = "error" | "warn";
@@ -29,6 +39,13 @@ function isEnabledLike(value: string | undefined) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeNameKey(value: string) {
+  return normalize(value)
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function pushFinding(
@@ -85,9 +102,30 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
   return deleteTableRows(tabName, rowNumbers);
 }
 
+function relCanonicalKey(fromPersonId: string, toPersonId: string, relType: string) {
+  return `${normalize(fromPersonId)}|${normalize(toPersonId)}|${normalize(relType)}`;
+}
+
+function boolLike(value: string) {
+  return parseBool(value) ? "TRUE" : "FALSE";
+}
+
 async function runIntegrityAudit(tenantKey: string) {
   const familyGroupKey = normalize(tenantKey);
-  const [people, peopleRowsGlobal, personFamilyRows, userAccessRows, userGroupRows, householdsRows, familyConfigRows, legacyLocalRows, tabs] = await Promise.all([
+  const [
+    people,
+    peopleRowsGlobal,
+    personFamilyRows,
+    userAccessRows,
+    userGroupRows,
+    householdsRows,
+    familyConfigRows,
+    legacyLocalRows,
+    tabs,
+    relationshipRows,
+    personAttributeRows,
+    importantDateRows,
+  ] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
     getTableRecords("People").catch(() => []),
     getTableRecords("PersonFamilyGroups").catch(() => []),
@@ -97,6 +135,9 @@ async function runIntegrityAudit(tenantKey: string) {
     getTableRecords(["FamilyConfig", "TenantConfig"]).catch(() => []),
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
     listTabs().catch(() => []),
+    getTableRecords("Relationships").catch(() => []),
+    getTableRecords("PersonAttributes").catch(() => []),
+    getTableRecords("ImportantDates").catch(() => []),
   ]);
 
   const peopleIds = new Set(
@@ -134,6 +175,66 @@ async function runIntegrityAudit(tenantKey: string) {
   }
 
   const findings: IntegrityFinding[] = [];
+  const personMembershipRefs = new Map<string, number>();
+  const personNonMembershipRefs = new Map<string, number>();
+  const bump = (map: Map<string, number>, personId: string) => {
+    const key = normalize(personId);
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  };
+  for (const row of personFamilyRows) {
+    bump(personMembershipRefs, readField(row.data, "person_id"));
+  }
+  for (const row of userAccessRows) {
+    bump(personNonMembershipRefs, readField(row.data, "person_id"));
+  }
+  for (const row of userGroupRows) {
+    bump(personNonMembershipRefs, readField(row.data, "person_id"));
+  }
+  for (const row of householdsRows) {
+    bump(personNonMembershipRefs, readField(row.data, "husband_person_id"));
+    bump(personNonMembershipRefs, readField(row.data, "wife_person_id"));
+  }
+  for (const row of relationshipRows) {
+    bump(personNonMembershipRefs, readField(row.data, "from_person_id"));
+    bump(personNonMembershipRefs, readField(row.data, "to_person_id"));
+  }
+  for (const row of personAttributeRows) {
+    bump(personNonMembershipRefs, readField(row.data, "person_id"));
+  }
+  for (const row of importantDateRows) {
+    bump(personNonMembershipRefs, readField(row.data, "person_id"));
+  }
+
+  const byName = new Map<string, string[]>();
+  for (const row of peopleRowsGlobal) {
+    const personId = normalize(readField(row.data, "person_id"));
+    if (!personId || !peopleIds.has(personId)) {
+      continue;
+    }
+    const first = readField(row.data, "first_name");
+    const middle = readField(row.data, "middle_name");
+    const last = readField(row.data, "last_name");
+    const display = readField(row.data, "display_name");
+    const composed = [first, middle, last].filter(Boolean).join(" ").trim();
+    const key = normalizeNameKey(composed || display);
+    if (!key) {
+      continue;
+    }
+    const list = byName.get(key) ?? [];
+    list.push(personId);
+    byName.set(key, list);
+  }
+  const duplicatePeopleGroups = Array.from(byName.entries())
+    .map(([nameKey, ids]) => ({ nameKey, personIds: Array.from(new Set(ids)) }))
+    .filter((group) => group.personIds.length > 1);
+  pushFinding(
+    findings,
+    "warn",
+    "duplicate_people_name_ids",
+    "Multiple person IDs in this family group share the same normalized name; review for accidental duplicates.",
+    duplicatePeopleGroups.map((group) => `${group.nameKey}: ${group.personIds.join(",")}`),
+  );
 
   const dupUserAccessPerson = Array.from(userAccessByPerson.entries())
     .filter(([, rows]) => rows.length > 1)
@@ -321,11 +422,18 @@ async function runIntegrityAudit(tenantKey: string) {
     people,
     userAccessRows,
     userGroupRows,
+    personFamilyRows,
+    relationshipRows,
+    personAttributeRows,
+    importantDateRows,
     legacyLocalRows,
     peopleIds,
     filteredLinks,
     userAccessByPerson,
     linkByPerson,
+    personMembershipRefs,
+    personNonMembershipRefs,
+    duplicatePeopleGroups,
     summary,
     findings,
   };
@@ -344,6 +452,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
     generatedAt: new Date().toISOString(),
     summary: report.summary,
     findings: report.findings,
+    duplicatePeopleGroups: report.duplicatePeopleGroups,
   });
 }
 
@@ -355,6 +464,306 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
   }
 
   const familyGroupKey = resolved.tenant.tenantKey;
+  const body = await _.json().catch(() => null);
+  const action = normalize(typeof body?.action === "string" ? body.action : "");
+
+  if (action === "merge_duplicate_person") {
+    const sourcePersonId = normalize(typeof body?.sourcePersonId === "string" ? body.sourcePersonId : "");
+    const targetPersonId = normalize(typeof body?.targetPersonId === "string" ? body.targetPersonId : "");
+    if (!sourcePersonId || !targetPersonId || sourcePersonId === targetPersonId) {
+      return NextResponse.json({ error: "invalid_merge_payload" }, { status: 400 });
+    }
+
+    const before = await runIntegrityAudit(familyGroupKey);
+    if (!before.peopleIds.has(sourcePersonId) || !before.peopleIds.has(targetPersonId)) {
+      return NextResponse.json({ error: "merge_people_not_found_in_family" }, { status: 404 });
+    }
+    const sameDuplicateGroup = before.duplicatePeopleGroups.some(
+      (group) => group.personIds.includes(sourcePersonId) && group.personIds.includes(targetPersonId),
+    );
+    if (!sameDuplicateGroup) {
+      return NextResponse.json({ error: "merge_people_not_in_same_duplicate_group" }, { status: 409 });
+    }
+
+    const peopleRows = before.peopleRows;
+    const relationshipRows = before.relationshipRows;
+    const householdRows = await getTableRecords("Households").catch(() => []);
+    const personAttributeRows = before.personAttributeRows;
+    const importantDateRows = before.importantDateRows;
+    const personFamilyRows = before.personFamilyRows;
+    const userFamilyRows = before.userGroupRows;
+    const userAccessRows = before.userAccessRows;
+
+    let updatedRelationships = 0;
+    let deletedRelationships = 0;
+    const existingNonSourceRels = new Set<string>();
+    for (const row of relationshipRows) {
+      const from = normalize(readField(row.data, "from_person_id"));
+      const to = normalize(readField(row.data, "to_person_id"));
+      const relType = readField(row.data, "rel_type");
+      if (from === sourcePersonId || to === sourcePersonId) continue;
+      if (!from || !to || !relType) continue;
+      existingNonSourceRels.add(relCanonicalKey(from, to, relType));
+    }
+    const newRelKeysFromSource = new Set<string>();
+    for (const row of relationshipRows) {
+      const relId = readField(row.data, "rel_id") || readField(row.data, "relationship_id") || readField(row.data, "id");
+      const relType = readField(row.data, "rel_type");
+      const from = normalize(readField(row.data, "from_person_id"));
+      const to = normalize(readField(row.data, "to_person_id"));
+      if (!relId || !relType || (from !== sourcePersonId && to !== sourcePersonId)) {
+        continue;
+      }
+      const nextFrom = from === sourcePersonId ? targetPersonId : from;
+      const nextTo = to === sourcePersonId ? targetPersonId : to;
+      if (!nextFrom || !nextTo || nextFrom === nextTo) {
+        if (await deleteTableRows("Relationships", [row.rowNumber])) deletedRelationships += 1;
+        continue;
+      }
+      const nextKey = relCanonicalKey(nextFrom, nextTo, relType);
+      if (existingNonSourceRels.has(nextKey) || newRelKeysFromSource.has(nextKey)) {
+        if (await deleteTableRows("Relationships", [row.rowNumber])) deletedRelationships += 1;
+        continue;
+      }
+      newRelKeysFromSource.add(nextKey);
+      const nextRelId = buildEntityId("rel", `${nextFrom}|${nextTo}|${relType}`);
+      const updated = await updateTableRecordById(
+        "Relationships",
+        relId,
+        {
+          from_person_id: nextFrom,
+          to_person_id: nextTo,
+          rel_id: nextRelId,
+          relationship_id: nextRelId,
+          id: nextRelId,
+        },
+        "rel_id",
+      );
+      if (updated) updatedRelationships += 1;
+    }
+
+    let updatedHouseholds = 0;
+    let deletedHouseholds = 0;
+    const existingNonSourcePairs = new Set<string>();
+    for (const row of householdRows) {
+      const husband = normalize(readField(row.data, "husband_person_id"));
+      const wife = normalize(readField(row.data, "wife_person_id"));
+      const familyKey = normalize(readField(row.data, "family_group_key"));
+      if (husband === sourcePersonId || wife === sourcePersonId) continue;
+      if (!husband || !wife) continue;
+      existingNonSourcePairs.add(`${familyKey}|${[husband, wife].sort().join("|")}`);
+    }
+    const newPairsFromSource = new Set<string>();
+    for (const row of householdRows) {
+      const householdId = readField(row.data, "household_id");
+      const husband = normalize(readField(row.data, "husband_person_id"));
+      const wife = normalize(readField(row.data, "wife_person_id"));
+      const familyKey = normalize(readField(row.data, "family_group_key"));
+      if (!householdId || (husband !== sourcePersonId && wife !== sourcePersonId)) {
+        continue;
+      }
+      const nextHusband = husband === sourcePersonId ? targetPersonId : husband;
+      const nextWife = wife === sourcePersonId ? targetPersonId : wife;
+      if (!nextHusband || !nextWife || nextHusband === nextWife) {
+        if (await deleteTableRows("Households", [row.rowNumber])) deletedHouseholds += 1;
+        continue;
+      }
+      const pairKey = `${familyKey}|${[nextHusband, nextWife].sort().join("|")}`;
+      if (existingNonSourcePairs.has(pairKey) || newPairsFromSource.has(pairKey)) {
+        if (await deleteTableRows("Households", [row.rowNumber])) deletedHouseholds += 1;
+        continue;
+      }
+      newPairsFromSource.add(pairKey);
+      const updated = await updateTableRecordById(
+        "Households",
+        householdId,
+        {
+          husband_person_id: nextHusband,
+          wife_person_id: nextWife,
+        },
+        "household_id",
+      );
+      if (updated) updatedHouseholds += 1;
+    }
+
+    let updatedAttributes = 0;
+    for (const row of personAttributeRows) {
+      const personId = normalize(readField(row.data, "person_id"));
+      const attributeId = readField(row.data, "attribute_id");
+      if (!attributeId || personId !== sourcePersonId) continue;
+      const updated = await updateTableRecordById(
+        "PersonAttributes",
+        attributeId,
+        { person_id: targetPersonId },
+        "attribute_id",
+      );
+      if (updated) updatedAttributes += 1;
+    }
+
+    let updatedImportantDates = 0;
+    for (const row of importantDateRows) {
+      const personId = normalize(readField(row.data, "person_id"));
+      const importantDateId = readField(row.data, "id");
+      if (!importantDateId || personId !== sourcePersonId) continue;
+      const updated = await updateTableRecordById(
+        "ImportantDates",
+        importantDateId,
+        { person_id: targetPersonId },
+        "id",
+      );
+      if (updated) updatedImportantDates += 1;
+    }
+
+    const personFamilyInScope = personFamilyRows.filter((row) => {
+      const personId = normalize(readField(row.data, "person_id"));
+      return personId === sourcePersonId || personId === targetPersonId;
+    });
+    const personFamilyByGroup = new Map<string, { family_group_key: string; is_enabled: string }>();
+    for (const row of personFamilyInScope) {
+      const groupKey = readField(row.data, "family_group_key");
+      if (!groupKey) continue;
+      const existing = personFamilyByGroup.get(normalize(groupKey));
+      const enabled = boolLike(readField(row.data, "is_enabled"));
+      if (!existing) {
+        personFamilyByGroup.set(normalize(groupKey), {
+          family_group_key: groupKey,
+          is_enabled: enabled,
+        });
+        continue;
+      }
+      if (enabled === "TRUE") {
+        existing.is_enabled = "TRUE";
+      }
+    }
+    const personFamilyRowsToDelete = personFamilyInScope.map((row) => row.rowNumber);
+    let deletedPersonFamilyRows = 0;
+    if (personFamilyRowsToDelete.length > 0) {
+      deletedPersonFamilyRows = await deleteRowsByNumber("PersonFamilyGroups", personFamilyRowsToDelete);
+    }
+    let createdPersonFamilyRows = 0;
+    const personFamilyToCreate = Array.from(personFamilyByGroup.values()).map((item) => ({
+      person_id: targetPersonId,
+      family_group_key: item.family_group_key,
+      is_enabled: item.is_enabled,
+    }));
+    if (personFamilyToCreate.length > 0) {
+      await createTableRecords("PersonFamilyGroups", personFamilyToCreate);
+      createdPersonFamilyRows = personFamilyToCreate.length;
+    }
+
+    const userFamilyInScope = userFamilyRows.filter((row) => {
+      const personId = normalize(readField(row.data, "person_id"));
+      return personId === sourcePersonId || personId === targetPersonId;
+    });
+    const userFamilyByKey = new Map<
+      string,
+      { user_email: string; family_group_key: string; family_group_name: string; role: string; is_enabled: string }
+    >();
+    for (const row of userFamilyInScope) {
+      const userEmail = readField(row.data, "user_email").toLowerCase();
+      const groupKey = readField(row.data, "family_group_key");
+      if (!userEmail || !groupKey) continue;
+      const key = `${normalize(userEmail)}|${normalize(groupKey)}`;
+      const role = normalize(readField(row.data, "role")) === "admin" ? "ADMIN" : "USER";
+      const enabled = boolLike(readField(row.data, "is_enabled"));
+      const existing = userFamilyByKey.get(key);
+      if (!existing) {
+        userFamilyByKey.set(key, {
+          user_email: userEmail,
+          family_group_key: groupKey,
+          family_group_name: readField(row.data, "family_group_name"),
+          role,
+          is_enabled: enabled,
+        });
+        continue;
+      }
+      if (role === "ADMIN") existing.role = "ADMIN";
+      if (enabled === "TRUE") existing.is_enabled = "TRUE";
+      if (!existing.family_group_name) existing.family_group_name = readField(row.data, "family_group_name");
+    }
+    const userFamilyRowsToDelete = userFamilyInScope.map((row) => row.rowNumber);
+    let deletedUserFamilyRows = 0;
+    if (userFamilyRowsToDelete.length > 0) {
+      deletedUserFamilyRows = await deleteRowsByNumber("UserFamilyGroups", userFamilyRowsToDelete);
+    }
+    let createdUserFamilyRows = 0;
+    const userFamilyToCreate = Array.from(userFamilyByKey.values()).map((item) => ({
+      user_email: item.user_email,
+      family_group_key: item.family_group_key,
+      family_group_name: item.family_group_name,
+      role: item.role,
+      person_id: targetPersonId,
+      is_enabled: item.is_enabled,
+    }));
+    if (userFamilyToCreate.length > 0) {
+      await createTableRecords("UserFamilyGroups", userFamilyToCreate);
+      createdUserFamilyRows = userFamilyToCreate.length;
+    }
+
+    const userAccessInScope = userAccessRows.filter((row) => {
+      const personId = normalize(readField(row.data, "person_id"));
+      return personId === sourcePersonId || personId === targetPersonId;
+    });
+    const userAccessRowsToDelete = userAccessInScope.map((row) => row.rowNumber);
+    let deletedUserAccessRows = 0;
+    if (userAccessRowsToDelete.length > 0) {
+      deletedUserAccessRows = await deleteRowsByNumber("UserAccess", userAccessRowsToDelete);
+    }
+    let createdUserAccessRows = 0;
+    if (userAccessInScope.length > 0) {
+      const keep = [...userAccessInScope].sort((a, b) => scoreUserAccessRow(b.data) - scoreUserAccessRow(a.data))[0];
+      await createTableRecord("UserAccess", {
+        person_id: targetPersonId,
+        role: normalize(readField(keep.data, "role")) === "admin" ? "ADMIN" : "USER",
+        user_email: readField(keep.data, "user_email").toLowerCase(),
+        username: readField(keep.data, "username").toLowerCase(),
+        google_access: boolLike(readField(keep.data, "google_access")),
+        local_access: boolLike(readField(keep.data, "local_access")),
+        is_enabled: boolLike(readField(keep.data, "is_enabled")),
+        password_hash: readField(keep.data, "password_hash"),
+        failed_attempts: readField(keep.data, "failed_attempts"),
+        locked_until: readField(keep.data, "locked_until"),
+        must_change_password: boolLike(readField(keep.data, "must_change_password")),
+      });
+      createdUserAccessRows = 1;
+    }
+
+    const sourcePeopleRowNumbers = peopleRows
+      .filter((row) => normalize(readField(row.data, "person_id")) === sourcePersonId)
+      .map((row) => row.rowNumber);
+    let deletedPeopleRows = 0;
+    if (sourcePeopleRowNumbers.length > 0) {
+      deletedPeopleRows = await deleteRowsByNumber("People", sourcePeopleRowNumbers);
+    }
+
+    const after = await runIntegrityAudit(familyGroupKey);
+    return NextResponse.json({
+      ok: true,
+      mergedAt: new Date().toISOString(),
+      merge: {
+        sourcePersonId,
+        targetPersonId,
+        deletedPeopleRows,
+        updatedRelationships,
+        deletedRelationships,
+        updatedHouseholds,
+        deletedHouseholds,
+        updatedAttributes,
+        updatedImportantDates,
+        deletedPersonFamilyRows,
+        createdPersonFamilyRows,
+        deletedUserFamilyRows,
+        createdUserFamilyRows,
+        deletedUserAccessRows,
+        createdUserAccessRows,
+      },
+      before: before.summary,
+      after: after.summary,
+      findings: after.findings,
+      duplicatePeopleGroups: after.duplicatePeopleGroups,
+    });
+  }
+
   const before = await runIntegrityAudit(familyGroupKey);
   const config = await getTenantConfig(familyGroupKey);
 
@@ -431,6 +840,37 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     }
   }
 
+  let deletedDuplicatePeopleRows = 0;
+  let deletedDuplicatePeopleMembershipRows = 0;
+  for (const group of before.duplicatePeopleGroups) {
+    const ranked = [...group.personIds].sort((a, b) => {
+      const nonMemA = before.personNonMembershipRefs.get(a) ?? 0;
+      const nonMemB = before.personNonMembershipRefs.get(b) ?? 0;
+      if (nonMemA !== nonMemB) return nonMemB - nonMemA;
+      const memA = before.personMembershipRefs.get(a) ?? 0;
+      const memB = before.personMembershipRefs.get(b) ?? 0;
+      if (memA !== memB) return memB - memA;
+      return a.localeCompare(b);
+    });
+    const keep = ranked[0];
+    const candidates = ranked.slice(1).filter((personId) => (before.personNonMembershipRefs.get(personId) ?? 0) === 0);
+    for (const personId of candidates) {
+      const memberRows = before.personFamilyRows
+        .filter((row) => normalize(readField(row.data, "person_id")) === personId)
+        .map((row) => row.rowNumber);
+      if (memberRows.length > 0) {
+        deletedDuplicatePeopleMembershipRows += await deleteRowsByNumber("PersonFamilyGroups", memberRows);
+      }
+      const personRows = before.peopleRows
+        .filter((row) => normalize(readField(row.data, "person_id")) === personId)
+        .map((row) => row.rowNumber);
+      if (personRows.length > 0) {
+        deletedDuplicatePeopleRows += await deleteRowsByNumber("People", personRows);
+      }
+      void keep;
+    }
+  }
+
   const after = await runIntegrityAudit(familyGroupKey);
   return NextResponse.json({
     ok: true,
@@ -440,6 +880,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       deletedOrphanUserFamilyGroupRows,
       createdMissingLinks,
       deletedLegacyLocalUsersRows,
+      deletedDuplicatePeopleRows,
+      deletedDuplicatePeopleMembershipRows,
     },
     before: before.summary,
     after: after.summary,

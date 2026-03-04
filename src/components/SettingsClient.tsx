@@ -55,6 +55,10 @@ type IntegrityReport = {
     legacyLocalUsersCount: number;
   };
   findings: IntegrityFinding[];
+  duplicatePeopleGroups: Array<{
+    nameKey: string;
+    personIds: string[];
+  }>;
 };
 
 type DeleteFamilyPreview = {
@@ -331,6 +335,10 @@ export function SettingsClient({
   const [integrityStatus, setIntegrityStatus] = useState("");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
+  const [selectedDuplicateGroupKey, setSelectedDuplicateGroupKey] = useState("");
+  const [mergeSourcePersonId, setMergeSourcePersonId] = useState("");
+  const [mergeTargetPersonId, setMergeTargetPersonId] = useState("");
+  const [duplicateMergeStatus, setDuplicateMergeStatus] = useState("");
   const adminLoadSeq = useRef(0);
   const adminLoadAbortRef = useRef<AbortController | null>(null);
   const managedPersonSyncRef = useRef("");
@@ -409,6 +417,14 @@ export function SettingsClient({
     }
     return `${titleCaseWord(maiden)}-${titleCaseWord(partner)} Family`;
   }, [newMatriarchMaidenName, newPatriarchLastName, newPatriarchFullName]);
+  const duplicateGroups = useMemo(
+    () => integrityReport?.duplicatePeopleGroups ?? [],
+    [integrityReport],
+  );
+  const selectedDuplicateGroup = useMemo(
+    () => duplicateGroups.find((group) => group.nameKey === selectedDuplicateGroupKey) ?? null,
+    [duplicateGroups, selectedDuplicateGroupKey],
+  );
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -970,6 +986,58 @@ export function SettingsClient({
     const repaired = body?.repaired ?? {};
     setIntegrityRepairStatus(
       `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}, removed legacy LocalUsers: ${Number(repaired.deletedLegacyLocalUsersRows ?? 0)}.`,
+    );
+    await runIntegrityCheck();
+  };
+
+  useEffect(() => {
+    if (!duplicateGroups.length) {
+      setSelectedDuplicateGroupKey("");
+      setMergeSourcePersonId("");
+      setMergeTargetPersonId("");
+      return;
+    }
+    const activeGroup = duplicateGroups.find((group) => group.nameKey === selectedDuplicateGroupKey) ?? duplicateGroups[0];
+    setSelectedDuplicateGroupKey(activeGroup.nameKey);
+    if (!activeGroup.personIds.includes(mergeSourcePersonId)) {
+      setMergeSourcePersonId(activeGroup.personIds[0] ?? "");
+    }
+    if (!activeGroup.personIds.includes(mergeTargetPersonId) || mergeTargetPersonId === mergeSourcePersonId) {
+      const fallbackTarget = activeGroup.personIds.find((id) => id !== (mergeSourcePersonId || activeGroup.personIds[0])) ?? "";
+      setMergeTargetPersonId(fallbackTarget);
+    }
+  }, [duplicateGroups, selectedDuplicateGroupKey, mergeSourcePersonId, mergeTargetPersonId]);
+
+  const mergeDuplicatePeople = async () => {
+    if (!mergeSourcePersonId || !mergeTargetPersonId || mergeSourcePersonId === mergeTargetPersonId) {
+      setDuplicateMergeStatus("Select different source and target people.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Merge duplicate person ${mergeSourcePersonId} into ${mergeTargetPersonId}? This reassigns references and deletes the source person.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDuplicateMergeStatus("Merging duplicate people...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/integrity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "merge_duplicate_person",
+        sourcePersonId: mergeSourcePersonId,
+        targetPersonId: mergeTargetPersonId,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setDuplicateMergeStatus(`Merge failed: ${res.status} ${text.slice(0, 220)}`);
+      return;
+    }
+    const merged = body?.merge ?? {};
+    setDuplicateMergeStatus(
+      `Merge complete. Deleted people rows: ${Number(merged.deletedPeopleRows ?? 0)}, relationships updated/deleted: ${Number(merged.updatedRelationships ?? 0)}/${Number(merged.deletedRelationships ?? 0)}, households updated/deleted: ${Number(merged.updatedHouseholds ?? 0)}/${Number(merged.deletedHouseholds ?? 0)}.`,
     );
     await runIntegrityCheck();
   };
@@ -2042,6 +2110,59 @@ export function SettingsClient({
         </div>
         {integrityStatus ? <p>{integrityStatus}</p> : null}
         {integrityRepairStatus ? <p>{integrityRepairStatus}</p> : null}
+        {integrityReport && duplicateGroups.length > 0 ? (
+          <div className="card" style={{ marginTop: "0.75rem" }}>
+            <h4 style={{ marginTop: 0 }}>Duplicate People Merge Tool</h4>
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              Auto-repair only removes low-risk duplicate rows. Use this tool to explicitly merge duplicate people records.
+            </p>
+            <label className="label">Duplicate Group</label>
+            <select
+              className="input"
+              value={selectedDuplicateGroupKey}
+              onChange={(e) => {
+                setSelectedDuplicateGroupKey(e.target.value);
+                setDuplicateMergeStatus("");
+              }}
+            >
+              {duplicateGroups.map((group) => (
+                <option key={`dup-group-${group.nameKey}`} value={group.nameKey}>
+                  {group.nameKey} ({group.personIds.length})
+                </option>
+              ))}
+            </select>
+            {selectedDuplicateGroup ? (
+              <>
+                <label className="label">Source Person (will be deleted)</label>
+                <select className="input" value={mergeSourcePersonId} onChange={(e) => setMergeSourcePersonId(e.target.value)}>
+                  <option value="">Select source</option>
+                  {selectedDuplicateGroup.personIds.map((personId) => (
+                    <option key={`merge-source-${personId}`} value={personId}>
+                      {personId}
+                    </option>
+                  ))}
+                </select>
+                <label className="label">Target Person (will be kept)</label>
+                <select className="input" value={mergeTargetPersonId} onChange={(e) => setMergeTargetPersonId(e.target.value)}>
+                  <option value="">Select target</option>
+                  {selectedDuplicateGroup.personIds
+                    .filter((personId) => personId !== mergeSourcePersonId)
+                    .map((personId) => (
+                      <option key={`merge-target-${personId}`} value={personId}>
+                        {personId}
+                      </option>
+                    ))}
+                </select>
+                <div className="settings-chip-list" style={{ marginTop: "0.5rem" }}>
+                  <button type="button" className="button tap-button" onClick={mergeDuplicatePeople}>
+                    Merge Selected Duplicate
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {duplicateMergeStatus ? <p>{duplicateMergeStatus}</p> : null}
+          </div>
+        ) : null}
         {integrityReport ? (
           <div className="settings-table-wrap">
             <table className="settings-table">

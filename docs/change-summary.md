@@ -13,6 +13,34 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (duplicate lookup + explicit merge repair tool)
+
+- `Change`: Added an explicit duplicate-people merge tool in Settings and API support to merge a selected source person into a selected target person with reference reassignment and dedupe safeguards.
+- `Type`: UI, API, Data
+- `Why`: Existing integrity auto-repair intentionally only removed low-risk duplicate rows, so many real duplicate cases appeared unchanged. This adds a controlled, operator-selected merge path.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`:
+  - Merge operation can update/delete rows in:
+    - `Relationships`
+    - `Households`
+    - `PersonAttributes`
+    - `ImportantDates`
+    - `PersonFamilyGroups`
+    - `UserFamilyGroups`
+    - `UserAccess`
+    - `People` (source row delete)
+- `Verify`:
+  - Run Integrity Check and confirm duplicate groups appear in UI merge tool.
+  - Select duplicate group, source person, and target person.
+  - Execute merge and verify source person is removed and references resolve to target.
+  - Re-run Integrity Check to confirm duplicate group count decreases.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy. Data rollback requires restoring affected rows from backup/export.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (default household label on new spouse creation)
 
 - `Change`: When creating a new spouse household, default household label now uses wife maiden last name + husband last name + `Family` (format: `<WifeLastName>-<HusbandLastName> Family`).
