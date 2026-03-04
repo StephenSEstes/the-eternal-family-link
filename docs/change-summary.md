@@ -13,6 +13,37 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI schema + Sheets-to-OCI migration tooling and first load)
+
+- `Change`: Added OCI schema bootstrap SQL and a migration runner to move Google Sheets tabs into OCI, including dry-run validation, load mode with truncate, and source/target row-count reporting.
+- `Type`: Infra, Data, Schema
+- `Why`: Establish an executable migration path from Sheets-backed storage to OCI with evidence-driven validation before app cutover.
+- `Files`:
+  - `oci-schema.sql`
+  - `oci-migrate-sheets-to-oci.cjs`
+  - `package.json`
+- `Data Changes`:
+  - Fixed 3 `UserFamilyGroups` rows in Google Sheets where `user_email` was blank by generating temporary values in format `firstname.lastname.TEMP@TEMP.org`.
+  - Loaded OCI target tables from Sheets after remediation.
+- `Verify`:
+  - `npm run db:migrate:dry-run` passes and reports source counts.
+  - `npm run db:migrate:load` passes and reports target counts matching source counts:
+    - `people=11`
+    - `person_family_groups=15`
+    - `relationships=14`
+    - `households=3`
+    - `user_access=4`
+    - `user_family_groups=10`
+    - `family_config=2`
+    - `family_security_policy=1`
+    - `person_attributes=16`
+    - `household_photos=2`
+    - `important_dates=0`
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit. For data remediation/load rollback, restore affected Google Sheet rows and truncate/reload OCI tables from known-good snapshot.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI DB preflight gate for repo runtime readiness)
 
 - `Change`: Added a repeatable OCI connection preflight command (`npm run db:preflight`) that validates required OCI env vars and performs a wallet/TNS-backed Oracle connection + `dual` query.

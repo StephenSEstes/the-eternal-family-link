@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Added OCI DB runtime preflight command (`npm run db:preflight`) and verified wallet/TNS app-layer connectivity as `EFL_APP`. See `docs/change-summary.md`.
+- 2026-03-04: Added OCI schema + Sheets-to-OCI migration tooling, remediated 3 blank `UserFamilyGroups.user_email` rows, and completed first OCI load with matching row counts. See `docs/change-summary.md`.

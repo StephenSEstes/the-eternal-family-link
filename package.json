@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts",
-    "db:preflight": "node scripts/oci-db-preflight.cjs"
+    "db:preflight": "node scripts/oci-db-preflight.cjs",
+    "db:migrate:dry-run": "node oci-migrate-sheets-to-oci.cjs --mode=dry-run",
+    "db:migrate:load": "node oci-migrate-sheets-to-oci.cjs --mode=load --truncate=true"
   },
   "dependencies": {
     "googleapis": "^171.4.0",
