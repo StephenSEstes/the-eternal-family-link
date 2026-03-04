@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Fixed person modal race where newly created spouse could fail auto-selection; spouse now remains selected after create. See `docs/change-summary.md`.
+- 2026-03-04: Fixed OCI membership write path and repaired affected spouse/membership rows so new spouse additions persist correctly in tenant scope. See `docs/change-summary.md`.

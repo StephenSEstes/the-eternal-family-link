@@ -618,3 +618,46 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[
     }));
   });
 }
+
+export async function upsertOciPersonFamilyGroupMembership(
+  personId: string,
+  familyGroupKey: string,
+  isEnabled: boolean
+): Promise<"created" | "updated"> {
+  const normalizedPersonId = personId.trim();
+  const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
+  if (!normalizedPersonId || !normalizedFamilyGroupKey) {
+    throw new Error("person_id and family_group_key are required");
+  }
+  const enabledValue = isEnabled ? "TRUE" : "FALSE";
+  return withConnection(async (connection) => {
+    const update = await connection.execute(
+      `UPDATE person_family_groups
+       SET is_enabled = :isEnabled
+       WHERE TRIM(person_id) = :personId
+         AND LOWER(TRIM(family_group_key)) = :familyGroupKey`,
+      {
+        isEnabled: enabledValue,
+        personId: normalizedPersonId,
+        familyGroupKey: normalizedFamilyGroupKey,
+      },
+      { autoCommit: false }
+    );
+    if ((update.rowsAffected ?? 0) > 0) {
+      await connection.commit();
+      return "updated";
+    }
+    await connection.execute(
+      `INSERT INTO person_family_groups (person_id, family_group_key, is_enabled)
+       VALUES (:personId, :familyGroupKey, :isEnabled)`,
+      {
+        personId: normalizedPersonId,
+        familyGroupKey: normalizedFamilyGroupKey,
+        isEnabled: enabledValue,
+      },
+      { autoCommit: false }
+    );
+    await connection.commit();
+    return "created";
+  });
+}

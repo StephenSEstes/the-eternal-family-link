@@ -16,6 +16,7 @@ import {
   getOciTableRecords,
   getOciTenantUserAccessRows,
   listOciTabs,
+  upsertOciPersonFamilyGroupMembership,
   updateOciTableRecordById,
 } from "@/lib/oci/tables";
 import type {
@@ -1557,6 +1558,9 @@ export async function ensurePersonFamilyGroupMembership(
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   if (!normalizedPersonId) {
     throw new Error("person_id is required");
+  }
+  if (isOciDataSource()) {
+    return upsertOciPersonFamilyGroupMembership(normalizedPersonId, normalizedTenantKey, isEnabled);
   }
   const matrix = await ensurePersonFamilyGroupsTabSchema();
   const idx = buildHeaderIndex(matrix.headers);

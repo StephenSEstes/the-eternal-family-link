@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI membership write-path fix + targeted spouse/membership data repair)
+
+- `Change`: Fixed OCI mode membership write path so `ensurePersonFamilyGroupMembership` performs OCI-native upsert instead of Sheets writes. Repaired affected OCI data by inserting missing `person_family_groups` rows and creating missing household for the reported spouse pair.
+- `Type`: API, Data
+- `Why`: New spouse/person creation could succeed in `people` but fail tenant-scoped visibility and downstream spouse/household flows when membership rows were not written in OCI mode.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/lib/google/sheets.ts`
+- `Data Changes`:
+  - Inserted missing `person_family_groups` rows for:
+    - `p-0be8e91e` -> `snowestes`
+    - `p-2201cda3` -> `snowestes`
+    - `p-62ae5519` -> `snowestes`
+  - Inserted missing spouse household row for:
+    - `p-44b30ff9` + `p-2201cda3` in `snowestes`
+- `Verify`:
+  - `npm run lint` passes.
+  - New spouse/person creates now persist tenant membership in OCI mode.
+  - Affected people now resolve in tenant-scoped reads and spouse household exists.
+- `Rollback Notes`: Revert this commit and redeploy. For data rollback, delete inserted repair rows by IDs.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (Person modal spouse auto-select after create: race-condition fix)
 
 - `Change`: Fixed spouse auto-selection after creating a new spouse from person modal by preventing transient cleanup logic from clearing the newly created spouse ID before options refresh.
