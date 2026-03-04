@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (Person modal spouse auto-select after create: race-condition fix)
+
+- `Change`: Fixed spouse auto-selection after creating a new spouse from person modal by preventing transient cleanup logic from clearing the newly created spouse ID before options refresh.
+- `Type`: UI
+- `Why`: Newly created spouse appeared in the list but was not auto-selected due to a timing race between state updates and spouse-options reconciliation.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Create spouse via Add Spouse popout.
+  - After create, spouse dropdown is automatically selected to the new person.
+  - New spouse remains selected after option list refresh.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (Person modal spouse flow: remove redundant existing-selector and use create-new popout)
 
 - `Change`: Simplified spouse-add to two paths: existing spouse selection remains only in the Family spouse dropdown, and `Add Spouse` now opens a separate popout modal for `Create New Spouse` only.

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Person modal spouse flow now has two paths only: existing via spouse dropdown, and create-new via Add Spouse popout modal. See `docs/change-summary.md`.
+- 2026-03-04: Fixed person modal race where newly created spouse could fail auto-selection; spouse now remains selected after create. See `docs/change-summary.md`.

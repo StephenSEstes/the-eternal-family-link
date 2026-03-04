@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 
@@ -438,6 +438,7 @@ export function PersonEditModal({
   const [newSpouseGender, setNewSpouseGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [newSpouseInLaw, setNewSpouseInLaw] = useState(true);
   const [creatingSpouse, setCreatingSpouse] = useState(false);
+  const pendingCreatedSpouseIdRef = useRef("");
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
 
   const parentEdges = useMemo(
@@ -562,6 +563,7 @@ export function PersonEditModal({
     setNewSpouseBirthDate("");
     setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
     setNewSpouseInLaw(true);
+    pendingCreatedSpouseIdRef.current = "";
     setStatus("");
     void loadAttributes(person.personId);
   }, [open, person, households, parentSelection, tenantKey]);
@@ -621,6 +623,16 @@ export function PersonEditModal({
   );
   useEffect(() => {
     if (!spouseId) {
+      pendingCreatedSpouseIdRef.current = "";
+      return;
+    }
+    if (spouseOptions.some((option) => option.personId === spouseId)) {
+      if (pendingCreatedSpouseIdRef.current === spouseId) {
+        pendingCreatedSpouseIdRef.current = "";
+      }
+      return;
+    }
+    if (pendingCreatedSpouseIdRef.current === spouseId) {
       return;
     }
     if (!spouseOptions.some((option) => option.personId === spouseId)) {
@@ -1108,6 +1120,7 @@ export function PersonEditModal({
         }
         return [...current, { personId: createdPersonId, displayName: createdDisplayName, gender: newSpouseGender }];
       });
+      pendingCreatedSpouseIdRef.current = createdPersonId;
       setSpouseId(createdPersonId);
       setShowAddSpouse(false);
       if (relationSaved) {
