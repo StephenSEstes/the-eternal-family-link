@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getEnv } from "@/lib/env";
-import { createSheetsClient, createTableRecord, getPeople, getTableRecords, getTenantConfig, listTabs } from "@/lib/google/sheets";
+import { createTableRecord, deleteTableRows, getPeople, getTableRecords, getTenantConfig, listTabs } from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type IntegritySeverity = "error" | "warn";
@@ -63,17 +62,7 @@ function scoreUserAccessRow(data: Record<string, string>) {
 }
 
 async function resolveTenantScopedTabName(tabName: string, tenantKey: string) {
-  const env = getEnv();
-  const sheets = await createSheetsClient();
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId: env.SHEET_ID,
-    fields: "sheets.properties.title",
-  });
-  const titles =
-    metadata.data.sheets
-      ?.map((sheet) => sheet.properties?.title ?? "")
-      .map((title) => title.trim())
-      .filter(Boolean) ?? [];
+  const titles = await listTabs().catch(() => []);
   const byLower = new Map(titles.map((title) => [title.toLowerCase(), title]));
   const normalizedTenant = normalize(tenantKey);
   const candidates =
@@ -93,43 +82,7 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
   }
-
-  const env = getEnv();
-  const sheets = await createSheetsClient();
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId: env.SHEET_ID,
-    fields: "sheets.properties.sheetId,sheets.properties.title",
-  });
-  const target = metadata.data.sheets?.find(
-    (sheet) => (sheet.properties?.title ?? "").trim().toLowerCase() === tabName.trim().toLowerCase(),
-  );
-  const sheetId = target?.properties?.sheetId;
-  if (sheetId === undefined) {
-    return 0;
-  }
-
-  const uniqueDescending = Array.from(new Set(rowNumbers.filter((rowNumber) => rowNumber >= 2))).sort((a, b) => b - a);
-  if (uniqueDescending.length === 0) {
-    return 0;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.SHEET_ID,
-    requestBody: {
-      requests: uniqueDescending.map((rowNumber) => ({
-        deleteDimension: {
-          range: {
-            sheetId,
-            dimension: "ROWS",
-            startIndex: rowNumber - 1,
-            endIndex: rowNumber,
-          },
-        },
-      })),
-    },
-  });
-
-  return uniqueDescending.length;
+  return deleteTableRows(tabName, rowNumbers);
 }
 
 async function runIntegrityAudit(tenantKey: string) {

@@ -2,12 +2,11 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import {
-  createSheetsClient,
   createTableRecord,
   deleteTableRecordById,
   getTableRecordById,
+  getTableRecords,
   listTabs,
-  readTabWithClient,
   updateTableRecordById,
 } from "@/lib/google/sheets";
 import { getTenantContext } from "@/lib/family-group/context";
@@ -100,7 +99,6 @@ export async function POST() {
   const tenant = getTenantContext(session);
 
   const tabs = await listTabs();
-  const client = await createSheetsClient();
   const reports: TabReport[] = [];
 
   for (const tab of tabs) {
@@ -114,8 +112,10 @@ export async function POST() {
     };
 
     try {
-      const matrix = await readTabWithClient(client, tab, 7000);
-      if (matrix.headers.length === 0) {
+      const records = await getTableRecords(tab, tenant.tenantKey);
+      const first = records[0]?.data ?? null;
+      const headers = first ? Object.keys(first) : [];
+      if (headers.length === 0) {
         report.create = { ok: false, error: "missing_header_row" };
         report.read = { ok: false, error: "skipped" };
         report.update = { ok: false, error: "skipped" };
@@ -124,7 +124,7 @@ export async function POST() {
         continue;
       }
 
-      const idColumn = detectIdColumn(matrix.headers);
+      const idColumn = detectIdColumn(headers);
       report.idColumn = idColumn;
       if (!idColumn) {
         report.create = { ok: false, error: "no_id_column_detected" };
@@ -136,14 +136,14 @@ export async function POST() {
       }
 
       const token = `smoke_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const createPayload = buildCreatePayload(matrix.headers, idColumn, token);
+      const createPayload = buildCreatePayload(headers, idColumn, token);
       const created = await createTableRecord(tab, createPayload, tenant.tenantKey);
       report.create = { ok: true, recordId: token, rowNumber: created.rowNumber };
 
       const readBack = await getTableRecordById(tab, token, idColumn, tenant.tenantKey);
       report.read = { ok: true, found: Boolean(readBack) };
 
-      const updatePayload = buildUpdatePayload(matrix.headers, token);
+      const updatePayload = buildUpdatePayload(headers, token);
       const updated = await updateTableRecordById(tab, token, updatePayload, idColumn, tenant.tenantKey);
       report.update = { ok: true, updated: Boolean(updated) };
 

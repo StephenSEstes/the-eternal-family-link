@@ -8,8 +8,14 @@ import {
   createOciTableRecords,
   deleteOciTableRecordById,
   deleteOciTableRows,
+  getOciEnabledUserAccessesByEmail,
+  getOciEnabledUserAccessesByPersonId,
+  getOciLocalUsersForTenant,
+  getOciPeopleRows,
   getOciTableRecordById,
   getOciTableRecords,
+  getOciTenantUserAccessRows,
+  listOciTabs,
   updateOciTableRecordById,
 } from "@/lib/oci/tables";
 import type {
@@ -392,6 +398,10 @@ export async function lookupTab(
 }
 
 export async function listTabs(timeoutMs = 3000): Promise<string[]> {
+  if (isOciDataSource()) {
+    void timeoutMs;
+    return listOciTabs();
+  }
   const env = getEnv();
   const sheets = await createSheetsClient();
   const result = await withAbortTimeout(timeoutMs, (signal) =>
@@ -520,7 +530,22 @@ async function ensureAuditLogTab() {
 
 export async function appendAuditLog(input: AuditLogInput) {
   if (isOciDataSource()) {
-    void input;
+    const now = new Date().toISOString();
+    const eventId = `${now}-${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-zA-Z0-9_-]/g, "");
+    await createOciTableRecords("AuditLog", [
+      {
+        event_id: eventId,
+        timestamp: now,
+        actor_email: (input.actorEmail ?? "").trim().toLowerCase(),
+        actor_person_id: (input.actorPersonId ?? "").trim(),
+        action: input.action.trim(),
+        entity_type: input.entityType.trim(),
+        entity_id: (input.entityId ?? "").trim(),
+        family_group_key: normalizeTenantKey(input.familyGroupKey),
+        status: (input.status ?? "SUCCESS").trim().toUpperCase(),
+        details: (input.details ?? "").slice(0, 2000),
+      },
+    ]).catch(() => undefined);
     return;
   }
   await ensureAuditLogTab();
@@ -1205,6 +1230,20 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
 }
 
 export async function getEnabledUserAccessList(email: string): Promise<TenantAccess[]> {
+  if (isOciDataSource()) {
+    const rows = await getOciEnabledUserAccessesByEmail(email);
+    const familyMap = new Map<string, TenantAccess>();
+    for (const row of rows) {
+      const tenantKey = row.tenantKey.trim() || DEFAULT_TENANT_KEY;
+      familyMap.set(tenantKey, {
+        tenantKey,
+        tenantName: row.tenantName.trim() || DEFAULT_TENANT_NAME,
+        role: toRole(row.role),
+        personId: row.personId,
+      });
+    }
+    return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+  }
   const target = email.trim().toLowerCase();
   const links = await ensureUserFamilyGroupsTabSchema();
   if (links.headers.length === 0) {
@@ -1231,6 +1270,20 @@ export async function getEnabledUserAccessList(email: string): Promise<TenantAcc
 }
 
 export async function getEnabledUserAccessListByPersonId(personId: string): Promise<TenantAccess[]> {
+  if (isOciDataSource()) {
+    const rows = await getOciEnabledUserAccessesByPersonId(personId);
+    const familyMap = new Map<string, TenantAccess>();
+    for (const row of rows) {
+      const tenantKey = row.tenantKey.trim() || DEFAULT_TENANT_KEY;
+      familyMap.set(tenantKey, {
+        tenantKey,
+        tenantName: row.tenantName.trim() || DEFAULT_TENANT_NAME,
+        role: toRole(row.role),
+        personId: row.personId,
+      });
+    }
+    return Array.from(familyMap.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+  }
   const targetPersonId = personId.trim();
   if (!targetPersonId) {
     return [];
@@ -1291,6 +1344,17 @@ export async function getAllFamilyGroupAccesses(personId: string): Promise<Tenan
 
 export async function getTenantUserAccessList(tenantKey: string): Promise<UserAccessRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (isOciDataSource()) {
+    const rows = await getOciTenantUserAccessRows(normalizedTenantKey);
+    return rows.map((row) => ({
+      userEmail: row.userEmail,
+      isEnabled: row.isEnabled,
+      role: toRole(row.role),
+      personId: row.personId,
+      tenantKey: row.tenantKey || normalizedTenantKey,
+      tenantName: row.tenantName || DEFAULT_TENANT_NAME,
+    }));
+  }
   const [links, users] = await Promise.all([
     ensureUserFamilyGroupsTabSchema(),
     ensureUserAccessTabSchema(),
@@ -1536,6 +1600,21 @@ export async function ensurePersonFamilyGroupMembership(
 }
 
 export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
+  if (isOciDataSource()) {
+    const normalizedTenantKey = normalizeTenantKey(tenantKey);
+    const rows = await getOciLocalUsersForTenant(normalizedTenantKey);
+    return rows.map((row) => ({
+      tenantKey: normalizedTenantKey,
+      username: row.username,
+      passwordHash: row.passwordHash,
+      role: toRole(row.role),
+      personId: row.personId,
+      isEnabled: row.isEnabled,
+      failedAttempts: row.failedAttempts,
+      lockedUntil: row.lockedUntil,
+      mustChangePassword: row.mustChangePassword,
+    }));
+  }
   const { headers, rows } = await ensureUserAccessTabSchema();
   if (headers.length === 0) {
     return [];
@@ -1585,6 +1664,13 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 }
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
+  if (isOciDataSource()) {
+    const rows = await getOciPeopleRows(tenantKey).catch(() => []);
+    return peopleFromMatrix({
+      headers: TENANT_TABLE_HEADERS.People,
+      rows: rows.map((record) => TENANT_TABLE_HEADERS.People.map((header) => record.data[header] ?? "")),
+    });
+  }
   const sheets = await createSheetsClient();
 
   const readPeopleFromTab = async (tabName: string) => {
@@ -1636,6 +1722,32 @@ export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
 
 export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (isOciDataSource()) {
+    const rows = await getTableRecords([FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB]).catch(() => []);
+    if (rows.length === 0) {
+      return defaultTenantConfig(normalizedTenantKey);
+    }
+    const row =
+      rows.find((candidate) => {
+        const rowTenantKey = (candidate.data.family_group_key ?? "").trim().toLowerCase();
+        return rowTenantKey === normalizedTenantKey;
+      }) ??
+      rows.find((candidate) => {
+        const rowTenantKey = (candidate.data.family_group_key ?? "").trim().toLowerCase();
+        return !rowTenantKey && normalizedTenantKey === DEFAULT_TENANT_KEY;
+      }) ??
+      rows[0];
+    if (!row) {
+      return defaultTenantConfig(normalizedTenantKey);
+    }
+    const fallback = defaultTenantConfig(normalizedTenantKey);
+    return {
+      tenantKey: normalizedTenantKey,
+      tenantName: (row.data.family_group_name ?? "").trim() || fallback.tenantName,
+      viewerPinHash: (row.data.viewer_pin_hash ?? "").trim() || fallback.viewerPinHash,
+      photosFolderId: (row.data.photos_folder_id ?? "").trim() || fallback.photosFolderId,
+    };
+  }
   let matrix: SheetMatrix | null = null;
 
   try {
@@ -1680,6 +1792,44 @@ export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig>
 
 export async function getImportantDates(tenantKey?: string): Promise<ImportantDateRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (isOciDataSource()) {
+    const rows = await getTableRecords(IMPORTANT_DATES_TAB, normalizedTenantKey).catch(() => []);
+    const items = rows
+      .map((row, i) => {
+        const shareScopeRaw = (row.data.share_scope ?? "").trim().toLowerCase();
+        const shareScope =
+          shareScopeRaw === "one_family" || shareScopeRaw === "single_family" ? "one_family" : "both_families";
+        const shareFamilyGroupKey = (row.data.share_family_group_key ?? "").trim().toLowerCase();
+        if (normalizedTenantKey) {
+          const isVisibleForFamily =
+            shareScope === "both_families" ||
+            shareFamilyGroupKey === normalizedTenantKey;
+          if (!isVisibleForFamily) {
+            return null;
+          }
+        }
+        const title = (row.data.title ?? "").trim() || (row.data.event_title ?? "").trim();
+        const rawDate =
+          (row.data.date ?? "").trim() ||
+          (row.data.event_date ?? "").trim() ||
+          (row.data.important_date ?? "").trim();
+        const personId = (row.data.person_id ?? "").trim();
+        const description = (row.data.description ?? "").trim() || (row.data.notes ?? "").trim();
+        const id = (row.data.id ?? "").trim() || `${normalizedTenantKey}-${i + 2}`;
+        if (!title || !rawDate) {
+          return null;
+        }
+        return {
+          id,
+          title,
+          date: normalizeDate(rawDate),
+          description,
+          personId,
+        } satisfies ImportantDateRecord;
+      })
+      .filter((item): item is ImportantDateRecord => Boolean(item));
+    return items.sort((a, b) => a.date.localeCompare(b.date));
+  }
   let matrix: SheetMatrix;
 
   try {
@@ -1742,6 +1892,20 @@ export async function getPersonAttributes(
   personId?: string,
 ): Promise<PersonAttributeRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (isOciDataSource()) {
+    const rows = await getTableRecords(PERSON_ATTRIBUTES_TAB, normalizedTenantKey).catch(() => []);
+    const attributes = personAttributesFromMatrix(
+      {
+        headers: TENANT_TABLE_HEADERS.PersonAttributes,
+        rows: rows.map((record) => TENANT_TABLE_HEADERS.PersonAttributes.map((header) => record.data[header] ?? "")),
+      },
+      normalizedTenantKey,
+    );
+    if (!personId) {
+      return attributes;
+    }
+    return attributes.filter((item) => item.personId === personId);
+  }
   let matrix: SheetMatrix;
 
   try {
@@ -1787,6 +1951,27 @@ export async function updatePerson(
   updates: PersonUpdateInput,
   tenantKey?: string,
 ): Promise<PersonRecord | null> {
+  if (isOciDataSource()) {
+    const payload: Record<string, string> = {
+      display_name: updates.display_name,
+      birth_date: updates.birth_date,
+      phones: updates.phones,
+      address: updates.address,
+      hobbies: updates.hobbies,
+      notes: updates.notes,
+    };
+    if (updates.first_name !== undefined) payload.first_name = updates.first_name;
+    if (updates.middle_name !== undefined) payload.middle_name = updates.middle_name;
+    if (updates.last_name !== undefined) payload.last_name = updates.last_name;
+    if (updates.nick_name !== undefined) payload.nick_name = updates.nick_name;
+    if (updates.gender) payload.gender = updates.gender;
+    if (updates.email !== undefined) payload.email = updates.email;
+    const updated = await updateTableRecordById(PEOPLE_TAB, personId, payload, "person_id", tenantKey);
+    if (!updated) {
+      return null;
+    }
+    return getPersonById(personId, tenantKey);
+  }
   await ensureResolvedTabColumns(PEOPLE_TAB, ["email"], tenantKey);
   const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
   const { headers, rows } = await readTab(tabName);

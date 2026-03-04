@@ -13,6 +13,36 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI-only cutover + relational performance optimization for auth/access/people)
+
+- `Change`: Completed OCI-only cutover for remaining direct Google-client routes/functions and moved high-traffic auth/access/people paths to relational OCI queries (DB-side filtering/joining) with supporting indexes.
+- `Type`: API, Data, Schema, Infra
+- `Why`: Remove residual Sheets runtime dependency and eliminate full-table app-side scans that added OCI latency under auth/session and tenant-access workflows.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/app/api/t/[tenantKey]/admin-snapshot/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/app/api/family-groups/delete/route.ts`
+  - `src/app/api/admin/smoke/sheets-crud/route.ts`
+  - `oci-schema.sql`
+- `Data Changes`:
+  - Added `audit_log` table DDL for OCI audit persistence.
+  - Added OCI indexes:
+    - `ix_user_family_groups_email`
+    - `ix_user_family_groups_person`
+    - `ix_user_family_groups_family`
+    - `ix_user_access_person`
+    - `ix_user_access_username`
+    - `ix_person_family_groups_family`
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Auth/session callbacks no longer rely on full-table in-memory filtering for OCI mode.
+  - Admin snapshot/integrity/family-delete routes no longer require direct Google Sheets client usage.
+- `Rollback Notes`: Revert this commit and redeploy; OCI mode can be disabled by unsetting `EFL_DATA_SOURCE=oci`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI parity verifier + OCI-backed table CRUD seam for cutover)
 
 - `Change`: Added a Sheets-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `src/lib/google/sheets.ts` (enabled by `EFL_DATA_SOURCE=oci`) so existing route imports can switch storage backend without route-by-route rewrites. Added runtime wallet-file loading from `OCI_WALLET_FILES_JSON` for server deployments where local `TNS_ADMIN` paths are not available.

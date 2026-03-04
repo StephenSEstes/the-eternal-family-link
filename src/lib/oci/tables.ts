@@ -183,7 +183,26 @@ const TABLES: Record<string, TableConfig> = {
     tableName: "family_security_policy",
     headers: ["family_group_key", "id", "min_length", "require_number", "require_uppercase", "require_lowercase", "lockout_attempts"],
   },
+  AuditLog: {
+    tableName: "audit_log",
+    headers: [
+      "event_id",
+      "timestamp",
+      "actor_email",
+      "actor_person_id",
+      "action",
+      "entity_type",
+      "entity_id",
+      "family_group_key",
+      "status",
+      "details",
+    ],
+  },
 };
+
+export function listOciTabs() {
+  return Object.keys(TABLES);
+}
 
 function normalizeHeader(header: string) {
   const normalized = header.trim().toLowerCase();
@@ -382,5 +401,220 @@ export async function deleteOciTableRows(tabName: string | string[], rowNumbers:
     }
     await connection.commit();
     return deleted;
+  });
+}
+
+type OciTenantAccessRow = {
+  tenantKey: string;
+  tenantName: string;
+  role: string;
+  personId: string;
+};
+
+type OciTenantUserAccessRow = {
+  userEmail: string;
+  isEnabled: boolean;
+  role: string;
+  personId: string;
+  tenantKey: string;
+  tenantName: string;
+};
+
+type OciLocalUserRow = {
+  tenantKey: string;
+  username: string;
+  passwordHash: string;
+  role: string;
+  personId: string;
+  isEnabled: boolean;
+  failedAttempts: number;
+  lockedUntil: string;
+  mustChangePassword: boolean;
+};
+
+function enabledExpr(column: string) {
+  return `LOWER(TRIM(NVL(${column}, 'TRUE'))) IN ('true','yes','1')`;
+}
+
+export async function getOciEnabledUserAccessesByEmail(email: string): Promise<OciTenantAccessRow[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         family_group_name,
+         role,
+         person_id
+       FROM user_family_groups
+       WHERE LOWER(TRIM(user_email)) = :email
+         AND ${enabledExpr("is_enabled")}
+       ORDER BY family_group_name, family_group_key`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      tenantKey: fromDbValue(row.FAMILY_GROUP_KEY),
+      tenantName: fromDbValue(row.FAMILY_GROUP_NAME),
+      role: fromDbValue(row.ROLE),
+      personId: fromDbValue(row.PERSON_ID),
+    }));
+  });
+}
+
+export async function getOciEnabledUserAccessesByPersonId(personId: string): Promise<OciTenantAccessRow[]> {
+  const normalized = personId.trim();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         family_group_name,
+         role,
+         person_id
+       FROM user_family_groups
+       WHERE TRIM(person_id) = :personId
+         AND ${enabledExpr("is_enabled")}
+       ORDER BY family_group_name, family_group_key`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      tenantKey: fromDbValue(row.FAMILY_GROUP_KEY),
+      tenantName: fromDbValue(row.FAMILY_GROUP_NAME),
+      role: fromDbValue(row.ROLE),
+      personId: fromDbValue(row.PERSON_ID),
+    }));
+  });
+}
+
+export async function getOciTenantUserAccessRows(tenantKey: string): Promise<OciTenantUserAccessRow[]> {
+  const normalized = tenantKey.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         NVL(LOWER(TRIM(u.user_email)), LOWER(TRIM(l.user_email))) AS user_email,
+         CASE WHEN ${enabledExpr("u.google_access")} THEN 1 ELSE 0 END AS is_enabled,
+         NVL(u.role, l.role) AS role,
+         l.person_id AS person_id,
+         l.family_group_key AS family_group_key,
+         NVL(l.family_group_name, '') AS family_group_name
+       FROM (
+         SELECT
+           user_email,
+           family_group_key,
+           family_group_name,
+           role,
+           person_id,
+           ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY ROWID) AS rn
+         FROM user_family_groups
+         WHERE LOWER(TRIM(family_group_key)) = :tenantKey
+       ) l
+       LEFT JOIN user_access u
+         ON TRIM(u.person_id) = TRIM(l.person_id)
+       WHERE l.rn = 1
+       ORDER BY user_email, person_id`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      userEmail: fromDbValue(row.USER_EMAIL),
+      isEnabled: fromDbValue(row.IS_ENABLED) === "1",
+      role: fromDbValue(row.ROLE),
+      personId: fromDbValue(row.PERSON_ID),
+      tenantKey: fromDbValue(row.FAMILY_GROUP_KEY),
+      tenantName: fromDbValue(row.FAMILY_GROUP_NAME),
+    }));
+  });
+}
+
+export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciLocalUserRow[]> {
+  const normalized = tenantKey.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         :tenantKey AS tenant_key,
+         LOWER(TRIM(u.username)) AS username,
+         NVL(u.password_hash, '') AS password_hash,
+         NVL(u.role, 'USER') AS role,
+         NVL(u.person_id, '') AS person_id,
+         CASE WHEN ${enabledExpr("u.is_enabled")} THEN 1 ELSE 0 END AS is_enabled,
+         TO_NUMBER(NVL(NULLIF(TRIM(u.failed_attempts), ''), '0')) AS failed_attempts,
+         NVL(u.locked_until, '') AS locked_until,
+         CASE WHEN ${enabledExpr("u.must_change_password")} THEN 1 ELSE 0 END AS must_change_password
+       FROM user_access u
+       INNER JOIN user_family_groups l
+         ON TRIM(l.person_id) = TRIM(u.person_id)
+       WHERE LOWER(TRIM(l.family_group_key)) = :tenantKey
+         AND ${enabledExpr("l.is_enabled")}
+         AND ${enabledExpr("u.local_access")}
+         AND TRIM(NVL(u.username, '')) IS NOT NULL
+         AND TRIM(NVL(u.username, '')) <> ''
+       ORDER BY LOWER(TRIM(u.username))`,
+      { tenantKey: normalized },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      tenantKey: fromDbValue(row.TENANT_KEY),
+      username: fromDbValue(row.USERNAME),
+      passwordHash: fromDbValue(row.PASSWORD_HASH),
+      role: fromDbValue(row.ROLE),
+      personId: fromDbValue(row.PERSON_ID),
+      isEnabled: fromDbValue(row.IS_ENABLED) === "1",
+      failedAttempts: Number.parseInt(fromDbValue(row.FAILED_ATTEMPTS), 10) || 0,
+      lockedUntil: fromDbValue(row.LOCKED_UNTIL),
+      mustChangePassword: fromDbValue(row.MUST_CHANGE_PASSWORD) === "1",
+    }));
+  });
+}
+
+export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[]> {
+  const cols = TABLES.People.headers.join(", ");
+  if (!tenantKey) {
+    return withConnection(async (connection) => {
+      const result = await connection.execute(
+        `SELECT ${cols} FROM people ORDER BY display_name, person_id`,
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      const rows = (result.rows ?? []) as Record<string, unknown>[];
+      return rows.map((row, idx) => ({
+        rowNumber: idx + 2,
+        data: Object.fromEntries(TABLES.People.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])])),
+      }));
+    });
+  }
+  const normalized = tenantKey.trim().toLowerCase();
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT ${TABLES.People.headers.map((h) => `p.${h}`).join(", ")}
+       FROM people p
+       INNER JOIN person_family_groups m
+         ON TRIM(m.person_id) = TRIM(p.person_id)
+       WHERE LOWER(TRIM(m.family_group_key)) = :tenantKey
+         AND (${enabledExpr("m.is_enabled")} OR TRIM(NVL(m.is_enabled, '')) = '')
+       ORDER BY p.display_name, p.person_id`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row, idx) => ({
+      rowNumber: idx + 2,
+      data: Object.fromEntries(TABLES.People.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])])),
+    }));
   });
 }

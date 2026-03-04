@@ -245,6 +245,30 @@ END;
 /
 
 BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE audit_log (
+      event_id VARCHAR2(128 CHAR) NOT NULL,
+      timestamp VARCHAR2(64 CHAR),
+      actor_email VARCHAR2(320 CHAR),
+      actor_person_id VARCHAR2(128 CHAR),
+      action VARCHAR2(128 CHAR),
+      entity_type VARCHAR2(128 CHAR),
+      entity_id VARCHAR2(256 CHAR),
+      family_group_key VARCHAR2(128 CHAR),
+      status VARCHAR2(32 CHAR),
+      details VARCHAR2(4000 CHAR),
+      CONSTRAINT pk_audit_log PRIMARY KEY (event_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_relationships_from_person ON relationships (from_person_id)';
 EXCEPTION
   WHEN OTHERS THEN
@@ -294,3 +318,62 @@ EXCEPTION
 END;
 /
 
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_user_family_groups_email ON user_family_groups (user_email)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_user_family_groups_person ON user_family_groups (person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_user_family_groups_family ON user_family_groups (family_group_key)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_user_access_person ON user_access (person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_user_access_username ON user_access (username)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_person_family_groups_family ON person_family_groups (family_group_key)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/

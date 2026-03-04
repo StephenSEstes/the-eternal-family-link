@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Added OCI parity verification and OCI-backed table CRUD seam (`EFL_DATA_SOURCE=oci`) plus runtime wallet-file loading for production OCI connectivity. See `docs/change-summary.md`.
+- 2026-03-04: Completed OCI-only cutover for remaining routes/functions and optimized auth/access/people with relational OCI queries + new indexes. See `docs/change-summary.md`.

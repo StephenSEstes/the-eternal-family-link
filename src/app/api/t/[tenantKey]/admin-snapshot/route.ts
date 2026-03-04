@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSheetsClient, readTabWithClient } from "@/lib/google/sheets";
+import { getTableRecords } from "@/lib/google/sheets";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type AppRole = "ADMIN" | "USER";
@@ -71,6 +71,13 @@ function readCell(row: string[], index: Map<string, number>, key: string) {
   return String(row[idx] ?? "");
 }
 
+function rowsToMatrix(records: { data: Record<string, string> }[], headers: string[]) {
+  return {
+    headers,
+    rows: records.map((record) => headers.map((header) => String(record.data[header] ?? ""))),
+  };
+}
+
 const DEFAULT_POLICY: SecurityPolicy = {
   minLength: 8,
   requireNumber: true,
@@ -88,15 +95,67 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
   const selectedFamilyKey = normalize(resolved.tenant.tenantKey);
 
   try {
-    const sheets = await createSheetsClient();
-    const [userAccessMatrix, userFamilyGroupsMatrix, peopleMatrix, personFamilyGroupsMatrix, policyMatrix] =
+    const [userAccessRows, userFamilyGroupsRows, peopleRows, personFamilyGroupsRows, policyRows] =
       await Promise.all([
-        readTabWithClient(sheets, "UserAccess"),
-        readTabWithClient(sheets, "UserFamilyGroups"),
-        readTabWithClient(sheets, "People"),
-        readTabWithClient(sheets, "PersonFamilyGroups"),
-        readTabWithClient(sheets, "FamilySecurityPolicy"),
+        getTableRecords("UserAccess"),
+        getTableRecords("UserFamilyGroups"),
+        getTableRecords("People"),
+        getTableRecords("PersonFamilyGroups"),
+        getTableRecords("FamilySecurityPolicy"),
       ]);
+    const userAccessMatrix = rowsToMatrix(userAccessRows, [
+      "person_id",
+      "role",
+      "user_email",
+      "username",
+      "google_access",
+      "local_access",
+      "is_enabled",
+      "password_hash",
+      "failed_attempts",
+      "locked_until",
+      "must_change_password",
+    ]);
+    const userFamilyGroupsMatrix = rowsToMatrix(userFamilyGroupsRows, [
+      "user_email",
+      "family_group_key",
+      "family_group_name",
+      "role",
+      "person_id",
+      "is_enabled",
+    ]);
+    const peopleMatrix = rowsToMatrix(peopleRows, [
+      "person_id",
+      "display_name",
+      "first_name",
+      "middle_name",
+      "last_name",
+      "nick_name",
+      "birth_date",
+      "gender",
+      "phones",
+      "email",
+      "address",
+      "hobbies",
+      "notes",
+      "photo_file_id",
+      "is_pinned",
+      "relationships",
+    ]);
+    const personFamilyGroupsMatrix = rowsToMatrix(personFamilyGroupsRows, [
+      "person_id",
+      "family_group_key",
+      "is_enabled",
+    ]);
+    const policyMatrix = rowsToMatrix(policyRows, [
+      "family_group_key",
+      "id",
+      "min_length",
+      "require_number",
+      "require_uppercase",
+      "require_lowercase",
+      "lockout_attempts",
+    ]);
 
     const peopleIdx = buildIndex(peopleMatrix.headers);
     const peopleById = new Map<string, PersonItem>();
@@ -235,4 +294,3 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
     return NextResponse.json({ error: "admin_snapshot_failed", message }, { status: 503 });
   }
 }
-

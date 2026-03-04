@@ -1,9 +1,8 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-import { getEnv } from "@/lib/env";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
-import { appendAuditLog, createSheetsClient, getTableRecords, updateTableRecordById } from "@/lib/google/sheets";
+import { appendAuditLog, deleteTableRows, getTableRecords, updateTableRecordById } from "@/lib/google/sheets";
 
 type OrphanPerson = {
   personId: string;
@@ -53,43 +52,7 @@ async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
   }
-
-  const env = getEnv();
-  const sheets = await createSheetsClient();
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId: env.SHEET_ID,
-    fields: "sheets.properties.sheetId,sheets.properties.title",
-  });
-  const target = metadata.data.sheets?.find(
-    (sheet) => (sheet.properties?.title ?? "").trim().toLowerCase() === tabName.trim().toLowerCase(),
-  );
-  const sheetId = target?.properties?.sheetId;
-  if (sheetId === undefined) {
-    return 0;
-  }
-
-  const uniqueDescending = Array.from(new Set(rowNumbers.filter((rowNumber) => rowNumber >= 2))).sort((a, b) => b - a);
-  if (uniqueDescending.length === 0) {
-    return 0;
-  }
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.SHEET_ID,
-    requestBody: {
-      requests: uniqueDescending.map((rowNumber) => ({
-        deleteDimension: {
-          range: {
-            sheetId,
-            dimension: "ROWS",
-            startIndex: rowNumber - 1,
-            endIndex: rowNumber,
-          },
-        },
-      })),
-    },
-  });
-
-  return uniqueDescending.length;
+  return deleteTableRows(tabName, rowNumbers);
 }
 
 async function buildDeletePreview(familyGroupKey: string) {
