@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Person modal Add Spouse now starts with explicit choice (`Create New Person` default, or `Select Existing Person`) and shows only the matching panel. See `docs/change-summary.md`.
+- 2026-03-04: Person modal spouse flow now has two paths only: existing via spouse dropdown, and create-new via Add Spouse popout modal. See `docs/change-summary.md`.

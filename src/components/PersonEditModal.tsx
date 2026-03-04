@@ -69,7 +69,6 @@ type Props = {
 };
 
 type TabKey = "contact" | "attributes" | "photos";
-type AddSpouseMode = "existing" | "new";
 type DraftMeta = {
   label: string;
   description: string;
@@ -430,9 +429,6 @@ export function PersonEditModal({
   const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
-  const [addSpouseMode, setAddSpouseMode] = useState<AddSpouseMode>("new");
-  const [existingSpouseQuery, setExistingSpouseQuery] = useState("");
-  const [existingSpouseId, setExistingSpouseId] = useState("");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
@@ -558,9 +554,6 @@ export function PersonEditModal({
     setShowPhotoLibraryPicker(false);
     setShowPhotoUploadPicker(false);
     setShowAddSpouse(false);
-    setAddSpouseMode("new");
-    setExistingSpouseQuery("");
-    setExistingSpouseId("");
     setNewSpouseFirstName("");
     setNewSpouseMiddleName("");
     setNewSpouseLastName("");
@@ -634,11 +627,6 @@ export function PersonEditModal({
       setSpouseId("");
     }
   }, [spouseId, spouseOptions]);
-  const existingSpouseOptions = useMemo(() => {
-    const query = existingSpouseQuery.trim().toLowerCase();
-    if (!query) return spouseOptions;
-    return spouseOptions.filter((option) => option.displayName.toLowerCase().includes(query));
-  }, [existingSpouseQuery, spouseOptions]);
   const selectedPhoto = useMemo(
     () => photoAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
     [photoAttributes, selectedPhotoAttributeId],
@@ -1291,117 +1279,14 @@ export function PersonEditModal({
                           type="button"
                           className="button secondary tap-button"
                           onClick={() => {
-                            setShowAddSpouse((value) => {
-                              const next = !value;
-                              if (next) {
-                                setAddSpouseMode("new");
-                                setNewSpouseInLaw(true);
-                                setNewSpouseGender(oppositeGender(gender));
-                              }
-                              return next;
-                            });
+                            setShowAddSpouse(true);
+                            setNewSpouseInLaw(true);
+                            setNewSpouseGender(oppositeGender(gender));
                             setStatus("");
                           }}
                         >
-                          {showAddSpouse ? "Close Add Spouse" : "Add Spouse"}
+                          Add Spouse
                         </button>
-                      </div>
-                    ) : null}
-                    {showAddSpouse ? (
-                      <div className="card" style={{ marginTop: "0.75rem" }}>
-                        <h4 style={{ marginTop: 0 }}>Add Spouse</h4>
-                        <label className="label">Choose how to add spouse</label>
-                        <div className="settings-chip-list" style={{ marginBottom: "0.75rem" }}>
-                          <button
-                            type="button"
-                            className={`button tap-button ${addSpouseMode === "new" ? "" : "secondary"}`}
-                            onClick={() => setAddSpouseMode("new")}
-                          >
-                            Create New Person
-                          </button>
-                          <button
-                            type="button"
-                            className={`button tap-button ${addSpouseMode === "existing" ? "" : "secondary"}`}
-                            onClick={() => setAddSpouseMode("existing")}
-                          >
-                            Select Existing Person
-                          </button>
-                        </div>
-
-                        {addSpouseMode === "existing" ? (
-                          <>
-                            <label className="label">Lookup</label>
-                            <input
-                              className="input"
-                              value={existingSpouseQuery}
-                              onChange={(e) => setExistingSpouseQuery(e.target.value)}
-                              placeholder="Search by name"
-                            />
-                            <label className="label">Select Person</label>
-                            <select
-                              className="input"
-                              value={existingSpouseId}
-                              onChange={(e) => setExistingSpouseId(e.target.value)}
-                            >
-                              <option value="">Choose person</option>
-                              {existingSpouseOptions.map((option) => (
-                                <option key={`existing-spouse-${option.personId}`} value={option.personId}>
-                                  {option.displayName}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              className="button tap-button"
-                              style={{ marginTop: "0.75rem" }}
-                              disabled={!existingSpouseId}
-                              onClick={() => {
-                                setSpouseId(existingSpouseId);
-                                setShowAddSpouse(false);
-                                setStatus("Spouse selected. Click Save to persist relationship.");
-                              }}
-                            >
-                              Use Selected Person
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <label className="label">First Name</label>
-                            <input className="input" value={newSpouseFirstName} onChange={(e) => setNewSpouseFirstName(e.target.value)} />
-                            <label className="label">Middle Name</label>
-                            <input className="input" value={newSpouseMiddleName} onChange={(e) => setNewSpouseMiddleName(e.target.value)} />
-                            <label className="label">Last Name</label>
-                            <input className="input" value={newSpouseLastName} onChange={(e) => setNewSpouseLastName(e.target.value)} />
-                            <label className="label">Nick Name</label>
-                            <input className="input" value={newSpouseNickName} onChange={(e) => setNewSpouseNickName(e.target.value)} />
-                            <label className="label">Display Name (optional)</label>
-                            <input className="input" value={newSpouseDisplayName} onChange={(e) => setNewSpouseDisplayName(e.target.value)} />
-                            <label className="label">Birthdate</label>
-                            <input className="input" type="date" value={newSpouseBirthDate} onChange={(e) => setNewSpouseBirthDate(e.target.value)} />
-                            <label className="label">Gender</label>
-                            <select
-                              className="input"
-                              value={newSpouseGender}
-                              onChange={(e) => setNewSpouseGender(e.target.value as "male" | "female" | "unspecified")}
-                            >
-                              <option value="unspecified">Unspecified</option>
-                              <option value="male">Male</option>
-                              <option value="female">Female</option>
-                            </select>
-                            <label className="label" style={{ marginTop: "0.5rem" }}>
-                              <input type="checkbox" checked={newSpouseInLaw} onChange={(e) => setNewSpouseInLaw(e.target.checked)} /> In-law mode
-                            </label>
-                            <button
-                              type="button"
-                              className="button tap-button"
-                              style={{ marginTop: "0.75rem" }}
-                              disabled={creatingSpouse}
-                              onClick={() => void createSpouseInline()}
-                            >
-                              {creatingSpouse ? "Creating..." : "Create Spouse"}
-                            </button>
-                          </>
-                        )}
                       </div>
                     ) : null}
                     {householdId ? (
@@ -1836,6 +1721,67 @@ export function PersonEditModal({
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {showAddSpouse ? (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 145, display: "grid", placeItems: "center", padding: "1rem" }}
+            onClick={() => setShowAddSpouse(false)}
+          >
+            <div
+              className="card"
+              style={{ width: "min(560px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h4 style={{ marginTop: 0 }}>Create New Spouse</h4>
+              <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
+                Use spouse dropdown for existing people. This dialog creates a new person and links spouse automatically.
+              </p>
+              <label className="label">First Name</label>
+              <input className="input" value={newSpouseFirstName} onChange={(e) => setNewSpouseFirstName(e.target.value)} />
+              <label className="label">Middle Name</label>
+              <input className="input" value={newSpouseMiddleName} onChange={(e) => setNewSpouseMiddleName(e.target.value)} />
+              <label className="label">Last Name</label>
+              <input className="input" value={newSpouseLastName} onChange={(e) => setNewSpouseLastName(e.target.value)} />
+              <label className="label">Nick Name</label>
+              <input className="input" value={newSpouseNickName} onChange={(e) => setNewSpouseNickName(e.target.value)} />
+              <label className="label">Display Name (optional)</label>
+              <input className="input" value={newSpouseDisplayName} onChange={(e) => setNewSpouseDisplayName(e.target.value)} />
+              <label className="label">Birthdate</label>
+              <input className="input" type="date" value={newSpouseBirthDate} onChange={(e) => setNewSpouseBirthDate(e.target.value)} />
+              <label className="label">Gender</label>
+              <select
+                className="input"
+                value={newSpouseGender}
+                onChange={(e) => setNewSpouseGender(e.target.value as "male" | "female" | "unspecified")}
+              >
+                <option value="unspecified">Unspecified</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+              <label className="label" style={{ marginTop: "0.5rem" }}>
+                <input type="checkbox" checked={newSpouseInLaw} onChange={(e) => setNewSpouseInLaw(e.target.checked)} /> In-law mode
+              </label>
+              <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  disabled={creatingSpouse}
+                  onClick={() => void createSpouseInline()}
+                >
+                  {creatingSpouse ? "Creating..." : "Create Spouse"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={creatingSpouse}
+                  onClick={() => setShowAddSpouse(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         <div className="settings-chip-list" style={{ marginTop: "1rem" }}>

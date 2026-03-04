@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (Person modal spouse flow: remove redundant existing-selector and use create-new popout)
+
+- `Change`: Simplified spouse-add to two paths: existing spouse selection remains only in the Family spouse dropdown, and `Add Spouse` now opens a separate popout modal for `Create New Spouse` only.
+- `Type`: UI
+- `Why`: Remove redundant existing-person chooser inside Add Spouse and make add-new-person flow clearer and isolated from the main person modal form.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Existing spouse can be selected only via spouse dropdown in Family section.
+  - `Add Spouse` opens a popout modal (not inline card).
+  - Popout includes only create-new-person fields and actions.
+  - Creating spouse still auto-links spouse and creates household.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (Person modal spouse flow: upfront choice with default create-new)
 
 - `Change`: Refined Add Spouse UI so the first step is an explicit choice between `Create New Person` (default) and `Select Existing Person`, and only the relevant panel is shown for the selected choice.
