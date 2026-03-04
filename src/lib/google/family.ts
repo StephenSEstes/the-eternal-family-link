@@ -2,6 +2,7 @@ import "server-only";
 
 import type { HouseholdRecord, RelationshipRecord } from "@/lib/google/types";
 import { getTableRecords } from "@/lib/google/sheets";
+import { getOciHouseholdsForTenant, getOciRelationshipsForTenant } from "@/lib/oci/tables";
 
 function readCell(record: Record<string, string>, ...keys: string[]) {
   const lowered = new Map(Object.entries(record).map(([k, v]) => [k.trim().toLowerCase(), v]));
@@ -14,8 +15,15 @@ function readCell(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
+
 export async function getRelationships(tenantKey?: string): Promise<RelationshipRecord[]> {
-  const rows = await getTableRecords("Relationships");
+  const rows =
+    tenantKey && isOciDataSource()
+      ? await getOciRelationshipsForTenant(tenantKey).catch(() => [])
+      : await getTableRecords("Relationships");
   const normalizedTenantKey = (tenantKey ?? "").trim().toLowerCase();
   return rows
     .map((row, idx) => {
@@ -32,7 +40,9 @@ export async function getRelationships(tenantKey?: string): Promise<Relationship
 }
 
 export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[]> {
-  const rows = await getTableRecords("Households", tenantKey);
+  const rows = isOciDataSource()
+    ? await getOciHouseholdsForTenant(tenantKey).catch(() => [])
+    : await getTableRecords("Households", tenantKey);
   return rows
     .map((row, idx) => {
       const data = row.data;

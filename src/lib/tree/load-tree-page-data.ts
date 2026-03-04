@@ -14,7 +14,7 @@ type TreePageCacheEntry = {
   expiresAt: number;
 };
 
-const TREE_PAGE_CACHE_TTL_MS = 3000;
+const TREE_PAGE_CACHE_TTL_MS = 20_000;
 const treePageDataCache = new Map<string, TreePageCacheEntry>();
 const inFlightTreePageLoads = new Map<string, Promise<TreePageData>>();
 

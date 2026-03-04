@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Added duplicate people lookup + explicit source->target merge repair tool in Data & System to resolve non-trivial duplicate records safely. See `docs/change-summary.md`.
+- 2026-03-04: Improved tree/people navigation speed in OCI mode and fixed household cluster clipping/redraw stability in the tree view. See `docs/change-summary.md`.

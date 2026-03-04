@@ -619,6 +619,83 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[
   });
 }
 
+export async function getOciRelationshipsForTenant(tenantKey: string): Promise<SheetRecord[]> {
+  const normalized = tenantKey.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT DISTINCT
+         r.family_group_key,
+         r.rel_id,
+         r.from_person_id,
+         r.to_person_id,
+         r.rel_type
+       FROM relationships r
+       INNER JOIN person_family_groups m_from
+         ON TRIM(m_from.person_id) = TRIM(r.from_person_id)
+       INNER JOIN person_family_groups m_to
+         ON TRIM(m_to.person_id) = TRIM(r.to_person_id)
+       WHERE LOWER(TRIM(m_from.family_group_key)) = :tenantKey
+         AND LOWER(TRIM(m_to.family_group_key)) = :tenantKey
+         AND (${enabledExpr("m_from.is_enabled")} OR TRIM(NVL(m_from.is_enabled, '')) = '')
+         AND (${enabledExpr("m_to.is_enabled")} OR TRIM(NVL(m_to.is_enabled, '')) = '')
+       ORDER BY r.rel_id`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row, idx) => ({
+      rowNumber: idx + 2,
+      data: {
+        family_group_key: fromDbValue(row.FAMILY_GROUP_KEY),
+        rel_id: fromDbValue(row.REL_ID),
+        from_person_id: fromDbValue(row.FROM_PERSON_ID),
+        to_person_id: fromDbValue(row.TO_PERSON_ID),
+        rel_type: fromDbValue(row.REL_TYPE),
+      },
+    }));
+  });
+}
+
+export async function getOciHouseholdsForTenant(tenantKey: string): Promise<SheetRecord[]> {
+  const normalized = tenantKey.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         household_id,
+         husband_person_id,
+         wife_person_id,
+         label,
+         notes,
+         wedding_photo_file_id
+       FROM households
+       WHERE LOWER(TRIM(family_group_key)) = :tenantKey
+       ORDER BY household_id`,
+      [normalized],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row, idx) => ({
+      rowNumber: idx + 2,
+      data: {
+        family_group_key: fromDbValue(row.FAMILY_GROUP_KEY),
+        household_id: fromDbValue(row.HOUSEHOLD_ID),
+        husband_person_id: fromDbValue(row.HUSBAND_PERSON_ID),
+        wife_person_id: fromDbValue(row.WIFE_PERSON_ID),
+        label: fromDbValue(row.LABEL),
+        notes: fromDbValue(row.NOTES),
+        wedding_photo_file_id: fromDbValue(row.WEDDING_PHOTO_FILE_ID),
+      },
+    }));
+  });
+}
+
 export async function upsertOciPersonFamilyGroupMembership(
   personId: string,
   familyGroupKey: string,

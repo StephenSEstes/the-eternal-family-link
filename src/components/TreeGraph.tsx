@@ -373,6 +373,56 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
     }
   });
 
+  // Normalize layout bounds after spouse/child nudges so clusters are never clipped by stale base width/height.
+  const layoutPadding = 28;
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  positions.forEach((pos) => {
+    minX = Math.min(minX, pos.x - NODE_HALF_WIDTH);
+    maxX = Math.max(maxX, pos.x + NODE_HALF_WIDTH);
+    minY = Math.min(minY, pos.y - NODE_HALF_HEIGHT);
+    maxY = Math.max(maxY, pos.y + NODE_HALF_HEIGHT);
+  });
+
+  spousePairMeta.forEach((pair) => {
+    const left = positions.get(pair.leftId);
+    const right = positions.get(pair.rightId);
+    if (!left || !right) {
+      return;
+    }
+    const midX = (left.x + right.x) / 2;
+    const midY = (left.y + right.y) / 2;
+    const distance = Math.hypot(left.x - right.x, left.y - right.y);
+    const halfWidth = Math.max(96, distance / 2 + NODE_HALF_WIDTH + 12);
+    const halfHeight = NODE_HALF_HEIGHT + 26;
+    minX = Math.min(minX, midX - halfWidth);
+    maxX = Math.max(maxX, midX + halfWidth);
+    minY = Math.min(minY, midY - halfHeight);
+    maxY = Math.max(maxY, midY + halfHeight);
+  });
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    minX = 0;
+    minY = 0;
+    maxX = width;
+    maxY = height;
+  }
+
+  const contentWidth = maxX - minX;
+  const contentHeight = maxY - minY;
+  const canvasWidth = Math.max(width, Math.ceil(contentWidth + layoutPadding * 2));
+  const canvasHeight = Math.max(height, Math.ceil(contentHeight + layoutPadding * 2));
+  const shiftX = layoutPadding - minX + Math.max(0, (canvasWidth - (contentWidth + layoutPadding * 2)) / 2);
+  const shiftY = layoutPadding - minY + Math.max(0, (canvasHeight - (contentHeight + layoutPadding * 2)) / 2);
+  if (shiftX !== 0 || shiftY !== 0) {
+    positions.forEach((pos, personId) => {
+      positions.set(personId, { x: pos.x + shiftX, y: pos.y + shiftY });
+    });
+  }
+
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -445,15 +495,38 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
       return;
     }
     const rect = el.getBoundingClientRect();
-    const fitScale = clampScale(Math.min(rect.width / width, rect.height / height) * 0.94);
-    const nextX = (rect.width - width * fitScale) / 2;
-    const nextY = (rect.height - height * fitScale) / 2;
+    const fitScale = clampScale(Math.min(rect.width / canvasWidth, rect.height / canvasHeight) * 0.94);
+    const nextX = (rect.width - canvasWidth * fitScale) / 2;
+    const nextY = (rect.height - canvasHeight * fitScale) / 2;
     setScale(fitScale);
     setOffset({ x: nextX, y: nextY });
-  }, [clampScale, height, width]);
+  }, [canvasHeight, canvasWidth, clampScale]);
 
   useEffect(() => {
     fitToView();
+  }, [fitToView]);
+
+  useEffect(() => {
+    const target = viewportRef.current;
+    if (!target || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      frame = window.requestAnimationFrame(() => {
+        fitToView();
+      });
+    });
+    observer.observe(target);
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      observer.disconnect();
+    };
   }, [fitToView]);
 
   const zoomAtPoint = useCallback(
@@ -682,16 +755,16 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
       <div
         className="tree-map-layer"
         style={{
-          width: `${width}px`,
-          height: `${height}px`,
+          width: `${canvasWidth}px`,
+          height: `${canvasHeight}px`,
           transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
         }}
       >
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
         className="tree-lines"
         aria-label="Family tree graph"
-        style={{ width: `${width}px`, height: `${height}px` }}
+        style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }}
       >
         {Array.from(spousePairIds).map((pairKey) => {
           const pair = spousePairMeta.get(pairKey);

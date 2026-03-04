@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (tree/people navigation performance + household render stability)
+
+- `Change`: Optimized OCI read paths for tree/people navigation and stabilized tree household rendering bounds/refit behavior.
+- `Type`: API, UI, Performance
+- `Why`: Navigation between tree and people could take 10-25 seconds due to broad data loads, and household clusters could clip or fail to redraw correctly after layout/viewport changes.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/lib/google/family.ts`
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Switching between `/tree` and `/people` feels materially faster in OCI mode.
+  - Tree household clusters are no longer clipped after layout changes, viewport resize, or tab navigation.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (duplicate lookup + explicit merge repair tool)
 
 - `Change`: Added an explicit duplicate-people merge tool in Settings and API support to merge a selected source person into a selected target person with reference reassignment and dedupe safeguards.
