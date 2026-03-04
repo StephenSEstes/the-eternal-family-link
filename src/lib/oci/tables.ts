@@ -52,7 +52,7 @@ function ensureWalletDirFromEnv(): string | null {
     return cachedWalletDir;
   }
 
-  const walletFilesJson = readWalletJsonPayload();
+  const walletFilesJson = readWalletJsonPayload().replace(/\r?\n/g, "");
   if (!walletFilesJson) {
     return null;
   }
