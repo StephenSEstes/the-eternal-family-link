@@ -1298,7 +1298,7 @@ export function PersonEditModal({
                             setStatus("");
                           }}
                         >
-                          Add Spouse
+                          Add New Person as Spouse
                         </button>
                       </div>
                     ) : null}

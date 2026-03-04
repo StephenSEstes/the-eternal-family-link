@@ -441,6 +441,34 @@ main {
   gap: 0.45rem;
 }
 
+.tenant-switch-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tenant-switch-spinner {
+  width: 0.92rem;
+  height: 0.92rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--accent) 28%, #fff 72%);
+  border-top-color: var(--accent);
+  animation: tenantSwitchSpin 760ms linear infinite;
+}
+
+@keyframes tenantSwitchSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .tenant-select {
   min-height: 2.5rem;
   border: 1px solid color-mix(in oklab, var(--line) 74%, #fff 26%);

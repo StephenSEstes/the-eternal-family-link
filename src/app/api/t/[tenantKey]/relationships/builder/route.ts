@@ -26,6 +26,10 @@ function makeParentEdgeKey(fromPersonId: string, toPersonId: string) {
   return `${fromPersonId}=>${toPersonId}=>parent`.toLowerCase();
 }
 
+function makeRelationEdgeKey(fromPersonId: string, toPersonId: string, relType: string) {
+  return `${fromPersonId}=>${toPersonId}=>${relType}`.toLowerCase();
+}
+
 function readField(record: Record<string, string>, ...keys: string[]) {
   const lowered = new Map(Object.entries(record).map(([k, v]) => [k.trim().toLowerCase(), v]));
   for (const key of keys) {
@@ -239,6 +243,51 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       await createTableRecords("Relationships", relationsToCreate, normalizedTenantKey);
     }
 
+    debugContext.phase = "upsert_spouse_edges";
+    const allRelationships = await getTableRecords("Relationships", normalizedTenantKey);
+    const spouseRelationshipRowNumbersToDelete: number[] = [];
+    const existingSpouseEdgeKeys = new Set<string>();
+    for (const row of allRelationships) {
+      const relId = readField(row.data, "rel_id", "relationship_id", "id");
+      const relType = readField(row.data, "rel_type").toLowerCase();
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      if (!relId || (relType !== "spouse" && relType !== "family")) {
+        continue;
+      }
+      if (fromPersonId !== parsed.data.personId && toPersonId !== parsed.data.personId) {
+        continue;
+      }
+      const isDesired =
+        spouseId &&
+        ((fromPersonId === parsed.data.personId && toPersonId === spouseId) ||
+          (toPersonId === parsed.data.personId && fromPersonId === spouseId));
+      if (!isDesired) {
+        spouseRelationshipRowNumbersToDelete.push(row.rowNumber);
+        continue;
+      }
+      existingSpouseEdgeKeys.add(makeRelationEdgeKey(fromPersonId, toPersonId, relType));
+    }
+    if (spouseRelationshipRowNumbersToDelete.length > 0) {
+      await deleteTableRows("Relationships", spouseRelationshipRowNumbersToDelete, normalizedTenantKey);
+    }
+    if (spouseId) {
+      const desiredSpouseEdges = [
+        relationPayload(normalizedTenantKey, parsed.data.personId, spouseId, "spouse"),
+        relationPayload(normalizedTenantKey, spouseId, parsed.data.personId, "spouse"),
+        relationPayload(normalizedTenantKey, parsed.data.personId, spouseId, "family"),
+        relationPayload(normalizedTenantKey, spouseId, parsed.data.personId, "family"),
+      ].filter((payload) => {
+        const fromPersonId = payload.from_person_id;
+        const toPersonId = payload.to_person_id;
+        const relType = payload.rel_type;
+        return !existingSpouseEdgeKeys.has(makeRelationEdgeKey(fromPersonId, toPersonId, relType));
+      });
+      if (desiredSpouseEdges.length > 0) {
+        await createTableRecords("Relationships", desiredSpouseEdges, normalizedTenantKey);
+      }
+    }
+
     debugContext.phase = "load_households";
     const households = await getTableRecords("Households", normalizedTenantKey);
     const spouseConflict = spouseId
@@ -295,10 +344,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     debugContext.phase = "upsert_household";
     if (spouseId) {
       const hasDesiredUnit = households.some((row) => {
+        const unitId = readField(row.data, "household_id");
         const partner1 = readField(row.data, "husband_person_id");
         const partner2 = readField(row.data, "wife_person_id");
         const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
         return (
+          Boolean(unitId) &&
           rowTenantKey === normalizedTenantKey &&
           ((partner1 === parsed.data.personId && partner2 === spouseId) ||
             (partner2 === parsed.data.personId && partner1 === spouseId))

@@ -48,3 +48,6 @@ handoff/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.secrets.local.ps1
+.vercel

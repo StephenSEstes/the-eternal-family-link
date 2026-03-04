@@ -101,6 +101,12 @@ export function TenantSwitcher({ activeTenantKey, tenants, showRole = true }: Te
           </option>
         ))}
       </select>
+      {isPending ? (
+        <span className="tenant-switch-loading" role="status" aria-live="polite">
+          <span className="tenant-switch-spinner" aria-hidden="true" />
+          Switching family group...
+        </span>
+      ) : null}
       {error ? <span className="status-warn">{error}</span> : null}
     </div>
   );

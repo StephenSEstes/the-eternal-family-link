@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (family-group switch feedback + spouse save consistency polish)
+
+- `Change`: Added animated loading feedback in the family-group switcher, updated spouse-action labels for clarity, and strengthened spouse/family relationship upsert logic to keep spouse edges consistent with household saves.
+- `Type`: UI, API, Performance
+- `Why`: Family-group switches needed immediate visual acknowledgment, and spouse save flows needed stronger relationship-row consistency to avoid stale/missing spouse/family edges.
+- `Files`:
+  - `src/components/TenantSwitcher.tsx`
+  - `src/app/globals.css`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/ProfileEditor.tsx`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `.gitignore`
+- `Data Changes`: None.
+- `Verify`:
+  - Family-group dropdown shows animated `Switching family group...` indicator while switch is pending.
+  - Spouse action label reads `Add New Person as Spouse` where applicable.
+  - Spouse save updates relationship edges (`spouse`/`family`) consistently and preserves expected household linkage.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (OCI navigation latency reduction: tenant-scoped reads + pooled connections)
 
 - `Change`: Reduced server-side latency for people/tree/profile navigation by removing global relationship/attribute scans from hot paths and reusing OCI pooled connections.

@@ -941,7 +941,7 @@ export function ProfileEditor({
                   }
                 }}
               >
-                {showAddSpouse ? "Close Add Spouse" : "Add New Spouse"}
+                {showAddSpouse ? "Close Add Spouse" : "Add New Person as Spouse"}
               </button>
               {showAddSpouse ? (
                 <div className="card" style={{ marginTop: "0.75rem" }}>
