@@ -60,6 +60,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-04 (daily horoscope API + home card integration)
+
+- `Change`: Added daily horoscope server route backed by Aztro and surfaced a new Horoscope card on both home pages (`/` and `/t/[tenantKey]`), including loading/missing-birthday/upstream-error states.
+- `Type`: API, UI
+- `Why`: Provide a lightweight daily engagement feature while reusing existing auth/session and person birthdate data without changing schemas or business flows.
+- `Files`:
+  - `src/app/api/horoscope/today/route.ts`
+  - `src/components/home/HoroscopeCard.tsx`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+- `Data Changes`: None. No table/column changes.
+- `Verify`:
+  - Logged-in user with birthdate gets populated horoscope card.
+  - Logged-in user without birthdate gets friendly enable message + profile link.
+  - Upstream failure shows retry state and does not break page render.
+  - Route returns HTTP 200 for `missing_birthday` and `upstream_error` states.
+  - Aztro is called only from server route.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-03 (household modal visual parity + pictures UX alignment)
 
 - `Change`: Updated `HouseholdEditModal` to use the same modern modal shell and card-based visual language as person modal, and refactored household pictures tab to gallery/detail/upload overlay flows with staged upload preview actions.

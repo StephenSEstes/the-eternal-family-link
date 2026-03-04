@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { HoroscopeCard } from "@/components/home/HoroscopeCard";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getTenantBasePath } from "@/lib/family-group/context";
 
@@ -26,6 +27,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
       <main className="section">
         <h1 className="page-title">{tenant.tenantName}</h1>
         <p className="page-subtitle">Family group workspace.</p>
+        <HoroscopeCard tenantKey={tenant.tenantKey} />
 
         <section className="tile-grid">
           {tiles.map((tile) => (

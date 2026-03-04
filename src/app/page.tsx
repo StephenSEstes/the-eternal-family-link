@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { HoroscopeCard } from "@/components/home/HoroscopeCard";
 import { requireSession } from "@/lib/auth/session";
 
 const tiles = [
@@ -18,6 +19,7 @@ export default async function HomePage() {
       <main className="section">
         <h1 className="page-title">Welcome Home</h1>
         <p className="page-subtitle">Quick access for family memory and connection.</p>
+        <HoroscopeCard />
 
         <section className="tile-grid">
           {tiles.map((tile) => (
