@@ -66,7 +66,7 @@ export default async function PersonPage({ params }: PersonPageProps) {
     [people, allRelationships, households, attributes] = await runStep("load_related", () =>
       Promise.all([
         getPeople(tenant.tenantKey),
-        getRelationships(),
+        getRelationships(tenant.tenantKey),
         getHouseholds(tenant.tenantKey),
         getPersonAttributes(tenant.tenantKey, personId),
       ]),

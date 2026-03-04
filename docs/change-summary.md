@@ -13,6 +13,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-04 (OCI navigation latency reduction: tenant-scoped reads + pooled connections)
+
+- `Change`: Reduced server-side latency for people/tree/profile navigation by removing global relationship/attribute scans from hot paths and reusing OCI pooled connections.
+- `Type`: API, Performance, Infra
+- `Why`: Navigation remained slow because several pages loaded global `relationships` (then filtered in memory), `person_attributes` in OCI mode read the full table, and each data call created a fresh wallet-backed Oracle connection.
+- `Files`:
+  - `src/app/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/people/[personId]/page.tsx`
+  - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
+  - `src/app/api/t/[tenantKey]/tree/route.ts`
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Route transitions between people/tree/profile are materially faster in OCI mode.
+  - Family-group switching no longer triggers global relationships/attributes reads for these paths.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (tree/people navigation performance + household render stability)
 
 - `Change`: Optimized OCI read paths for tree/people navigation and stabilized tree household rendering bounds/refit behavior.

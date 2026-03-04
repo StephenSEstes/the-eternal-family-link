@@ -34,7 +34,7 @@ export async function loadTreePageData(tenantKey: string): Promise<TreePageData>
   const next = (async () => {
     const people = await getPeople(tenantKey);
     const peopleInFamily = new Set(people.map((person) => person.personId));
-    const [allRelationships, households] = await Promise.all([getRelationships(), getHouseholds(tenantKey)]);
+    const [allRelationships, households] = await Promise.all([getRelationships(tenantKey), getHouseholds(tenantKey)]);
     const relationships = allRelationships.filter(
       (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
     );

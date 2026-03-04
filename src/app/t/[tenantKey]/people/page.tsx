@@ -14,7 +14,12 @@ const PEOPLE_ROUTE_CACHE_TTL_MS = 20_000;
 
 async function loadPeoplePageBundle(tenantKey: string) {
   return getOrLoadWithTtl(`tenant_people_page_bundle:${tenantKey}`, PEOPLE_ROUTE_CACHE_TTL_MS, () =>
-    Promise.all([getPeople(tenantKey), getRelationships(), getHouseholds(tenantKey), getPersonAttributes(tenantKey)]),
+    Promise.all([
+      getPeople(tenantKey),
+      getRelationships(tenantKey),
+      getHouseholds(tenantKey),
+      getPersonAttributes(tenantKey),
+    ]),
   );
 }
 

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-04: Improved tree/people navigation speed in OCI mode and fixed household cluster clipping/redraw stability in the tree view. See `docs/change-summary.md`.
+- 2026-03-04: Reduced OCI navigation latency via tenant-scoped relationship/attribute reads and pooled OCI connections for people/tree/profile routes. See `docs/change-summary.md`.

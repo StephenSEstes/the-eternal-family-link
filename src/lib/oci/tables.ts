@@ -21,7 +21,12 @@ type OciConnection = {
   close: () => Promise<void>;
 };
 
+type OciPool = {
+  getConnection: () => Promise<OciConnection>;
+};
+
 let cachedWalletDir: string | null = null;
+let poolPromise: Promise<OciPool> | null = null;
 
 function readWalletJsonPayload() {
   const single = process.env.OCI_WALLET_FILES_JSON;
@@ -236,23 +241,45 @@ function fromDbValue(value: unknown) {
 }
 
 async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
+  const pool = await getPool();
+  const connection = (await pool.getConnection()) as OciConnection;
+  try {
+    return await run(connection);
+  } finally {
+    await connection.close();
+  }
+}
+
+async function getPool(): Promise<OciPool> {
+  if (poolPromise) {
+    return poolPromise;
+  }
+
   const walletDir = resolveWalletDirectory();
   const user = (process.env.OCI_DB_USER ?? "").trim();
   const password = (process.env.OCI_DB_PASSWORD ?? "").trim();
   const connectString = (process.env.OCI_DB_CONNECT_STRING ?? "").trim();
   const walletPassword = (process.env.OCI_WALLET_PASSWORD ?? "").trim();
-  const connection = (await oracledb.getConnection({
+
+  poolPromise = oracledb.createPool({
     user,
     password,
     connectString,
     configDir: walletDir || undefined,
     walletLocation: walletDir || undefined,
     walletPassword,
-  })) as OciConnection;
+    poolMin: 1,
+    poolMax: 8,
+    poolIncrement: 1,
+    poolTimeout: 60,
+  });
+
+  const nextPoolPromise = poolPromise;
   try {
-    return await run(connection);
-  } finally {
-    await connection.close();
+    return await nextPoolPromise!;
+  } catch (error) {
+    poolPromise = null;
+    throw error;
   }
 }
 
@@ -692,6 +719,40 @@ export async function getOciHouseholdsForTenant(tenantKey: string): Promise<Shee
         notes: fromDbValue(row.NOTES),
         wedding_photo_file_id: fromDbValue(row.WEDDING_PHOTO_FILE_ID),
       },
+    }));
+  });
+}
+
+export async function getOciPersonAttributesForTenant(
+  tenantKey: string,
+  personId?: string,
+): Promise<SheetRecord[]> {
+  const normalized = tenantKey.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+  const normalizedPersonId = (personId ?? "").trim();
+  return withConnection(async (connection) => {
+    const wherePersonClause = normalizedPersonId ? "AND TRIM(a.person_id) = :personId" : "";
+    const result = await connection.execute(
+      `SELECT DISTINCT
+         ${TABLES.PersonAttributes.headers.map((header) => `a.${header}`).join(", ")}
+       FROM person_attributes a
+       INNER JOIN person_family_groups m
+         ON TRIM(m.person_id) = TRIM(a.person_id)
+       WHERE LOWER(TRIM(m.family_group_key)) = :tenantKey
+         AND (${enabledExpr("m.is_enabled")} OR TRIM(NVL(m.is_enabled, '')) = '')
+         ${wherePersonClause}
+       ORDER BY a.person_id, a.attribute_type, a.sort_order, a.attribute_id`,
+      normalizedPersonId ? { tenantKey: normalized, personId: normalizedPersonId } : { tenantKey: normalized },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row, idx) => ({
+      rowNumber: idx + 2,
+      data: Object.fromEntries(
+        TABLES.PersonAttributes.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])]),
+      ),
     }));
   });
 }

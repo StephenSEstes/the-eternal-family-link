@@ -11,6 +11,7 @@ import {
   getOciEnabledUserAccessesByEmail,
   getOciEnabledUserAccessesByPersonId,
   getOciLocalUsersForTenant,
+  getOciPersonAttributesForTenant,
   getOciPeopleRows,
   getOciTableRecordById,
   getOciTableRecords,
@@ -1897,7 +1898,7 @@ export async function getPersonAttributes(
 ): Promise<PersonAttributeRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   if (isOciDataSource()) {
-    const rows = await getTableRecords(PERSON_ATTRIBUTES_TAB, normalizedTenantKey).catch(() => []);
+    const rows = await getOciPersonAttributesForTenant(normalizedTenantKey, personId).catch(() => []);
     const attributes = personAttributesFromMatrix(
       {
         headers: TENANT_TABLE_HEADERS.PersonAttributes,
@@ -1905,10 +1906,7 @@ export async function getPersonAttributes(
       },
       normalizedTenantKey,
     );
-    if (!personId) {
-      return attributes;
-    }
-    return attributes.filter((item) => item.personId === personId);
+    return attributes;
   }
   let matrix: SheetMatrix;
 

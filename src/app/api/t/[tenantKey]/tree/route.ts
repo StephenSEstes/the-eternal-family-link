@@ -23,7 +23,7 @@ export async function GET(_: Request, { params }: TenantTreeRouteProps) {
   const tenant = getTenantContext(session, normalized);
   const [people, allRelationships, households] = await Promise.all([
     getPeople(tenant.tenantKey),
-    getRelationships(),
+    getRelationships(tenant.tenantKey),
     getHouseholds(tenant.tenantKey),
   ]);
   const peopleInFamily = new Set(people.map((person) => person.personId));
