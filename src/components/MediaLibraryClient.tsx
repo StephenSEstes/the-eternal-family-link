@@ -35,6 +35,8 @@ type ClientMediaMetadata = {
   height?: number;
   durationSec?: number;
   fileSizeBytes?: number;
+  checksumSha256?: string;
+  originalFileName?: string;
 };
 
 function inferMediaKind(fileId: string, rawMetadata?: string) {
@@ -113,6 +115,56 @@ async function assertOk(res: Response, fallbackMessage: string) {
   throw new Error(String(message));
 }
 
+async function postFormWithProgress(
+  url: string,
+  form: FormData,
+  onProgress?: (pct: number) => void,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    xhr.responseType = "json";
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable || event.total <= 0) return;
+      const pct = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      onProgress(pct);
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onload = () => {
+      const status = xhr.status;
+      const body = xhr.response ?? null;
+      if (status >= 200 && status < 300) {
+        onProgress?.(100);
+        resolve(body);
+        return;
+      }
+      const message =
+        (body && typeof body === "object" && "message" in body ? String((body as { message?: string }).message) : "") ||
+        (body && typeof body === "object" && "error" in body ? String((body as { error?: string }).error) : "") ||
+        `Upload failed (${status})`;
+      reject(new Error(message));
+    };
+    xhr.send(form);
+  });
+}
+
+async function computeFileSha256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const bytes = Array.from(new Uint8Array(hashBuffer));
+  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function readChecksumFromMetadata(raw?: string) {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw) as { checksumSha256?: string };
+    return String(parsed.checksumSha256 ?? "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
@@ -120,6 +172,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadProgressPct, setUploadProgressPct] = useState(0);
+  const [uploadProgressLabel, setUploadProgressLabel] = useState("");
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [category, setCategory] = useState("");
@@ -224,8 +278,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     setList([...list, value]);
   };
 
-  const uploadOneFile = async (file: File) => {
+  const uploadOneFile = async (
+    file: File,
+    checksumSha256: string,
+    onProgress: (pct: number) => void,
+  ) => {
     const mediaMeta = await fileToMetadata(file);
+    mediaMeta.checksumSha256 = checksumSha256;
+    mediaMeta.originalFileName = file.name;
     const metaJson = JSON.stringify(mediaMeta);
     const hasPeople = selectedPersonIds.length > 0;
     const hasHouseholds = selectedHouseholdIds.length > 0;
@@ -249,16 +309,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
       if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
       if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
-      const uploadRes = await fetch(
+      const uploadBody = await postFormWithProgress(
         `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(uploadedViaPersonId)}/photos/upload`,
-        {
-          method: "POST",
-          body: form,
-        },
+        form,
+        onProgress,
       );
-      await assertOk(uploadRes, "Person media upload failed");
-      const uploadBody = await uploadRes.json().catch(() => null);
-      fileId = String(uploadBody?.fileId ?? "").trim();
+      fileId = String((uploadBody as { fileId?: string } | null)?.fileId ?? "").trim();
     } else {
       uploadedViaHouseholdId = selectedHouseholdIds[0];
       const form = new FormData();
@@ -270,16 +326,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
       if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
       if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
-      const uploadRes = await fetch(
+      const uploadBody = await postFormWithProgress(
         `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(uploadedViaHouseholdId)}/photos/upload`,
-        {
-          method: "POST",
-          body: form,
-        },
+        form,
+        onProgress,
       );
-      await assertOk(uploadRes, "Household media upload failed");
-      const uploadBody = await uploadRes.json().catch(() => null);
-      fileId = String(uploadBody?.fileId ?? "").trim();
+      fileId = String((uploadBody as { fileId?: string } | null)?.fileId ?? "").trim();
     }
 
     if (!fileId) {
@@ -344,12 +396,37 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     }
 
     setBusy(true);
+    setUploadProgressPct(0);
+    setUploadProgressLabel("");
     setStatus(`Uploading ${selectedFiles.length} file(s)...`);
     try {
-      for (const file of selectedFiles) {
-        await uploadOneFile(file);
+      const knownChecksums = new Set(
+        mediaItems.map((item) => readChecksumFromMetadata(item.mediaMetadata)).filter(Boolean),
+      );
+      let uploadedCount = 0;
+      let skippedDuplicates = 0;
+
+      for (let idx = 0; idx < selectedFiles.length; idx += 1) {
+        const file = selectedFiles[idx];
+        const checksumSha256 = await computeFileSha256(file);
+        if (knownChecksums.has(checksumSha256)) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        knownChecksums.add(checksumSha256);
+        setUploadProgressLabel(`Uploading ${uploadedCount + 1} of ${selectedFiles.length}: ${file.name}`);
+        await uploadOneFile(file, checksumSha256, (filePct) => {
+          const overall = ((idx + Math.max(0, Math.min(100, filePct)) / 100) / selectedFiles.length) * 100;
+          setUploadProgressPct(Math.round(overall));
+        });
+        uploadedCount += 1;
       }
-      setStatus(`Uploaded and linked ${selectedFiles.length} file(s).`);
+      setUploadProgressPct(100);
+      setStatus(
+        skippedDuplicates > 0
+          ? `Uploaded ${uploadedCount} file(s). Skipped ${skippedDuplicates} duplicate file(s).`
+          : `Uploaded and linked ${uploadedCount} file(s).`,
+      );
       setSelectedFiles([]);
       setCategory("");
       setPhotoDate("");
@@ -358,6 +435,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setStatus(error instanceof Error ? error.message : "Upload failed");
     } finally {
       setBusy(false);
+      setUploadProgressLabel("");
     }
   };
 
@@ -485,6 +563,31 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           <button type="button" className="button tap-button" onClick={() => void uploadAll()} disabled={busy}>
             {busy ? "Uploading..." : "Upload and Attach"}
           </button>
+          {busy ? (
+            <div style={{ display: "grid", gap: "0.35rem" }}>
+              <div
+                aria-label="Upload progress"
+                style={{
+                  height: "10px",
+                  borderRadius: "999px",
+                  background: "#e5e7eb",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${uploadProgressPct}%`,
+                    background: "linear-gradient(90deg, #3b82f6 0%, #14b8a6 100%)",
+                    transition: "width 160ms ease",
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "0.85rem" }}>
+                {uploadProgressLabel || "Uploading..."} ({uploadProgressPct}%)
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
