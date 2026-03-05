@@ -80,6 +80,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (media upload multi-select reliability fix)
+
+- `Change`: Fixed Media Library file picker behavior to support reliable multi-select workflows across repeated picks and added selected-files list management (`Remove` and `Clear all`).
+- `Type`: UI
+- `Why`: Root cause was file selection UX ambiguity and picker behavior that made it appear multi-select was not working consistently.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Selecting files multiple times appends to selected list.
+  - Selecting the same file again does not duplicate entry.
+  - Selected file count and list are visible before upload.
+  - Per-file `Remove` and `Clear all` work.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (household photo tagging parity + attribute media link management)
 
 - `Change`: Added full household photo-detail link management (search/add/remove linked people and households), enabled linking an existing media file to additional households via new API route, and expanded person media-detail/tagging flow to include attribute media (`photo/video/audio/media`) not just photo rows.

@@ -128,6 +128,29 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [selectedHouseholdIds, setSelectedHouseholdIds] = useState<string[]>([]);
 
+  const appendSelectedFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const incoming = Array.from(files);
+    setSelectedFiles((current) => {
+      const seen = new Set(current.map((file) => `${file.name}|${file.size}|${file.lastModified}`));
+      const next = [...current];
+      for (const file of incoming) {
+        const key = `${file.name}|${file.size}|${file.lastModified}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        next.push(file);
+      }
+      return next;
+    });
+  };
+
+  const removeSelectedFile = (fileToRemove: File) => {
+    const targetKey = `${fileToRemove.name}|${fileToRemove.size}|${fileToRemove.lastModified}`;
+    setSelectedFiles((current) =>
+      current.filter((file) => `${file.name}|${file.size}|${file.lastModified}` !== targetKey),
+    );
+  };
+
   const loadLibrary = async (query = "") => {
     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(query)}`);
     await assertOk(res, "Failed to load media library");
@@ -354,10 +377,49 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
               type="file"
               multiple
               accept="image/*,video/*,audio/*"
-              onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
+              onChange={(e) => {
+                appendSelectedFiles(e.target.files);
+                e.currentTarget.value = "";
+              }}
               disabled={busy}
             />
           </label>
+          {selectedFiles.length > 0 ? (
+            <div className="card" style={{ padding: "0.6rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                <strong>{selectedFiles.length} file(s) selected</strong>
+                <button
+                  type="button"
+                  className="button button-ghost tap-button"
+                  onClick={() => setSelectedFiles([])}
+                  disabled={busy}
+                >
+                  Clear all
+                </button>
+              </div>
+              <div style={{ marginTop: "0.5rem", maxHeight: "140px", overflow: "auto", display: "grid", gap: "0.35rem" }}>
+                {selectedFiles.map((file) => (
+                  <div
+                    key={`${file.name}|${file.size}|${file.lastModified}`}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}
+                  >
+                    <span style={{ fontSize: "0.85rem", overflowWrap: "anywhere" }}>
+                      {file.name} ({Math.max(1, Math.round(file.size / 1024))} KB)
+                    </span>
+                    <button
+                      type="button"
+                      className="button button-ghost tap-button"
+                      aria-label={`Remove ${file.name}`}
+                      onClick={() => removeSelectedFile(file)}
+                      disabled={busy}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             <label style={{ display: "grid", gap: "0.35rem" }}>
