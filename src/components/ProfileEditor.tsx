@@ -1011,7 +1011,7 @@ export function ProfileEditor({
               <input
                 className="input"
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*,audio/*"
                 onChange={(event) => setNewPhotoUpload(event.target.files?.[0] ?? null)}
               />
               <label className="label">

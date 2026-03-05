@@ -111,6 +111,60 @@ function isVideoMediaByMetadata(raw?: string) {
   return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
 }
 
+function isAudioMediaByMetadata(raw?: string) {
+  const parsed = parseMediaMetadata(raw);
+  const mime = (parsed?.mimeType ?? "").toLowerCase();
+  const fileName = (parsed?.fileName ?? "").toLowerCase();
+  return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
+}
+
+async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
+  const result: { width?: number; height?: number; durationSec?: number } = {};
+  if (file.type.startsWith("image/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        result.width = img.naturalWidth;
+        result.height = img.naturalHeight;
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.src = url;
+    });
+    return result;
+  }
+  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+      media.preload = "metadata";
+      media.onloadedmetadata = () => {
+        if (Number.isFinite(media.duration)) {
+          result.durationSec = Math.max(0, media.duration);
+        }
+        if (file.type.startsWith("video/")) {
+          const video = media as HTMLVideoElement;
+          result.width = video.videoWidth || undefined;
+          result.height = video.videoHeight || undefined;
+        }
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.src = url;
+    });
+  }
+  return result;
+}
+
 function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate: string | undefined, minYears = 15) {
   const parent = parseDate(parentBirthDate);
   const child = parseDate(childBirthDate);
@@ -406,6 +460,7 @@ export function PersonEditModal({
   const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
   const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
   const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
+  const [pendingUploadCaptureSource, setPendingUploadCaptureSource] = useState("library");
   const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
   const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
   const [tagQuery, setTagQuery] = useState("");
@@ -413,6 +468,7 @@ export function PersonEditModal({
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
+  const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [personPhotoQuery, setPersonPhotoQuery] = useState("");
   const [photoSearchQuery, setPhotoSearchQuery] = useState("");
@@ -428,6 +484,7 @@ export function PersonEditModal({
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
   const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -489,7 +546,14 @@ export function PersonEditModal({
     : "/placeholders/avatar-male.png";
   const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, tenantKey) : fallbackAvatar;
   const photoAttributes = attributes.filter((item) => item.attributeType.toLowerCase() === "photo");
-  const regularAttributes = attributes.filter((item) => item.attributeType.toLowerCase() !== "photo");
+  const mediaAttributes = attributes.filter((item) => {
+    const type = item.attributeType.toLowerCase();
+    return type === "media" || type === "audio" || type === "video";
+  });
+  const regularAttributes = attributes.filter((item) => {
+    const type = item.attributeType.toLowerCase();
+    return type !== "photo" && type !== "media" && type !== "audio" && type !== "video";
+  });
   const loadAttributes = async (personId: string) => {
     const res = await fetch(
       `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
@@ -537,6 +601,7 @@ export function PersonEditModal({
     setNewPhotoHeadshot(false);
     setPendingUploadPhotoFile(null);
     setPendingUploadPhotoPreviewUrl("");
+    setPendingUploadCaptureSource("library");
     setSelectedPhotoAttributeId("");
     setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
     setTagQuery("");
@@ -544,6 +609,7 @@ export function PersonEditModal({
     setPendingOps(new Set());
     setLargePhotoFileId("");
     setLargePhotoIsVideo(false);
+    setLargePhotoIsAudio(false);
     setPhotoBusy(false);
     setPersonPhotoQuery("");
     setPhotoSearchQuery("");
@@ -554,6 +620,7 @@ export function PersonEditModal({
     setShowPhotoDetail(false);
     setShowPhotoLibraryPicker(false);
     setShowPhotoUploadPicker(false);
+    setUploadTarget("photo");
     setShowAddSpouse(false);
     setNewSpouseFirstName("");
     setNewSpouseMiddleName("");
@@ -954,9 +1021,10 @@ export function PersonEditModal({
     }
     setPendingUploadPhotoFile(null);
     setPendingUploadPhotoPreviewUrl("");
+    setPendingUploadCaptureSource("library");
   };
 
-  const setPendingUploadFromInput = (file: File | null) => {
+  const setPendingUploadFromInput = (file: File | null, source = "library") => {
     if (!file) return;
     if (pendingUploadPhotoPreviewUrl) {
       URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
@@ -964,6 +1032,7 @@ export function PersonEditModal({
     const previewUrl = URL.createObjectURL(file);
     setPendingUploadPhotoFile(file);
     setPendingUploadPhotoPreviewUrl(previewUrl);
+    setPendingUploadCaptureSource(source);
     if (!newPhotoDate && file.lastModified) {
       setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
     }
@@ -983,6 +1052,12 @@ export function PersonEditModal({
       form.append("isHeadshot", String(newPhotoHeadshot));
       form.append("description", newPhotoDescription.trim());
       form.append("photoDate", newPhotoDate.trim());
+      form.append("captureSource", pendingUploadCaptureSource);
+      form.append("attributeType", uploadTarget === "attribute-media" ? "media" : "photo");
+      const mediaMeta = await readClientMediaMetadata(pendingUploadPhotoFile);
+      if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
+      if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
+      if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
       if (pendingUploadPhotoFile.lastModified) {
         form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
       }
@@ -999,6 +1074,7 @@ export function PersonEditModal({
       setStatus("Photo uploaded.");
       clearPendingUploadPhoto();
       setShowPhotoUploadPicker(false);
+      setUploadTarget("photo");
       setNewPhotoHeadshot(false);
       setNewPhotoDescription("");
       setNewPhotoDate("");
@@ -1384,6 +1460,66 @@ export function PersonEditModal({
                 >
                   Add Attribute
                 </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  style={{ marginTop: "0.5rem" }}
+                  onClick={() => {
+                    setUploadTarget("attribute-media");
+                    setShowPhotoUploadPicker(true);
+                  }}
+                >
+                  Upload Media Attribute
+                </button>
+              </div>
+            ) : null}
+
+            {mediaAttributes.length > 0 ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 style={{ marginTop: 0 }}>Media Attributes</h4>
+                <div className="person-photo-grid">
+                  {mediaAttributes.map((item) => (
+                    <div key={item.attributeId} className="person-photo-tile">
+                      {isVideoMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                        <video src={getPhotoProxyPath(item.valueText, tenantKey)} className="person-photo-tile-image" muted playsInline />
+                      ) : isAudioMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                        <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
+                          <audio src={getPhotoProxyPath(item.valueText, tenantKey)} controls style={{ width: "100%" }} />
+                        </div>
+                      ) : (
+                        <img src={getPhotoProxyPath(item.valueText, tenantKey)} alt={item.label || "media"} className="person-photo-tile-image" />
+                      )}
+                      <div className="person-photo-tile-meta">
+                        <span className="person-photo-tile-label">{item.label || item.attributeType}</span>
+                      </div>
+                      {canManage ? (
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => {
+                            void (async () => {
+                              const ok = window.confirm("Delete this media attribute?");
+                              if (!ok) return;
+                              const res = await fetch(
+                                `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(item.attributeId)}`,
+                                { method: "DELETE" },
+                              );
+                              if (!res.ok) {
+                                setStatus(`Delete media attribute failed: ${res.status}`);
+                                return;
+                              }
+                              setStatus("Media attribute deleted.");
+                              await loadAttributes(person.personId);
+                              onSaved();
+                            })();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
           </>
@@ -1396,7 +1532,14 @@ export function PersonEditModal({
                 <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Gallery</h4>
                 <div className="person-photo-gallery-actions">
                   {canManage ? (
-                    <button type="button" className="button tap-button" onClick={() => setShowPhotoUploadPicker(true)}>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      onClick={() => {
+                        setUploadTarget("photo");
+                        setShowPhotoUploadPicker(true);
+                      }}
+                    >
                       + Add Photo
                     </button>
                   ) : null}
@@ -1428,6 +1571,10 @@ export function PersonEditModal({
                           muted
                           playsInline
                         />
+                      ) : isAudioMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                        <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
+                          <audio src={getPhotoProxyPath(item.valueText, tenantKey)} controls style={{ width: "100%" }} />
+                        </div>
                       ) : (
                         <img
                           src={getPhotoProxyPath(item.valueText, tenantKey)}
@@ -1457,6 +1604,7 @@ export function PersonEditModal({
                     onViewLarge={() => {
                       setLargePhotoFileId(selectedPhoto.valueText);
                       setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                      setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
                     }}
                   />
                   <div className="card">
@@ -1466,6 +1614,12 @@ export function PersonEditModal({
                         className="person-photo-detail-preview"
                         controls
                         playsInline
+                      />
+                    ) : isAudioMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
+                      <audio
+                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        className="person-photo-detail-preview"
+                        controls
                       />
                     ) : (
                       <img
@@ -1578,7 +1732,7 @@ export function PersonEditModal({
                           <label key={`search-${item.fileId}`} className="person-library-tile">
                             <img
                               src={getPhotoProxyPath(item.fileId, tenantKey)}
-                              alt={item.name || "photo"}
+                              alt={item.name || "media"}
                               className="person-library-image"
                             />
                             <div className="person-library-meta">
@@ -1619,13 +1773,16 @@ export function PersonEditModal({
               <div className="person-photo-picker-shell">
                 <div className="person-photo-picker-card">
                   <div className="person-photo-picker-head">
-                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Upload Photo</h4>
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>
+                      {uploadTarget === "attribute-media" ? "Upload Media Attribute" : "Upload Photo"}
+                    </h4>
                     <button
                       type="button"
                       className="button secondary tap-button"
                       onClick={() => {
                         clearPendingUploadPhoto();
                         setShowPhotoUploadPicker(false);
+                        setUploadTarget("photo");
                       }}
                     >
                       Close
@@ -1638,7 +1795,7 @@ export function PersonEditModal({
                   <label className="label">Date</label>
                   <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
                   <label className="label" style={{ marginTop: "0.5rem" }}>
-                    <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} /> Set as primary headshot
+                    <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} disabled={uploadTarget === "attribute-media"} /> Set as primary headshot
                   </label>
                   {pendingUploadPhotoPreviewUrl ? (
                     <div className="person-upload-preview-card">
@@ -1649,6 +1806,8 @@ export function PersonEditModal({
                           controls
                           playsInline
                         />
+                      ) : pendingUploadPhotoFile?.type?.startsWith("audio/") ? (
+                        <audio src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls />
                       ) : (
                         <img
                           src={pendingUploadPhotoPreviewUrl}
@@ -1669,12 +1828,36 @@ export function PersonEditModal({
                   <input
                     id={`person-photo-upload-${person.personId}`}
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,audio/*"
                     style={{ display: "none" }}
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       e.currentTarget.value = "";
-                      setPendingUploadFromInput(file);
+                      setPendingUploadFromInput(file, "library");
+                    }}
+                  />
+                  <input
+                    id={`person-photo-upload-camera-${person.personId}`}
+                    type="file"
+                    accept="image/*,video/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      setPendingUploadFromInput(file, "camera");
+                    }}
+                  />
+                  <input
+                    id={`person-photo-upload-audio-${person.personId}`}
+                    type="file"
+                    accept="audio/*"
+                    capture="user"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.currentTarget.value = "";
+                      setPendingUploadFromInput(file, "audio-capture");
                     }}
                   />
                   <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
@@ -1684,7 +1867,23 @@ export function PersonEditModal({
                       disabled={photoBusy}
                       onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
                     >
-                      {pendingUploadPhotoFile ? "Choose Another Photo" : "Choose Photo"}
+                      {pendingUploadPhotoFile ? "Choose From Library" : "Choose From Library"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={photoBusy}
+                      onClick={() => document.getElementById(`person-photo-upload-camera-${person.personId}`)?.click()}
+                    >
+                      Camera
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={photoBusy}
+                      onClick={() => document.getElementById(`person-photo-upload-audio-${person.personId}`)?.click()}
+                    >
+                      Audio
                     </button>
                     <button
                       type="button"
@@ -1701,6 +1900,7 @@ export function PersonEditModal({
                       onClick={() => {
                         clearPendingUploadPhoto();
                         setShowPhotoUploadPicker(false);
+                        setUploadTarget("photo");
                       }}
                     >
                       Cancel
@@ -1713,8 +1913,9 @@ export function PersonEditModal({
               <div
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
                 onClick={() => {
-                  setLargePhotoFileId("");
-                  setLargePhotoIsVideo(false);
+      setLargePhotoFileId("");
+      setLargePhotoIsVideo(false);
+      setLargePhotoIsAudio(false);
                 }}
               >
                 {largePhotoIsVideo ? (
@@ -1723,6 +1924,12 @@ export function PersonEditModal({
                     controls
                     playsInline
                     style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                  />
+                ) : largePhotoIsAudio ? (
+                  <audio
+                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    controls
+                    style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
                 ) : (
                   <img

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Added unified OCI media schema + non-destructive photo migration tooling and integrated household/person/attribute photo links. See `docs/change-summary.md`.
+- 2026-03-05: Added media attachment expansion (audio + mobile capture inputs + attribute media uploads + unified OCI media search). See `docs/change-summary.md`.

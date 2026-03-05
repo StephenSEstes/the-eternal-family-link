@@ -28,6 +28,15 @@ function isOciDataSource() {
   return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
+function normalizeMediaAttributeType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "photo") return "photo";
+  if (normalized === "video") return "video";
+  if (normalized === "audio") return "audio";
+  if (normalized === "media") return "media";
+  return "";
+}
+
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string) {
   const current = await getPersonAttributes(tenantKey, personId);
   const updates = current.filter((item) => item.attributeType === attributeType && item.isPrimary);
@@ -116,11 +125,13 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     resolved.tenant.tenantKey,
   );
 
-  if (parsed.data.attributeType.toLowerCase() === "photo") {
+  const mediaAttributeType = normalizeMediaAttributeType(parsed.data.attributeType);
+  if (mediaAttributeType) {
     if (isOciDataSource() && parsed.data.valueText.trim()) {
       const fileId = parsed.data.valueText.trim();
       const mediaId = buildMediaId(fileId);
-      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, fileId, "photo");
+      const usageType = mediaAttributeType === "photo" ? "photo" : "media";
+      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, fileId, usageType);
       const createdAt = new Date().toISOString();
       await upsertOciMediaAsset({
         mediaId,
@@ -135,7 +146,7 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
         mediaId,
         entityType: "attribute",
         entityId: attributeId,
-        usageType: "photo",
+        usageType,
         label: parsed.data.label,
         description: parsed.data.notes,
         photoDate: parsed.data.startDate,
@@ -145,14 +156,16 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
         createdAt,
       });
     }
-    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
-    await updateTableRecordById(
-      PEOPLE_TAB,
-      personId,
-      { photo_file_id: primaryPhotoFileId },
-      "person_id",
-      resolved.tenant.tenantKey,
-    );
+    if (mediaAttributeType === "photo") {
+      const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+      await updateTableRecordById(
+        PEOPLE_TAB,
+        personId,
+        { photo_file_id: primaryPhotoFileId },
+        "person_id",
+        resolved.tenant.tenantKey,
+      );
+    }
   }
 
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: record.data }, { status: 201 });

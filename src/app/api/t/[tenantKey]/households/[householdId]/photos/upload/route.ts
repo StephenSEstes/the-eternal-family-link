@@ -3,6 +3,7 @@ import { buildEntityId } from "@/lib/entity-id";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import {
   createTableRecord,
@@ -59,29 +60,43 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const description = String(formData?.get("description") ?? "").trim();
     const requestedPhotoDate = String(formData?.get("photoDate") ?? "").trim();
     const fileCreatedAt = String(formData?.get("fileCreatedAt") ?? "").trim();
+    const mediaWidth = String(formData?.get("mediaWidth") ?? "").trim();
+    const mediaHeight = String(formData?.get("mediaHeight") ?? "").trim();
+    const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
+    const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const requestedPrimary = String(formData?.get("isPrimary") ?? "").trim().toLowerCase() === "true";
 
     const bytes = Buffer.from(await file.arrayBuffer());
-    if (bytes.length === 0) {
-      return NextResponse.json({ error: "invalid_payload", message: "file is empty" }, { status: 400 });
+    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
+    if (!validated.ok) {
+      return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
 
     const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
     const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
-    const mediaMetadata = JSON.stringify({
-      fileName: file.name || "",
-      mimeType: file.type || "application/octet-stream",
+    const safeFileName = sanitizeUploadFileName(
+      file.name || "",
+      `${householdId}-${Date.now()}.${validated.mediaKind === "image" ? "jpg" : validated.mediaKind === "video" ? "mp4" : "bin"}`,
+    );
+    const mediaMetadata = buildMediaMetadata({
+      fileName: safeFileName,
+      mimeType: validated.mimeType,
       sizeBytes: bytes.length,
       createdAt: createdAtIso,
+      mediaKind: validated.mediaKind,
+      width: mediaWidth,
+      height: mediaHeight,
+      durationSec: mediaDurationSec,
+      captureSource,
     });
 
     const config = await getTenantConfig(resolved.tenant.tenantKey);
     const uploaded = await uploadPhotoToFolder({
       folderId: config.photosFolderId,
-      filename: file.name || `${householdId}-${Date.now()}.jpg`,
-      mimeType: file.type || "application/octet-stream",
+      filename: safeFileName,
+      mimeType: validated.mimeType,
       data: bytes,
     });
 
@@ -104,8 +119,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         mediaId,
         fileId: uploaded.fileId,
         storageProvider: "gdrive",
-        mimeType: file.type || "application/octet-stream",
-        fileName: file.name || `${householdId}-${Date.now()}.jpg`,
+        mimeType: validated.mimeType,
+        fileName: safeFileName,
         fileSizeBytes: String(bytes.length),
         mediaMetadata,
         createdAt: createdAtIso,

@@ -13,6 +13,33 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-05 (media attachments: audio/mobile capture + attribute media + OCI search parity)
+
+- `Change`: Expanded media attachments to support image/video/audio uploads across people, households, and attributes with shared validation/metadata handling; added mobile capture-friendly upload inputs; and switched media search to unified OCI media link tables in OCI mode.
+- `Type`: UI, API, Data
+- `Why`: Root cause was photo-centric media handling (image/video only in parts of UI, no centralized upload validation, no audio capture path, and search still tied to legacy photo rows).
+- `Files`:
+  - `src/lib/media/upload.ts`
+  - `src/lib/media/upload.test.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/ProfileEditor.tsx`
+  - `package.json`
+- `Data Changes`: None (existing unified media tables reused).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Person/Household media upload supports image/video/audio from library plus mobile camera/audio capture inputs where browser/device supports `capture`.
+  - Person Attributes tab can upload/list/delete media attributes.
+  - OCI mode photo search reads `media_links` + `media_assets` instead of legacy-only photo rows.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (unified media schema + one-pass non-destructive migration tooling)
 
 - `Change`: Added unified OCI media tables (`media_assets`, `media_links`), API integration for household/person/attribute photo flows in OCI mode, and one-pass backfill/parity scripts that keep legacy tables intact.

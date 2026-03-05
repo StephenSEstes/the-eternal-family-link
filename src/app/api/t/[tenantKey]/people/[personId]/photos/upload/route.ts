@@ -3,6 +3,7 @@ import { canEditPerson } from "@/lib/auth/permissions";
 import { buildEntityId } from "@/lib/entity-id";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import {
   createTableRecord,
@@ -20,8 +21,8 @@ type UploadRouteProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
 };
 
-function buildAttributeId(tenantKey: string, personId: string) {
-  return buildEntityId("attr", `${tenantKey}|${personId}|photo|${Date.now()}`);
+function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
+  return buildEntityId("attr", `${tenantKey}|${personId}|${attributeType}|${Date.now()}`);
 }
 
 function normalizeDateFromTimestamp(raw: string): string {
@@ -60,21 +61,36 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const file = fileField as Blob & { name?: string; type?: string };
 
     const label = String(formData?.get("label") ?? "gallery").trim() || "gallery";
+    const requestedAttributeType = String(formData?.get("attributeType") ?? "photo")
+      .trim()
+      .toLowerCase();
+    const attributeType = ["photo", "video", "audio", "media"].includes(requestedAttributeType)
+      ? requestedAttributeType
+      : "photo";
     const requestedHeadshot = String(formData?.get("isHeadshot") ?? "").trim().toLowerCase() === "true";
     const description = String(formData?.get("description") ?? "").trim();
     const requestedPhotoDate = String(formData?.get("photoDate") ?? "").trim();
     const fileCreatedAt = String(formData?.get("fileCreatedAt") ?? "").trim();
+    const mediaWidth = String(formData?.get("mediaWidth") ?? "").trim();
+    const mediaHeight = String(formData?.get("mediaHeight") ?? "").trim();
+    const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
+    const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
-    if (bytes.length === 0) {
-      return NextResponse.json({ error: "invalid_payload", message: "file is empty" }, { status: 400 });
+    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
+    if (!validated.ok) {
+      return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
 
     const tenantConfig = await getTenantConfig(resolved.tenant.tenantKey);
+    const safeFileName = sanitizeUploadFileName(
+      file.name || "",
+      `${personId}-${Date.now()}.${validated.mediaKind === "image" ? "jpg" : validated.mediaKind === "video" ? "mp4" : "bin"}`,
+    );
     const uploaded = await uploadPhotoToFolder({
       folderId: tenantConfig.photosFolderId,
-      filename: file.name || `${personId}-${Date.now()}.jpg`,
-      mimeType: file.type || "application/octet-stream",
+      filename: safeFileName,
+      mimeType: validated.mimeType,
       data: bytes,
     });
 
@@ -82,17 +98,24 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
     const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
-    const mediaMetadata = JSON.stringify({
-      fileName: file.name || "",
-      mimeType: file.type || "application/octet-stream",
+    const mediaMetadata = buildMediaMetadata({
+      fileName: safeFileName,
+      mimeType: validated.mimeType,
       sizeBytes: bytes.length,
       createdAt: createdAtIso,
+      mediaKind: validated.mediaKind,
+      width: mediaWidth,
+      height: mediaHeight,
+      durationSec: mediaDurationSec,
+      captureSource,
     });
 
-    const existingPhotos = (await getPersonAttributes(resolved.tenant.tenantKey, personId)).filter(
+    const existingPhotos = attributeType === "photo"
+      ? (await getPersonAttributes(resolved.tenant.tenantKey, personId)).filter(
       (item) => item.attributeType === "photo",
-    );
-    const shouldBePrimary = requestedHeadshot || existingPhotos.length === 0;
+      )
+      : [];
+    const shouldBePrimary = attributeType === "photo" && validated.mediaKind === "image" && (requestedHeadshot || existingPhotos.length === 0);
 
     if (shouldBePrimary) {
       await Promise.all(
@@ -110,7 +133,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       );
     }
 
-    const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId);
+    const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId, attributeType);
     await ensureResolvedTabColumns(
       PERSON_ATTRIBUTES_TAB,
       ["media_metadata"],
@@ -121,7 +144,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       {
         attribute_id: attributeId,
         person_id: personId,
-        attribute_type: "photo",
+        attribute_type: attributeType,
         value_text: uploaded.fileId,
         value_json: mediaMetadata,
         media_metadata: mediaMetadata,
@@ -140,7 +163,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
 
     if (isOciDataSource()) {
       const mediaId = buildMediaId(uploaded.fileId);
-      const personUsageType = shouldBePrimary ? "profile" : "gallery";
+      const personUsageType = shouldBePrimary ? "profile" : attributeType === "photo" ? "gallery" : "media";
       const personLinkId = buildMediaLinkId(
         resolved.tenant.tenantKey,
         "person",
@@ -153,15 +176,15 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         "attribute",
         attributeId,
         uploaded.fileId,
-        "photo",
+        attributeType === "photo" ? "photo" : "media",
       );
 
       await upsertOciMediaAsset({
         mediaId,
         fileId: uploaded.fileId,
         storageProvider: "gdrive",
-        mimeType: file.type || "application/octet-stream",
-        fileName: file.name || `${personId}-${Date.now()}.jpg`,
+        mimeType: validated.mimeType,
+        fileName: safeFileName,
         fileSizeBytes: String(bytes.length),
         mediaMetadata,
         createdAt: createdAtIso,
@@ -196,7 +219,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         mediaId,
         entityType: "attribute",
         entityId: attributeId,
-        usageType: "photo",
+        usageType: attributeType === "photo" ? "photo" : "media",
         label: shouldBePrimary ? "headshot" : label,
         description,
         photoDate: effectivePhotoDate,
@@ -223,6 +246,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       personId,
       fileId: uploaded.fileId,
       isHeadshot: shouldBePrimary,
+      attributeType,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

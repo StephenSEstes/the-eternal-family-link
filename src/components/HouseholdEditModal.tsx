@@ -61,6 +61,58 @@ function isVideoMediaByMetadata(raw?: string) {
   return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
 }
 
+function isAudioMediaByMetadata(raw?: string) {
+  const parsed = parseMediaMetadata(raw);
+  const mime = (parsed?.mimeType ?? "").toLowerCase();
+  const fileName = (parsed?.fileName ?? "").toLowerCase();
+  return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
+}
+
+async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
+  const result: { width?: number; height?: number; durationSec?: number } = {};
+  if (file.type.startsWith("image/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        result.width = img.naturalWidth;
+        result.height = img.naturalHeight;
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.src = url;
+    });
+    return result;
+  }
+  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+      media.preload = "metadata";
+      media.onloadedmetadata = () => {
+        if (Number.isFinite(media.duration)) result.durationSec = Math.max(0, media.duration);
+        if (file.type.startsWith("video/")) {
+          const video = media as HTMLVideoElement;
+          result.width = video.videoWidth || undefined;
+          result.height = video.videoHeight || undefined;
+        }
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.src = url;
+    });
+  }
+  return result;
+}
+
 export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -84,9 +136,11 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
   const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
+  const [pendingUploadCaptureSource, setPendingUploadCaptureSource] = useState("library");
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
+  const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -116,6 +170,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setShowPhotoDetail(false);
     setLargePhotoFileId("");
     setLargePhotoIsVideo(false);
+    setLargePhotoIsAudio(false);
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
@@ -133,9 +188,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     }
     setPendingUploadPhotoFile(null);
     setPendingUploadPhotoPreviewUrl("");
+    setPendingUploadCaptureSource("library");
   };
 
-  const setPendingUploadFromInput = (file: File | null) => {
+  const setPendingUploadFromInput = (file: File | null, source = "library") => {
     if (!file) return;
     if (pendingUploadPhotoPreviewUrl) {
       URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
@@ -143,6 +199,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     const previewUrl = URL.createObjectURL(file);
     setPendingUploadPhotoFile(file);
     setPendingUploadPhotoPreviewUrl(previewUrl);
+    setPendingUploadCaptureSource(source);
     if (!newPhotoDate && file.lastModified) {
       setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
     }
@@ -161,6 +218,11 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     form.append("description", newPhotoDescription.trim());
     form.append("photoDate", newPhotoDate.trim());
     form.append("isPrimary", String(newPhotoPrimary));
+    form.append("captureSource", pendingUploadCaptureSource);
+    const mediaMeta = await readClientMediaMetadata(pendingUploadPhotoFile);
+    if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
+    if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
+    if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
     if (pendingUploadPhotoFile.lastModified) {
       form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
     }
@@ -460,6 +522,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                               muted
                               playsInline
                             />
+                          ) : isAudioMediaByMetadata(photo.mediaMetadata) ? (
+                            <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
+                              <audio src={getPhotoProxyPath(photo.fileId, tenantKey)} controls style={{ width: "100%" }} />
+                            </div>
                           ) : (
                             <img
                               src={getPhotoProxyPath(photo.fileId, tenantKey)}
@@ -492,6 +558,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           onClick={() => {
                             setLargePhotoFileId(selectedPhoto.fileId);
                             setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata));
+                            setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.mediaMetadata));
                           }}
                         >
                           View Large
@@ -504,6 +571,12 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             className="person-photo-detail-preview"
                             controls
                             playsInline
+                          />
+                        ) : isAudioMediaByMetadata(selectedPhoto.mediaMetadata) ? (
+                          <audio
+                            src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
+                            className="person-photo-detail-preview"
+                            controls
                           />
                         ) : (
                           <img
@@ -585,6 +658,8 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         <div className="person-upload-preview-card">
                           {pendingUploadPhotoFile?.type?.startsWith("video/") ? (
                             <video src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls playsInline />
+                          ) : pendingUploadPhotoFile?.type?.startsWith("audio/") ? (
+                            <audio src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls />
                           ) : (
                             <img src={pendingUploadPhotoPreviewUrl} alt="Selected upload preview" className="person-upload-preview-image" />
                           )}
@@ -599,12 +674,36 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       <input
                         id={`household-photo-upload-${householdId}`}
                         type="file"
-                        accept="image/*,video/*"
+                        accept="image/*,video/*,audio/*"
                         style={{ display: "none" }}
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null;
                           e.currentTarget.value = "";
-                          setPendingUploadFromInput(file);
+                          setPendingUploadFromInput(file, "library");
+                        }}
+                      />
+                      <input
+                        id={`household-photo-upload-camera-${householdId}`}
+                        type="file"
+                        accept="image/*,video/*"
+                        capture="environment"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          e.currentTarget.value = "";
+                          setPendingUploadFromInput(file, "camera");
+                        }}
+                      />
+                      <input
+                        id={`household-photo-upload-audio-${householdId}`}
+                        type="file"
+                        accept="audio/*"
+                        capture="user"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          e.currentTarget.value = "";
+                          setPendingUploadFromInput(file, "audio-capture");
                         }}
                       />
                       <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
@@ -614,7 +713,23 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           disabled={uploadingPhoto}
                           onClick={() => document.getElementById(`household-photo-upload-${householdId}`)?.click()}
                         >
-                          {pendingUploadPhotoFile ? "Choose Another Photo" : "Choose Photo"}
+                          {pendingUploadPhotoFile ? "Choose From Library" : "Choose From Library"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          disabled={uploadingPhoto}
+                          onClick={() => document.getElementById(`household-photo-upload-camera-${householdId}`)?.click()}
+                        >
+                          Camera
+                        </button>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          disabled={uploadingPhoto}
+                          onClick={() => document.getElementById(`household-photo-upload-audio-${householdId}`)?.click()}
+                        >
+                          Audio
                         </button>
                         <button
                           type="button"
@@ -645,6 +760,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     onClick={() => {
                       setLargePhotoFileId("");
                       setLargePhotoIsVideo(false);
+                      setLargePhotoIsAudio(false);
                     }}
                   >
                     {largePhotoIsVideo ? (
@@ -653,6 +769,12 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         controls
                         playsInline
                         style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                      />
+                    ) : largePhotoIsAudio ? (
+                      <audio
+                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                        controls
+                        style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                       />
                     ) : (
                       <img

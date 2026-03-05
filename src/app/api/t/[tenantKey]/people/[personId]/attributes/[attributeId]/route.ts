@@ -22,6 +22,15 @@ function isOciDataSource() {
   return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
+function normalizeMediaAttributeType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "photo") return "photo";
+  if (normalized === "video") return "video";
+  if (normalized === "audio") return "audio";
+  if (normalized === "media") return "media";
+  return "";
+}
+
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string, keepAttributeId: string) {
   const current = await getPersonAttributes(tenantKey, personId);
   const updates = current.filter(
@@ -109,19 +118,21 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  if (isOciDataSource() && (existing.attributeType === "photo" || nextType === "photo")) {
+  const existingMediaType = normalizeMediaAttributeType(existing.attributeType);
+  const nextMediaType = normalizeMediaAttributeType(nextType);
+  if (isOciDataSource() && (existingMediaType || nextMediaType)) {
     const existingLinks = await getOciMediaLinksForEntity({
       familyGroupKey: resolved.tenant.tenantKey,
       entityType: "attribute",
       entityId: attributeId,
-      usageType: "photo",
     });
     await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
 
     const nextValueText = (payload.value_text ?? existing.valueText).trim();
-    if (nextType === "photo" && nextValueText) {
+    if (nextMediaType && nextValueText) {
       const mediaId = buildMediaId(nextValueText);
-      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, nextValueText, "photo");
+      const usageType = nextMediaType === "photo" ? "photo" : "media";
+      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, nextValueText, usageType);
       const nextLabel = payload.label ?? existing.label;
       const nextDescription = payload.notes ?? existing.notes;
       const nextPhotoDate = payload.start_date ?? existing.startDate;
@@ -142,7 +153,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
         mediaId,
         entityType: "attribute",
         entityId: attributeId,
-        usageType: "photo",
+        usageType,
         label: nextLabel,
         description: nextDescription,
         photoDate: nextPhotoDate,
@@ -154,7 +165,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     }
   }
 
-  if (existing.attributeType === "photo" || nextType === "photo") {
+  if (existingMediaType === "photo" || nextMediaType === "photo") {
     const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
     await updateTableRecordById(
       PEOPLE_TAB,
@@ -196,17 +207,16 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  if (isOciDataSource() && existing.attributeType === "photo") {
+  if (isOciDataSource() && normalizeMediaAttributeType(existing.attributeType)) {
     const existingLinks = await getOciMediaLinksForEntity({
       familyGroupKey: resolved.tenant.tenantKey,
       entityType: "attribute",
       entityId: attributeId,
-      usageType: "photo",
     });
     await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
   }
 
-  if (existing.attributeType === "photo") {
+  if (normalizeMediaAttributeType(existing.attributeType) === "photo") {
     const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
     await updateTableRecordById(
       PEOPLE_TAB,

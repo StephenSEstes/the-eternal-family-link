@@ -25,6 +25,10 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
   const { tenantKey } = await params;
   const resolved = await requireTenantAccess(tenantKey);
@@ -35,11 +39,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   const query = q.toLowerCase();
 
-  const [people, attributes, householdRows, householdPhotoRows] = await Promise.all([
+  const [people, attributes, householdRows, householdPhotoRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
     getPeople(resolved.tenant.tenantKey),
     getPersonAttributes(resolved.tenant.tenantKey),
     getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []),
     getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []),
+    isOciDataSource() ? getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
+    isOciDataSource() ? getTableRecords("MediaAssets", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
   ]);
 
   const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
@@ -67,35 +73,85 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     return catalog.get(key)!;
   };
 
-  for (const attr of attributes) {
-    if (norm(attr.attributeType) !== "photo") continue;
-    const fileId = attr.valueText.trim();
-    if (!fileId) continue;
-    const item = ensureItem(fileId);
-    if (!item.name && attr.label.trim()) item.name = attr.label.trim();
-    if (!item.description && attr.notes?.trim()) item.description = attr.notes.trim();
-    if (!item.date && attr.startDate?.trim()) item.date = attr.startDate.trim();
-    if (!item.people.some((person) => person.personId === attr.personId)) {
-      item.people.push({
-        personId: attr.personId,
-        displayName: peopleById.get(attr.personId) || attr.personId,
-      });
-    }
-  }
+  if (isOciDataSource()) {
+    const mediaById = new Map(
+      mediaAssetRows.map((row) => [readCell(row.data, "media_id"), readCell(row.data, "file_id")] as const),
+    );
+    for (const row of mediaLinkRows) {
+      const familyGroupKey = readCell(row.data, "family_group_key");
+      if (norm(familyGroupKey) !== norm(resolved.tenant.tenantKey)) continue;
+      const entityType = norm(readCell(row.data, "entity_type"));
+      const entityId = readCell(row.data, "entity_id");
+      const mediaId = readCell(row.data, "media_id");
+      const fileId = mediaById.get(mediaId) || "";
+      if (!fileId) continue;
 
-  for (const row of householdPhotoRows) {
-    const fileId = readCell(row.data, "file_id");
-    if (!fileId) continue;
-    const item = ensureItem(fileId);
-    const householdId = readCell(row.data, "household_id");
-    if (!item.name) item.name = readCell(row.data, "name");
-    if (!item.description) item.description = readCell(row.data, "description");
-    if (!item.date) item.date = readCell(row.data, "photo_date");
-    if (householdId && !item.households.some((household) => household.householdId === householdId)) {
-      item.households.push({
-        householdId,
-        label: householdsById.get(householdId) || householdId,
-      });
+      const item = ensureItem(fileId);
+      if (!item.name) item.name = readCell(row.data, "label");
+      if (!item.description) item.description = readCell(row.data, "description");
+      if (!item.date) item.date = readCell(row.data, "photo_date");
+
+      if (entityType === "person") {
+        if (!item.people.some((person) => person.personId === entityId)) {
+          item.people.push({
+            personId: entityId,
+            displayName: peopleById.get(entityId) || entityId,
+          });
+        }
+        continue;
+      }
+
+      if (entityType === "household") {
+        if (!item.households.some((household) => household.householdId === entityId)) {
+          item.households.push({
+            householdId: entityId,
+            label: householdsById.get(entityId) || entityId,
+          });
+        }
+        continue;
+      }
+
+      if (entityType === "attribute") {
+        const attr = attributes.find((entry) => entry.attributeId === entityId);
+        if (attr && !item.people.some((person) => person.personId === attr.personId)) {
+          item.people.push({
+            personId: attr.personId,
+            displayName: peopleById.get(attr.personId) || attr.personId,
+          });
+        }
+      }
+    }
+  } else {
+    for (const attr of attributes) {
+      if (norm(attr.attributeType) !== "photo") continue;
+      const fileId = attr.valueText.trim();
+      if (!fileId) continue;
+      const item = ensureItem(fileId);
+      if (!item.name && attr.label.trim()) item.name = attr.label.trim();
+      if (!item.description && attr.notes?.trim()) item.description = attr.notes.trim();
+      if (!item.date && attr.startDate?.trim()) item.date = attr.startDate.trim();
+      if (!item.people.some((person) => person.personId === attr.personId)) {
+        item.people.push({
+          personId: attr.personId,
+          displayName: peopleById.get(attr.personId) || attr.personId,
+        });
+      }
+    }
+
+    for (const row of householdPhotoRows) {
+      const fileId = readCell(row.data, "file_id");
+      if (!fileId) continue;
+      const item = ensureItem(fileId);
+      const householdId = readCell(row.data, "household_id");
+      if (!item.name) item.name = readCell(row.data, "name");
+      if (!item.description) item.description = readCell(row.data, "description");
+      if (!item.date) item.date = readCell(row.data, "photo_date");
+      if (householdId && !item.households.some((household) => household.householdId === householdId)) {
+        item.households.push({
+          householdId,
+          label: householdsById.get(householdId) || householdId,
+        });
+      }
     }
   }
 
