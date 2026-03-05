@@ -335,6 +335,7 @@ export function SettingsClient({
   const [integrityStatus, setIntegrityStatus] = useState("");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [integrityRepairStatus, setIntegrityRepairStatus] = useState("");
+  const [orphanMediaStatus, setOrphanMediaStatus] = useState("");
   const [selectedDuplicateGroupKey, setSelectedDuplicateGroupKey] = useState("");
   const [mergeSourcePersonId, setMergeSourcePersonId] = useState("");
   const [mergeTargetPersonId, setMergeTargetPersonId] = useState("");
@@ -986,6 +987,51 @@ export function SettingsClient({
     const repaired = body?.repaired ?? {};
     setIntegrityRepairStatus(
       `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}, removed legacy LocalUsers: ${Number(repaired.deletedLegacyLocalUsersRows ?? 0)}.`,
+    );
+    await runIntegrityCheck();
+  };
+
+  const scanOrphanMediaLinks = async () => {
+    setOrphanMediaStatus("Scanning orphaned media links...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/integrity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "audit_orphan_media_links" }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setOrphanMediaStatus(`Scan failed: ${res.status} ${text.slice(0, 220)}`);
+      return;
+    }
+    const counts = body?.counts ?? {};
+    setOrphanMediaStatus(
+      `Scan complete. Missing links: ${Number(counts.missingLinks ?? 0)}, orphan file IDs: ${Number(counts.orphanFileIds ?? 0)}, missing assets: ${Number(counts.missingAssetFileIds ?? 0)}.`,
+    );
+  };
+
+  const repairOrphanMediaLinks = async () => {
+    const confirmed = window.confirm(
+      "Repair orphaned media links for this family group? This creates missing media_assets/media_links rows from existing person/attribute/household references.",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setOrphanMediaStatus("Repairing orphaned media links...");
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/integrity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "repair_orphan_media_links" }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body) {
+      const text = typeof body === "object" ? JSON.stringify(body) : "";
+      setOrphanMediaStatus(`Repair failed: ${res.status} ${text.slice(0, 220)}`);
+      return;
+    }
+    const counts = body?.counts ?? {};
+    setOrphanMediaStatus(
+      `Repair complete. Created media links: ${Number(counts.createdMediaLinks ?? 0)}, created media assets: ${Number(counts.createdMediaAssets ?? 0)}, remaining missing links (pre-run count): ${Number(counts.missingLinks ?? 0)}.`,
     );
     await runIntegrityCheck();
   };
@@ -2107,9 +2153,16 @@ export function SettingsClient({
           <button type="button" className="button tap-button" onClick={repairIntegrityIssues}>
             Repair Integrity Issues
           </button>
+          <button type="button" className="button tap-button" onClick={scanOrphanMediaLinks}>
+            Scan Orphaned Media Links
+          </button>
+          <button type="button" className="button tap-button" onClick={repairOrphanMediaLinks}>
+            Repair Orphaned Media Links
+          </button>
         </div>
         {integrityStatus ? <p>{integrityStatus}</p> : null}
         {integrityRepairStatus ? <p>{integrityRepairStatus}</p> : null}
+        {orphanMediaStatus ? <p>{orphanMediaStatus}</p> : null}
         {integrityReport && duplicateGroups.length > 0 ? (
           <div className="card" style={{ marginTop: "0.75rem" }}>
             <h4 style={{ marginTop: 0 }}>Duplicate People Merge Tool</h4>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { getPeople, getPersonAttributes, getTableRecords } from "@/lib/google/sheets";
+import { listFilesInFolder } from "@/lib/google/drive";
+import { getPeople, getPersonAttributes, getTableRecords, getTenantConfig } from "@/lib/google/sheets";
 
 type SearchItem = {
   fileId: string;
@@ -37,8 +38,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     return resolved.error;
   }
 
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q")?.trim() ?? "";
   const query = q.toLowerCase();
+  const rawLimit = Number(url.searchParams.get("limit") ?? "200");
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(5000, Math.trunc(rawLimit))) : 200;
+  const includeDrive = ["1", "true", "yes"].includes(norm(url.searchParams.get("includeDrive") ?? ""));
 
   const [people, attributes, householdRows, householdPhotoRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
     getPeople(resolved.tenant.tenantKey),
@@ -124,39 +129,72 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         }
       }
     }
-  } else {
-    for (const attr of attributes) {
-      if (norm(attr.attributeType) !== "photo") continue;
-      const fileId = attr.valueText.trim();
-      if (!fileId) continue;
-      const item = ensureItem(fileId);
-      if (!item.name && attr.label.trim()) item.name = attr.label.trim();
-      if (!item.description && attr.notes?.trim()) item.description = attr.notes.trim();
-      if (!item.date && attr.startDate?.trim()) item.date = attr.startDate.trim();
-      if (!item.mediaMetadata && attr.valueJson?.trim()) item.mediaMetadata = attr.valueJson.trim();
-      if (!item.people.some((person) => person.personId === attr.personId)) {
-        item.people.push({
-          personId: attr.personId,
-          displayName: peopleById.get(attr.personId) || attr.personId,
-        });
-      }
-    }
+  }
 
-    for (const row of householdPhotoRows) {
-      const fileId = readCell(row.data, "file_id");
-      if (!fileId) continue;
-      const item = ensureItem(fileId);
-      const householdId = readCell(row.data, "household_id");
-      if (!item.name) item.name = readCell(row.data, "name");
-      if (!item.description) item.description = readCell(row.data, "description");
-      if (!item.date) item.date = readCell(row.data, "photo_date");
-      if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
-      if (householdId && !item.households.some((household) => household.householdId === householdId)) {
-        item.households.push({
-          householdId,
-          label: householdsById.get(householdId) || householdId,
-        });
+  // Always merge legacy links so OCI mode includes pre-existing media not yet backfilled into media_links.
+  for (const person of people) {
+    const fileId = person.photoFileId.trim();
+    if (!fileId) continue;
+    const item = ensureItem(fileId);
+    if (!item.name) item.name = "Headshot";
+    if (!item.people.some((entry) => entry.personId === person.personId)) {
+      item.people.push({
+        personId: person.personId,
+        displayName: peopleById.get(person.personId) || person.personId,
+      });
+    }
+  }
+
+  for (const attr of attributes) {
+    const type = norm(attr.attributeType);
+    if (!["photo", "video", "audio", "media"].includes(type)) continue;
+    const fileId = attr.valueText.trim();
+    if (!fileId) continue;
+    const item = ensureItem(fileId);
+    if (!item.name && attr.label.trim()) item.name = attr.label.trim();
+    if (!item.description && attr.notes?.trim()) item.description = attr.notes.trim();
+    if (!item.date && attr.startDate?.trim()) item.date = attr.startDate.trim();
+    if (!item.mediaMetadata && attr.valueJson?.trim()) item.mediaMetadata = attr.valueJson.trim();
+    if (!item.people.some((person) => person.personId === attr.personId)) {
+      item.people.push({
+        personId: attr.personId,
+        displayName: peopleById.get(attr.personId) || attr.personId,
+      });
+    }
+  }
+
+  for (const row of householdPhotoRows) {
+    const fileId = readCell(row.data, "file_id");
+    if (!fileId) continue;
+    const item = ensureItem(fileId);
+    const householdId = readCell(row.data, "household_id");
+    if (!item.name) item.name = readCell(row.data, "name");
+    if (!item.description) item.description = readCell(row.data, "description");
+    if (!item.date) item.date = readCell(row.data, "photo_date");
+    if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
+    if (householdId && !item.households.some((household) => household.householdId === householdId)) {
+      item.households.push({
+        householdId,
+        label: householdsById.get(householdId) || householdId,
+      });
+    }
+  }
+
+  if (includeDrive) {
+    try {
+      const tenantConfig = await getTenantConfig(resolved.tenant.tenantKey);
+      const driveFiles = await listFilesInFolder(tenantConfig.photosFolderId, {
+        nameContains: q,
+        maxItems: limit,
+      });
+      for (const file of driveFiles) {
+        if (norm(file.mimeType) === "application/vnd.google-apps.folder") continue;
+        const item = ensureItem(file.fileId);
+        if (!item.name) item.name = file.name;
+        if (!item.date) item.date = file.createdTime.slice(0, 10) || file.modifiedTime.slice(0, 10);
       }
+    } catch {
+      // Drive listing is best-effort so media search still returns table-linked results when Drive lookup fails.
     }
   }
 
@@ -181,11 +219,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       return haystack.includes(query);
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.fileId.localeCompare(b.fileId))
-    .slice(0, 200);
+    .slice(0, limit);
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
     query: q,
+    limit,
     count: matches.length,
     items: matches,
   });

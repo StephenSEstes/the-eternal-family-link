@@ -165,6 +165,8 @@ function readChecksumFromMetadata(raw?: string) {
   }
 }
 
+const MEDIA_LIBRARY_LIMIT = 5000;
+
 export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
@@ -206,7 +208,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const loadLibrary = async (query = "") => {
-    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(query)}&limit=${MEDIA_LIBRARY_LIMIT}&includeDrive=1`,
+    );
     await assertOk(res, "Failed to load media library");
     const body = (await res.json()) as { items?: MediaItem[] };
     setMediaItems(Array.isArray(body.items) ? body.items : []);

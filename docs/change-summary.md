@@ -34,6 +34,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (media library family-scope fallback + orphaned media link integrity tools)
+
+- `Change`: Added family-scoped media search enhancements and dedicated orphan-media integrity actions. Media search now supports configurable limits and optional Drive-folder merge mode for media library views; Settings now includes separate `Scan Orphaned Media Links` and `Repair Orphaned Media Links` actions that audit/repair missing OCI `media_assets`/`media_links` rows from existing person/attribute/household references.
+- `Type`: UI, API, Data
+- `Why`: Root cause was missing family-scoped media link records for some existing files, causing media library omissions even when files existed in Drive and/or legacy references.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/lib/google/drive.ts`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`:
+  - No schema changes.
+  - Added optional repair path that can create missing `MediaAssets` and `MediaLinks` rows in OCI mode.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Media page can include family folder files when using Drive-merge query mode.
+  - Integrity page exposes orphan-media scan and repair buttons.
+  - `repair_orphan_media_links` returns created counts for missing `MediaAssets`/`MediaLinks`.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (spouse family-group propagation + repair backfill)
 
 - `Change`: Fixed spouse add/save flow to propagate spouse membership and household rows into parent-derived family groups, and extended integrity repair to backfill missing spouse family-group/household associations for existing data.

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Fixed Media Library multi-select reliability and added selected-files list management (remove/clear-all) before upload. See `docs/change-summary.md`.
+- 2026-03-05: Added Media Library family-scope fallback + orphaned media link scan/repair tools in Integrity Checker. See `docs/change-summary.md`.

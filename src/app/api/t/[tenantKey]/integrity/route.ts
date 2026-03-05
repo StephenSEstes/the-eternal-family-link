@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildEntityId } from "@/lib/entity-id";
+import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import {
   createTableRecord,
   createTableRecords,
@@ -150,6 +151,256 @@ function relCanonicalKey(fromPersonId: string, toPersonId: string, relType: stri
 
 function boolLike(value: string) {
   return parseBool(value) ? "TRUE" : "FALSE";
+}
+
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
+
+type ExpectedMediaLink = {
+  source: "people_headshot" | "person_attribute" | "household_photo";
+  familyGroupKey: string;
+  entityType: "person" | "attribute" | "household";
+  entityId: string;
+  usageType: string;
+  fileId: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  mediaMetadata: string;
+};
+
+function mediaLinkKey(input: {
+  familyGroupKey: string;
+  entityType: string;
+  entityId: string;
+  usageType: string;
+  fileId: string;
+}) {
+  return [
+    normalize(input.familyGroupKey),
+    normalize(input.entityType),
+    normalize(input.entityId),
+    normalize(input.usageType),
+    normalize(input.fileId),
+  ].join("|");
+}
+
+async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: boolean) {
+  if (!isOciDataSource()) {
+    return {
+      ok: false,
+      reason: "unsupported_data_source",
+      message: "Orphan media link repair requires OCI data source.",
+    } as const;
+  }
+
+  const familyGroupKey = normalize(tenantKey);
+  const [people, attributeRows, householdPhotoRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
+    getPeople(tenantKey).catch(() => []),
+    getTableRecords("PersonAttributes", tenantKey).catch(() => []),
+    getTableRecords("HouseholdPhotos", tenantKey).catch(() => []),
+    getTableRecords("MediaAssets", tenantKey).catch(() => []),
+    getTableRecords("MediaLinks", tenantKey).catch(() => []),
+  ]);
+
+  const mediaIdByFileId = new Map<string, string>();
+  const knownAssetByFileId = new Set<string>();
+  for (const row of mediaAssetRows) {
+    const mediaId = readField(row.data, "media_id");
+    const fileId = readField(row.data, "file_id");
+    if (!mediaId || !fileId) continue;
+    mediaIdByFileId.set(fileId, mediaId);
+    knownAssetByFileId.add(fileId);
+  }
+  for (const row of mediaLinkRows) {
+    const mediaId = readField(row.data, "media_id");
+    const fileId = readField(row.data, "file_id");
+    if (!mediaId || !fileId) continue;
+    if (!mediaIdByFileId.has(fileId)) {
+      mediaIdByFileId.set(fileId, mediaId);
+    }
+  }
+
+  const existingLinkKeys = new Set<string>();
+  const existingLinkIds = new Set<string>();
+  for (const row of mediaLinkRows) {
+    const rowFamily = readField(row.data, "family_group_key");
+    if (normalize(rowFamily) !== familyGroupKey) continue;
+    const linkId = readField(row.data, "link_id");
+    if (linkId) existingLinkIds.add(linkId);
+    const entityType = readField(row.data, "entity_type");
+    const entityId = readField(row.data, "entity_id");
+    const usageType = readField(row.data, "usage_type");
+    const mediaId = readField(row.data, "media_id");
+    const rowFileId = readField(row.data, "file_id") || mediaAssetRows.find((asset) => readField(asset.data, "media_id") === mediaId)?.data.file_id || "";
+    if (!entityType || !entityId || !usageType || !rowFileId) continue;
+    existingLinkKeys.add(
+      mediaLinkKey({
+        familyGroupKey: rowFamily,
+        entityType,
+        entityId,
+        usageType,
+        fileId: rowFileId,
+      }),
+    );
+  }
+
+  const expectedLinks: ExpectedMediaLink[] = [];
+  for (const person of people) {
+    const personId = person.personId.trim();
+    const fileId = person.photoFileId.trim();
+    if (!personId || !fileId) continue;
+    expectedLinks.push({
+      source: "people_headshot",
+      familyGroupKey,
+      entityType: "person",
+      entityId: personId,
+      usageType: "profile",
+      fileId,
+      label: "Headshot",
+      description: "",
+      photoDate: "",
+      mediaMetadata: "",
+    });
+  }
+
+  for (const row of attributeRows) {
+    const personId = readField(row.data, "person_id");
+    if (!personId || !people.some((person) => normalize(person.personId) === normalize(personId))) continue;
+    const attributeType = normalize(readField(row.data, "attribute_type"));
+    if (!["photo", "video", "audio", "media"].includes(attributeType)) continue;
+    const attributeId = readField(row.data, "attribute_id");
+    const fileId = readField(row.data, "value_text");
+    if (!attributeId || !fileId) continue;
+    expectedLinks.push({
+      source: "person_attribute",
+      familyGroupKey,
+      entityType: "attribute",
+      entityId: attributeId,
+      usageType: attributeType === "photo" ? "photo" : "media",
+      fileId,
+      label: readField(row.data, "label"),
+      description: readField(row.data, "notes"),
+      photoDate: readField(row.data, "start_date"),
+      mediaMetadata: readField(row.data, "media_metadata") || readField(row.data, "value_json"),
+    });
+  }
+
+  for (const row of householdPhotoRows) {
+    const fileId = readField(row.data, "file_id");
+    const householdId = readField(row.data, "household_id");
+    if (!fileId || !householdId) continue;
+    expectedLinks.push({
+      source: "household_photo",
+      familyGroupKey,
+      entityType: "household",
+      entityId: householdId,
+      usageType: "gallery",
+      fileId,
+      label: readField(row.data, "name"),
+      description: readField(row.data, "description"),
+      photoDate: readField(row.data, "photo_date"),
+      mediaMetadata: readField(row.data, "media_metadata"),
+    });
+  }
+
+  const missingExpectedLinks = expectedLinks.filter(
+    (candidate) =>
+      !existingLinkKeys.has(
+        mediaLinkKey({
+          familyGroupKey: candidate.familyGroupKey,
+          entityType: candidate.entityType,
+          entityId: candidate.entityId,
+          usageType: candidate.usageType,
+          fileId: candidate.fileId,
+        }),
+      ),
+  );
+
+  const orphanFileIds = Array.from(
+    new Set(missingExpectedLinks.map((entry) => entry.fileId)),
+  );
+  const missingAssetFileIds = orphanFileIds.filter((fileId) => !knownAssetByFileId.has(fileId));
+
+  let createdMediaAssets = 0;
+  let createdMediaLinks = 0;
+  if (applyChanges) {
+    const nowIso = new Date().toISOString();
+    for (const fileId of missingAssetFileIds) {
+      const mediaId = mediaIdByFileId.get(fileId) || buildMediaId(fileId);
+      if (!mediaIdByFileId.has(fileId)) {
+        mediaIdByFileId.set(fileId, mediaId);
+      }
+      await createTableRecord("MediaAssets", {
+        media_id: mediaId,
+        file_id: fileId,
+        storage_provider: "gdrive",
+        mime_type: "",
+        file_name: "",
+        file_size_bytes: "",
+        media_metadata: "",
+        created_at: nowIso,
+      }, tenantKey);
+      knownAssetByFileId.add(fileId);
+      createdMediaAssets += 1;
+    }
+
+    for (const candidate of missingExpectedLinks) {
+      const mediaId = mediaIdByFileId.get(candidate.fileId) || buildMediaId(candidate.fileId);
+      if (!mediaIdByFileId.has(candidate.fileId)) {
+        mediaIdByFileId.set(candidate.fileId, mediaId);
+      }
+      const linkId = buildMediaLinkId(
+        candidate.familyGroupKey,
+        candidate.entityType,
+        candidate.entityId,
+        candidate.fileId,
+        candidate.usageType,
+      );
+      if (existingLinkIds.has(linkId)) {
+        continue;
+      }
+      await createTableRecord("MediaLinks", {
+        family_group_key: candidate.familyGroupKey,
+        link_id: linkId,
+        media_id: mediaId,
+        entity_type: candidate.entityType,
+        entity_id: candidate.entityId,
+        usage_type: candidate.usageType,
+        label: candidate.label,
+        description: candidate.description,
+        photo_date: candidate.photoDate,
+        is_primary: "FALSE",
+        sort_order: "0",
+        media_metadata: candidate.mediaMetadata,
+        created_at: nowIso,
+      }, tenantKey);
+      existingLinkIds.add(linkId);
+      createdMediaLinks += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    familyGroupKey: tenantKey,
+    mode: applyChanges ? "repair" : "audit",
+    counts: {
+      expectedLinks: expectedLinks.length,
+      missingLinks: missingExpectedLinks.length,
+      orphanFileIds: orphanFileIds.length,
+      missingAssetFileIds: missingAssetFileIds.length,
+      createdMediaAssets,
+      createdMediaLinks,
+    },
+    sampleMissingLinks: missingExpectedLinks.slice(0, 25).map((entry) => ({
+      source: entry.source,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      usageType: entry.usageType,
+      fileId: entry.fileId,
+    })),
+  } as const;
 }
 
 async function runIntegrityAudit(tenantKey: string) {
@@ -509,6 +760,14 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
   const familyGroupKey = resolved.tenant.tenantKey;
   const body = await _.json().catch(() => null);
   const action = normalize(typeof body?.action === "string" ? body.action : "");
+
+  if (action === "audit_orphan_media_links" || action === "repair_orphan_media_links") {
+    const result = await auditOrRepairOrphanMediaLinks(familyGroupKey, action === "repair_orphan_media_links");
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 400 });
+    }
+    return NextResponse.json(result);
+  }
 
   if (action === "merge_duplicate_person") {
     const sourcePersonId = normalize(typeof body?.sourcePersonId === "string" ? body.sourcePersonId : "");

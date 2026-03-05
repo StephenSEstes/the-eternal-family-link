@@ -10,6 +10,69 @@ async function getDriveClient() {
   return google.drive({ version: "v3", auth });
 }
 
+type ListFolderFilesOptions = {
+  nameContains?: string;
+  maxItems?: number;
+};
+
+export type DriveFolderFile = {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  createdTime: string;
+  modifiedTime: string;
+};
+
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+export async function listFilesInFolder(folderId: string, options?: ListFolderFilesOptions): Promise<DriveFolderFile[]> {
+  const drive = await getDriveClient();
+  const normalizedFolderId = folderId.trim();
+  if (!normalizedFolderId) return [];
+
+  const nameContains = String(options?.nameContains ?? "").trim();
+  const maxItems = Number.isFinite(options?.maxItems) ? Math.max(1, Math.min(5000, Math.trunc(options?.maxItems ?? 0))) : 2000;
+  const qParts = [`trashed = false`, `'${escapeDriveQueryValue(normalizedFolderId)}' in parents`];
+  if (nameContains) {
+    qParts.push(`name contains '${escapeDriveQueryValue(nameContains)}'`);
+  }
+  const q = qParts.join(" and ");
+
+  const results: DriveFolderFile[] = [];
+  let pageToken: string | undefined;
+
+  while (results.length < maxItems) {
+    const pageSize = Math.min(1000, maxItems - results.length);
+    const response = await drive.files.list({
+      q,
+      fields: "nextPageToken, files(id,name,mimeType,createdTime,modifiedTime)",
+      orderBy: "createdTime desc",
+      pageSize,
+      pageToken,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    for (const file of response.data.files ?? []) {
+      const fileId = String(file.id ?? "").trim();
+      if (!fileId) continue;
+      results.push({
+        fileId,
+        name: String(file.name ?? "").trim(),
+        mimeType: String(file.mimeType ?? "").trim(),
+        createdTime: String(file.createdTime ?? "").trim(),
+        modifiedTime: String(file.modifiedTime ?? "").trim(),
+      });
+      if (results.length >= maxItems) break;
+    }
+    pageToken = response.data.nextPageToken ?? undefined;
+    if (!pageToken) break;
+  }
+
+  return results;
+}
+
 export async function ensureTenantPhotosFolder(tenantKey: string, tenantName: string): Promise<string> {
   const drive = await getDriveClient();
   const env = getEnv();
