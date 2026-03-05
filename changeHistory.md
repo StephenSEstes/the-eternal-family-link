@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Fixed spouse family-group propagation on spouse add/save and added integrity-repair backfill for missing spouse/household family-group associations. See `docs/change-summary.md`.
+- 2026-03-05: Added top-level Media Library with multi-file upload, category/date tagging, and attach-to-people/households using existing media attach APIs. See `docs/change-summary.md`.

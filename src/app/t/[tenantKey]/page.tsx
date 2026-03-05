@@ -18,6 +18,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
     { href: `${basePath}/tree`, title: "Family Tree", subtitle: "Relationship map" },
     { href: `${basePath}/today`, title: "Today", subtitle: "Daily reminders and events" },
     { href: `${basePath}/games`, title: "Games", subtitle: "Memory activities" },
+    { href: `${basePath}/media`, title: "Media", subtitle: "Shared family photo and video library" },
     { href: `${basePath}/viewer`, title: "Viewer", subtitle: "PIN-gated read-only mode" },
   ];
 

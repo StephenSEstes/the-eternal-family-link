@@ -7,6 +7,7 @@ type SearchItem = {
   name: string;
   description: string;
   date: string;
+  mediaMetadata?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -66,6 +67,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         name: "",
         description: "",
         date: "",
+        mediaMetadata: "",
         people: [],
         households: [],
       });
@@ -90,6 +92,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       if (!item.name) item.name = readCell(row.data, "label");
       if (!item.description) item.description = readCell(row.data, "description");
       if (!item.date) item.date = readCell(row.data, "photo_date");
+      if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
 
       if (entityType === "person") {
         if (!item.people.some((person) => person.personId === entityId)) {
@@ -130,6 +133,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       if (!item.name && attr.label.trim()) item.name = attr.label.trim();
       if (!item.description && attr.notes?.trim()) item.description = attr.notes.trim();
       if (!item.date && attr.startDate?.trim()) item.date = attr.startDate.trim();
+      if (!item.mediaMetadata && attr.valueJson?.trim()) item.mediaMetadata = attr.valueJson.trim();
       if (!item.people.some((person) => person.personId === attr.personId)) {
         item.people.push({
           personId: attr.personId,
@@ -146,6 +150,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       if (!item.name) item.name = readCell(row.data, "name");
       if (!item.description) item.description = readCell(row.data, "description");
       if (!item.date) item.date = readCell(row.data, "photo_date");
+      if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
       if (householdId && !item.households.some((household) => household.householdId === householdId)) {
         item.households.push({
           householdId,

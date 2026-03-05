@@ -8,6 +8,7 @@ const tiles = [
   { href: "/tree", title: "Family Tree", subtitle: "Relationship map" },
   { href: "/today", title: "Today", subtitle: "Simple daily snapshot" },
   { href: "/games", title: "Games", subtitle: "Memory activities" },
+  { href: "/media", title: "Media", subtitle: "Shared family photo and video library" },
 ];
 
 export default async function HomePage() {

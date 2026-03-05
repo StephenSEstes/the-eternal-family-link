@@ -66,6 +66,16 @@ function GameIcon() {
   );
 }
 
+function MediaIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8" cy="10" r="1.8" />
+      <path d="M6 17l4-4 2.5 2.5 2.5-3 3 4.5" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -119,6 +129,12 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       href: `${basePath}/games`,
       match: (path) => path.startsWith(`${basePath}/games`),
       icon: <GameIcon />,
+    },
+    {
+      label: "Media",
+      href: `${basePath}/media`,
+      match: (path) => path.startsWith(`${basePath}/media`),
+      icon: <MediaIcon />,
     },
   ];
 

@@ -56,6 +56,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (top-level media library + multi-file attach to people/households)
+
+- `Change`: Added a new top-level `Media` page with a shared library and multi-file upload flow that supports category/date and attaching uploads to multiple people and households using existing media attach endpoints.
+- `Type`: UI, API
+- `Why`: Users needed a centralized media workspace instead of uploading only from person/household modals.
+- `Files`:
+  - `src/components/HeaderNav.tsx`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/media/page.tsx`
+  - `src/app/t/[tenantKey]/media/page.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - New `Media` top-level nav item appears and routes to `/media` and `/t/[tenantKey]/media`.
+  - Media library list loads existing photo/video/audio items.
+  - Multi-file upload succeeds with category/date set.
+  - Selected people and households receive links for uploaded files.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (household photo tagging parity + attribute media link management)
 
 - `Change`: Added full household photo-detail link management (search/add/remove linked people and households), enabled linking an existing media file to additional households via new API route, and expanded person media-detail/tagging flow to include attribute media (`photo/video/audio/media`) not just photo rows.
