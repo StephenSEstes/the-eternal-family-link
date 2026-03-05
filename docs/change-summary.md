@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-05 (household photo tagging parity + attribute media link management)
+
+- `Change`: Added full household photo-detail link management (search/add/remove linked people and households), enabled linking an existing media file to additional households via new API route, and expanded person media-detail/tagging flow to include attribute media (`photo/video/audio/media`) not just photo rows.
+- `Type`: UI, API
+- `Why`: Root cause was split edit experiences: person photo detail had tagging tools, while household photo detail and attribute media did not expose the same association-management flow.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In Household -> Pictures -> Photo Detail: can search/add/remove people tags and linked households.
+  - In Person -> Attributes -> Media Attributes: `Manage Links` opens shared media-detail flow with tagging tools.
+  - Household unlink endpoint accepts either link ID or file ID in OCI mode.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (media attachments: audio/mobile capture + attribute media + OCI search parity)
 
 - `Change`: Expanded media attachments to support image/video/audio uploads across people, households, and attributes with shared validation/metadata handling; added mobile capture-friendly upload inputs; and switched media search to unified OCI media link tables in OCI mode.

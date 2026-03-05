@@ -27,11 +27,13 @@ export async function DELETE(_: Request, { params }: RouteProps) {
       entityId: householdId,
       usageType: "gallery",
     });
-    const exists = links.some((item) => item.linkId === photoId);
-    if (!exists) {
+    const direct = links.find((item) => item.linkId === photoId);
+    const byFileId = links.find((item) => item.fileId === photoId);
+    const target = direct ?? byFileId;
+    if (!target) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    const deleted = await deleteOciMediaLink(photoId);
+    const deleted = await deleteOciMediaLink(target.linkId);
     if (!deleted) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }

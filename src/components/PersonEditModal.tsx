@@ -550,6 +550,10 @@ export function PersonEditModal({
     const type = item.attributeType.toLowerCase();
     return type === "media" || type === "audio" || type === "video";
   });
+  const allMediaAttributes = attributes.filter((item) => {
+    const type = item.attributeType.toLowerCase();
+    return type === "photo" || type === "media" || type === "audio" || type === "video";
+  });
   const regularAttributes = attributes.filter((item) => {
     const type = item.attributeType.toLowerCase();
     return type !== "photo" && type !== "media" && type !== "audio" && type !== "video";
@@ -707,17 +711,20 @@ export function PersonEditModal({
     }
   }, [spouseId, spouseOptions]);
   const selectedPhoto = useMemo(
-    () => photoAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
-    [photoAttributes, selectedPhotoAttributeId],
+    () => allMediaAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
+    [allMediaAttributes, selectedPhotoAttributeId],
   );
-  const linkedPhotoFileIds = useMemo(() => new Set(photoAttributes.map((item) => item.valueText.trim()).filter(Boolean)), [photoAttributes]);
+  const linkedPhotoFileIds = useMemo(
+    () => new Set(allMediaAttributes.map((item) => item.valueText.trim()).filter(Boolean)),
+    [allMediaAttributes],
+  );
   const filteredPhotoAttributes = useMemo(() => {
     const query = personPhotoQuery.trim().toLowerCase();
-    if (!query) return photoAttributes;
-    return photoAttributes.filter((item) =>
+    if (!query) return allMediaAttributes;
+    return allMediaAttributes.filter((item) =>
       [item.label, item.notes, item.startDate, item.valueText].some((value) => (value || "").toLowerCase().includes(query)),
     );
-  }, [personPhotoQuery, photoAttributes]);
+  }, [allMediaAttributes, personPhotoQuery]);
   const linkablePeople = useMemo(
     () => personOptions.slice().sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [personOptions],
@@ -836,13 +843,15 @@ export function PersonEditModal({
 
   const linkSelectedPhotoToPerson = async (targetPersonId: string) => {
     if (!selectedPhoto || !targetPersonId || !person) return false;
+    const selectedType = selectedPhoto.attributeType.toLowerCase();
+    const nextAttributeType = selectedType === "photo" ? "photo" : "media";
     setPhotoAssociationStatus("Saving association...");
     setStatus("Linking photo to selected person...");
     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        attributeType: "photo",
+        attributeType: nextAttributeType,
         valueText: selectedPhoto.valueText,
         label: draftMeta.label || selectedPhoto.label || "photo",
         notes: draftMeta.description || selectedPhoto.notes || "",
@@ -883,7 +892,10 @@ export function PersonEditModal({
     }
     const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as PersonAttribute[]) : [];
     const matches = attrs.filter(
-      (item) => item.attributeType.toLowerCase() === "photo" && item.valueText.trim() === fileId,
+      (item) => {
+        const type = item.attributeType.toLowerCase();
+        return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === fileId;
+      },
     );
     for (const match of matches) {
       await fetch(
@@ -1492,6 +1504,16 @@ export function PersonEditModal({
                       <div className="person-photo-tile-meta">
                         <span className="person-photo-tile-label">{item.label || item.attributeType}</span>
                       </div>
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => {
+                          setActiveTab("photos");
+                          openPhotoDetail(item.attributeId);
+                        }}
+                      >
+                        Manage Links
+                      </button>
                       {canManage ? (
                         <button
                           type="button"
@@ -1529,7 +1551,7 @@ export function PersonEditModal({
           <>
             <div className="card person-photo-gallery-card">
               <div className="person-photo-gallery-toolbar">
-                <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Gallery</h4>
+                <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Media Gallery</h4>
                 <div className="person-photo-gallery-actions">
                   {canManage ? (
                     <button

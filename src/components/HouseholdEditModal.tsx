@@ -34,6 +34,25 @@ type HouseholdPhoto = {
   mediaMetadata?: string;
 };
 
+type PersonOption = {
+  personId: string;
+  displayName: string;
+};
+
+type HouseholdOption = {
+  householdId: string;
+  label: string;
+};
+
+type PhotoLibraryItem = {
+  fileId: string;
+  name: string;
+  description: string;
+  date: string;
+  people: Array<{ personId: string; displayName: string }>;
+  households: Array<{ householdId: string; label: string }>;
+};
+
 type Props = {
   open: boolean;
   tenantKey: string;
@@ -150,6 +169,17 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"" | "male" | "female">("");
   const [childAddress, setChildAddress] = useState("");
+  const [availablePeople, setAvailablePeople] = useState<PersonOption[]>([]);
+  const [availableHouseholds, setAvailableHouseholds] = useState<HouseholdOption[]>([]);
+  const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
+    people: Array<{ personId: string; displayName: string }>;
+    households: Array<{ householdId: string; label: string }>;
+  }>({ people: [], households: [] });
+  const [associationStatus, setAssociationStatus] = useState("");
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [householdQuery, setHouseholdQuery] = useState("");
+  const [associationBusy, setAssociationBusy] = useState(false);
+  const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
 
   const refresh = async () => {
     setLoading(true);
@@ -180,6 +210,46 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setZip(String(next.zip ?? ""));
     setLoading(false);
     setStatus("");
+    setSelectedPhotoAssociations({ people: [], households: [] });
+    setAssociationStatus("");
+    setPeopleQuery("");
+    setHouseholdQuery("");
+  };
+
+  const refreshSelectedPhotoAssociations = async (fileId: string) => {
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setSelectedPhotoAssociations({ people: [], households: [] });
+      return;
+    }
+    const item = (Array.isArray(body?.items) ? (body.items as PhotoLibraryItem[]) : []).find((entry) => entry.fileId === fileId);
+    setSelectedPhotoAssociations({
+      people: item?.people ?? [],
+      households: item?.households ?? [],
+    });
+  };
+
+  const loadLinkOptions = async () => {
+    const [peopleRes, householdsRes] = await Promise.all([
+      fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, { cache: "no-store" }),
+      fetch(`/api/t/${encodeURIComponent(tenantKey)}/households`, { cache: "no-store" }),
+    ]);
+    const peopleBody = await peopleRes.json().catch(() => null);
+    const householdsBody = await householdsRes.json().catch(() => null);
+    if (peopleRes.ok) {
+      const items = Array.isArray(peopleBody?.people) ? (peopleBody.people as Array<{ personId: string; displayName: string }>) : [];
+      setAvailablePeople(items.map((item) => ({ personId: item.personId, displayName: item.displayName })));
+    }
+    if (householdsRes.ok) {
+      const items = Array.isArray(householdsBody?.households)
+        ? (householdsBody.households as Array<{ householdId: string; label: string }>)
+        : [];
+      setAvailableHouseholds(items.map((item) => ({ householdId: item.householdId, label: item.label || item.householdId })));
+    }
   };
 
   const clearPendingUploadPhoto = () => {
@@ -251,6 +321,130 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
 
   const selectedPhoto = photos.find((photo) => photo.photoId === selectedPhotoId) ?? null;
 
+  const linkSelectedPhotoToPerson = async (targetPersonId: string) => {
+    if (!selectedPhoto || !targetPersonId) return false;
+    setAssociationBusy(true);
+    setAssociationStatus("Linking person...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attributeType: "photo",
+          valueText: selectedPhoto.fileId,
+          label: selectedPhoto.name || "photo",
+          notes: selectedPhoto.description || "",
+          startDate: selectedPhoto.photoDate || "",
+          visibility: "family",
+          shareScope: "both_families",
+          shareFamilyGroupKey: "",
+          sortOrder: 0,
+          isPrimary: false,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setAssociationStatus(`Link failed: ${res.status} ${String(message).slice(0, 120)}`);
+      setAssociationBusy(false);
+      return false;
+    }
+    await refreshSelectedPhotoAssociations(selectedPhoto.fileId);
+    setAssociationStatus("Person linked.");
+    setAssociationBusy(false);
+    return true;
+  };
+
+  const removePhotoAssociationFromPerson = async (targetPersonId: string, fileId: string) => {
+    setAssociationBusy(true);
+    setAssociationStatus("Removing person link...");
+    const attrsRes = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      { cache: "no-store" },
+    );
+    const attrsBody = await attrsRes.json().catch(() => null);
+    if (!attrsRes.ok) {
+      setAssociationStatus("Remove failed.");
+      setAssociationBusy(false);
+      return false;
+    }
+    const attrs = Array.isArray(attrsBody?.attributes)
+      ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
+      : [];
+    const matches = attrs.filter((item) => {
+      const type = item.attributeType.toLowerCase();
+      return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === fileId;
+    });
+    for (const match of matches) {
+      await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,
+        { method: "DELETE" },
+      );
+    }
+    await refreshSelectedPhotoAssociations(fileId);
+    setAssociationStatus("Person link removed.");
+    setAssociationBusy(false);
+    return true;
+  };
+
+  const linkSelectedPhotoToHousehold = async (targetHouseholdId: string) => {
+    if (!selectedPhoto || !targetHouseholdId) return false;
+    setAssociationBusy(true);
+    setAssociationStatus("Linking household...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(targetHouseholdId)}/photos/link`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: selectedPhoto.fileId,
+          name: selectedPhoto.name || "photo",
+          description: selectedPhoto.description || "",
+          photoDate: selectedPhoto.photoDate || "",
+          mediaMetadata: selectedPhoto.mediaMetadata || "",
+          isPrimary: false,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setAssociationStatus(`Link failed: ${res.status} ${String(message).slice(0, 120)}`);
+      setAssociationBusy(false);
+      return false;
+    }
+    await refreshSelectedPhotoAssociations(selectedPhoto.fileId);
+    setAssociationStatus("Household linked.");
+    setAssociationBusy(false);
+    return true;
+  };
+
+  const removePhotoAssociationFromHousehold = async (targetHouseholdId: string, fileId: string) => {
+    setAssociationBusy(true);
+    setAssociationStatus("Removing household link...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(targetHouseholdId)}/photos/${encodeURIComponent(fileId)}`,
+      { method: "DELETE" },
+    );
+    if (!res.ok) {
+      setAssociationStatus("Remove failed.");
+      setAssociationBusy(false);
+      return false;
+    }
+    await refreshSelectedPhotoAssociations(fileId);
+    if (targetHouseholdId === householdId) {
+      await refresh();
+      setShowPhotoDetail(false);
+      setSelectedPhotoId("");
+      onSaved();
+    }
+    setAssociationStatus("Household link removed.");
+    setAssociationBusy(false);
+    return true;
+  };
+
   useEffect(() => {
     if (!open || !householdId) {
       return;
@@ -261,7 +455,16 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setChildAddress("");
     setStatus("Loading household...");
     void refresh();
+    void loadLinkOptions();
   }, [open, householdId, tenantKey]);
+
+  useEffect(() => {
+    if (!selectedPhoto || !showPhotoDetail) {
+      setSelectedPhotoAssociations({ people: [], households: [] });
+      return;
+    }
+    void refreshSelectedPhotoAssociations(selectedPhoto.fileId);
+  }, [selectedPhoto, showPhotoDetail, tenantKey]);
 
   useEffect(() => {
     return () => {
@@ -276,6 +479,22 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   }
 
   const imageSrc = weddingPhotoFileId ? getPhotoProxyPath(weddingPhotoFileId, tenantKey) : "/WeddingAvatar1.png";
+  const linkedPersonIds = new Set(selectedPhotoAssociations.people.map((item) => item.personId));
+  const linkedHouseholdIds = new Set(selectedPhotoAssociations.households.map((item) => item.householdId));
+  const peopleQueryNormalized = peopleQuery.trim().toLowerCase();
+  const householdQueryNormalized = householdQuery.trim().toLowerCase();
+  const peopleSearchResults =
+    !peopleQueryNormalized
+      ? []
+      : availablePeople
+          .filter((item) => item.displayName.toLowerCase().includes(peopleQueryNormalized) && !linkedPersonIds.has(item.personId))
+          .slice(0, 8);
+  const householdSearchResults =
+    !householdQueryNormalized
+      ? []
+      : availableHouseholds
+          .filter((item) => item.label.toLowerCase().includes(householdQueryNormalized) && !linkedHouseholdIds.has(item.householdId))
+          .slice(0, 8);
 
   return (
     <div
@@ -596,6 +815,130 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         <input className="input" value={selectedPhoto.photoDate || ""} disabled />
                         <label className="label">Primary</label>
                         <input className="input" value={selectedPhoto.isPrimary ? "Yes" : "No"} disabled />
+                      </div>
+                      <div className="card">
+                        <h5 style={{ margin: "0 0 0.5rem" }}>People Tagged In This Photo</h5>
+                        <div className="person-chip-row">
+                          {selectedPhotoAssociations.people.length > 0 ? (
+                            selectedPhotoAssociations.people.map((item) => (
+                              <span key={`p-chip-${item.personId}`} className="person-tag-chip">
+                                <span>{item.displayName}</span>
+                                <button
+                                  type="button"
+                                  className="person-chip-remove"
+                                  disabled={associationBusy || pendingOps.has(`p-${item.personId}`)}
+                                  onClick={() => {
+                                    const key = `p-${item.personId}`;
+                                    setPendingOps((current) => new Set(current).add(key));
+                                    void (async () => {
+                                      await removePhotoAssociationFromPerson(item.personId, selectedPhoto.fileId);
+                                      setPendingOps((current) => {
+                                        const next = new Set(current);
+                                        next.delete(key);
+                                        return next;
+                                      });
+                                    })();
+                                  }}
+                                >
+                                  x
+                                </button>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="status-chip status-chip--neutral">None</span>
+                          )}
+                        </div>
+                        <label className="label" style={{ marginTop: "0.75rem" }}>Search people to tag</label>
+                        <input
+                          className="input"
+                          value={peopleQuery}
+                          onChange={(e) => setPeopleQuery(e.target.value)}
+                          placeholder="Start typing a name..."
+                        />
+                        {peopleQuery.trim() ? (
+                          <div className="person-typeahead-list">
+                            {peopleSearchResults.length > 0 ? (
+                              peopleSearchResults.map((entry) => (
+                                <button
+                                  key={`p-add-${entry.personId}`}
+                                  type="button"
+                                  className="person-typeahead-item"
+                                  disabled={associationBusy}
+                                  onClick={() => {
+                                    setPeopleQuery("");
+                                    void linkSelectedPhotoToPerson(entry.personId);
+                                  }}
+                                >
+                                  {entry.displayName}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="page-subtitle" style={{ margin: 0 }}>No matching people.</p>
+                            )}
+                          </div>
+                        ) : null}
+
+                        <h5 style={{ margin: "0.9rem 0 0.5rem" }}>Linked Households</h5>
+                        <div className="person-chip-row">
+                          {selectedPhotoAssociations.households.length > 0 ? (
+                            selectedPhotoAssociations.households.map((item) => (
+                              <span key={`h-chip-${item.householdId}`} className="person-tag-chip">
+                                <span>{item.label || item.householdId}</span>
+                                <button
+                                  type="button"
+                                  className="person-chip-remove"
+                                  disabled={associationBusy || pendingOps.has(`h-${item.householdId}`)}
+                                  onClick={() => {
+                                    const key = `h-${item.householdId}`;
+                                    setPendingOps((current) => new Set(current).add(key));
+                                    void (async () => {
+                                      await removePhotoAssociationFromHousehold(item.householdId, selectedPhoto.fileId);
+                                      setPendingOps((current) => {
+                                        const next = new Set(current);
+                                        next.delete(key);
+                                        return next;
+                                      });
+                                    })();
+                                  }}
+                                >
+                                  x
+                                </button>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="status-chip status-chip--neutral">None</span>
+                          )}
+                        </div>
+                        <label className="label" style={{ marginTop: "0.75rem" }}>Search households to link</label>
+                        <input
+                          className="input"
+                          value={householdQuery}
+                          onChange={(e) => setHouseholdQuery(e.target.value)}
+                          placeholder="Start typing a household..."
+                        />
+                        {householdQuery.trim() ? (
+                          <div className="person-typeahead-list">
+                            {householdSearchResults.length > 0 ? (
+                              householdSearchResults.map((entry) => (
+                                <button
+                                  key={`h-add-${entry.householdId}`}
+                                  type="button"
+                                  className="person-typeahead-item"
+                                  disabled={associationBusy}
+                                  onClick={() => {
+                                    setHouseholdQuery("");
+                                    void linkSelectedPhotoToHousehold(entry.householdId);
+                                  }}
+                                >
+                                  {entry.label || entry.householdId}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="page-subtitle" style={{ margin: 0 }}>No matching households.</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {associationStatus ? <p className="page-subtitle" style={{ marginTop: "0.7rem" }}>{associationStatus}</p> : null}
                       </div>
                       <div className="card" style={{ borderColor: "#fecaca" }}>
                         <h5 style={{ margin: "0 0 0.5rem" }}>Danger Zone</h5>
