@@ -1521,3 +1521,24 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Top household cluster no longer clips at viewport top.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (edit photo linked-to redesign + edit phone formatting)
+
+- `Change`: Refactored Edit Photo detail UI in person and household modals to match the redesigned structure: `Edit Photo` header with top-right close, large preview, cleaner photo info block, consolidated `Linked To` section (people + households), per-row unlink controls, and sticky footer actions (`Cancel`, `Save Changes`) while preserving existing link/save API behavior. Also normalized edit-screen phone formatting to `(XXX) XXX-XXXX` for person phone input and phone attribute input flows.
+- `Type`: UI, UX
+- `Why`: Remove duplicated linking UI paths, align photo editor with modern modal layout, and improve phone value readability/consistency in edit screens.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/globals.css`
+  - `src/components/ProfileEditor.tsx`
+  - `src/lib/phone-format.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Edit Photo shows one `Linked To` list with people (gender placeholder avatars) and households (house icon), with per-row remove controls.
+  - Photo save/link/unlink behavior remains on existing routes and persists as before.
+  - Phone fields in edit screens format to `(XXX) XXX-XXXX` on blur / save path where applicable.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

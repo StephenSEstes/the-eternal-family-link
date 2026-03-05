@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { PhoneLinkActions } from "@/components/PhoneLinkActions";
+import { formatUsPhoneForEdit } from "@/lib/phone-format";
 
 type PersonItem = {
   personId: string;
@@ -76,6 +77,10 @@ type DraftMeta = {
   date: string;
   isPrimary: boolean;
 };
+
+type LinkedSearchResult =
+  | { kind: "person"; key: string; displayName: string; personId: string; gender: "male" | "female" | "unspecified" }
+  | { kind: "household"; key: string; displayName: string; householdId: string };
 
 function toMonthDay(value: string) {
   const raw = value.trim();
@@ -217,22 +222,44 @@ function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonIt
   return { motherId, fatherId };
 }
 
+function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
+  if (gender === "female") return "/placeholders/avatar-female.png";
+  return "/placeholders/avatar-male.png";
+}
+
+function HouseholdIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path
+        d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function PhotoDetailHeader({
-  onBack,
+  onClose,
   onViewLarge,
 }: {
-  onBack: () => void;
+  onClose: () => void;
   onViewLarge: () => void;
 }) {
   return (
     <div className="person-photo-detail-head">
-      <button type="button" className="button secondary tap-button" onClick={onBack}>
-        Back
-      </button>
-      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Photo Detail</h4>
-      <button type="button" className="button secondary tap-button" onClick={onViewLarge}>
-        View Large
-      </button>
+      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Photo</h4>
+      <div className="settings-chip-list">
+        <button type="button" className="button secondary tap-button" onClick={onViewLarge}>
+          View Large
+        </button>
+        <button type="button" className="button secondary tap-button" onClick={onClose} aria-label="Close edit photo">
+          x
+        </button>
+      </div>
     </div>
   );
 }
@@ -279,6 +306,9 @@ function PhotoInfoForm({
           disabled={disabled}
         /> Set as primary
       </label>
+      <p className="page-subtitle" style={{ marginTop: "0.35rem", marginBottom: 0 }}>
+        Highlight and show first for this person.
+      </p>
     </div>
   );
 }
@@ -286,135 +316,151 @@ function PhotoInfoForm({
 function StickySaveBar({
   dirty,
   saving,
+  onCancel,
   onSave,
 }: {
   dirty: boolean;
   saving: boolean;
+  onCancel: () => void;
   onSave: () => void;
 }) {
-  const label = saving ? "Saving..." : dirty ? "Save Changes" : "Saved";
+  const label = saving ? "Saving..." : "Save Changes";
   return (
     <div className="photo-save-sticky-bar">
-      <button
-        type="button"
-        className="button tap-button"
-        disabled={!dirty || saving}
-        onClick={onSave}
-      >
-        {label}
-      </button>
+      <div className="photo-save-sticky-actions">
+        <SecondaryButton type="button" disabled={saving} onClick={onCancel}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton type="button" disabled={!dirty || saving} onClick={onSave}>
+          {label}
+        </PrimaryButton>
+      </div>
     </div>
   );
 }
 
 function PeopleTagger({
-  currentPerson,
   taggedPeople,
   taggedHouseholds,
-  tagQuery,
-  onTagQueryChange,
+  searchQuery,
+  onSearchQueryChange,
   results,
   pendingOps,
   canManage,
-  onAddTag,
-  onRemoveTag,
+  onAddLink,
+  onRemovePerson,
   onRemoveHousehold,
+  getGenderForPerson,
   busy,
   statusText,
 }: {
-  currentPerson: PersonItem;
   taggedPeople: Array<{ personId: string; displayName: string }>;
   taggedHouseholds: Array<{ householdId: string; label: string }>;
-  tagQuery: string;
-  onTagQueryChange: (value: string) => void;
-  results: PersonItem[];
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
+  results: LinkedSearchResult[];
   pendingOps: Set<string>;
   canManage: boolean;
-  onAddTag: (person: PersonItem) => void;
-  onRemoveTag: (personId: string) => void;
+  onAddLink: (result: LinkedSearchResult) => void;
+  onRemovePerson: (personId: string) => void;
   onRemoveHousehold: (householdId: string) => void;
+  getGenderForPerson: (personId: string) => "male" | "female" | "unspecified";
   busy: boolean;
   statusText: string;
 }) {
   return (
     <div className="person-photo-tags-card card">
-      <h5 style={{ margin: "0 0 0.5rem" }}>People Tagged In This Photo</h5>
-      <div className="person-chip-row">
-        <span className="person-tag-chip">
-          <span>{currentPerson.displayName}</span>
-        </span>
-        {taggedPeople
-          .filter((item) => item.personId !== currentPerson.personId)
-          .map((item) => (
-            <span key={`chip-${item.personId}`} className="person-tag-chip">
+      <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>
+      <div className="person-association-list">
+        {taggedPeople.map((item) => (
+          <div key={`person-linked-${item.personId}`} className="person-linked-row">
+            <div className="person-linked-main">
+              <span className="person-linked-icon" aria-hidden="true">
+                <img
+                  src={getGenderAvatarSrc(getGenderForPerson(item.personId))}
+                  alt=""
+                  className="person-linked-avatar"
+                />
+              </span>
               <span>{item.displayName}</span>
-              {canManage ? (
-                <button
-                  type="button"
-                  className="person-chip-remove"
-                  disabled={busy || pendingOps.has(item.personId)}
-                  onClick={() => onRemoveTag(item.personId)}
-                  aria-label={`Remove ${item.displayName}`}
-                >
-                  {pendingOps.has(item.personId) ? "..." : "x"}
-                </button>
-              ) : null}
-            </span>
-          ))}
+            </div>
+            {canManage ? (
+              <button
+                type="button"
+                className="person-chip-remove"
+                disabled={busy || pendingOps.has(item.personId)}
+                onClick={() => onRemovePerson(item.personId)}
+                aria-label={`Remove ${item.displayName} from photo`}
+              >
+                {pendingOps.has(item.personId) ? "..." : "x"}
+              </button>
+            ) : null}
+          </div>
+        ))}
+        {taggedHouseholds.map((household) => (
+          <div key={`household-linked-${household.householdId}`} className="person-linked-row">
+            <div className="person-linked-main">
+              <span className="person-linked-icon person-linked-icon--household" aria-hidden="true">
+                <HouseholdIcon />
+              </span>
+              <span>{household.label || household.householdId}</span>
+            </div>
+            {canManage ? (
+              <button
+                type="button"
+                className="person-chip-remove"
+                disabled={busy || pendingOps.has(`h-${household.householdId}`)}
+                onClick={() => onRemoveHousehold(household.householdId)}
+                aria-label={`Remove ${household.label || household.householdId} from photo`}
+              >
+                {pendingOps.has(`h-${household.householdId}`) ? "..." : "x"}
+              </button>
+            ) : null}
+          </div>
+        ))}
+        {taggedPeople.length === 0 && taggedHouseholds.length === 0 ? (
+          <span className="status-chip status-chip--neutral">None</span>
+        ) : null}
       </div>
       {canManage ? (
         <>
-          <label className="label" style={{ marginTop: "0.75rem" }}>Search people to tag in this photo</label>
+          <label className="label" style={{ marginTop: "0.75rem" }}>Search</label>
           <input
             className="input"
-            value={tagQuery}
-            onChange={(e) => onTagQueryChange(e.target.value)}
-            placeholder="Start typing a name..."
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            placeholder="Search people, households"
           />
-          {tagQuery.trim() ? (
+          {searchQuery.trim() ? (
             <div className="person-typeahead-list">
               {results.length > 0 ? (
                 results.map((entry) => (
                   <button
-                    key={`tag-result-${entry.personId}`}
+                    key={entry.key}
                     type="button"
                     className="person-typeahead-item"
-                    onClick={() => onAddTag(entry)}
-                    disabled={busy || pendingOps.has(entry.personId)}
+                    onClick={() => onAddLink(entry)}
+                    disabled={busy || pendingOps.has(entry.kind === "person" ? entry.personId : `h-${entry.householdId}`)}
                   >
-                    <span>{entry.displayName}</span>
+                    <span className="person-linked-main">
+                      <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
+                        {entry.kind === "person" ? (
+                          <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
+                        ) : (
+                          <HouseholdIcon />
+                        )}
+                      </span>
+                      <span>{entry.displayName}</span>
+                    </span>
                   </button>
                 ))
               ) : (
-                <p className="page-subtitle" style={{ margin: 0 }}>No matching people.</p>
+                <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
               )}
             </div>
           ) : null}
         </>
       ) : null}
-      <h5 style={{ margin: "0.75rem 0 0.5rem" }}>Linked Households</h5>
-      <div className="person-chip-row">
-        {taggedHouseholds.length > 0 ? (
-          taggedHouseholds.map((household) => (
-            <span key={`h-chip-${household.householdId}`} className="person-tag-chip">
-              <span>{household.label || household.householdId}</span>
-              {canManage ? (
-                <button
-                  type="button"
-                  className="person-chip-remove"
-                  disabled={busy || pendingOps.has(`h-${household.householdId}`)}
-                  onClick={() => onRemoveHousehold(household.householdId)}
-                  aria-label={`Remove ${household.label || household.householdId}`}
-                >
-                  {pendingOps.has(`h-${household.householdId}`) ? "..." : "x"}
-                </button>
-              ) : null}
-            </span>
-          ))
-        ) : (
-          <span className="status-chip status-chip--neutral">None</span>
-        )}
-      </div>
       {statusText ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{statusText}</p> : null}
     </div>
   );
@@ -584,7 +630,7 @@ export function PersonEditModal({
     setNickName(person.nickName || "");
     setBirthDate(person.birthDate || "");
     setGender(person.gender || "unspecified");
-    setPhones(person.phones || "");
+    setPhones(formatUsPhoneForEdit(person.phones || ""));
     setEmail(person.email || "");
     setAddress(person.address || "");
     setHobbies(person.hobbies || "");
@@ -730,17 +776,56 @@ export function PersonEditModal({
     () => personOptions.slice().sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [personOptions],
   );
+  const peopleByIdForLinks = useMemo(
+    () =>
+      new Map(
+        personOptions.map((item) => [
+          item.personId,
+          { displayName: item.displayName, gender: (item.gender ?? "unspecified") as "male" | "female" | "unspecified" },
+        ]),
+      ),
+    [personOptions],
+  );
+  const availableHouseholdLinks = useMemo(() => {
+    const unique = new Map<string, { householdId: string; label: string }>();
+    households.forEach((item) => {
+      const key = item.id.trim();
+      if (!key) return;
+      if (unique.has(key)) return;
+      unique.set(key, { householdId: key, label: key });
+    });
+    return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [households]);
   const linkedPersonIdsForSelectedPhoto = useMemo(
     () => new Set(taggedPeople.map((entry) => entry.personId)),
     [taggedPeople],
   );
+  const linkedHouseholdIdsForSelectedPhoto = useMemo(
+    () => new Set(selectedPhotoAssociations.households.map((entry) => entry.householdId)),
+    [selectedPhotoAssociations.households],
+  );
   const tagSearchResults = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
-    if (!q) return [] as PersonItem[];
-    return linkablePeople
+    if (!q) return [] as LinkedSearchResult[];
+    const personMatches: LinkedSearchResult[] = linkablePeople
       .filter((item) => item.displayName.toLowerCase().includes(q) && !linkedPersonIdsForSelectedPhoto.has(item.personId))
-      .slice(0, 8);
-  }, [linkablePeople, linkedPersonIdsForSelectedPhoto, tagQuery]);
+      .map((item) => ({
+        kind: "person",
+        key: `person-${item.personId}`,
+        displayName: item.displayName,
+        personId: item.personId,
+        gender: item.gender ?? "unspecified",
+      }));
+    const householdMatches: LinkedSearchResult[] = availableHouseholdLinks
+      .filter((item) => item.label.toLowerCase().includes(q) && !linkedHouseholdIdsForSelectedPhoto.has(item.householdId))
+      .map((item) => ({
+        kind: "household",
+        key: `household-${item.householdId}`,
+        displayName: item.label,
+        householdId: item.householdId,
+      }));
+    return [...personMatches, ...householdMatches].slice(0, 10);
+  }, [availableHouseholdLinks, linkablePeople, linkedHouseholdIdsForSelectedPhoto, linkedPersonIdsForSelectedPhoto, tagQuery]);
   useEffect(() => {
     if (!selectedPhoto) {
       return;
@@ -877,6 +962,38 @@ export function PersonEditModal({
     return true;
   };
 
+  const linkSelectedPhotoToHousehold = async (targetHouseholdId: string) => {
+    if (!selectedPhoto || !targetHouseholdId) return false;
+    setPhotoAssociationStatus("Saving association...");
+    setStatus("Linking photo to selected household...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(targetHouseholdId)}/photos/link`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: selectedPhoto.valueText,
+          name: draftMeta.label || selectedPhoto.label || "photo",
+          description: draftMeta.description || selectedPhoto.notes || "",
+          photoDate: draftMeta.date || selectedPhoto.startDate || "",
+          mediaMetadata: selectedPhoto.mediaMetadata || selectedPhoto.valueJson || "",
+          isPrimary: false,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoAssociationStatus("Association save failed.");
+      return false;
+    }
+    setStatus("Photo linked to selected household.");
+    await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
+    setPhotoAssociationStatus("Association saved.");
+    return true;
+  };
+
   const removePhotoAssociationFromPerson = async (targetPersonId: string, fileId: string) => {
     if (!person) return false;
     setPhotoBusy(true);
@@ -934,23 +1051,38 @@ export function PersonEditModal({
     return true;
   };
 
-  const addTagByTypeahead = async (candidate: PersonItem) => {
-    if (!selectedPhoto || linkedPersonIdsForSelectedPhoto.has(candidate.personId)) {
-      setPhotoAssociationStatus("Already tagged.");
+  const addTagByTypeahead = async (candidate: LinkedSearchResult) => {
+    if (!selectedPhoto) {
+      return;
+    }
+    if (candidate.kind === "person" && linkedPersonIdsForSelectedPhoto.has(candidate.personId)) {
+      setPhotoAssociationStatus("Already linked.");
+      return;
+    }
+    if (candidate.kind === "household" && linkedHouseholdIdsForSelectedPhoto.has(candidate.householdId)) {
+      setPhotoAssociationStatus("Already linked.");
       return;
     }
     setTagQuery("");
-    setTaggedPeople((current) => [...current, { personId: candidate.personId, displayName: candidate.displayName }]);
-    setPendingOps((current) => new Set(current).add(candidate.personId));
+    if (candidate.kind === "person") {
+      setTaggedPeople((current) => [...current, { personId: candidate.personId, displayName: candidate.displayName }]);
+    }
+    const key = candidate.kind === "person" ? candidate.personId : `h-${candidate.householdId}`;
+    setPendingOps((current) => new Set(current).add(key));
     try {
-      const ok = await linkSelectedPhotoToPerson(candidate.personId);
+      const ok =
+        candidate.kind === "person"
+          ? await linkSelectedPhotoToPerson(candidate.personId)
+          : await linkSelectedPhotoToHousehold(candidate.householdId);
       if (!ok) {
-        setTaggedPeople((current) => current.filter((item) => item.personId !== candidate.personId));
+        if (candidate.kind === "person") {
+          setTaggedPeople((current) => current.filter((item) => item.personId !== candidate.personId));
+        }
       }
     } finally {
       setPendingOps((current) => {
         const next = new Set(current);
-        next.delete(candidate.personId);
+        next.delete(key);
         return next;
       });
     }
@@ -1311,7 +1443,13 @@ export function PersonEditModal({
               <div className="card">
                 <h4 className="ui-section-title">Contact</h4>
                 <label className="label">Phone</label>
-                <input className="input" value={phones} onChange={(e) => setPhones(e.target.value)} disabled={showReadOnly} />
+                <input
+                  className="input"
+                  value={phones}
+                  onChange={(e) => setPhones(e.target.value)}
+                  onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
+                  disabled={showReadOnly}
+                />
                 <label className="label">Email</label>
                 <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
                 <label className="label">Address</label>
@@ -1455,7 +1593,9 @@ export function PersonEditModal({
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           attributeType: newAttrType.trim() || "note",
-                          valueText: newAttrValue,
+                          valueText: (newAttrType.trim().toLowerCase() === "phone")
+                            ? formatUsPhoneForEdit(newAttrValue)
+                            : newAttrValue,
                           label: newAttrLabel,
                           visibility: "family",
                           shareScope: "both_families",
@@ -1629,7 +1769,7 @@ export function PersonEditModal({
               <div className="person-photo-detail-shell">
                 <div className="person-photo-detail-card">
                   <PhotoDetailHeader
-                    onBack={() => setShowPhotoDetail(false)}
+                    onClose={() => setShowPhotoDetail(false)}
                     onViewLarge={() => {
                       setLargePhotoFileId(selectedPhoto.valueText);
                       setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
@@ -1660,46 +1800,26 @@ export function PersonEditModal({
                   </div>
                   <PhotoInfoForm draftMeta={draftMeta} onChange={setDraftMeta} disabled={!canManage || photoBusy} />
                   <PeopleTagger
-                    currentPerson={person}
                     taggedPeople={taggedPeople}
                     taggedHouseholds={selectedPhotoAssociations.households}
-                    tagQuery={tagQuery}
-                    onTagQueryChange={setTagQuery}
+                    searchQuery={tagQuery}
+                    onSearchQueryChange={setTagQuery}
                     results={tagSearchResults}
                     pendingOps={pendingOps}
                     canManage={canManage}
-                    onAddTag={(candidate) => {
+                    onAddLink={(candidate) => {
                       void addTagByTypeahead(candidate);
                     }}
-                    onRemoveTag={(personIdToRemove) => {
-                      if (personIdToRemove === person.personId) {
-                        return;
-                      }
+                    onRemovePerson={(personIdToRemove) => {
                       void removeTagByChip(personIdToRemove);
                     }}
                     onRemoveHousehold={(householdIdToRemove) => {
                       void removeHouseholdByChip(householdIdToRemove);
                     }}
+                    getGenderForPerson={(personId) => peopleByIdForLinks.get(personId)?.gender ?? "unspecified"}
                     busy={photoBusy || selectedPhotoAssociationsBusy}
                     statusText={photoAssociationStatus}
                   />
-                  {canManage ? (
-                    <div className="card" style={{ borderColor: "#fecaca" }}>
-                      <h5 style={{ margin: "0 0 0.5rem" }}>Danger Zone</h5>
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        disabled={photoBusy}
-                        onClick={() => {
-                          const ok = window.confirm(`Remove this photo from ${person.displayName}? This won't delete the photo from the library.`);
-                          if (!ok) return;
-                          void removePhotoAssociationFromPerson(person.personId, selectedPhoto.valueText);
-                        }}
-                      >
-                        Remove from {person.displayName}
-                      </button>
-                    </div>
-                  ) : null}
                   <StickySaveBar
                     dirty={
                       draftMeta.label !== (selectedPhoto.label || "") ||
@@ -1708,6 +1828,7 @@ export function PersonEditModal({
                       draftMeta.isPrimary !== selectedPhoto.isPrimary
                     }
                     saving={photoBusy}
+                    onCancel={() => setShowPhotoDetail(false)}
                     onSave={() => {
                       void saveSelectedPhotoMetadata();
                     }}

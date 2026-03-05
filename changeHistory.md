@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Added click-to-call (`tel:`) and click-to-text (`sms:`) actions for phone values in person/profile views. See `docs/change-summary.md`.
+- 2026-03-05: Updated Edit Photo to consolidated `Linked To` redesign (people + households, per-row unlink, pinned save/cancel actions) and added phone edit formatting to `(XXX) XXX-XXXX`. See `docs/change-summary.md`.

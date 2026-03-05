@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { PersonAttributeRecord, PersonRecord } from "@/lib/google/types";
 import { PrimaryButton } from "@/components/ui/primitives";
 import { PhoneLinkActions } from "@/components/PhoneLinkActions";
+import { formatUsPhoneForEdit } from "@/lib/phone-format";
 
 type TenantOption = {
   tenantKey: string;
@@ -445,7 +446,9 @@ export function ProfileEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           attributeType,
-          valueText: attributeValue,
+          valueText: attributeType.trim().toLowerCase() === "phone"
+            ? formatUsPhoneForEdit(attributeValue)
+            : attributeValue,
           label: attributeLabel,
           visibility: attributeVisibility,
           shareScope: attributeShareTarget === "both" ? "both_families" : "one_family",
@@ -1109,7 +1112,16 @@ export function ProfileEditor({
                 <option value="custom">custom</option>
               </select>
               <label className="label">Value</label>
-              <input className="input" value={attributeValue} onChange={(event) => setAttributeValue(event.target.value)} />
+              <input
+                className="input"
+                value={attributeValue}
+                onChange={(event) => setAttributeValue(event.target.value)}
+                onBlur={() => {
+                  if (attributeType.trim().toLowerCase() === "phone") {
+                    setAttributeValue((current) => formatUsPhoneForEdit(current));
+                  }
+                }}
+              />
               <label className="label">Label</label>
               <input className="input" value={attributeLabel} onChange={(event) => setAttributeLabel(event.target.value)} />
               <label className="label">Visibility</label>
