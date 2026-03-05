@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Added household photo tagging parity plus attribute media link management (people/households search+link+unlink in detail views). See `docs/change-summary.md`.
+- 2026-03-05: Added click-to-call (`tel:`) and click-to-text (`sms:`) actions for phone values in person/profile views. See `docs/change-summary.md`.

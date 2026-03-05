@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { PersonAttributeRecord, PersonRecord } from "@/lib/google/types";
 import { PrimaryButton } from "@/components/ui/primitives";
+import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 
 type TenantOption = {
   tenantKey: string;
@@ -1162,7 +1163,12 @@ export function ProfileEditor({
             {nonPhotoAttributes.map((item) => (
               <div key={item.attributeId} className="settings-attr-row">
                 <div>
-                  <strong>{item.attributeType}</strong>: {item.valueText}
+                  <strong>{item.attributeType}</strong>:{" "}
+                  {item.attributeType.toLowerCase() === "phone" ? (
+                    <PhoneLinkActions value={item.valueText} />
+                  ) : (
+                    item.valueText
+                  )}
                   <div className="settings-attr-meta">
                     label: {item.label || "-"} | primary: {item.isPrimary ? "TRUE" : "FALSE"} | visibility:{" "}
                     {item.visibility} | share: {item.shareScope === "one_family" ? item.shareFamilyGroupKey : "both"} | order: {item.sortOrder}

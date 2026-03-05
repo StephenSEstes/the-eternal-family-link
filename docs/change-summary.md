@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-05 (click-to-call and click-to-text links for phone fields)
+
+- `Change`: Added reusable phone link parsing/rendering and enabled `tel:` + `sms:` actions anywhere phone values are displayed in person/profile attribute views.
+- `Type`: UI
+- `Why`: Phone values were plain text only; users could not tap to open dialer or messaging apps directly from profile screens.
+- `Files`:
+  - `src/lib/phone-links.ts`
+  - `src/components/PhoneLinkActions.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/ProfileEditor.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Person modal header phone value shows `Call` and `Text` actions.
+  - Phone-type attributes show `Call` and `Text` actions in both person modal and profile editor.
+  - `tel:` launches dialer with target number.
+  - `sms:` launches message composer with target number.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (household photo tagging parity + attribute media link management)
 
 - `Change`: Added full household photo-detail link management (search/add/remove linked people and households), enabled linking an existing media file to additional households via new API route, and expanded person media-detail/tagging flow to include attribute media (`photo/video/audio/media`) not just photo rows.

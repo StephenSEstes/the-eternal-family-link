@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
+import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 
 type PersonItem = {
   personId: string;
@@ -1246,7 +1247,7 @@ export function PersonEditModal({
               Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>
             <p className="person-modal-meta">
-              Email: {email || "-"} | Phone: {phones || "-"}
+              Email: {email || "-"} | Phone: <PhoneLinkActions value={phones} />
             </p>
           </div>
           <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
@@ -1418,7 +1419,13 @@ export function PersonEditModal({
                     <tr key={item.attributeId}>
                       <td>{item.attributeType}</td>
                       <td>{item.label || "-"}</td>
-                      <td>{item.valueText}</td>
+                      <td>
+                        {item.attributeType.toLowerCase() === "phone" ? (
+                          <PhoneLinkActions value={item.valueText} />
+                        ) : (
+                          item.valueText
+                        )}
+                      </td>
                     </tr>
                   )) : <tr><td colSpan={3}>No attributes yet.</td></tr>}
                 </tbody>
