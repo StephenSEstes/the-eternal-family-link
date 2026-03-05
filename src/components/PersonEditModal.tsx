@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
+import { AttributeSummarySection } from "@/components/AttributesModal";
 
 type PersonItem = {
   personId: string;
@@ -1549,6 +1550,13 @@ export function PersonEditModal({
 
         {activeTab === "attributes" ? (
           <>
+            <AttributeSummarySection
+              tenantKey={tenantKey}
+              entityType="person"
+              entityId={person.personId}
+              entityLabel={person.displayName}
+              canManage={canManage}
+            />
             <div className="settings-table-wrap">
               <table className="settings-table">
                 <thead><tr><th>Type</th><th>Label</th><th>Value</th></tr></thead>

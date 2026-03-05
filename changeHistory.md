@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Updated Edit Photo to consolidated `Linked To` redesign (people + households, per-row unlink, pinned save/cancel actions) and added phone edit formatting to `(XXX) XXX-XXXX`. See `docs/change-summary.md`.
+- 2026-03-05: Added compact Attributes (People + Households), `AttributesModal` manager, `/api/attributes` CRUD routes, and attribute-level media attachments reusing existing upload flows. See `docs/change-summary.md`.

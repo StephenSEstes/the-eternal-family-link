@@ -1,0 +1,694 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import type { AttributeCategory, AttributeEntityType } from "@/lib/attributes/types";
+
+type AttributeMedia = {
+  linkId: string;
+  fileId: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  isPrimary: boolean;
+  mediaMetadata: string;
+  createdAt: string;
+};
+
+type AttributeItem = {
+  attributeId: string;
+  entityType: AttributeEntityType;
+  entityId: string;
+  category: AttributeCategory;
+  typeKey: string;
+  label: string;
+  valueText: string;
+  dateStart: string;
+  dateEnd: string;
+  location: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  media: AttributeMedia[];
+};
+
+type AttributeTab = "all" | "descriptor" | "event";
+
+const DESCRIPTOR_TYPES = ["hobbies", "likes", "blood_type", "allergies", "hair_color", "height", "health"];
+const EVENT_TYPES = ["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"];
+const END_DATE_TYPES = new Set(["missions", "lived_in", "jobs"]);
+
+function prettyLabel(typeKey: string, label: string) {
+  if (label.trim()) return label.trim();
+  return typeKey.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function summarizeSingle(item: AttributeItem) {
+  const value = item.valueText.trim();
+  const datePart = item.dateStart
+    ? item.dateEnd
+      ? `${item.dateStart} - ${item.dateEnd}`
+      : item.dateStart
+    : "";
+  const location = item.location.trim();
+  const parts = [value, datePart, location].filter(Boolean);
+  return parts.join(" • ") || "-";
+}
+
+function typeListForCategory(category: AttributeCategory) {
+  return category === "event" ? EVENT_TYPES : DESCRIPTOR_TYPES;
+}
+
+function inferCategory(typeKey: string): AttributeCategory {
+  return EVENT_TYPES.includes(typeKey) ? "event" : "descriptor";
+}
+
+async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
+  const result: { width?: number; height?: number; durationSec?: number } = {};
+  if (file.type.startsWith("image/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        result.width = img.naturalWidth;
+        result.height = img.naturalHeight;
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.src = url;
+    });
+    return result;
+  }
+  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+    await new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+      media.preload = "metadata";
+      media.onloadedmetadata = () => {
+        if (Number.isFinite(media.duration)) result.durationSec = Math.max(0, media.duration);
+        if (file.type.startsWith("video/")) {
+          const video = media as HTMLVideoElement;
+          result.width = video.videoWidth || undefined;
+          result.height = video.videoHeight || undefined;
+        }
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      media.src = url;
+    });
+  }
+  return result;
+}
+
+export function AttributesModal({
+  open,
+  tenantKey,
+  entityType,
+  entityId,
+  entityLabel,
+  initialTypeKey,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  tenantKey: string;
+  entityType: AttributeEntityType;
+  entityId: string;
+  entityLabel: string;
+  initialTypeKey?: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [items, setItems] = useState<AttributeItem[]>([]);
+  const [tab, setTab] = useState<AttributeTab>("all");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [category, setCategory] = useState<AttributeCategory>("descriptor");
+  const [typeKey, setTypeKey] = useState("hobbies");
+  const [label, setLabel] = useState("");
+  const [valueText, setValueText] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState("");
+  const [captureSource, setCaptureSource] = useState("library");
+
+  const refresh = async () => {
+    const res = await fetch(
+      `/api/attributes?entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStatus(`Load failed: ${res.status}`);
+      return;
+    }
+    setItems(Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : []);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    setStatus("Loading...");
+    void refresh().then(() => setStatus(""));
+    if (initialTypeKey) {
+      setTypeKey(initialTypeKey);
+      setCategory(inferCategory(initialTypeKey));
+    }
+  }, [open, entityType, entityId, initialTypeKey]);
+
+  useEffect(() => {
+    if (!pendingPreview) return;
+    return () => URL.revokeObjectURL(pendingPreview);
+  }, [pendingPreview]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((item) => {
+      if (tab !== "all" && item.category !== tab) return false;
+      if (!q) return true;
+      const haystack = [item.typeKey, item.label, item.valueText, item.location, item.notes].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, query, tab]);
+
+  const editingItem = useMemo(() => items.find((item) => item.attributeId === editingId) ?? null, [items, editingId]);
+
+  const resetEditor = () => {
+    setEditingId("");
+    setCategory("descriptor");
+    setTypeKey("hobbies");
+    setLabel("");
+    setValueText("");
+    setDateStart("");
+    setDateEnd("");
+    setLocation("");
+    setNotes("");
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview("");
+    setPendingFile(null);
+    setCaptureSource("library");
+  };
+
+  const openEditor = (item?: AttributeItem) => {
+    if (!item) {
+      resetEditor();
+      return;
+    }
+    setEditingId(item.attributeId);
+    setCategory(item.category);
+    setTypeKey(item.typeKey);
+    setLabel(item.label);
+    setValueText(item.valueText);
+    setDateStart(item.dateStart);
+    setDateEnd(item.dateEnd);
+    setLocation(item.location);
+    setNotes(item.notes);
+  };
+
+  const validateEditor = () => {
+    const normalizedType = typeKey.trim().toLowerCase();
+    if (!normalizedType) return "Type is required.";
+    if (category === "descriptor" && !valueText.trim()) return "Value is required for descriptor attributes.";
+    if (category === "event" && normalizedType !== "stories" && !dateStart.trim()) return "Start date is required for this event type.";
+    if (dateEnd.trim() && !END_DATE_TYPES.has(normalizedType)) return "End date is only allowed for missions, lived_in, jobs.";
+    return "";
+  };
+
+  const saveAttribute = async () => {
+    const validationError = validateEditor();
+    if (validationError) {
+      setStatus(validationError);
+      return;
+    }
+    setBusy(true);
+    const payload = {
+      entityType,
+      entityId,
+      category,
+      typeKey,
+      label,
+      valueText,
+      dateStart,
+      dateEnd,
+      location,
+      notes,
+    };
+    const res = await fetch(editingId ? `/api/attributes/${encodeURIComponent(editingId)}` : "/api/attributes", {
+      method: editingId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStatus(`Save failed: ${res.status} ${String(body?.message ?? body?.error ?? "").slice(0, 160)}`);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    setStatus("Saved.");
+    await refresh();
+    onSaved();
+    if (!editingId && body?.attribute?.attributeId) {
+      setEditingId(String(body.attribute.attributeId));
+    }
+  };
+
+  const removeAttribute = async (attributeId: string) => {
+    if (!window.confirm("Delete this attribute?")) return;
+    setBusy(true);
+    const res = await fetch(`/api/attributes/${encodeURIComponent(attributeId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      setStatus(`Delete failed: ${res.status}`);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    setStatus("Deleted.");
+    await refresh();
+    onSaved();
+    if (editingId === attributeId) resetEditor();
+  };
+
+  const removeMedia = async (attributeId: string, linkId: string) => {
+    setBusy(true);
+    const res = await fetch(`/api/attributes/${encodeURIComponent(attributeId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeMediaLinkId: linkId }),
+    });
+    if (!res.ok) {
+      setStatus(`Media remove failed: ${res.status}`);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    await refresh();
+    onSaved();
+  };
+
+  const uploadAttachment = async () => {
+    if (!editingId || !pendingFile) {
+      setStatus("Save attribute first, then select a file.");
+      return;
+    }
+    setBusy(true);
+    setStatus("Uploading...");
+    const form = new FormData();
+    form.append("file", pendingFile);
+    form.append("name", pendingFile.name || "media");
+    form.append("description", notes.trim());
+    form.append("photoDate", dateStart.trim());
+    form.append("attributeId", editingId);
+    form.append("captureSource", captureSource);
+    form.append("attributeType", "media");
+    const mediaMeta = await readClientMediaMetadata(pendingFile);
+    if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
+    if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
+    if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
+    if (pendingFile.lastModified) form.append("fileCreatedAt", new Date(pendingFile.lastModified).toISOString());
+    const url =
+      entityType === "person"
+        ? `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(entityId)}/photos/upload`
+        : `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(entityId)}/photos/upload`;
+    const res = await fetch(url, { method: "POST", body: form });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStatus(`Upload failed: ${res.status} ${String(body?.message ?? body?.error ?? "").slice(0, 160)}`);
+      setBusy(false);
+      return;
+    }
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview("");
+    setPendingFile(null);
+    setCaptureSource("library");
+    setStatus("Attachment uploaded.");
+    setBusy(false);
+    await refresh();
+    onSaved();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="person-modal-backdrop" onClick={onClose} onPointerDown={(event) => event.stopPropagation()}>
+      <div className="person-modal-panel" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="person-modal-sticky-head">
+          <div className="person-modal-header">
+            <div>
+              <h3 className="person-modal-title">Attributes</h3>
+              <p className="person-modal-meta">{entityLabel}</p>
+            </div>
+            <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
+          </div>
+          <div className="settings-chip-list">
+            <button type="button" className={`tab-pill ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>All</button>
+            <button type="button" className={`tab-pill ${tab === "descriptor" ? "active" : ""}`} onClick={() => setTab("descriptor")}>Descriptors</button>
+            <button type="button" className={`tab-pill ${tab === "event" ? "active" : ""}`} onClick={() => setTab("event")}>Events</button>
+            <button type="button" className="button tap-button" onClick={() => openEditor()} disabled={busy}>+ Add Attribute</button>
+          </div>
+          <label className="label" style={{ marginTop: "0.65rem" }}>Search</label>
+          <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search type, value, location, notes" />
+        </div>
+
+        <div className="person-modal-body">
+          <div className="card">
+            <h4 className="ui-section-title" style={{ marginTop: 0 }}>Attribute Records</h4>
+            <div className="person-association-list">
+              {filtered.length > 0 ? filtered.map((item) => (
+                <div key={item.attributeId} className="person-linked-row">
+                  <div style={{ minWidth: 0 }}>
+                    <strong>{prettyLabel(item.typeKey, item.label)}</strong>
+                    <div className="page-subtitle" style={{ margin: 0 }}>{summarizeSingle(item)}</div>
+                  </div>
+                  <div className="settings-chip-list">
+                    <span className="status-chip status-chip--neutral">Media {item.media?.length ?? 0}</span>
+                    <button type="button" className="button secondary tap-button" onClick={() => openEditor(item)}>Edit</button>
+                    <button type="button" className="button secondary tap-button" onClick={() => void removeAttribute(item.attributeId)}>Delete</button>
+                  </div>
+                </div>
+              )) : (
+                <p className="page-subtitle" style={{ margin: 0 }}>No attributes found.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <h4 className="ui-section-title" style={{ marginTop: 0 }}>{editingId ? "Edit Attribute" : "Add Attribute"}</h4>
+            <div className="settings-chip-list">
+              <select className="input" value={category} onChange={(e) => {
+                const nextCategory = e.target.value as AttributeCategory;
+                setCategory(nextCategory);
+                const defaults = typeListForCategory(nextCategory);
+                if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
+              }}>
+                <option value="descriptor">Descriptor</option>
+                <option value="event">Event</option>
+              </select>
+              <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
+                {typeListForCategory(category).map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+                <option value="custom">custom</option>
+              </select>
+              {typeKey === "custom" ? (
+                <input className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)} placeholder="custom_type_key" />
+              ) : null}
+            </div>
+            <label className="label">Label</label>
+            <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
+            <label className="label">Value</label>
+            <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
+            <div className="settings-chip-list">
+              <div style={{ flex: 1, minWidth: "180px" }}>
+                <label className="label">Start Date</label>
+                <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
+              </div>
+              <div style={{ flex: 1, minWidth: "180px" }}>
+                <label className="label">End Date</label>
+                <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
+              </div>
+            </div>
+            <label className="label">Location</label>
+            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
+            <label className="label">Notes</label>
+            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+              <button type="button" className="button tap-button" disabled={busy} onClick={() => void saveAttribute()}>
+                {busy ? "Saving..." : "Save Attribute"}
+              </button>
+              {editingId ? (
+                <button type="button" className="button secondary tap-button" disabled={busy} onClick={resetEditor}>
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="card">
+            <h4 className="ui-section-title" style={{ marginTop: 0 }}>Attachments</h4>
+            {!editingItem ? (
+              <p className="page-subtitle" style={{ margin: 0 }}>Save an attribute first to attach media.</p>
+            ) : (
+              <>
+                <div className="person-association-list">
+                  {(editingItem.media ?? []).length > 0 ? editingItem.media.map((item) => (
+                    <div key={item.linkId} className="person-linked-row">
+                      <div className="person-linked-main">
+                        <img src={getPhotoProxyPath(item.fileId, tenantKey)} alt={item.label || "media"} className="person-linked-avatar" />
+                        <span>{item.label || item.fileId}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="person-chip-remove"
+                        disabled={busy}
+                        aria-label={`Remove ${item.label || item.fileId} from attribute`}
+                        onClick={() => void removeMedia(editingItem.attributeId, item.linkId)}
+                      >
+                        x
+                      </button>
+                    </div>
+                  )) : (
+                    <p className="page-subtitle" style={{ margin: 0 }}>No media linked.</p>
+                  )}
+                </div>
+                {pendingPreview ? (
+                  <div className="person-upload-preview-card" style={{ marginTop: "0.75rem" }}>
+                    {pendingFile?.type?.startsWith("video/") ? (
+                      <video src={pendingPreview} className="person-upload-preview-image" controls playsInline />
+                    ) : pendingFile?.type?.startsWith("audio/") ? (
+                      <audio src={pendingPreview} className="person-upload-preview-image" controls />
+                    ) : (
+                      <img src={pendingPreview} alt="Pending upload preview" className="person-upload-preview-image" />
+                    )}
+                    <div className="person-upload-preview-meta">
+                      <strong>{pendingFile?.name || "Selected media"}</strong>
+                      <span>Will attach to this attribute.</span>
+                    </div>
+                  </div>
+                ) : null}
+                <input
+                  id={`attribute-upload-${editingItem.attributeId}`}
+                  type="file"
+                  accept="image/*,video/*,audio/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+                    setPendingFile(file);
+                    setPendingPreview(URL.createObjectURL(file));
+                    setCaptureSource("library");
+                  }}
+                />
+                <input
+                  id={`attribute-upload-camera-${editingItem.attributeId}`}
+                  type="file"
+                  accept="image/*,video/*"
+                  capture="environment"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+                    setPendingFile(file);
+                    setPendingPreview(URL.createObjectURL(file));
+                    setCaptureSource("camera");
+                  }}
+                />
+                <input
+                  id={`attribute-upload-audio-${editingItem.attributeId}`}
+                  type="file"
+                  accept="audio/*"
+                  capture="user"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+                    setPendingFile(file);
+                    setPendingPreview(URL.createObjectURL(file));
+                    setCaptureSource("microphone");
+                  }}
+                />
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-${editingItem.attributeId}`)?.click()}>
+                    Choose File
+                  </button>
+                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-camera-${editingItem.attributeId}`)?.click()}>
+                    Camera
+                  </button>
+                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-audio-${editingItem.attributeId}`)?.click()}>
+                    Audio
+                  </button>
+                  <button type="button" className="button tap-button" disabled={!pendingFile || busy} onClick={() => void uploadAttachment()}>
+                    {busy ? "Uploading..." : "Attach Media"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AttributeSummarySection({
+  tenantKey,
+  entityType,
+  entityId,
+  entityLabel,
+  canManage,
+}: {
+  tenantKey: string;
+  entityType: AttributeEntityType;
+  entityId: string;
+  entityLabel: string;
+  canManage: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [initialTypeKey, setInitialTypeKey] = useState("");
+  const [items, setItems] = useState<AttributeItem[]>([]);
+  const [status, setStatus] = useState("");
+
+  const refresh = async () => {
+    const res = await fetch(
+      `/api/attributes?entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStatus(`Attributes load failed: ${res.status}`);
+      return;
+    }
+    setItems(Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : []);
+    setStatus("");
+  };
+
+  useEffect(() => {
+    if (!entityId) return;
+    void refresh();
+  }, [entityType, entityId]);
+
+  const grouped = useMemo(() => {
+    const groupByCategory = (category: AttributeCategory) => {
+      const map = new Map<string, AttributeItem[]>();
+      items.filter((item) => item.category === category).forEach((item) => {
+        if (!map.has(item.typeKey)) map.set(item.typeKey, []);
+        map.get(item.typeKey)!.push(item);
+      });
+      return Array.from(map.entries())
+        .map(([typeKey, entries]) => {
+          const sorted = entries.slice().sort((a, b) => (b.dateStart || "").localeCompare(a.dateStart || ""));
+          const latest = sorted[0];
+          const mediaCount = entries.reduce((sum, current) => sum + (current.media?.length ?? 0), 0);
+          return {
+            typeKey,
+            label: prettyLabel(typeKey, latest?.label || ""),
+            count: entries.length,
+            summary: entries.length === 1 ? summarizeSingle(latest) : `${entries.length} entries • ${summarizeSingle(latest)}`,
+            mediaCount,
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+    };
+    return {
+      descriptor: groupByCategory("descriptor"),
+      event: groupByCategory("event"),
+    };
+  }, [items]);
+
+  return (
+    <>
+      <div className="card">
+        <div className="person-photo-gallery-toolbar">
+          <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Attributes</h4>
+          {canManage ? (
+            <button type="button" className="button tap-button" onClick={() => {
+              setInitialTypeKey("");
+              setOpen(true);
+            }}>
+              Manage Attributes
+            </button>
+          ) : null}
+        </div>
+
+        <h5 style={{ margin: "0.5rem 0 0.45rem" }}>Descriptors</h5>
+        <div className="person-association-list">
+          {grouped.descriptor.length > 0 ? grouped.descriptor.map((row) => (
+            <div key={`desc-${row.typeKey}`} className="person-linked-row">
+              <div style={{ minWidth: 0 }}>
+                <strong>{row.label}</strong>
+                <div className="page-subtitle" style={{ margin: 0 }}>{row.summary}</div>
+              </div>
+              <div className="settings-chip-list">
+                <span className="status-chip status-chip--neutral">Media {row.mediaCount}</span>
+                {canManage ? (
+                  <button type="button" className="button secondary tap-button" onClick={() => {
+                    setInitialTypeKey(row.typeKey);
+                    setOpen(true);
+                  }}>
+                    Edit
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )) : <p className="page-subtitle" style={{ margin: 0 }}>No descriptors.</p>}
+        </div>
+
+        <h5 style={{ margin: "0.75rem 0 0.45rem" }}>Events</h5>
+        <div className="person-association-list">
+          {grouped.event.length > 0 ? grouped.event.map((row) => (
+            <div key={`event-${row.typeKey}`} className="person-linked-row">
+              <div style={{ minWidth: 0 }}>
+                <strong>{row.label}</strong>
+                <div className="page-subtitle" style={{ margin: 0 }}>{row.summary}</div>
+              </div>
+              <div className="settings-chip-list">
+                <span className="status-chip status-chip--neutral">Media {row.mediaCount}</span>
+                {canManage ? (
+                  <button type="button" className="button secondary tap-button" onClick={() => {
+                    setInitialTypeKey(row.typeKey);
+                    setOpen(true);
+                  }}>
+                    Edit
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )) : <p className="page-subtitle" style={{ margin: 0 }}>No events.</p>}
+        </div>
+        {status ? <p className="page-subtitle" style={{ marginTop: "0.6rem" }}>{status}</p> : null}
+      </div>
+
+      <AttributesModal
+        open={open}
+        tenantKey={tenantKey}
+        entityType={entityType}
+        entityId={entityId}
+        entityLabel={entityLabel}
+        initialTypeKey={initialTypeKey}
+        onClose={() => setOpen(false)}
+        onSaved={() => {
+          void refresh();
+        }}
+      />
+    </>
+  );
+}

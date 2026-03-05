@@ -1542,3 +1542,32 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Phone fields in edit screens format to `(XXX) XXX-XXXX` on blur / save path where applicable.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (attributes for people/households + attribute media attachments)
+
+- `Change`: Added a new `Attributes` data model for people and households (one value per attribute row), new `/api/attributes` CRUD endpoints, compact grouped Attribute summaries on both Person and Household modals, and a reusable `AttributesModal` manager with add/edit/delete/search/tabs. Extended existing photo upload routes to support attaching media directly to an existing attribute via `attributeId`, reusing current upload/link flows and media-link persistence (`entity_type = "attribute"`).
+- `Type`: API, Data, UI, UX
+- `Why`: Implement compact, data-dense attributes management across both entity types without introducing a separate uploader or changing existing person/household photo behavior.
+- `Files`:
+  - `src/lib/attributes/types.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/validation/attributes.ts`
+  - `src/app/api/attributes/route.ts`
+  - `src/app/api/attributes/[attributeId]/route.ts`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+  - `docs/data-schema.md`
+- `Data Changes`: Additive schema support for `Attributes` table mapping (Sheets + OCI) and OCI runtime table bootstrap for `attributes`.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Person and Household screens show compact grouped Attributes sections (Descriptors/Events) with summarize-on-duplicates behavior.
+  - `AttributesModal` supports add/edit/delete/search and media attach/remove against attribute records.
+  - Existing person/household photo upload and linkage behavior remains unchanged when `attributeId` is not supplied.
+- `Rollback Notes`: Revert this deployment commit.
+- `Design Decision Change`: No design decision change.

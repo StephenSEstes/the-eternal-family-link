@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { AttributeSummarySection } from "@/components/AttributesModal";
 
 type HouseholdSummary = {
   householdId: string;
@@ -597,6 +598,13 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                   <label className="label">Notes</label>
                   <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
                 </div>
+                <AttributeSummarySection
+                  tenantKey={tenantKey}
+                  entityType="household"
+                  entityId={householdId}
+                  entityLabel={household.label || householdId}
+                  canManage
+                />
               </>
             ) : null}
 

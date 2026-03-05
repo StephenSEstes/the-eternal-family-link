@@ -178,6 +178,24 @@ const TABLES: Record<string, TableConfig> = {
       "notes",
     ],
   },
+  Attributes: {
+    tableName: "attributes",
+    headers: [
+      "attribute_id",
+      "entity_type",
+      "entity_id",
+      "category",
+      "type_key",
+      "label",
+      "value_text",
+      "date_start",
+      "date_end",
+      "location",
+      "notes",
+      "created_at",
+      "updated_at",
+    ],
+  },
   UserAccess: {
     tableName: "user_access",
     headers: [
@@ -229,6 +247,39 @@ const TABLES: Record<string, TableConfig> = {
 
 export function listOciTabs() {
   return Object.keys(TABLES);
+}
+
+export async function ensureOciAttributesTable() {
+  return withConnection(async (connection) => {
+    try {
+      await connection.execute(
+        `CREATE TABLE attributes (
+           attribute_id VARCHAR2(128) PRIMARY KEY,
+           entity_type VARCHAR2(32) NOT NULL,
+           entity_id VARCHAR2(128) NOT NULL,
+           category VARCHAR2(32) NOT NULL,
+           type_key VARCHAR2(80) NOT NULL,
+           label VARCHAR2(160),
+           value_text CLOB,
+           date_start VARCHAR2(32),
+           date_end VARCHAR2(32),
+           location VARCHAR2(400),
+           notes CLOB,
+           created_at VARCHAR2(64),
+           updated_at VARCHAR2(64)
+         )`,
+      );
+      await connection.execute(
+        `CREATE INDEX idx_attributes_entity ON attributes(entity_type, entity_id, category, type_key)`,
+      );
+      await connection.commit();
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  });
 }
 
 function normalizeHeader(header: string) {

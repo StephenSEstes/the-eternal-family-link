@@ -5,6 +5,7 @@ import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
+import { getAttributeById } from "@/lib/attributes/store";
 import {
   createTableRecord,
   ensureResolvedTabColumns,
@@ -75,6 +76,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const mediaHeight = String(formData?.get("mediaHeight") ?? "").trim();
     const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
     const captureSource = String(formData?.get("captureSource") ?? "").trim();
+    const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
     const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
@@ -115,7 +117,11 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       (item) => item.attributeType === "photo",
       )
       : [];
-    const shouldBePrimary = attributeType === "photo" && validated.mediaKind === "image" && (requestedHeadshot || existingPhotos.length === 0);
+    const shouldBePrimary =
+      !targetAttributeId &&
+      attributeType === "photo" &&
+      validated.mediaKind === "image" &&
+      (requestedHeadshot || existingPhotos.length === 0);
 
     if (shouldBePrimary) {
       await Promise.all(
@@ -133,33 +139,46 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       );
     }
 
-    const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId, attributeType);
-    await ensureResolvedTabColumns(
-      PERSON_ATTRIBUTES_TAB,
-      ["media_metadata"],
-      resolved.tenant.tenantKey,
-    );
-    await createTableRecord(
-      PERSON_ATTRIBUTES_TAB,
-      {
-        attribute_id: attributeId,
-        person_id: personId,
-        attribute_type: attributeType,
-        value_text: uploaded.fileId,
-        value_json: mediaMetadata,
-        media_metadata: mediaMetadata,
-        label: shouldBePrimary ? "headshot" : label,
-        is_primary: shouldBePrimary ? "TRUE" : "FALSE",
-        sort_order: "0",
-        start_date: effectivePhotoDate,
-        end_date: "",
-        visibility: "family",
-        share_scope: "both_families",
-        share_family_group_key: "",
-        notes: description,
-      },
-      resolved.tenant.tenantKey,
-    );
+    const attributeId = targetAttributeId || buildAttributeId(resolved.tenant.tenantKey, personId, attributeType);
+    if (!targetAttributeId) {
+      await ensureResolvedTabColumns(
+        PERSON_ATTRIBUTES_TAB,
+        ["media_metadata"],
+        resolved.tenant.tenantKey,
+      );
+      await createTableRecord(
+        PERSON_ATTRIBUTES_TAB,
+        {
+          attribute_id: attributeId,
+          person_id: personId,
+          attribute_type: attributeType,
+          value_text: uploaded.fileId,
+          value_json: mediaMetadata,
+          media_metadata: mediaMetadata,
+          label: shouldBePrimary ? "headshot" : label,
+          is_primary: shouldBePrimary ? "TRUE" : "FALSE",
+          sort_order: "0",
+          start_date: effectivePhotoDate,
+          end_date: "",
+          visibility: "family",
+          share_scope: "both_families",
+          share_family_group_key: "",
+          notes: description,
+        },
+        resolved.tenant.tenantKey,
+      );
+    } else {
+      if (!isOciDataSource()) {
+        return NextResponse.json(
+          { error: "unsupported", message: "attribute media attachments require OCI data source" },
+          { status: 400 },
+        );
+      }
+      const targetAttribute = await getAttributeById(resolved.tenant.tenantKey, targetAttributeId);
+      if (!targetAttribute || targetAttribute.entityType !== "person" || targetAttribute.entityId !== personId) {
+        return NextResponse.json({ error: "invalid_payload", message: "attributeId is not valid for this person" }, { status: 400 });
+      }
+    }
 
     if (isOciDataSource()) {
       const mediaId = buildMediaId(uploaded.fileId);
@@ -189,29 +208,31 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         mediaMetadata,
         createdAt: createdAtIso,
       });
-      await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId: personLinkId,
-        mediaId,
-        entityType: "person",
-        entityId: personId,
-        usageType: personUsageType,
-        label: shouldBePrimary ? "headshot" : label,
-        description,
-        photoDate: effectivePhotoDate,
-        isPrimary: shouldBePrimary,
-        sortOrder: 0,
-        mediaMetadata,
-        createdAt: createdAtIso,
-      });
-      if (shouldBePrimary) {
-        await setOciPrimaryMediaLink({
+      if (!targetAttributeId) {
+        await upsertOciMediaLink({
           familyGroupKey: resolved.tenant.tenantKey,
+          linkId: personLinkId,
+          mediaId,
           entityType: "person",
           entityId: personId,
-          usageType: "profile",
-          linkId: personLinkId,
+          usageType: personUsageType,
+          label: shouldBePrimary ? "headshot" : label,
+          description,
+          photoDate: effectivePhotoDate,
+          isPrimary: shouldBePrimary,
+          sortOrder: 0,
+          mediaMetadata,
+          createdAt: createdAtIso,
         });
+        if (shouldBePrimary) {
+          await setOciPrimaryMediaLink({
+            familyGroupKey: resolved.tenant.tenantKey,
+            entityType: "person",
+            entityId: personId,
+            usageType: "profile",
+            linkId: personLinkId,
+          });
+        }
       }
       await upsertOciMediaLink({
         familyGroupKey: resolved.tenant.tenantKey,
@@ -230,7 +251,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       });
     }
 
-    if (shouldBePrimary) {
+    if (!targetAttributeId && shouldBePrimary) {
       await updateTableRecordById(
         PEOPLE_TAB,
         personId,
@@ -247,6 +268,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       fileId: uploaded.fileId,
       isHeadshot: shouldBePrimary,
       attributeType,
+      attributeId,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

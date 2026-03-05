@@ -5,6 +5,7 @@ import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
+import { getAttributeById } from "@/lib/attributes/store";
 import {
   createTableRecord,
   ensureResolvedTabColumns,
@@ -65,6 +66,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
     const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const requestedPrimary = String(formData?.get("isPrimary") ?? "").trim().toLowerCase() === "true";
+    const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
@@ -101,7 +103,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     });
 
     let photoId = buildEntityId("attr", `${resolved.tenant.tenantKey}|${householdId}|${Date.now()}|${uploaded.fileId}`);
-    let shouldBePrimary = requestedPrimary;
+    let shouldBePrimary = !targetAttributeId && requestedPrimary;
     if (isOciDataSource()) {
       const existing = await getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []);
       const existingForHousehold = existing.filter(
@@ -111,7 +113,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
           (row.data.entity_id ?? "").trim() === householdId &&
           normalize(row.data.usage_type) === "gallery",
       );
-      shouldBePrimary = requestedPrimary || existingForHousehold.length === 0;
+      shouldBePrimary = !targetAttributeId && (requestedPrimary || existingForHousehold.length === 0);
       const mediaId = buildMediaId(uploaded.fileId);
       const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "household", householdId, uploaded.fileId, "gallery");
       photoId = linkId;
@@ -125,31 +127,67 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         mediaMetadata,
         createdAt: createdAtIso,
       });
-      await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId,
-        mediaId,
-        entityType: "household",
-        entityId: householdId,
-        usageType: "gallery",
-        label: name || file.name || "photo",
-        description,
-        photoDate: effectivePhotoDate,
-        isPrimary: shouldBePrimary,
-        sortOrder: 0,
-        mediaMetadata,
-        createdAt: createdAtIso,
-      });
-      if (shouldBePrimary) {
-        await setOciPrimaryMediaLink({
+      if (!targetAttributeId) {
+        await upsertOciMediaLink({
           familyGroupKey: resolved.tenant.tenantKey,
+          linkId,
+          mediaId,
           entityType: "household",
           entityId: householdId,
           usageType: "gallery",
-          linkId,
+          label: name || file.name || "photo",
+          description,
+          photoDate: effectivePhotoDate,
+          isPrimary: shouldBePrimary,
+          sortOrder: 0,
+          mediaMetadata,
+          createdAt: createdAtIso,
+        });
+        if (shouldBePrimary) {
+          await setOciPrimaryMediaLink({
+            familyGroupKey: resolved.tenant.tenantKey,
+            entityType: "household",
+            entityId: householdId,
+            usageType: "gallery",
+            linkId,
+          });
+        }
+      }
+      if (targetAttributeId) {
+        const targetAttribute = await getAttributeById(resolved.tenant.tenantKey, targetAttributeId);
+        if (!targetAttribute || targetAttribute.entityType !== "household" || targetAttribute.entityId !== householdId) {
+          return NextResponse.json({ error: "invalid_payload", message: "attributeId is not valid for this household" }, { status: 400 });
+        }
+        const attributeLinkId = buildMediaLinkId(
+          resolved.tenant.tenantKey,
+          "attribute",
+          targetAttributeId,
+          uploaded.fileId,
+          "media",
+        );
+        await upsertOciMediaLink({
+          familyGroupKey: resolved.tenant.tenantKey,
+          linkId: attributeLinkId,
+          mediaId,
+          entityType: "attribute",
+          entityId: targetAttributeId,
+          usageType: "media",
+          label: name || file.name || "photo",
+          description,
+          photoDate: effectivePhotoDate,
+          isPrimary: false,
+          sortOrder: 0,
+          mediaMetadata,
+          createdAt: createdAtIso,
         });
       }
     } else {
+      if (targetAttributeId) {
+        return NextResponse.json(
+          { error: "unsupported", message: "attribute media attachments require OCI data source" },
+          { status: 400 },
+        );
+      }
       await ensureResolvedTabColumns(
         HOUSEHOLD_PHOTOS_TAB,
         ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
@@ -198,6 +236,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       photoId,
       fileId: uploaded.fileId,
       isPrimary: shouldBePrimary,
+      attributeId: targetAttributeId || "",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";
