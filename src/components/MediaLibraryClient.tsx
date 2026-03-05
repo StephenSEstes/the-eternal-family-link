@@ -831,14 +831,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
               </div>
 
               <label style={{ display: "grid", gap: "0.35rem" }}>
-                <span style={{ fontWeight: 600 }}>Attach Targets</span>
-                <input
-                  className="input"
-                  value={entitySearch}
-                  onChange={(e) => setEntitySearch(e.target.value)}
-                  placeholder="Search people or households"
-                  disabled={busy}
-                />
+                <span style={{ fontWeight: 600 }}>Selected Links</span>
               </label>
               <div className="person-chip-row">
                 {selectedPersonIds.map((personId) => (
@@ -867,7 +860,21 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </button>
                   </span>
                 ))}
+                {selectedPersonIds.length === 0 && selectedHouseholdIds.length === 0 ? (
+                  <span className="status-chip status-chip--neutral">None selected</span>
+                ) : null}
               </div>
+
+              <label style={{ display: "grid", gap: "0.35rem", marginTop: "0.2rem" }}>
+                <span style={{ fontWeight: 600 }}>Search to Add Links</span>
+                <input
+                  className="input"
+                  value={entitySearch}
+                  onChange={(e) => setEntitySearch(e.target.value)}
+                  placeholder="Search people or households"
+                  disabled={busy}
+                />
+              </label>
               {entitySearch.trim() ? (
                 <div className="person-typeahead-list">
                   {uploadSearchResults.length > 0 ? (
@@ -927,15 +934,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             Include unlinked Drive files
           </label>
         </div>
-        <label className="label">Filter by Linked To</label>
-        <input
-          className="input"
-          value={linkedFilterQuery}
-          onChange={(e) => setLinkedFilterQuery(e.target.value)}
-          placeholder="Type person or household name"
-          style={{ maxWidth: "420px" }}
-        />
-        <div className="person-chip-row" style={{ marginTop: "0.5rem" }}>
+        <label className="label">Selected Linked Filters</label>
+        <div className="person-chip-row" style={{ marginTop: "0.3rem" }}>
           {linkedFilterPersonIds.map((personId) => (
             <span key={`filter-selected-person-${personId}`} className="person-linked-row">
               <span className="person-linked-main">
@@ -972,7 +972,18 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
               </button>
             </span>
           ))}
+          {linkedFilterPersonIds.length === 0 && linkedFilterHouseholdIds.length === 0 ? (
+            <span className="status-chip status-chip--neutral">No filters selected</span>
+          ) : null}
         </div>
+        <label className="label" style={{ marginTop: "0.55rem" }}>Search to Add Linked Filters</label>
+        <input
+          className="input"
+          value={linkedFilterQuery}
+          onChange={(e) => setLinkedFilterQuery(e.target.value)}
+          placeholder="Type person or household name"
+          style={{ maxWidth: "420px" }}
+        />
         {linkedFilterQuery.trim() ? (
           <div className="person-typeahead-list" style={{ marginTop: "0.45rem", marginBottom: "0.7rem" }}>
             {linkedFilterSearchResults.length > 0 ? (
@@ -1012,7 +1023,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   ) : kind === "audio" ? (
                     <audio src={getPhotoProxyPath(item.fileId, tenantKey)} controls style={{ width: "100%" }} />
                   ) : (
-                    <img src={getPhotoProxyPath(item.fileId, tenantKey)} alt={item.name || item.fileId} style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "8px" }} />
+                    <img
+                      src={getPhotoProxyPath(item.fileId, tenantKey)}
+                      alt={item.name || item.fileId}
+                      style={{ width: "100%", maxHeight: "160px", objectFit: "cover", objectPosition: "top center", borderRadius: "8px" }}
+                    />
                   )}
                 </div>
                 <div style={{ fontSize: "0.85rem", display: "grid", gap: "0.2rem" }}>
@@ -1078,6 +1093,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 </div>
                 <div className="person-photo-tags-card card">
                   <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>
+                  <label className="label">Selected Links</label>
                   <div className="person-association-list">
                     {selectedPhotoAssociations.people.map((item) => (
                       <span key={`editor-person-${item.personId}`} className="person-linked-row">
@@ -1147,7 +1163,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       <span className="status-chip status-chip--neutral">None</span>
                     ) : null}
                   </div>
-                  <label className="label" style={{ marginTop: "0.75rem" }}>Search</label>
+                  <label className="label" style={{ marginTop: "0.75rem" }}>Search to Add Links</label>
                   <input
                     className="input"
                     value={photoTagQuery}

@@ -7,4 +7,4 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-05: Added Media Library chip UX, modal upload flow, in-library edit-photo link management, and load-performance improvements. See `docs/change-summary.md`.
+- 2026-03-05: Updated Media Library selected-link labels and ordering so selected chips appear above search inputs across upload/filter/edit flows. See `docs/change-summary.md`.

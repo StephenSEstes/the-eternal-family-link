@@ -34,6 +34,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (media library selected-links labels and ordering)
+
+- `Change`: Updated Media Library link-selection UX so selected links/chips are shown above search inputs with explicit section labels (`Selected Links` / `Search to Add Links`) across upload modal, library linked-filter controls, and media edit panel.
+- `Type`: UI
+- `Why`: Improve clarity between already-selected links and typeahead lookup results.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Upload modal shows selected link chips above search with clear labels.
+  - Library linked filter shows selected chips above search with clear labels.
+  - Edit Photo panel shows selected links section above search-to-add section.
+  - `npm run lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (media library chip UX + modal upload + linked-photo editor + load performance)
 
 - `Change`: Refined Media Library UX with chip-based typeahead selectors (add via search, remove via `x`) for linked filters and upload targets, moved upload workflow into an `Add Photos` modal, added in-library `Edit Photo` detail panel with linked-to management matching person/household edit flows, and reduced initial load cost by removing duplicate fetch, lowering default load limit, adding optional Drive merge toggle, and adding short-lived API response caching.
