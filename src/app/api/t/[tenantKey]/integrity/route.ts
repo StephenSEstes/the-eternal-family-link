@@ -48,6 +48,48 @@ function normalizeNameKey(value: string) {
     .trim();
 }
 
+function normalizeNamePart(value: string) {
+  const cleaned = value.trim().replace(/[^a-zA-Z\s'-]/g, " ").replace(/\s+/g, " ");
+  if (!cleaned) return "";
+  return cleaned
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function buildHouseholdLabel(wifeLastName: string, husbandLastName: string) {
+  const wife = normalizeNamePart(wifeLastName);
+  const husband = normalizeNamePart(husbandLastName);
+  if (wife && husband) {
+    return `${wife}-${husband} Family`;
+  }
+  if (wife) {
+    return `${wife} Family`;
+  }
+  if (husband) {
+    return `${husband} Family`;
+  }
+  return "Family";
+}
+
+function resolveHouseholdRoles(
+  personA: string,
+  personB: string,
+  peopleById: Map<string, { gender: string }>,
+): { husband: string; wife: string } {
+  const personAGender = (peopleById.get(personA)?.gender ?? "").toLowerCase();
+  const personBGender = (peopleById.get(personB)?.gender ?? "").toLowerCase();
+  if (personAGender === "female" && personBGender === "male") {
+    return { husband: personB, wife: personA };
+  }
+  if (personAGender === "male" && personBGender === "female") {
+    return { husband: personA, wife: personB };
+  }
+  const sorted = [personA, personB].sort();
+  return { husband: sorted[0], wife: sorted[1] };
+}
+
 function pushFinding(
   findings: IntegrityFinding[],
   severity: IntegritySeverity,
@@ -424,6 +466,7 @@ async function runIntegrityAudit(tenantKey: string) {
     userGroupRows,
     personFamilyRows,
     relationshipRows,
+    householdsRows,
     personAttributeRows,
     importantDateRows,
     legacyLocalRows,
@@ -829,6 +872,140 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     createdMissingLinks += 1;
   }
 
+  let repairedSpouseFamilyMembershipRows = 0;
+  let repairedSpouseHouseholdRows = 0;
+  let skippedSpouseHouseholdConflicts = 0;
+  const peopleById = new Map<string, { gender: string; lastName: string }>();
+  for (const row of before.peopleRows) {
+    const personId = normalize(readField(row.data, "person_id"));
+    if (!personId) continue;
+    peopleById.set(personId, {
+      gender: readField(row.data, "gender"),
+      lastName: readField(row.data, "last_name"),
+    });
+  }
+  const enabledGroupsByPerson = new Map<string, Set<string>>();
+  for (const row of before.personFamilyRows) {
+    const personId = normalize(readField(row.data, "person_id"));
+    const groupKey = normalize(readField(row.data, "family_group_key"));
+    if (!personId || !groupKey || !isEnabledLike(readField(row.data, "is_enabled"))) {
+      continue;
+    }
+    const groups = enabledGroupsByPerson.get(personId) ?? new Set<string>();
+    groups.add(groupKey);
+    enabledGroupsByPerson.set(personId, groups);
+  }
+  const parentIdsByChild = new Map<string, Set<string>>();
+  const spousePairs = new Map<string, { personA: string; personB: string }>();
+  for (const row of before.relationshipRows) {
+    const relType = normalize(readField(row.data, "rel_type"));
+    const fromPersonId = normalize(readField(row.data, "from_person_id"));
+    const toPersonId = normalize(readField(row.data, "to_person_id"));
+    if (!fromPersonId || !toPersonId || fromPersonId === toPersonId) {
+      continue;
+    }
+    if (relType === "parent") {
+      const parents = parentIdsByChild.get(toPersonId) ?? new Set<string>();
+      parents.add(fromPersonId);
+      parentIdsByChild.set(toPersonId, parents);
+      continue;
+    }
+    if (relType !== "spouse") {
+      continue;
+    }
+    if (!before.peopleIds.has(fromPersonId) && !before.peopleIds.has(toPersonId)) {
+      continue;
+    }
+    const sorted = [fromPersonId, toPersonId].sort();
+    const pairKey = sorted.join("|");
+    if (!spousePairs.has(pairKey)) {
+      spousePairs.set(pairKey, { personA: sorted[0], personB: sorted[1] });
+    }
+  }
+  const householdPairByGroup = new Map<string, Set<string>>();
+  const occupiedPartnersByGroup = new Map<string, Map<string, string>>();
+  for (const row of before.householdsRows) {
+    const familyKey = normalize(readField(row.data, "family_group_key"));
+    const husband = normalize(readField(row.data, "husband_person_id"));
+    const wife = normalize(readField(row.data, "wife_person_id"));
+    if (!familyKey || !husband || !wife) continue;
+    const pairKey = [husband, wife].sort().join("|");
+    const pairs = householdPairByGroup.get(familyKey) ?? new Set<string>();
+    pairs.add(pairKey);
+    householdPairByGroup.set(familyKey, pairs);
+    const occupants = occupiedPartnersByGroup.get(familyKey) ?? new Map<string, string>();
+    occupants.set(husband, pairKey);
+    occupants.set(wife, pairKey);
+    occupiedPartnersByGroup.set(familyKey, occupants);
+  }
+  for (const pair of spousePairs.values()) {
+    const targetGroups = new Set<string>();
+    const parentIdsA = parentIdsByChild.get(pair.personA) ?? new Set<string>();
+    const parentIdsB = parentIdsByChild.get(pair.personB) ?? new Set<string>();
+    [...parentIdsA, ...parentIdsB].forEach((parentId) => {
+      const parentGroups = enabledGroupsByPerson.get(parentId);
+      if (!parentGroups) return;
+      parentGroups.forEach((groupKey) => targetGroups.add(groupKey));
+    });
+    if (targetGroups.size === 0) {
+      continue;
+    }
+    for (const groupKey of targetGroups) {
+      const personAEnabledGroups = enabledGroupsByPerson.get(pair.personA) ?? new Set<string>();
+      if (!personAEnabledGroups.has(groupKey)) {
+        await createTableRecord("PersonFamilyGroups", {
+          person_id: pair.personA,
+          family_group_key: groupKey,
+          is_enabled: "TRUE",
+        });
+        personAEnabledGroups.add(groupKey);
+        enabledGroupsByPerson.set(pair.personA, personAEnabledGroups);
+        repairedSpouseFamilyMembershipRows += 1;
+      }
+      const personBEnabledGroups = enabledGroupsByPerson.get(pair.personB) ?? new Set<string>();
+      if (!personBEnabledGroups.has(groupKey)) {
+        await createTableRecord("PersonFamilyGroups", {
+          person_id: pair.personB,
+          family_group_key: groupKey,
+          is_enabled: "TRUE",
+        });
+        personBEnabledGroups.add(groupKey);
+        enabledGroupsByPerson.set(pair.personB, personBEnabledGroups);
+        repairedSpouseFamilyMembershipRows += 1;
+      }
+
+      const pairKey = [pair.personA, pair.personB].sort().join("|");
+      const existingPairs = householdPairByGroup.get(groupKey) ?? new Set<string>();
+      if (existingPairs.has(pairKey)) {
+        continue;
+      }
+      const occupants = occupiedPartnersByGroup.get(groupKey) ?? new Map<string, string>();
+      const occupiedA = occupants.get(pair.personA);
+      const occupiedB = occupants.get(pair.personB);
+      if ((occupiedA && occupiedA !== pairKey) || (occupiedB && occupiedB !== pairKey)) {
+        skippedSpouseHouseholdConflicts += 1;
+        continue;
+      }
+      const roles = resolveHouseholdRoles(pair.personA, pair.personB, peopleById);
+      const wifeLastName = (peopleById.get(roles.wife)?.lastName ?? "").trim();
+      const husbandLastName = (peopleById.get(roles.husband)?.lastName ?? "").trim();
+      const householdId = buildEntityId("h", `${groupKey}|${pairKey}`);
+      await createTableRecord("Households", {
+        family_group_key: groupKey,
+        household_id: householdId,
+        husband_person_id: roles.husband,
+        wife_person_id: roles.wife,
+        label: buildHouseholdLabel(wifeLastName, husbandLastName),
+      });
+      existingPairs.add(pairKey);
+      householdPairByGroup.set(groupKey, existingPairs);
+      occupants.set(pair.personA, pairKey);
+      occupants.set(pair.personB, pairKey);
+      occupiedPartnersByGroup.set(groupKey, occupants);
+      repairedSpouseHouseholdRows += 1;
+    }
+  }
+
   let deletedLegacyLocalUsersRows = 0;
   if (before.legacyLocalRows.length > 0) {
     const localUsersTab = await resolveTenantScopedTabName("LocalUsers", familyGroupKey);
@@ -879,6 +1056,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       deletedDuplicateUserAccessRows,
       deletedOrphanUserFamilyGroupRows,
       createdMissingLinks,
+      repairedSpouseFamilyMembershipRows,
+      repairedSpouseHouseholdRows,
+      skippedSpouseHouseholdConflicts,
       deletedLegacyLocalUsersRows,
       deletedDuplicatePeopleRows,
       deletedDuplicatePeopleMembershipRows,

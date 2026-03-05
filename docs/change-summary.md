@@ -34,6 +34,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (spouse family-group propagation + repair backfill)
+
+- `Change`: Fixed spouse add/save flow to propagate spouse membership and household rows into parent-derived family groups, and extended integrity repair to backfill missing spouse family-group/household associations for existing data.
+- `Type`: API, Data
+- `Why`: Root cause was family-group scoping in spouse builder writes; spouse and household records were only created in the active family group and not propagated to both parents' family groups.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+- `Data Changes`:
+  - No schema changes.
+  - Integrity repair now creates missing `PersonFamilyGroups` and `Households` rows for spouse pairs where parent-derived family-group propagation was missing.
+- `Verify`:
+  - Add spouse from person modal and confirm spouse + household appear in both parent family groups.
+  - Run integrity repair and confirm response includes:
+    - `repairedSpouseFamilyMembershipRows`
+    - `repairedSpouseHouseholdRows`
+    - `skippedSpouseHouseholdConflicts`
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (household photo tagging parity + attribute media link management)
 
 - `Change`: Added full household photo-detail link management (search/add/remove linked people and households), enabled linking an existing media file to additional households via new API route, and expanded person media-detail/tagging flow to include attribute media (`photo/video/audio/media`) not just photo rows.
