@@ -31,6 +31,58 @@ function isOciDataSource() {
   return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
+const MEDIA_SEARCH_CACHE_TTL_MS = 20_000;
+const MEDIA_SEARCH_CACHE_MAX_KEYS = 200;
+const mediaSearchCache = new Map<string, { expiresAt: number; payload: unknown }>();
+
+function makeMediaSearchCacheKey(input: {
+  tenantKey: string;
+  query: string;
+  limit: number;
+  includeDrive: boolean;
+  oci: boolean;
+}) {
+  return [
+    norm(input.tenantKey),
+    input.query.trim().toLowerCase(),
+    String(input.limit),
+    input.includeDrive ? "1" : "0",
+    input.oci ? "oci" : "sheets",
+  ].join("|");
+}
+
+function readCachedMediaSearch(key: string) {
+  const hit = mediaSearchCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    mediaSearchCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writeCachedMediaSearch(key: string, payload: unknown) {
+  const now = Date.now();
+  mediaSearchCache.set(key, {
+    payload,
+    expiresAt: now + MEDIA_SEARCH_CACHE_TTL_MS,
+  });
+  if (mediaSearchCache.size <= MEDIA_SEARCH_CACHE_MAX_KEYS) return;
+  for (const [entryKey, entry] of mediaSearchCache.entries()) {
+    if (entry.expiresAt <= now) {
+      mediaSearchCache.delete(entryKey);
+    }
+  }
+  if (mediaSearchCache.size <= MEDIA_SEARCH_CACHE_MAX_KEYS) return;
+  const overflow = mediaSearchCache.size - MEDIA_SEARCH_CACHE_MAX_KEYS;
+  let removed = 0;
+  for (const entryKey of mediaSearchCache.keys()) {
+    mediaSearchCache.delete(entryKey);
+    removed += 1;
+    if (removed >= overflow) break;
+  }
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
   const { tenantKey } = await params;
   const resolved = await requireTenantAccess(tenantKey);
@@ -44,14 +96,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   const rawLimit = Number(url.searchParams.get("limit") ?? "200");
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(5000, Math.trunc(rawLimit))) : 200;
   const includeDrive = ["1", "true", "yes"].includes(norm(url.searchParams.get("includeDrive") ?? ""));
+  const oci = isOciDataSource();
+  const cacheKey = makeMediaSearchCacheKey({
+    tenantKey: resolved.tenant.tenantKey,
+    query: q,
+    limit,
+    includeDrive,
+    oci,
+  });
+  const cached = readCachedMediaSearch(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
 
   const [people, attributes, householdRows, householdPhotoRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
     getPeople(resolved.tenant.tenantKey),
     getPersonAttributes(resolved.tenant.tenantKey),
     getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []),
     getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []),
-    isOciDataSource() ? getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
-    isOciDataSource() ? getTableRecords("MediaAssets", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
+    oci ? getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
+    oci ? getTableRecords("MediaAssets", resolved.tenant.tenantKey).catch(() => []) : Promise.resolve([]),
   ]);
 
   const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
@@ -80,7 +144,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     return catalog.get(key)!;
   };
 
-  if (isOciDataSource()) {
+  if (oci) {
     const mediaById = new Map(
       mediaAssetRows.map((row) => [readCell(row.data, "media_id"), readCell(row.data, "file_id")] as const),
     );
@@ -221,11 +285,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     .sort((a, b) => a.name.localeCompare(b.name) || a.fileId.localeCompare(b.fileId))
     .slice(0, limit);
 
-  return NextResponse.json({
+  const payload = {
     tenantKey: resolved.tenant.tenantKey,
     query: q,
     limit,
     count: matches.length,
     items: matches,
-  });
+  };
+  writeCachedMediaSearch(cacheKey, payload);
+  return NextResponse.json(payload);
 }

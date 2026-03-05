@@ -4,22 +4,10 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
-- [ ] Eliminate data-as-identifier usage across app and schema
-  Priority: High
-  Est date: 2026-03-08
-  Desc: Audit and replace all mutable/data-derived identifiers (email/name/date/composites) with stable opaque IDs, including access/auth joins and migration compatibility steps.
-- [ ] Remove tenant/tenancy terminology from codebase (phased migration)
-  Priority: High
-  Est date: 2026-03-22
-  Desc: Replace tenant/tenancy naming with family-group terminology across code, routes, API payloads, session claims, and docs using a backward-compatible phased migration plan.
 - [ ] Multi-photo uploads in photo flow
   Priority: Med
   Est date: 2026-03-03
   Desc: Allow selecting and uploading multiple photos in one action, with per-file progress, validation, and error handling.
-- [ ] Workflow for adding new attributes
-  Priority: High
-  Est date: 2026-03-05
-  Desc: Design a guided admin workflow to add additional attributes quickly, including field type, validation rules, defaults, and visibility options.
 - [ ] AI summary of person profile
   Priority: Med
   Est date: 2026-03-10
@@ -44,22 +32,10 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-03-27
   Desc: Define and implement household-level attributes and editing workflow.
-- [ ] Develop Household as an entity with attributes and pictures
-  Priority: High
-  Est date: 2026-03-28
-  Desc: Add first-class household entity support including profile attributes, photo storage, and household media management UI.
-- [ ] Develop Family attributes
-  Priority: High
-  Est date: 2026-03-29
-  Desc: Define and implement family-group-level attributes and editing workflow.
 - [ ] Add primary contact attributes (phone, email, address)
   Priority: Med
   Est date: 2026-03-30
   Desc: Implement primary attribute flags and UI behavior for phone, email, and address so one value can be designated as primary per type.
-- [ ] Develop delete person workflow
-  Priority: High
-  Est date: 2026-04-02
-  Desc: Implement safe delete flow for a person with dependency checks, confirmations, and relationship cleanup rules.
 - [ ] Develop user invitation flow with launch icon support
   Priority: Med
   Est date: 2026-04-05
@@ -78,6 +54,12 @@ I will update this list as we add, complete, or remove work.
 - [ ] Add deployment and ops hardening tasks
 
 ## Completed
+- [x] Eliminate data-as-identifier usage across app and schema
+- [x] Remove tenant/tenancy terminology from codebase (phased migration)
+- [x] Workflow for adding new attributes
+- [x] Develop Household as an entity with attributes and pictures
+- [x] Develop Family attributes
+- [x] Develop delete person workflow
 - [x] Create project TODO tracker (`TODO.md`)
 - [x] OCI migration readiness + first load milestone (OCI preflight, schema bootstrap, Sheets->OCI migration tooling, initial data load verification)
 - [x] Simplify admin screen with sub-tabs under each main admin tab

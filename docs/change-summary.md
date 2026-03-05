@@ -34,6 +34,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-05 (media library chip UX + modal upload + linked-photo editor + load performance)
+
+- `Change`: Refined Media Library UX with chip-based typeahead selectors (add via search, remove via `x`) for linked filters and upload targets, moved upload workflow into an `Add Photos` modal, added in-library `Edit Photo` detail panel with linked-to management matching person/household edit flows, and reduced initial load cost by removing duplicate fetch, lowering default load limit, adding optional Drive merge toggle, and adding short-lived API response caching.
+- `Type`: UI, API, Performance
+- `Why`: Root cause was a combination of heavy initial media-load query behavior and fragmented media-link management UX compared to person/household photo editors.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/app/globals.css`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Media screen shows `Add Photos` button and opens upload modal.
+  - Upload targets and linked filters use chip-style typeahead + removable `x` tokens.
+  - Media card `Edit Photo` opens detail panel and supports add/remove people/household links.
+  - Initial Media load starts at 100 items and does not double-fetch.
+  - `Include unlinked Drive files` toggle controls Drive-merge behavior.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (media library family-scope fallback + orphaned media link integrity tools)
 
 - `Change`: Added family-scoped media search enhancements and dedicated orphan-media integrity actions. Media search now supports configurable limits and optional Drive-folder merge mode for media library views; Settings now includes separate `Scan Orphaned Media Links` and `Repair Orphaned Media Links` actions that audit/repair missing OCI `media_assets`/`media_links` rows from existing person/attribute/household references.

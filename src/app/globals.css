@@ -1768,7 +1768,8 @@ main,
 }
 
 .person-association-list {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -1780,15 +1781,16 @@ main,
 }
 
 .person-linked-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.55rem;
-  min-height: 42px;
+  min-height: 34px;
+  max-width: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 999px;
   background: #fff;
-  padding: 0.45rem 0.6rem;
+  padding: 0.25rem 0.6rem;
 }
 
 .person-linked-main {
@@ -1804,6 +1806,7 @@ main,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 220px;
 }
 
 .person-linked-icon {
@@ -1859,22 +1862,26 @@ main,
 
 .person-typeahead-list {
   margin-top: 0.45rem;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
   padding: 0.45rem;
+  max-height: 210px;
+  overflow: auto;
 }
 
 .person-typeahead-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 32px;
+  max-width: 100%;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 999px;
   background: #fff;
-  padding: 0.35rem 0.55rem;
+  padding: 0.25rem 0.55rem;
   text-align: left;
 }
 
