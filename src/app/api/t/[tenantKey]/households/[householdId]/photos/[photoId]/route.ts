@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { deleteTableRows, getTableRecords } from "@/lib/google/sheets";
+import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string; photoId: string }>;
@@ -8,11 +9,33 @@ type RouteProps = {
 
 const HOUSEHOLD_PHOTOS_TAB = "HouseholdPhotos";
 
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
+
 export async function DELETE(_: Request, { params }: RouteProps) {
   const { tenantKey, householdId, photoId } = await params;
   const resolved = await requireTenantAdmin(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
+  }
+
+  if (isOciDataSource()) {
+    const links = await getOciMediaLinksForEntity({
+      familyGroupKey: resolved.tenant.tenantKey,
+      entityType: "household",
+      entityId: householdId,
+      usageType: "gallery",
+    });
+    const exists = links.some((item) => item.linkId === photoId);
+    if (!exists) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const deleted = await deleteOciMediaLink(photoId);
+    if (!deleted) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, deleted });
   }
 
   const rows = await getTableRecords(HOUSEHOLD_PHOTOS_TAB, resolved.tenant.tenantKey).catch(() => []);

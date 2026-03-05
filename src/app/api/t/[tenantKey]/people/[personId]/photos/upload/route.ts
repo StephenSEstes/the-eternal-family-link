@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { buildEntityId } from "@/lib/entity-id";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
+import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import {
   createTableRecord,
   ensureResolvedTabColumns,
@@ -28,6 +30,10 @@ function normalizeDateFromTimestamp(raw: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
   return parsed.toISOString().slice(0, 10);
+}
+
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
 export async function POST(request: Request, { params }: UploadRouteProps) {
@@ -131,6 +137,75 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       },
       resolved.tenant.tenantKey,
     );
+
+    if (isOciDataSource()) {
+      const mediaId = buildMediaId(uploaded.fileId);
+      const personUsageType = shouldBePrimary ? "profile" : "gallery";
+      const personLinkId = buildMediaLinkId(
+        resolved.tenant.tenantKey,
+        "person",
+        personId,
+        uploaded.fileId,
+        personUsageType,
+      );
+      const attributeLinkId = buildMediaLinkId(
+        resolved.tenant.tenantKey,
+        "attribute",
+        attributeId,
+        uploaded.fileId,
+        "photo",
+      );
+
+      await upsertOciMediaAsset({
+        mediaId,
+        fileId: uploaded.fileId,
+        storageProvider: "gdrive",
+        mimeType: file.type || "application/octet-stream",
+        fileName: file.name || `${personId}-${Date.now()}.jpg`,
+        fileSizeBytes: String(bytes.length),
+        mediaMetadata,
+        createdAt: createdAtIso,
+      });
+      await upsertOciMediaLink({
+        familyGroupKey: resolved.tenant.tenantKey,
+        linkId: personLinkId,
+        mediaId,
+        entityType: "person",
+        entityId: personId,
+        usageType: personUsageType,
+        label: shouldBePrimary ? "headshot" : label,
+        description,
+        photoDate: effectivePhotoDate,
+        isPrimary: shouldBePrimary,
+        sortOrder: 0,
+        mediaMetadata,
+        createdAt: createdAtIso,
+      });
+      if (shouldBePrimary) {
+        await setOciPrimaryMediaLink({
+          familyGroupKey: resolved.tenant.tenantKey,
+          entityType: "person",
+          entityId: personId,
+          usageType: "profile",
+          linkId: personLinkId,
+        });
+      }
+      await upsertOciMediaLink({
+        familyGroupKey: resolved.tenant.tenantKey,
+        linkId: attributeLinkId,
+        mediaId,
+        entityType: "attribute",
+        entityId: attributeId,
+        usageType: "photo",
+        label: shouldBePrimary ? "headshot" : label,
+        description,
+        photoDate: effectivePhotoDate,
+        isPrimary: shouldBePrimary,
+        sortOrder: 0,
+        mediaMetadata,
+        createdAt: createdAtIso,
+      });
+    }
 
     if (shouldBePrimary) {
       await updateTableRecordById(

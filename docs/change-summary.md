@@ -13,6 +13,36 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-05 (unified media schema + one-pass non-destructive migration tooling)
+
+- `Change`: Added unified OCI media tables (`media_assets`, `media_links`), API integration for household/person/attribute photo flows in OCI mode, and one-pass backfill/parity scripts that keep legacy tables intact.
+- `Type`: Schema, API, Data, Infra
+- `Why`: Photo data was split across multiple legacy tables/columns and did not support a consistent entity-link model for people, households, and attributes.
+- `Files`:
+  - `oci-schema.sql`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/media/ids.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `scripts/oci-media-backfill.cjs`
+  - `scripts/oci-media-parity.cjs`
+  - `package.json`
+- `Data Changes`:
+  - Added new tables/indexes for unified media model.
+  - Added migration script to backfill from legacy photo locations into `media_*`.
+  - Kept all legacy tables/columns unchanged for rollback and parity verification.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - `npm run media:migrate:backfill` completes.
+  - `npm run media:migrate:parity` reports `Overall parity: PASS`.
+- `Rollback Notes`: Revert code deployment and continue using legacy photo tables; no destructive legacy-table writes were performed by this migration.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-04 (tree relationship lines restore: safe fallback on tenant-scoped read)
 
 - `Change`: Restored Tree relationship rendering robustness by adding a safe fallback in relationship reads: if tenant-scoped OCI relationship load fails or returns zero rows, fall back to global relationship rows and rely on existing in-family filtering.

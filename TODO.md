@@ -8,6 +8,10 @@ I will update this list as we add, complete, or remove work.
   Priority: High
   Est date: 2026-03-08
   Desc: Audit and replace all mutable/data-derived identifiers (email/name/date/composites) with stable opaque IDs, including access/auth joins and migration compatibility steps.
+- [ ] Remove tenant/tenancy terminology from codebase (phased migration)
+  Priority: High
+  Est date: 2026-03-22
+  Desc: Replace tenant/tenancy naming with family-group terminology across code, routes, API payloads, session claims, and docs using a backward-compatible phased migration plan.
 - [ ] Multi-photo uploads in photo flow
   Priority: Med
   Est date: 2026-03-03

@@ -132,6 +132,28 @@ const TABLES: Record<string, TableConfig> = {
     tableName: "household_photos",
     headers: ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
   },
+  MediaAssets: {
+    tableName: "media_assets",
+    headers: ["media_id", "file_id", "storage_provider", "mime_type", "file_name", "file_size_bytes", "media_metadata", "created_at"],
+  },
+  MediaLinks: {
+    tableName: "media_links",
+    headers: [
+      "family_group_key",
+      "link_id",
+      "media_id",
+      "entity_type",
+      "entity_id",
+      "usage_type",
+      "label",
+      "description",
+      "photo_date",
+      "is_primary",
+      "sort_order",
+      "media_metadata",
+      "created_at",
+    ],
+  },
   ImportantDates: {
     tableName: "important_dates",
     headers: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
@@ -229,7 +251,7 @@ function resolveIdColumn(headers: string[], idColumn?: string): string {
     const match = headers.find((h) => normalizeHeader(h) === normalizeHeader(idColumn));
     if (match) return match;
   }
-  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id"]) {
+  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id"]) {
     const match = headers.find((h) => normalizeHeader(h) === fallback);
     if (match) return match;
   }
@@ -457,6 +479,23 @@ type OciLocalUserRow = {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+};
+
+type OciMediaLinkRow = {
+  familyGroupKey: string;
+  linkId: string;
+  mediaId: string;
+  entityType: string;
+  entityId: string;
+  usageType: string;
+  fileId: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  mediaMetadata: string;
+  createdAt: string;
 };
 
 function enabledExpr(column: string) {
@@ -797,5 +836,302 @@ export async function upsertOciPersonFamilyGroupMembership(
     );
     await connection.commit();
     return "created";
+  });
+}
+
+export async function upsertOciMediaAsset(input: {
+  mediaId: string;
+  fileId: string;
+  storageProvider?: string;
+  mimeType?: string;
+  fileName?: string;
+  fileSizeBytes?: string;
+  mediaMetadata?: string;
+  createdAt?: string;
+}) {
+  const mediaId = input.mediaId.trim();
+  const fileId = input.fileId.trim();
+  if (!mediaId || !fileId) {
+    throw new Error("media_id and file_id are required");
+  }
+  return withConnection(async (connection) => {
+    await connection.execute(
+      `MERGE INTO media_assets t
+       USING (
+         SELECT :mediaId AS media_id,
+                :fileId AS file_id,
+                :storageProvider AS storage_provider,
+                :mimeType AS mime_type,
+                :fileName AS file_name,
+                :fileSizeBytes AS file_size_bytes,
+                :mediaMetadata AS media_metadata,
+                :createdAt AS created_at
+         FROM dual
+       ) s
+       ON (TRIM(t.media_id) = TRIM(s.media_id))
+       WHEN MATCHED THEN UPDATE SET
+         t.file_id = s.file_id,
+         t.storage_provider = s.storage_provider,
+         t.mime_type = s.mime_type,
+         t.file_name = s.file_name,
+         t.file_size_bytes = s.file_size_bytes,
+         t.media_metadata = s.media_metadata,
+         t.created_at = s.created_at
+       WHEN NOT MATCHED THEN INSERT (
+         media_id,
+         file_id,
+         storage_provider,
+         mime_type,
+         file_name,
+         file_size_bytes,
+         media_metadata,
+         created_at
+       ) VALUES (
+         s.media_id,
+         s.file_id,
+         s.storage_provider,
+         s.mime_type,
+         s.file_name,
+         s.file_size_bytes,
+         s.media_metadata,
+         s.created_at
+       )`,
+      {
+        mediaId,
+        fileId,
+        storageProvider: (input.storageProvider ?? "gdrive").trim(),
+        mimeType: (input.mimeType ?? "").trim(),
+        fileName: (input.fileName ?? "").trim(),
+        fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
+        mediaMetadata: (input.mediaMetadata ?? "").trim(),
+        createdAt: (input.createdAt ?? "").trim(),
+      },
+      { autoCommit: true },
+    );
+  });
+}
+
+export async function upsertOciMediaLink(input: {
+  familyGroupKey: string;
+  linkId: string;
+  mediaId: string;
+  entityType: "person" | "household" | "attribute";
+  entityId: string;
+  usageType?: string;
+  label?: string;
+  description?: string;
+  photoDate?: string;
+  isPrimary?: boolean;
+  sortOrder?: number;
+  mediaMetadata?: string;
+  createdAt?: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const linkId = input.linkId.trim();
+  const mediaId = input.mediaId.trim();
+  const entityId = input.entityId.trim();
+  if (!familyGroupKey || !linkId || !mediaId || !entityId) {
+    throw new Error("family_group_key, link_id, media_id, and entity_id are required");
+  }
+  return withConnection(async (connection) => {
+    await connection.execute(
+      `MERGE INTO media_links t
+       USING (
+         SELECT :familyGroupKey AS family_group_key,
+                :linkId AS link_id,
+                :mediaId AS media_id,
+                :entityType AS entity_type,
+                :entityId AS entity_id,
+                :usageType AS usage_type,
+                :label AS label,
+                :description AS description,
+                :photoDate AS photo_date,
+                :isPrimary AS is_primary,
+                :sortOrder AS sort_order,
+                :mediaMetadata AS media_metadata,
+                :createdAt AS created_at
+         FROM dual
+       ) s
+       ON (TRIM(t.link_id) = TRIM(s.link_id))
+       WHEN MATCHED THEN UPDATE SET
+         t.family_group_key = s.family_group_key,
+         t.media_id = s.media_id,
+         t.entity_type = s.entity_type,
+         t.entity_id = s.entity_id,
+         t.usage_type = s.usage_type,
+         t.label = s.label,
+         t.description = s.description,
+         t.photo_date = s.photo_date,
+         t.is_primary = s.is_primary,
+         t.sort_order = s.sort_order,
+         t.media_metadata = s.media_metadata,
+         t.created_at = s.created_at
+       WHEN NOT MATCHED THEN INSERT (
+         family_group_key,
+         link_id,
+         media_id,
+         entity_type,
+         entity_id,
+         usage_type,
+         label,
+         description,
+         photo_date,
+         is_primary,
+         sort_order,
+         media_metadata,
+         created_at
+       ) VALUES (
+         s.family_group_key,
+         s.link_id,
+         s.media_id,
+         s.entity_type,
+         s.entity_id,
+         s.usage_type,
+         s.label,
+         s.description,
+         s.photo_date,
+         s.is_primary,
+         s.sort_order,
+         s.media_metadata,
+         s.created_at
+       )`,
+      {
+        familyGroupKey,
+        linkId,
+        mediaId,
+        entityType: input.entityType,
+        entityId,
+        usageType: (input.usageType ?? "").trim(),
+        label: (input.label ?? "").trim(),
+        description: (input.description ?? "").trim(),
+        photoDate: (input.photoDate ?? "").trim(),
+        isPrimary: input.isPrimary ? "TRUE" : "FALSE",
+        sortOrder: String(input.sortOrder ?? 0),
+        mediaMetadata: (input.mediaMetadata ?? "").trim(),
+        createdAt: (input.createdAt ?? "").trim(),
+      },
+      { autoCommit: true },
+    );
+  });
+}
+
+export async function setOciPrimaryMediaLink(input: {
+  familyGroupKey: string;
+  entityType: "person" | "household" | "attribute";
+  entityId: string;
+  usageType?: string;
+  linkId: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const entityType = input.entityType;
+  const entityId = input.entityId.trim();
+  const usageType = (input.usageType ?? "").trim();
+  const linkId = input.linkId.trim();
+  if (!familyGroupKey || !entityId || !linkId) {
+    throw new Error("family_group_key, entity_id and link_id are required");
+  }
+  return withConnection(async (connection) => {
+    await connection.execute(
+      `UPDATE media_links
+       SET is_primary = CASE
+         WHEN TRIM(link_id) = :linkId THEN 'TRUE'
+         ELSE 'FALSE'
+       END
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND LOWER(TRIM(entity_type)) = :entityType
+         AND TRIM(entity_id) = :entityId
+         AND LOWER(TRIM(NVL(usage_type, ''))) = :usageType`,
+      {
+        linkId,
+        familyGroupKey,
+        entityType,
+        entityId,
+        usageType: usageType.toLowerCase(),
+      },
+      { autoCommit: true },
+    );
+  });
+}
+
+export async function getOciMediaLinksForEntity(input: {
+  familyGroupKey: string;
+  entityType: "person" | "household" | "attribute";
+  entityId: string;
+  usageType?: string;
+}): Promise<OciMediaLinkRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const entityType = input.entityType;
+  const entityId = input.entityId.trim();
+  const usageType = (input.usageType ?? "").trim().toLowerCase();
+  if (!familyGroupKey || !entityId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const usageClause = usageType ? "AND LOWER(TRIM(NVL(l.usage_type, ''))) = :usageType" : "";
+    const result = await connection.execute(
+      `SELECT
+         l.family_group_key,
+         l.link_id,
+         l.media_id,
+         l.entity_type,
+         l.entity_id,
+         l.usage_type,
+         a.file_id,
+         l.label,
+         l.description,
+         l.photo_date,
+         l.is_primary,
+         l.sort_order,
+         COALESCE(NULLIF(TRIM(l.media_metadata), ''), a.media_metadata) AS media_metadata,
+         l.created_at
+       FROM media_links l
+       INNER JOIN media_assets a
+         ON TRIM(a.media_id) = TRIM(l.media_id)
+       WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
+         AND LOWER(TRIM(l.entity_type)) = :entityType
+         AND TRIM(l.entity_id) = :entityId
+         ${usageClause}
+       ORDER BY
+         CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
+         TO_NUMBER(NVL(NULLIF(TRIM(l.sort_order), ''), '0')),
+         l.created_at,
+         l.link_id`,
+      usageType
+        ? { familyGroupKey, entityType, entityId, usageType }
+        : { familyGroupKey, entityType, entityId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+      linkId: fromDbValue(row.LINK_ID),
+      mediaId: fromDbValue(row.MEDIA_ID),
+      entityType: fromDbValue(row.ENTITY_TYPE),
+      entityId: fromDbValue(row.ENTITY_ID),
+      usageType: fromDbValue(row.USAGE_TYPE),
+      fileId: fromDbValue(row.FILE_ID),
+      label: fromDbValue(row.LABEL),
+      description: fromDbValue(row.DESCRIPTION),
+      photoDate: fromDbValue(row.PHOTO_DATE),
+      isPrimary: fromDbValue(row.IS_PRIMARY).trim().toLowerCase() === "true",
+      sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
+      mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+      createdAt: fromDbValue(row.CREATED_AT),
+    }));
+  });
+}
+
+export async function deleteOciMediaLink(linkId: string) {
+  const normalized = linkId.trim();
+  if (!normalized) {
+    return 0;
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `DELETE FROM media_links WHERE TRIM(link_id) = :linkId`,
+      { linkId: normalized },
+      { autoCommit: true },
+    );
+    return result.rowsAffected ?? 0;
   });
 }

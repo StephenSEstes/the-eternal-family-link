@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
+import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { deleteOciMediaLink, getOciMediaLinksForEntity, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import {
   deleteTableRecordById,
   getPrimaryPhotoFileIdFromAttributes,
@@ -15,6 +17,10 @@ import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes"
 type PersonAttributeItemRouteProps = {
   params: Promise<{ tenantKey: string; personId: string; attributeId: string }>;
 };
+
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
+}
 
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string, keepAttributeId: string) {
   const current = await getPersonAttributes(tenantKey, personId);
@@ -103,6 +109,51 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  if (isOciDataSource() && (existing.attributeType === "photo" || nextType === "photo")) {
+    const existingLinks = await getOciMediaLinksForEntity({
+      familyGroupKey: resolved.tenant.tenantKey,
+      entityType: "attribute",
+      entityId: attributeId,
+      usageType: "photo",
+    });
+    await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
+
+    const nextValueText = (payload.value_text ?? existing.valueText).trim();
+    if (nextType === "photo" && nextValueText) {
+      const mediaId = buildMediaId(nextValueText);
+      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, nextValueText, "photo");
+      const nextLabel = payload.label ?? existing.label;
+      const nextDescription = payload.notes ?? existing.notes;
+      const nextPhotoDate = payload.start_date ?? existing.startDate;
+      const nextSortOrderRaw = payload.sort_order ?? String(existing.sortOrder);
+      const nextSortOrder = Number.parseInt(nextSortOrderRaw, 10) || 0;
+      const nextMediaMetadata = payload.value_json ?? existing.valueJson;
+      await upsertOciMediaAsset({
+        mediaId,
+        fileId: nextValueText,
+        storageProvider: "gdrive",
+        mediaMetadata: nextMediaMetadata,
+        createdAt: new Date().toISOString(),
+      });
+      const nextIsPrimaryRaw = payload.is_primary ?? (existing.isPrimary ? "TRUE" : "FALSE");
+      await upsertOciMediaLink({
+        familyGroupKey: resolved.tenant.tenantKey,
+        linkId,
+        mediaId,
+        entityType: "attribute",
+        entityId: attributeId,
+        usageType: "photo",
+        label: nextLabel,
+        description: nextDescription,
+        photoDate: nextPhotoDate,
+        isPrimary: nextIsPrimaryRaw.trim().toLowerCase() === "true",
+        sortOrder: nextSortOrder,
+        mediaMetadata: nextMediaMetadata,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
   if (existing.attributeType === "photo" || nextType === "photo") {
     const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
     await updateTableRecordById(
@@ -143,6 +194,16 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
   );
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  if (isOciDataSource() && existing.attributeType === "photo") {
+    const existingLinks = await getOciMediaLinksForEntity({
+      familyGroupKey: resolved.tenant.tenantKey,
+      entityType: "attribute",
+      entityId: attributeId,
+      usageType: "photo",
+    });
+    await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
   }
 
   if (existing.attributeType === "photo") {

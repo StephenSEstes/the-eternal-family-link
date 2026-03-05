@@ -225,6 +225,55 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE media_assets (
+      media_id VARCHAR2(128 CHAR) NOT NULL,
+      file_id VARCHAR2(512 CHAR) NOT NULL,
+      storage_provider VARCHAR2(64 CHAR),
+      mime_type VARCHAR2(256 CHAR),
+      file_name VARCHAR2(512 CHAR),
+      file_size_bytes VARCHAR2(32 CHAR),
+      media_metadata VARCHAR2(4000 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_media_assets PRIMARY KEY (media_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE media_links (
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      link_id VARCHAR2(128 CHAR) NOT NULL,
+      media_id VARCHAR2(128 CHAR) NOT NULL,
+      entity_type VARCHAR2(64 CHAR) NOT NULL,
+      entity_id VARCHAR2(128 CHAR) NOT NULL,
+      usage_type VARCHAR2(64 CHAR),
+      label VARCHAR2(512 CHAR),
+      description VARCHAR2(4000 CHAR),
+      photo_date VARCHAR2(32 CHAR),
+      is_primary VARCHAR2(8 CHAR),
+      sort_order VARCHAR2(32 CHAR),
+      media_metadata VARCHAR2(4000 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_media_links PRIMARY KEY (link_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE important_dates (
       id VARCHAR2(128 CHAR) NOT NULL,
       date_value VARCHAR2(32 CHAR),
@@ -300,6 +349,46 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_person_attributes_person ON person_attributes (person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_media_assets_file_id ON media_assets (file_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_links_family_entity ON media_links (family_group_key, entity_type, entity_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_links_media_id ON media_links (media_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_links_primary ON media_links (entity_type, entity_id, usage_type, is_primary)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { buildEntityId } from "@/lib/entity-id";
+import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import {
   createTableRecord,
   getPrimaryPhotoFileIdFromAttributes,
@@ -20,6 +22,10 @@ type PersonAttributeRouteProps = {
 function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
   const typeKey = attributeType.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
   return buildEntityId("attr", `${tenantKey}|${personId}|${typeKey}|${Date.now()}`);
+}
+
+function isOciDataSource() {
+  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
 async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string) {
@@ -111,6 +117,34 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
   );
 
   if (parsed.data.attributeType.toLowerCase() === "photo") {
+    if (isOciDataSource() && parsed.data.valueText.trim()) {
+      const fileId = parsed.data.valueText.trim();
+      const mediaId = buildMediaId(fileId);
+      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, fileId, "photo");
+      const createdAt = new Date().toISOString();
+      await upsertOciMediaAsset({
+        mediaId,
+        fileId,
+        storageProvider: "gdrive",
+        mediaMetadata: parsed.data.valueJson,
+        createdAt,
+      });
+      await upsertOciMediaLink({
+        familyGroupKey: resolved.tenant.tenantKey,
+        linkId,
+        mediaId,
+        entityType: "attribute",
+        entityId: attributeId,
+        usageType: "photo",
+        label: parsed.data.label,
+        description: parsed.data.notes,
+        photoDate: parsed.data.startDate,
+        isPrimary: parsed.data.isPrimary,
+        sortOrder: parsed.data.sortOrder,
+        mediaMetadata: parsed.data.valueJson,
+        createdAt,
+      });
+    }
     const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
     await updateTableRecordById(
       PEOPLE_TAB,
