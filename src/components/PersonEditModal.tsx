@@ -1406,7 +1406,7 @@ export function PersonEditModal({
           <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => setActiveTab("attributes")}>{aboutLabel}</button>
           <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
         </div>
-        <div className="person-modal-content" style={{ minHeight: "62vh" }}>
+        <div className="person-modal-content">
 
         {activeTab === "contact" ? (
           <>

@@ -1839,3 +1839,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (person modal fixed panel with internal tab scrolling)
+
+- `Change`: Converted person modal shell to a fixed-height panel and moved tab overflow to internal content scrolling so switching between `Contact Info`, `About [FirstName]`, and `Pictures` does not resize the modal frame.
+- `Type`: UI, UX
+- `Why`: Root cause was content-driven panel sizing (`max-height` + outer overflow and tab content min-height), which allowed taller tabs like Contact Info to expand the modal relative to shorter tabs.
+- `Files`:
+  - `src/app/globals.css`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Modal frame height stays fixed when switching person tabs.
+  - Tab content scrolls inside the content area when content exceeds available height.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
