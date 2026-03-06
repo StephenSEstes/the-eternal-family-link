@@ -13,3 +13,4 @@ This file is a quick release-log entry point.
 - 2026-03-05: Removed legacy inline controls from Person Attributes tab; unified on Manage Attributes flow only. See `docs/change-summary.md`.
 - 2026-03-05: Removed duplicate Add Attribute CTA and enabled add-modal Add Photo/Video/Audio save+attach flow in Manage Attributes. See `docs/change-summary.md`.
 - 2026-03-05: Refined attribute saved-detail card, fixed object-title rendering, and added Add Media chooser (device/camera/library/audio) in Manage Attributes. See `docs/change-summary.md`.
+- 2026-03-05: Polished attributes modal UX (no add-modal X, side-by-side type/category, title-cased options, simplified media sources, steadier tab layout). See `docs/change-summary.md`.

@@ -1766,3 +1766,23 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (attributes modal UX polish: simplified close/actions/layout language)
+
+- `Change`: Removed add-modal top-right close `X`, aligned `Type` and `Category` on one row, capitalized category/type option labels, updated `Value` copy to event/mission naming language, simplified media source chooser options to `File From Device`, `Media Library`, and `Camera` (mobile), and stabilized list-view panel height to reduce tab-based layout jumps.
+- `Type`: UI, UX
+- `Why`: Root cause was redundant close affordances, inconsistent field language, and shifting panel layout that made the workflow feel unstable and harder to scan.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Add modal closes via `Cancel` / save flow only (no top-right X).
+  - Type + Category render side-by-side on common widths.
+  - Category/type option labels are title-cased.
+  - Value field labels/event naming are clearer.
+  - Add Media options match requested sources.
+  - Switching tabs no longer causes major panel height jumps.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

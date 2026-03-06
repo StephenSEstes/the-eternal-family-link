@@ -220,7 +220,7 @@ export function AttributesModal({
   const [drawerEditMode, setDrawerEditMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addDetailsOpen, setAddDetailsOpen] = useState(false);
-  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "audio" | "library">("");
+  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "library">("");
 
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
@@ -310,11 +310,9 @@ export function AttributesModal({
       return;
     }
     const id =
-      pendingUploadIntent === "audio"
-        ? `attribute-upload-audio-${selectedItem.attributeId}`
-        : pendingUploadIntent === "video"
-          ? `attribute-upload-camera-${selectedItem.attributeId}`
-          : `attribute-upload-${selectedItem.attributeId}`;
+      pendingUploadIntent === "video"
+        ? `attribute-upload-camera-${selectedItem.attributeId}`
+        : `attribute-upload-${selectedItem.attributeId}`;
     setEditingId(selectedItem.attributeId);
     const timer = window.setTimeout(() => {
       document.getElementById(id)?.click();
@@ -549,7 +547,7 @@ export function AttributesModal({
     setDrawerEditMode(false);
   };
 
-  const startAddAndAttach = (intent: "photo" | "video" | "audio" | "library") => {
+  const startAddAndAttach = (intent: "photo" | "video" | "library") => {
     setPendingUploadIntent(intent);
     void saveAttribute();
   };
@@ -629,7 +627,7 @@ export function AttributesModal({
           />
         </div>
 
-        <div className="person-modal-body" style={{ background: "#F7F8FA" }}>
+        <div className="person-modal-body" style={{ background: "#F7F8FA", minHeight: "60vh" }}>
           {showDescriptors ? (
             <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
               <h4 className="ui-section-title" style={{ marginTop: 0 }}>Descriptors</h4>
@@ -767,14 +765,14 @@ export function AttributesModal({
                     </select>
                     <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
                       {typeListForCategory(category).map((item) => (
-                        <option key={item} value={item}>{item}</option>
+                        <option key={item} value={item}>{prettyLabel(item, "")}</option>
                       ))}
                     </select>
                   </div>
-                  <label className="label">Label</label>
-                  <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
-                  <label className="label">Value</label>
-                  <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
+                  <label className="label">Display Label (optional)</label>
+                  <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
+                  <label className="label">Value / Event Name</label>
+                  <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
                   <div className="settings-chip-list">
                     <div style={{ flex: 1, minWidth: "170px" }}>
                       <label className="label">Start Date</label>
@@ -927,17 +925,6 @@ export function AttributesModal({
                     >
                       Media Library
                     </button>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => {
-                        setEditingId(selectedItem.attributeId);
-                        setShowAddMediaMenu(false);
-                        document.getElementById(`attribute-upload-audio-${selectedItem.attributeId}`)?.click();
-                      }}
-                    >
-                      Audio
-                    </button>
                   </div>
                 ) : null}
                 {showLibraryPicker ? (
@@ -998,35 +985,40 @@ export function AttributesModal({
         <div className="person-modal-backdrop" onClick={() => { setAddModalOpen(false); resetEditor(); }} style={{ zIndex: 1300 }}>
           <div className="person-modal-panel" style={{ maxWidth: "680px" }} onClick={(event) => event.stopPropagation()}>
             <div className="person-modal-sticky-head">
-              <div className="person-modal-header">
-                <div>
-                  <h3 className="person-modal-title">Add Attribute</h3>
-                  <p className="person-modal-meta">{entityLabel}</p>
-                </div>
-                <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} aria-label="Close add attribute">X</button>
+                <div className="person-modal-header">
+                  <div>
+                    <h3 className="person-modal-title">Add Attribute</h3>
+                    <p className="person-modal-meta">{entityLabel}</p>
+                  </div>
               </div>
             </div>
             <div className="person-modal-body">
               <div className="card">
-                <label className="label">Type</label>
-                <select className="input" value={category} onChange={(e) => {
-                  const nextCategory = e.target.value as AttributeCategory;
-                  setCategory(nextCategory);
-                  const defaults = typeListForCategory(nextCategory);
-                  if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
-                  if (nextCategory === "event") setAddDetailsOpen(true);
-                }}>
-                  <option value="descriptor">Descriptor</option>
-                  <option value="event">Event</option>
-                </select>
-                <label className="label">Category</label>
-                <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
-                  {typeListForCategory(category).map((item) => (
-                    <option key={item} value={item}>{item}</option>
-                  ))}
-                </select>
-                <label className="label">Value</label>
-                <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
+                <div className="settings-chip-list">
+                  <div style={{ flex: 1, minWidth: "190px" }}>
+                    <label className="label">Type</label>
+                    <select className="input" value={category} onChange={(e) => {
+                      const nextCategory = e.target.value as AttributeCategory;
+                      setCategory(nextCategory);
+                      const defaults = typeListForCategory(nextCategory);
+                      if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
+                      if (nextCategory === "event") setAddDetailsOpen(true);
+                    }}>
+                      <option value="descriptor">Descriptor</option>
+                      <option value="event">Event</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: "190px" }}>
+                    <label className="label">Category</label>
+                    <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
+                      {typeListForCategory(category).map((item) => (
+                        <option key={item} value={item}>{prettyLabel(item, "")}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <label className="label">Value / Event Name</label>
+                <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
 
                 <div style={{ marginTop: "0.75rem" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setAddDetailsOpen((prev) => !prev)}>
@@ -1036,8 +1028,8 @@ export function AttributesModal({
 
                 {addDetailsOpen ? (
                   <div style={{ marginTop: "0.75rem" }}>
-                    <label className="label">Label</label>
-                    <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
+                    <label className="label">Display Label (optional)</label>
+                    <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
                         <label className="label">Start Date</label>
@@ -1067,7 +1059,6 @@ export function AttributesModal({
                       <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("video")} disabled={busy}>Camera</button>
                     ) : null}
                     <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("library")} disabled={busy}>Media Library</button>
-                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("audio")} disabled={busy}>Audio</button>
                   </div>
                 ) : null}
                 <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Selecting a media option saves first, then opens the chooser.</p>
