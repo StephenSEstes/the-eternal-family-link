@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Removed legacy OCI `person_attributes` table and remaining runtime references; attributes now run on unified `Attributes` only. See `docs/change-summary.md`.
 - 2026-03-06: Consolidated legacy person attributes into unified Attributes table with migration and compatibility updates across import/integrity/API paths. See `docs/change-summary.md`.
 - 2026-03-06: Increased fixed person modal height by about 15% to show more content while preserving fixed-frame tab behavior. See `docs/change-summary.md`.
 - 2026-03-06: Fixed person modal to a constant panel height with internal tab scrolling so Contact/About/Pictures no longer resize the frame. See `docs/change-summary.md`.

@@ -59,7 +59,6 @@ const USER_ACCESS_HEADERS = [
 ];
 export const PEOPLE_TAB = "People";
 const IMPORTANT_DATES_TAB = "ImportantDates";
-export const LEGACY_PERSON_ATTRIBUTES_TAB = "PersonAttributes";
 export const PERSON_ATTRIBUTES_TAB = "Attributes";
 const FAMILY_CONFIG_TAB = "FamilyConfig";
 const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
@@ -118,23 +117,6 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "media_metadata",
   ],
   ImportantDates: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
-  PersonAttributes: [
-    "attribute_id",
-    "person_id",
-    "attribute_type",
-    "value_text",
-    "value_json",
-    "media_metadata",
-    "label",
-    "is_primary",
-    "sort_order",
-    "start_date",
-    "end_date",
-    "visibility",
-    "share_scope",
-    "share_family_group_key",
-    "notes",
-  ],
   Attributes: [
     "attribute_id",
     "entity_type",
@@ -1918,43 +1900,6 @@ export async function getImportantDates(tenantKey?: string): Promise<ImportantDa
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-const personAttributesMigrationDone = new Set<string>();
-const PERSON_ATTRIBUTE_EVENT_TYPES = new Set(["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"]);
-
-function inferAttributeCategory(typeKey: string) {
-  return PERSON_ATTRIBUTE_EVENT_TYPES.has(typeKey) ? "event" : "descriptor";
-}
-
-function mapLegacyPersonAttributeToAttributesRow(record: PersonAttributeRecord): Record<string, string> {
-  const typeKey = record.attributeType.trim().toLowerCase();
-  return {
-    attribute_id: record.attributeId,
-    entity_type: "person",
-    entity_id: record.personId,
-    category: inferAttributeCategory(typeKey),
-    type_key: typeKey,
-    person_id: record.personId,
-    attribute_type: typeKey,
-    value_text: record.valueText,
-    value_json: record.valueJson,
-    media_metadata: record.mediaMetadata,
-    label: record.label,
-    is_primary: record.isPrimary ? "TRUE" : "FALSE",
-    sort_order: String(record.sortOrder || 0),
-    start_date: record.startDate,
-    end_date: record.endDate,
-    date_start: record.startDate,
-    date_end: record.endDate,
-    visibility: record.visibility || "family",
-    share_scope: record.shareScope || "both_families",
-    share_family_group_key: record.shareFamilyGroupKey || "",
-    location: "",
-    notes: record.notes,
-    created_at: "",
-    updated_at: "",
-  };
-}
-
 function personAttributesFromUnifiedMatrix(matrix: SheetMatrix, tenantKey: string): PersonAttributeRecord[] {
   const idx = buildHeaderIndex(matrix.headers);
   return matrix.rows
@@ -2000,71 +1945,11 @@ function personAttributesFromUnifiedMatrix(matrix: SheetMatrix, tenantKey: strin
     .filter((item): item is PersonAttributeRecord => Boolean(item));
 }
 
-async function migrateLegacyPersonAttributesToUnified(tenantKey: string) {
-  if (personAttributesMigrationDone.has(tenantKey)) return;
-  personAttributesMigrationDone.add(tenantKey);
-
-  let legacyMatrix: SheetMatrix;
-  try {
-    const legacyTabName = await resolveTenantTabName(LEGACY_PERSON_ATTRIBUTES_TAB, tenantKey);
-    legacyMatrix = await readTab(legacyTabName);
-  } catch {
-    return;
-  }
-
-  const legacyRecords = personAttributesFromMatrix(legacyMatrix, tenantKey);
-  if (legacyRecords.length === 0) {
-    return;
-  }
-
-  await ensureResolvedTabColumns(
-    PERSON_ATTRIBUTES_TAB,
-    [
-      "entity_type",
-      "entity_id",
-      "category",
-      "type_key",
-      "person_id",
-      "attribute_type",
-      "value_json",
-      "media_metadata",
-      "is_primary",
-      "sort_order",
-      "start_date",
-      "end_date",
-      "visibility",
-      "share_scope",
-      "share_family_group_key",
-      "date_start",
-      "date_end",
-      "location",
-      "created_at",
-      "updated_at",
-    ],
-    tenantKey,
-  );
-
-  const existing = await getTableRecords(PERSON_ATTRIBUTES_TAB, tenantKey).catch(() => []);
-  const existingIds = new Set(
-    existing.map((row) => (row.data.attribute_id ?? "").trim()).filter(Boolean),
-  );
-
-  for (const record of legacyRecords) {
-    if (existingIds.has(record.attributeId)) continue;
-    await createTableRecord(
-      PERSON_ATTRIBUTES_TAB,
-      mapLegacyPersonAttributeToAttributesRow(record),
-      tenantKey,
-    );
-  }
-}
-
 export async function getPersonAttributes(
   tenantKey?: string,
   personId?: string,
 ): Promise<PersonAttributeRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  await migrateLegacyPersonAttributesToUnified(normalizedTenantKey);
   let matrix: SheetMatrix;
 
   try {

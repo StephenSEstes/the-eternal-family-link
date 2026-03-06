@@ -13,14 +13,25 @@ type TenantPeoplePageProps = {
 const PEOPLE_ROUTE_CACHE_TTL_MS = 20_000;
 
 async function loadPeoplePageBundle(tenantKey: string) {
-  return getOrLoadWithTtl(`tenant_people_page_bundle:${tenantKey}`, PEOPLE_ROUTE_CACHE_TTL_MS, () =>
-    Promise.all([
+  return getOrLoadWithTtl(`tenant_people_page_bundle:${tenantKey}`, PEOPLE_ROUTE_CACHE_TTL_MS, async () => {
+    const [peopleResult, relationshipsResult, householdsResult, attributesResult] = await Promise.allSettled([
       getPeople(tenantKey),
       getRelationships(tenantKey),
       getHouseholds(tenantKey),
       getPersonAttributes(tenantKey),
-    ]),
-  );
+    ]);
+
+    if (peopleResult.status !== "fulfilled") {
+      throw peopleResult.reason;
+    }
+
+    return [
+      peopleResult.value,
+      relationshipsResult.status === "fulfilled" ? relationshipsResult.value : [],
+      householdsResult.status === "fulfilled" ? householdsResult.value : [],
+      attributesResult.status === "fulfilled" ? attributesResult.value : [],
+    ] as const;
+  });
 }
 
 export default async function TenantPeoplePage({ params }: TenantPeoplePageProps) {

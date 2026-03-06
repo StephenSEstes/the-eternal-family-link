@@ -158,26 +158,6 @@ const TABLES: Record<string, TableConfig> = {
     tableName: "important_dates",
     headers: ["id", "date", "title", "description", "person_id", "share_scope", "share_family_group_key"],
   },
-  PersonAttributes: {
-    tableName: "person_attributes",
-    headers: [
-      "attribute_id",
-      "person_id",
-      "attribute_type",
-      "value_text",
-      "value_json",
-      "media_metadata",
-      "label",
-      "is_primary",
-      "sort_order",
-      "start_date",
-      "end_date",
-      "visibility",
-      "share_scope",
-      "share_family_group_key",
-      "notes",
-    ],
-  },
   Attributes: {
     tableName: "attributes",
     headers: [
@@ -845,40 +825,6 @@ export async function getOciHouseholdsForTenant(tenantKey: string): Promise<Shee
         notes: fromDbValue(row.NOTES),
         wedding_photo_file_id: fromDbValue(row.WEDDING_PHOTO_FILE_ID),
       },
-    }));
-  });
-}
-
-export async function getOciPersonAttributesForTenant(
-  tenantKey: string,
-  personId?: string,
-): Promise<SheetRecord[]> {
-  const normalized = tenantKey.trim().toLowerCase();
-  if (!normalized) {
-    return [];
-  }
-  const normalizedPersonId = (personId ?? "").trim();
-  return withConnection(async (connection) => {
-    const wherePersonClause = normalizedPersonId ? "AND TRIM(a.person_id) = :personId" : "";
-    const result = await connection.execute(
-      `SELECT DISTINCT
-         ${TABLES.PersonAttributes.headers.map((header) => `a.${header}`).join(", ")}
-       FROM person_attributes a
-       INNER JOIN person_family_groups m
-         ON TRIM(m.person_id) = TRIM(a.person_id)
-       WHERE LOWER(TRIM(m.family_group_key)) = :tenantKey
-         AND (${enabledExpr("m.is_enabled")} OR TRIM(NVL(m.is_enabled, '')) = '')
-         ${wherePersonClause}
-       ORDER BY a.person_id, a.attribute_type, a.sort_order, a.attribute_id`,
-      normalizedPersonId ? { tenantKey: normalized, personId: normalizedPersonId } : { tenantKey: normalized },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map((row, idx) => ({
-      rowNumber: idx + 2,
-      data: Object.fromEntries(
-        TABLES.PersonAttributes.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])]),
-      ),
     }));
   });
 }

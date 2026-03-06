@@ -1899,3 +1899,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).
+
+## 2026-03-06 (legacy person_attributes table removed)
+
+- `Change`: Removed remaining runtime references to legacy `PersonAttributes` and dropped OCI table `person_attributes` after cutover validation. Updated attribute media utility scripts and schema docs to reflect a single-table attribute model.
+- `Type`: Architecture, Data, Cleanup
+- `Why`: Root cause was lingering legacy table existence after consolidation, which risked drift/confusion despite canonical reads/writes already targeting `Attributes`.
+- `Files`:
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+  - `scripts/oci-media-backfill.cjs`
+  - `scripts/oci-media-parity.cjs`
+  - `scripts/drop-legacy-person-attributes.cjs`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Yes.
+  - Executed `DROP TABLE person_attributes PURGE` in OCI.
+- `Verify`:
+  - Drop script returns `Legacy table not found: person_attributes` on repeat run.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Restore from DB backup/snapshot if legacy table is needed again.
+- `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).
