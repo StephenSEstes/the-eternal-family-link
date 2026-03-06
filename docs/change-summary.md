@@ -1804,3 +1804,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (contact tab layout: Name section + conditional maiden name + full-width notes)
+
+- `Change`: Updated Person modal Contact Info layout by renaming `Basics` to `Name`, showing a conditional `Maiden Name` field (for female with spouse selected) in the Name section, and moving notes out of the Family section into a dedicated `Notes` section that spans both grid columns.
+- `Type`: UI, UX
+- `Why`: Improve information hierarchy and reduce crowding in Family details while matching requested naming and layout behavior.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Contact tab shows section title `Name`.
+  - `Maiden Name` appears only when gender is female and a spouse is selected.
+  - `Notes` appears in its own full-width section below the two-column cards.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

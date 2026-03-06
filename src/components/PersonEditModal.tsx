@@ -1413,7 +1413,7 @@ export function PersonEditModal({
               </div>
 
               <div className="card">
-                <h4 className="ui-section-title">Basics</h4>
+                <h4 className="ui-section-title">Name</h4>
                 <div className="field-grid">
                   <div>
                     <label className="label">First Name</label>
@@ -1427,10 +1427,17 @@ export function PersonEditModal({
                     <label className="label">Last Name</label>
                     <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
                   </div>
-                  <div>
-                    <label className="label">Nick Name</label>
-                    <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
-                  </div>
+                  {gender === "female" && hasVisibleSpouseSelection ? (
+                    <div>
+                      <label className="label">Maiden Name</label>
+                      <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="label">Nick Name</label>
+                      <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1534,7 +1541,10 @@ export function PersonEditModal({
                     Relationship editing is available to administrators.
                   </p>
                 )}
-                <label className="label">Notes</label>
+              </div>
+
+              <div className="card field-span-2">
+                <h4 className="ui-section-title">Notes</h4>
                 <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
               </div>
             </div>
