@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     readTab(sheets, "People"),
     readTab(sheets, "Relationships"),
     readTab(sheets, "Households"),
-    readTab(sheets, "PersonAttributes"),
+    readTab(sheets, "Attributes"),
     readTab(sheets, "ImportantDates"),
     readTab(sheets, "PersonFamilyGroups"),
     readTab(sheets, "UserAccess"),
@@ -194,8 +194,8 @@ export async function POST(request: Request) {
     const idx = headerIndex(attributes.headers);
     attributes.rows.forEach((row, rowIdx) => {
       const oldId = getCell(row, idx, "attribute_id");
-      const personId = remapPersonId(getCell(row, idx, "person_id"), personMap);
-      const attributeType = getCell(row, idx, "attribute_type").toLowerCase();
+      const personId = remapPersonId(getCell(row, idx, "person_id") || getCell(row, idx, "entity_id"), personMap);
+      const attributeType = (getCell(row, idx, "attribute_type") || getCell(row, idx, "type_key")).toLowerCase();
       const label = getCell(row, idx, "label").toLowerCase();
       const seed = `${personId}|${attributeType}|${label}|${oldId}|${rowIdx + 2}`;
       const nextId = oldId && isTypedEntityId(oldId, "attr")
@@ -204,6 +204,10 @@ export async function POST(request: Request) {
       if (oldId) attributeMap.set(oldId, nextId);
       setCell(row, idx, "attribute_id", nextId);
       setCell(row, idx, "person_id", personId);
+      setCell(row, idx, "entity_type", "person");
+      setCell(row, idx, "entity_id", personId);
+      setCell(row, idx, "attribute_type", attributeType);
+      setCell(row, idx, "type_key", attributeType);
     });
   }
 
@@ -273,7 +277,7 @@ export async function POST(request: Request) {
   await writeTab(sheets, "People", people);
   if (relationships) await writeTab(sheets, "Relationships", relationships);
   if (households) await writeTab(sheets, "Households", households);
-  if (attributes) await writeTab(sheets, "PersonAttributes", attributes);
+  if (attributes) await writeTab(sheets, "Attributes", attributes);
   if (dates) await writeTab(sheets, "ImportantDates", dates);
   if (personFamilyGroups) await writeTab(sheets, "PersonFamilyGroups", personFamilyGroups);
   if (userAccess) await writeTab(sheets, "UserAccess", userAccess);

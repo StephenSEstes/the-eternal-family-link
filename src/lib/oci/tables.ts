@@ -186,6 +186,17 @@ const TABLES: Record<string, TableConfig> = {
       "entity_id",
       "category",
       "type_key",
+      "person_id",
+      "attribute_type",
+      "value_json",
+      "media_metadata",
+      "is_primary",
+      "sort_order",
+      "start_date",
+      "end_date",
+      "visibility",
+      "share_scope",
+      "share_family_group_key",
       "label",
       "value_text",
       "date_start",
@@ -279,6 +290,31 @@ export async function ensureOciAttributesTable() {
         throw error;
       }
     }
+
+    const additiveColumns = [
+      "person_id VARCHAR2(128)",
+      "attribute_type VARCHAR2(80)",
+      "value_json CLOB",
+      "media_metadata CLOB",
+      "is_primary VARCHAR2(8)",
+      "sort_order VARCHAR2(16)",
+      "start_date VARCHAR2(32)",
+      "end_date VARCHAR2(32)",
+      "visibility VARCHAR2(32)",
+      "share_scope VARCHAR2(32)",
+      "share_family_group_key VARCHAR2(128)",
+    ];
+    for (const columnSql of additiveColumns) {
+      try {
+        await connection.execute(`ALTER TABLE attributes ADD (${columnSql})`);
+      } catch (error) {
+        const message = (error as Error).message ?? "";
+        if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+          throw error;
+        }
+      }
+    }
+    await connection.commit();
   });
 }
 

@@ -6,6 +6,7 @@ import {
   createTableRecords,
   deleteTableRows,
   getPeople,
+  PERSON_ATTRIBUTES_TAB,
   getTableRecords,
   getTenantConfig,
   listTabs,
@@ -198,7 +199,7 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
   const familyGroupKey = normalize(tenantKey);
   const [people, attributeRows, householdPhotoRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
-    getTableRecords("PersonAttributes", tenantKey).catch(() => []),
+    getTableRecords(PERSON_ATTRIBUTES_TAB, tenantKey).catch(() => []),
     getTableRecords("HouseholdPhotos", tenantKey).catch(() => []),
     getTableRecords("MediaAssets", tenantKey).catch(() => []),
     getTableRecords("MediaLinks", tenantKey).catch(() => []),
@@ -429,7 +430,7 @@ async function runIntegrityAudit(tenantKey: string) {
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
     listTabs().catch(() => []),
     getTableRecords("Relationships").catch(() => []),
-    getTableRecords("PersonAttributes").catch(() => []),
+    getTableRecords(PERSON_ATTRIBUTES_TAB).catch(() => []),
     getTableRecords("ImportantDates").catch(() => []),
   ]);
 
@@ -894,7 +895,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       const attributeId = readField(row.data, "attribute_id");
       if (!attributeId || personId !== sourcePersonId) continue;
       const updated = await updateTableRecordById(
-        "PersonAttributes",
+        PERSON_ATTRIBUTES_TAB,
         attributeId,
         { person_id: targetPersonId },
         "attribute_id",

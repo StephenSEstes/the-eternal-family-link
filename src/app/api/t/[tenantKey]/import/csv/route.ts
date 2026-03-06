@@ -27,7 +27,7 @@ function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
     };
   }
   if (target === "person_attributes") {
-    return { tabName: "PersonAttributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
+    return { tabName: "Attributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
   }
   return { tabName: "ImportantDates", idColumn: "id", required: ["date", "title"] };
 }
@@ -111,7 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (target.tabName === "People") {
         return sourceRow[target.idColumn]?.trim() || buildPersonId(sourceRow.display_name ?? "", sourceRow.birth_date ?? "");
       }
-      if (target.tabName === "PersonAttributes") {
+      if (target.tabName === "Attributes") {
         return sourceRow[target.idColumn]?.trim() || buildAttributeId(normalizedTenantKey, sourceRow);
       }
       if (target.tabName === "Relationships") {
@@ -143,7 +143,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     if (target.tabName === "People" && !payload.person_id) {
       payload.person_id = recordId;
     }
-    if (target.tabName === "PersonAttributes" && !payload.attribute_id) {
+    if (target.tabName === "Attributes" && !payload.attribute_id) {
       payload.attribute_id = recordId;
     }
     if (target.tabName === "Relationships" && !payload.rel_id) {
@@ -157,13 +157,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
     if (
       target.tabName !== "People" &&
-      target.tabName !== "PersonAttributes" &&
+      target.tabName !== "Attributes" &&
       target.tabName !== "ImportantDates" &&
       target.tabName !== "Relationships"
     ) {
       payload.tenant_key = normalizedTenantKey;
     }
-    if (target.tabName === "PersonAttributes") {
+    if (target.tabName === "Attributes") {
       payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";
       if (payload.share_scope === "one_family" && !payload.share_family_group_key?.trim()) {
         payload.share_family_group_key = normalizedTenantKey;
@@ -171,6 +171,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (payload.share_scope !== "one_family") {
         payload.share_family_group_key = "";
       }
+      const typeKey = (payload.type_key ?? payload.attribute_type ?? "").trim().toLowerCase();
+      payload.type_key = typeKey;
+      payload.attribute_type = typeKey;
+      payload.entity_type = "person";
+      payload.entity_id = (payload.entity_id ?? payload.person_id ?? "").trim();
+      if (!payload.category) {
+        payload.category = ["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"].includes(typeKey)
+          ? "event"
+          : "descriptor";
+      }
+      payload.date_start = payload.date_start ?? payload.start_date ?? "";
+      payload.date_end = payload.date_end ?? payload.end_date ?? "";
+      payload.value_json = payload.value_json ?? "";
+      payload.media_metadata = payload.media_metadata ?? payload.value_json;
+      payload.visibility = payload.visibility ?? "family";
+      payload.sort_order = payload.sort_order ?? "0";
+      payload.is_primary = payload.is_primary ?? "FALSE";
     }
     if (target.tabName === "ImportantDates") {
       payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";

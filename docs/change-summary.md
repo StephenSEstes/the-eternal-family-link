@@ -1872,3 +1872,30 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (single-table attribute consolidation: migrate legacy PersonAttributes into Attributes)
+
+- `Change`: Consolidated attribute persistence to the unified `Attributes` table and added compatibility coverage for legacy person/photo flows. Implemented one-time migration on read that copies legacy `PersonAttributes` rows into `Attributes` (by `attribute_id`) and switched legacy constants/routes/import/integrity references to operate on the unified table path.
+- `Type`: Architecture, Data, API
+- `Why`: Root cause was a mixed storage model (`PersonAttributes` and `Attributes`) where different screens/endpoints read and wrote different tables, producing inconsistent behavior and incomplete cross-screen visibility.
+- `Files`:
+  - `src/lib/google/sheets.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/import/csv/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/app/api/admin/migrate-entity-ids/route.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Yes (migration behavior)
+  - On first unified person-attribute read per tenant, legacy `PersonAttributes` rows are copied into `Attributes` if missing by `attribute_id`.
+  - OCI `attributes` table ensure step now adds legacy-compat columns used by person/photo flows.
+- `Verify`:
+  - Legacy person-attribute endpoints continue returning expected records while sourcing from unified `Attributes`.
+  - Unified `/api/attributes` reads include rows created by legacy person/photo flows.
+  - CSV import target `person_attributes` writes to `Attributes` with canonical and compatibility fields.
+  - Integrity checks referencing person attributes operate against unified tab constant.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).
