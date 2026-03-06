@@ -1715,3 +1715,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (person attributes tab cleanup: remove legacy inline controls)
+
+- `Change`: Removed the legacy inline attributes UI from the Person modal Attributes tab (table, inline Add Attribute, Upload Media Attribute, and media-attribute tile actions) so the tab now relies on the unified `Manage Attributes` flow only.
+- `Type`: UI, UX
+- `Why`: Root cause was mixed rendering of old and new attributes UIs in the same tab, creating duplicate/inconsistent actions and user confusion.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Person `Attributes` tab shows `Manage Attributes` section only (no inline add/upload controls).
+  - Attribute create/edit/delete/media attach workflows still work via `Manage Attributes` modal.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

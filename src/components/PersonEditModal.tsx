@@ -499,9 +499,6 @@ export function PersonEditModal({
   const [saving, setSaving] = useState(false);
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
-  const [newAttrType, setNewAttrType] = useState("note");
-  const [newAttrLabel, setNewAttrLabel] = useState("");
-  const [newAttrValue, setNewAttrValue] = useState("");
   const [newPhotoLabel, setNewPhotoLabel] = useState("portrait");
   const [newPhotoDescription, setNewPhotoDescription] = useState("");
   const [newPhotoDate, setNewPhotoDate] = useState("");
@@ -594,17 +591,9 @@ export function PersonEditModal({
     : "/placeholders/avatar-male.png";
   const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, tenantKey) : fallbackAvatar;
   const photoAttributes = attributes.filter((item) => item.attributeType.toLowerCase() === "photo");
-  const mediaAttributes = attributes.filter((item) => {
-    const type = item.attributeType.toLowerCase();
-    return type === "media" || type === "audio" || type === "video";
-  });
   const allMediaAttributes = attributes.filter((item) => {
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
-  });
-  const regularAttributes = attributes.filter((item) => {
-    const type = item.attributeType.toLowerCase();
-    return type !== "photo" && type !== "media" && type !== "audio" && type !== "video";
   });
   const loadAttributes = async (personId: string) => {
     const res = await fetch(
@@ -644,9 +633,6 @@ export function PersonEditModal({
     } else {
       setSpouseId("");
     }
-    setNewAttrType("note");
-    setNewAttrLabel("");
-    setNewAttrValue("");
     setNewPhotoLabel("portrait");
     setNewPhotoDescription("");
     setNewPhotoDate("");
@@ -1557,148 +1543,6 @@ export function PersonEditModal({
               entityLabel={person.displayName}
               canManage={canManage}
             />
-            <div className="settings-table-wrap">
-              <table className="settings-table">
-                <thead><tr><th>Type</th><th>Label</th><th>Value</th></tr></thead>
-                <tbody>
-                  {regularAttributes.length > 0 ? regularAttributes.map((item) => (
-                    <tr key={item.attributeId}>
-                      <td>{item.attributeType}</td>
-                      <td>{item.label || "-"}</td>
-                      <td>
-                        {item.attributeType.toLowerCase() === "phone" ? (
-                          <PhoneLinkActions value={item.valueText} />
-                        ) : (
-                          item.valueText
-                        )}
-                      </td>
-                    </tr>
-                  )) : <tr><td colSpan={3}>No attributes yet.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-
-            {canManage ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Add Attribute</h4>
-                <div className="settings-chip-list">
-                  <input className="input" value={newAttrType} onChange={(e) => setNewAttrType(e.target.value)} placeholder="Type (hobby, note, etc)" />
-                  <input className="input" value={newAttrLabel} onChange={(e) => setNewAttrLabel(e.target.value)} placeholder="Label" />
-                </div>
-                <input className="input" value={newAttrValue} onChange={(e) => setNewAttrValue(e.target.value)} placeholder="Value" />
-                <button
-                  type="button"
-                  className="button tap-button"
-                  style={{ marginTop: "0.75rem" }}
-                  onClick={() =>
-                    void (async () => {
-                      if (!newAttrValue.trim()) {
-                        setStatus("Attribute value is required.");
-                        return;
-                      }
-                      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          attributeType: newAttrType.trim() || "note",
-                          valueText: (newAttrType.trim().toLowerCase() === "phone")
-                            ? formatUsPhoneForEdit(newAttrValue)
-                            : newAttrValue,
-                          label: newAttrLabel,
-                          visibility: "family",
-                          shareScope: "both_families",
-                          shareFamilyGroupKey: "",
-                          sortOrder: 0,
-                          isPrimary: false,
-                        }),
-                      });
-                      const body = await res.text();
-                      if (!res.ok) {
-                        setStatus(`Add attribute failed: ${res.status} ${body.slice(0, 120)}`);
-                        return;
-                      }
-                      setNewAttrLabel("");
-                      setNewAttrValue("");
-                      setStatus("Attribute saved.");
-                      await loadAttributes(person.personId);
-                      onSaved();
-                    })()
-                  }
-                >
-                  Add Attribute
-                </button>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  style={{ marginTop: "0.5rem" }}
-                  onClick={() => {
-                    setUploadTarget("attribute-media");
-                    setShowPhotoUploadPicker(true);
-                  }}
-                >
-                  Upload Media Attribute
-                </button>
-              </div>
-            ) : null}
-
-            {mediaAttributes.length > 0 ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Media Attributes</h4>
-                <div className="person-photo-grid">
-                  {mediaAttributes.map((item) => (
-                    <div key={item.attributeId} className="person-photo-tile">
-                      {isVideoMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
-                        <video src={getPhotoProxyPath(item.valueText, tenantKey)} className="person-photo-tile-image" muted playsInline />
-                      ) : isAudioMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
-                        <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
-                          <audio src={getPhotoProxyPath(item.valueText, tenantKey)} controls style={{ width: "100%" }} />
-                        </div>
-                      ) : (
-                        <img src={getPhotoProxyPath(item.valueText, tenantKey)} alt={item.label || "media"} className="person-photo-tile-image" />
-                      )}
-                      <div className="person-photo-tile-meta">
-                        <span className="person-photo-tile-label">{item.label || item.attributeType}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        onClick={() => {
-                          setActiveTab("photos");
-                          openPhotoDetail(item.attributeId);
-                        }}
-                      >
-                        Manage Links
-                      </button>
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          onClick={() => {
-                            void (async () => {
-                              const ok = window.confirm("Delete this media attribute?");
-                              if (!ok) return;
-                              const res = await fetch(
-                                `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(item.attributeId)}`,
-                                { method: "DELETE" },
-                              );
-                              if (!res.ok) {
-                                setStatus(`Delete media attribute failed: ${res.status}`);
-                                return;
-                              }
-                              setStatus("Media attribute deleted.");
-                              await loadAttributes(person.personId);
-                              onSaved();
-                            })();
-                          }}
-                        >
-                          Delete
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
 
