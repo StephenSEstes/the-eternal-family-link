@@ -1731,3 +1731,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (attributes modal CTA dedupe + add-modal media attach wiring)
+
+- `Change`: Removed duplicate `+ Add Attribute` CTA rendering in `AttributesModal` (single bottom action), and wired Add Modal media actions (`Add Photo`, `Add Video`, `Add Audio`) to save-first then auto-open the corresponding upload picker in the attribute detail drawer.
+- `Type`: UI, UX
+- `Why`: Root cause was dual CTA rendering (empty-state CTA + sticky CTA) and intentionally disabled media buttons in add modal, which caused confusion and non-functional controls.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Manage Attributes screen shows only one bottom `+ Add Attribute` button.
+  - In Add Attribute modal, media buttons are clickable.
+  - Clicking `Add Photo/Video/Audio` saves the attribute and opens the relevant file picker flow.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

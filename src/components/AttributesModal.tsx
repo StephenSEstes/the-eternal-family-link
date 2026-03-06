@@ -145,6 +145,7 @@ export function AttributesModal({
   const [drawerEditMode, setDrawerEditMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addDetailsOpen, setAddDetailsOpen] = useState(false);
+  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "audio">("");
 
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
@@ -206,6 +207,22 @@ export function AttributesModal({
     [items, selectedAttributeId],
   );
 
+  useEffect(() => {
+    if (!selectedItem || !pendingUploadIntent) return;
+    const id =
+      pendingUploadIntent === "audio"
+        ? `attribute-upload-audio-${selectedItem.attributeId}`
+        : pendingUploadIntent === "video"
+          ? `attribute-upload-camera-${selectedItem.attributeId}`
+          : `attribute-upload-${selectedItem.attributeId}`;
+    setEditingId(selectedItem.attributeId);
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.click();
+      setPendingUploadIntent("");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedItem, pendingUploadIntent]);
+
   const resetEditor = () => {
     setEditingId("");
     setCategory("descriptor");
@@ -249,6 +266,7 @@ export function AttributesModal({
     const validationError = validateEditor();
     if (validationError) {
       setStatus(validationError);
+      setPendingUploadIntent("");
       return;
     }
     setBusy(true);
@@ -273,6 +291,7 @@ export function AttributesModal({
     if (!res.ok) {
       setStatus(`Save failed: ${res.status} ${String(body?.message ?? body?.error ?? "").slice(0, 160)}`);
       setBusy(false);
+      setPendingUploadIntent("");
       return;
     }
     const savedId = String(body?.attribute?.attributeId || editingId || "");
@@ -376,6 +395,11 @@ export function AttributesModal({
     setAddDetailsOpen(nextCategory === "event");
     setAddModalOpen(true);
     setDrawerEditMode(false);
+  };
+
+  const startAddAndAttach = (intent: "photo" | "video" | "audio") => {
+    setPendingUploadIntent(intent);
+    void saveAttribute();
   };
 
   const openAttributeDrawer = (item: AttributeItem) => {
@@ -520,9 +544,6 @@ export function AttributesModal({
           {filtered.length === 0 ? (
             <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
               <p className="page-subtitle" style={{ margin: 0 }}>No attributes yet.</p>
-              <div style={{ marginTop: "0.6rem" }}>
-                <button type="button" className="button tap-button" onClick={openAddModal} disabled={busy}>+ Add Attribute</button>
-              </div>
             </div>
           ) : null}
 
@@ -804,11 +825,11 @@ export function AttributesModal({
                 ) : null}
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button type="button" className="button secondary tap-button" disabled>Add Photo</button>
-                  <button type="button" className="button secondary tap-button" disabled>Add Video</button>
-                  <button type="button" className="button secondary tap-button" disabled>Add Audio</button>
+                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("photo")} disabled={busy}>Add Photo</button>
+                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("video")} disabled={busy}>Add Video</button>
+                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("audio")} disabled={busy}>Add Audio</button>
                 </div>
-                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Save first, then attach media from the detail drawer.</p>
+                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Save + attach flow will open the file picker automatically.</p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} disabled={busy}>Cancel</button>
