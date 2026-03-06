@@ -34,6 +34,12 @@ type AttributeItem = {
 };
 
 type AttributeTab = "all" | "descriptor" | "event";
+type LibraryMediaItem = {
+  fileId: string;
+  name: string;
+  description: string;
+  date: string;
+};
 
 const DESCRIPTOR_TYPES = ["hobbies", "likes", "blood_type", "allergies", "hair_color", "height", "health"];
 const EVENT_TYPES = ["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"];
@@ -62,6 +68,75 @@ function typeListForCategory(category: AttributeCategory) {
 
 function inferCategory(typeKey: string): AttributeCategory {
   return EVENT_TYPES.includes(typeKey) ? "event" : "descriptor";
+}
+
+function getSafeAttributeValueText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        return getSafeAttributeValueText(JSON.parse(trimmed));
+      } catch {
+        return trimmed === "[object Object]" ? "" : trimmed;
+      }
+    }
+    return trimmed === "[object Object]" ? "" : trimmed;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map((entry) => getSafeAttributeValueText(entry)).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = [
+      record.displayLabel,
+      record.label,
+      record.title,
+      record.name,
+      record.valueText,
+      record.value,
+      record.text,
+      record.fileId,
+    ];
+    for (const candidate of preferred) {
+      const safe = getSafeAttributeValueText(candidate);
+      if (safe) return safe;
+    }
+    return "";
+  }
+  return "";
+}
+
+function formatAttributeDate(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatAttributeDateRange(startDate: string, endDate: string) {
+  const start = formatAttributeDate(startDate);
+  const end = formatAttributeDate(endDate);
+  if (start && end) return `${start} - ${end}`;
+  return start || end || "";
+}
+
+function getAttributeDisplayType(item: AttributeItem) {
+  return item.category === "event" ? "Event" : "Descriptor";
+}
+
+function getAttributeDisplayTitle(item: AttributeItem) {
+  const categoryLabel = prettyLabel(item.typeKey, "");
+  const preferred = [
+    getSafeAttributeValueText(item.label),
+    getSafeAttributeValueText(item.valueText),
+  ].filter(Boolean);
+  if (preferred[0] && preferred[1] && preferred[0] !== preferred[1]) return `${preferred[0]}  ${preferred[1]}`;
+  if (preferred[0]) return `${categoryLabel}  ${preferred[0]}`;
+  return categoryLabel || "Attribute";
 }
 
 async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
@@ -145,7 +220,7 @@ export function AttributesModal({
   const [drawerEditMode, setDrawerEditMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addDetailsOpen, setAddDetailsOpen] = useState(false);
-  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "audio">("");
+  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "audio" | "library">("");
 
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
@@ -160,6 +235,12 @@ export function AttributesModal({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState("");
   const [captureSource, setCaptureSource] = useState("library");
+  const [showAddMediaMenu, setShowAddMediaMenu] = useState(false);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryResults, setLibraryResults] = useState<LibraryMediaItem[]>([]);
+  const [isLikelyMobile, setIsLikelyMobile] = useState(false);
 
   const refresh = async () => {
     const res = await fetch(
@@ -192,6 +273,20 @@ export function AttributesModal({
     return () => URL.revokeObjectURL(pendingPreview);
   }, [pendingPreview]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsLikelyMobile(window.matchMedia("(pointer: coarse)").matches || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAttributeId) {
+      setShowAddMediaMenu(false);
+      setShowLibraryPicker(false);
+      setLibraryQuery("");
+      setLibraryResults([]);
+    }
+  }, [selectedAttributeId]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((item) => {
@@ -209,6 +304,11 @@ export function AttributesModal({
 
   useEffect(() => {
     if (!selectedItem || !pendingUploadIntent) return;
+    if (pendingUploadIntent === "library") {
+      setShowLibraryPicker(true);
+      setPendingUploadIntent("");
+      return;
+    }
     const id =
       pendingUploadIntent === "audio"
         ? `attribute-upload-audio-${selectedItem.attributeId}`
@@ -238,6 +338,10 @@ export function AttributesModal({
     setPendingPreview("");
     setPendingFile(null);
     setCaptureSource("library");
+    setShowAddMediaMenu(false);
+    setShowLibraryPicker(false);
+    setLibraryQuery("");
+    setLibraryResults([]);
   };
 
   const loadEditorFromItem = (item: AttributeItem) => {
@@ -387,6 +491,54 @@ export function AttributesModal({
     onSaved();
   };
 
+  const searchLibraryMedia = async () => {
+    const q = libraryQuery.trim();
+    if (!q) {
+      setLibraryResults([]);
+      return;
+    }
+    setLibraryBusy(true);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(q)}&limit=40`,
+        { cache: "no-store" },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setStatus(`Media library search failed: ${res.status}`);
+        setLibraryResults([]);
+        return;
+      }
+      const items = Array.isArray(body?.items) ? (body.items as LibraryMediaItem[]) : [];
+      setLibraryResults(items);
+    } finally {
+      setLibraryBusy(false);
+    }
+  };
+
+  const selectLibraryMedia = async (item: LibraryMediaItem) => {
+    try {
+      const response = await fetch(getPhotoProxyPath(item.fileId, tenantKey), { cache: "no-store" });
+      if (!response.ok) {
+        setStatus(`Failed to fetch selected media: ${response.status}`);
+        return;
+      }
+      const blob = await response.blob();
+      const contentType = blob.type || "application/octet-stream";
+      const fallbackName = item.name?.trim() || `${item.fileId}.bin`;
+      const file = new File([blob], fallbackName, { type: contentType });
+      if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+      setPendingFile(file);
+      setPendingPreview(URL.createObjectURL(file));
+      setCaptureSource("library");
+      setShowLibraryPicker(false);
+      setShowAddMediaMenu(false);
+      setStatus("Selected media from library. Click Attach Media to link it.");
+    } catch {
+      setStatus("Failed to load selected media from library.");
+    }
+  };
+
   const openAddModal = () => {
     resetEditor();
     const nextCategory = initialTypeKey ? inferCategory(initialTypeKey) : "descriptor";
@@ -397,7 +549,7 @@ export function AttributesModal({
     setDrawerEditMode(false);
   };
 
-  const startAddAndAttach = (intent: "photo" | "video" | "audio") => {
+  const startAddAndAttach = (intent: "photo" | "video" | "audio" | "library") => {
     setPendingUploadIntent(intent);
     void saveAttribute();
   };
@@ -494,7 +646,7 @@ export function AttributesModal({
                           style={{ borderRadius: "999px" }}
                           onClick={() => openAttributeDrawer(item)}
                         >
-                          {item.valueText || "-"}
+                          {getSafeAttributeValueText(item.valueText) || "-"}
                           {(item.media?.length ?? 0) > 0 ? ` | Media ${item.media.length}` : ""}
                         </button>
                       ))}
@@ -524,7 +676,7 @@ export function AttributesModal({
                           onClick={() => openAttributeDrawer(item)}
                         >
                           <div style={{ minWidth: 0 }}>
-                            <strong>{item.valueText || "-"}</strong>
+                            <strong>{getSafeAttributeValueText(item.valueText) || "-"}</strong>
                             <div className="page-subtitle" style={{ margin: 0 }}>
                               {[item.dateStart, item.dateEnd].filter(Boolean).join(" - ") || "No dates"}
                             </div>
@@ -563,8 +715,11 @@ export function AttributesModal({
             <div className="person-modal-sticky-head">
               <div className="person-modal-header">
                 <div>
-                  <h3 className="person-modal-title">{prettyLabel(selectedItem.typeKey, selectedItem.label)}: {selectedItem.valueText || "-"}</h3>
-                  <p className="person-modal-meta">{selectedItem.category === "event" ? "Event" : "Descriptor"}</p>
+                  <h3 className="person-modal-title">{getAttributeDisplayTitle(selectedItem)}</h3>
+                  <p className="person-modal-meta">
+                    <span className="status-chip status-chip--neutral" style={{ marginRight: "0.45rem" }}>{getAttributeDisplayType(selectedItem)}</span>
+                    <span>{entityLabel}</span>
+                  </p>
                 </div>
                 <button type="button" className="button secondary tap-button" aria-label="Close attribute details" onClick={() => { setSelectedAttributeId(""); setDrawerEditMode(false); setEditingId(""); }}>
                   X
@@ -575,20 +730,27 @@ export function AttributesModal({
             <div className="person-modal-body">
               {!drawerEditMode ? (
                 <>
-                  <div className="card">
+                  <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
                     <h4 className="ui-section-title" style={{ marginTop: 0 }}>Details</h4>
-                    <div className="person-association-list">
-                      <div className="person-linked-row"><strong>Type</strong><span>{selectedItem.category === "event" ? "Event" : "Descriptor"}</span></div>
-                      {selectedItem.dateStart ? <div className="person-linked-row"><strong>Start Date</strong><span>{selectedItem.dateStart}</span></div> : null}
-                      {selectedItem.dateEnd ? <div className="person-linked-row"><strong>End Date</strong><span>{selectedItem.dateEnd}</span></div> : null}
-                      {selectedItem.location ? <div className="person-linked-row"><strong>Location</strong><span>{selectedItem.location}</span></div> : null}
-                      {selectedItem.notes ? <div className="person-linked-row"><strong>Notes</strong><span>{selectedItem.notes}</span></div> : null}
+                    <div style={{ display: "grid", gap: "0.55rem" }}>
+                      <div className="person-linked-row"><strong>Type</strong><span>{getAttributeDisplayType(selectedItem)}</span></div>
+                      {formatAttributeDateRange(selectedItem.dateStart, selectedItem.dateEnd) ? (
+                        <div className="person-linked-row">
+                          <strong>Dates</strong>
+                          <span>{formatAttributeDateRange(selectedItem.dateStart, selectedItem.dateEnd)}</span>
+                        </div>
+                      ) : null}
+                      {getSafeAttributeValueText(selectedItem.location) ? (
+                        <div className="person-linked-row"><strong>Location</strong><span>{getSafeAttributeValueText(selectedItem.location)}</span></div>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                    <button type="button" className="button tap-button" onClick={beginEditSelected} disabled={busy}>Edit</button>
-                    <button type="button" className="button secondary tap-button" onClick={() => void removeAttribute(selectedItem.attributeId)} disabled={busy}>Delete</button>
-                  </div>
+                  {getSafeAttributeValueText(selectedItem.notes) ? (
+                    <div className="card" style={{ marginTop: "0.75rem", border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
+                      <h4 className="ui-section-title" style={{ marginTop: 0 }}>Notes</h4>
+                      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{getSafeAttributeValueText(selectedItem.notes)}</p>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <div className="card">
@@ -636,7 +798,7 @@ export function AttributesModal({
                 </div>
               )}
 
-              <div className="card" style={{ marginTop: "0.75rem" }}>
+              <div className="card" style={{ marginTop: "0.75rem", border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
                 <h4 className="ui-section-title" style={{ marginTop: 0 }}>Media</h4>
                 <div className="person-association-list">
                   {(selectedItem.media ?? []).length > 0 ? selectedItem.media.map((item) => (
@@ -656,7 +818,7 @@ export function AttributesModal({
                       </button>
                     </div>
                   )) : (
-                    <p className="page-subtitle" style={{ margin: 0 }}>No media linked.</p>
+                    <p className="page-subtitle" style={{ margin: 0 }}>No media linked yet.</p>
                   )}
                 </div>
                 {pendingPreview ? (
@@ -721,42 +883,111 @@ export function AttributesModal({
                     setCaptureSource("microphone");
                   }}
                 />
-                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => {
-                      setEditingId(selectedItem.attributeId);
-                      document.getElementById(`attribute-upload-${selectedItem.attributeId}`)?.click();
-                    }}
-                  >
-                    Choose File
-                  </button>
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => {
-                      setEditingId(selectedItem.attributeId);
-                      document.getElementById(`attribute-upload-camera-${selectedItem.attributeId}`)?.click();
-                    }}
-                  >
-                    Camera
-                  </button>
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => {
-                      setEditingId(selectedItem.attributeId);
-                      document.getElementById(`attribute-upload-audio-${selectedItem.attributeId}`)?.click();
-                    }}
-                  >
-                    Audio
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
+                  <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)}>
+                    Add Media
                   </button>
                   <button type="button" className="button tap-button" disabled={!pendingFile || busy} onClick={() => void uploadAttachment()}>
                     {busy ? "Uploading..." : "Attach Media"}
                   </button>
                 </div>
+                {showAddMediaMenu ? (
+                  <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        setEditingId(selectedItem.attributeId);
+                        setShowAddMediaMenu(false);
+                        document.getElementById(`attribute-upload-${selectedItem.attributeId}`)?.click();
+                      }}
+                    >
+                      File From Device
+                    </button>
+                    {isLikelyMobile ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => {
+                          setEditingId(selectedItem.attributeId);
+                          setShowAddMediaMenu(false);
+                          document.getElementById(`attribute-upload-camera-${selectedItem.attributeId}`)?.click();
+                        }}
+                      >
+                        Camera
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        setShowLibraryPicker(true);
+                        setShowAddMediaMenu(false);
+                      }}
+                    >
+                      Media Library
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        setEditingId(selectedItem.attributeId);
+                        setShowAddMediaMenu(false);
+                        document.getElementById(`attribute-upload-audio-${selectedItem.attributeId}`)?.click();
+                      }}
+                    >
+                      Audio
+                    </button>
+                  </div>
+                ) : null}
+                {showLibraryPicker ? (
+                  <div className="card" style={{ marginTop: "0.75rem", border: "1px solid #E7EAF0", borderRadius: "0.9rem", padding: "0.7rem" }}>
+                    <label className="label">Choose from Media Library</label>
+                    <div className="settings-chip-list">
+                      <input
+                        className="input"
+                        placeholder="Search library by file name or ID"
+                        value={libraryQuery}
+                        onChange={(e) => setLibraryQuery(e.target.value)}
+                      />
+                      <button type="button" className="button secondary tap-button" onClick={() => void searchLibraryMedia()} disabled={libraryBusy}>
+                        {libraryBusy ? "Searching..." : "Search"}
+                      </button>
+                      <button type="button" className="button secondary tap-button" onClick={() => setShowLibraryPicker(false)}>
+                        Close
+                      </button>
+                    </div>
+                    <div className="person-association-list" style={{ marginTop: "0.55rem" }}>
+                      {libraryResults.length > 0 ? libraryResults.map((item) => (
+                        <button
+                          key={item.fileId}
+                          type="button"
+                          className="person-linked-row"
+                          style={{ width: "100%", textAlign: "left", background: "#fff" }}
+                          onClick={() => void selectLibraryMedia(item)}
+                        >
+                          <span>{item.name || item.fileId}</span>
+                          <span className="page-subtitle">{item.date || item.fileId}</span>
+                        </button>
+                      )) : <p className="page-subtitle" style={{ margin: 0 }}>No results yet.</p>}
+                    </div>
+                  </div>
+                ) : null}
               </div>
+              {!drawerEditMode ? (
+                <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.45rem" }}>
+                  <button type="button" className="button secondary tap-button" onClick={beginEditSelected} disabled={busy}>Edit Attribute</button>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    style={{ opacity: 0.78 }}
+                    onClick={() => void removeAttribute(selectedItem.attributeId)}
+                    disabled={busy}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ) : null}
               {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
             </div>
           </div>
@@ -824,12 +1055,22 @@ export function AttributesModal({
                   </div>
                 ) : null}
 
-                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("photo")} disabled={busy}>Add Photo</button>
-                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("video")} disabled={busy}>Add Video</button>
-                  <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("audio")} disabled={busy}>Add Audio</button>
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
+                  <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)} disabled={busy}>
+                    Add Media
+                  </button>
                 </div>
-                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Save + attach flow will open the file picker automatically.</p>
+                {showAddMediaMenu ? (
+                  <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
+                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("photo")} disabled={busy}>File From Device</button>
+                    {isLikelyMobile ? (
+                      <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("video")} disabled={busy}>Camera</button>
+                    ) : null}
+                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("library")} disabled={busy}>Media Library</button>
+                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("audio")} disabled={busy}>Audio</button>
+                  </div>
+                ) : null}
+                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Selecting a media option saves first, then opens the chooser.</p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} disabled={busy}>Cancel</button>

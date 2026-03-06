@@ -1748,3 +1748,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (attribute detail card readability + safe title rendering + add-media chooser)
+
+- `Change`: Reworked `AttributesModal` saved-detail drawer into a readable card hierarchy with safe display helpers, fixed raw object title rendering (`[object Object]`), formatted date ranges for display, moved media section ahead of destructive actions, lowered delete visual emphasis, and added a single `Add Media` chooser with `File From Device`, `Camera` (mobile), `Media Library`, and `Audio` options.
+- `Type`: UI, UX
+- `Why`: Root cause was direct interpolation of raw attribute values in the detail title and chip-like detail presentation that made saved state hard to read; media next-step actions were fragmented and not clearly prioritized.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Saved attribute header never shows `[object Object]` and displays a readable title.
+  - Detail section shows clean read-only rows and user-friendly date format.
+  - Media appears before delete; delete has lower emphasis than edit.
+  - `Add Media` exposes file/camera/library/audio choices.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
