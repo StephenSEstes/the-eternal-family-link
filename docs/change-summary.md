@@ -1786,3 +1786,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (person About labeling + stable modal sizing)
+
+- `Change`: Renamed person-facing `Attributes` labels to `About [FirstName]` in the Person modal tab, summary section title, manage button, and attributes manager subtitle. Added stable minimum height to person modal content to prevent visible size/shape shifts when selecting the About tab.
+- `Type`: UI, UX
+- `Why`: Root cause was inconsistent/legacy naming and variable-content height causing modal layout jumpiness when switching tabs.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Person tab label shows `About [FirstName]`.
+  - Summary section and manage flow use matching `About [FirstName]` wording.
+  - Switching tabs no longer changes the modal frame size noticeably.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

@@ -190,6 +190,7 @@ export function AttributesModal({
   entityType,
   entityId,
   entityLabel,
+  modalSubtitle = "Attributes",
   initialTypeKey,
   onClose,
   onSaved,
@@ -199,6 +200,7 @@ export function AttributesModal({
   entityType: AttributeEntityType;
   entityId: string;
   entityLabel: string;
+  modalSubtitle?: string;
   initialTypeKey?: string;
   onClose: () => void;
   onSaved: () => void;
@@ -607,7 +609,7 @@ export function AttributesModal({
           <div className="person-modal-header">
             <div>
               <h3 className="person-modal-title">{entityLabel}</h3>
-              <p className="person-modal-meta">Attributes</p>
+              <p className="person-modal-meta">{modalSubtitle}</p>
             </div>
             <button type="button" className="button secondary tap-button" onClick={onClose} aria-label="Close attributes">
               X
@@ -1085,12 +1087,18 @@ export function AttributeSummarySection({
   entityId,
   entityLabel,
   canManage,
+  sectionTitle = "Attributes",
+  manageLabel = "Manage Attributes",
+  modalSubtitle = "Attributes",
 }: {
   tenantKey: string;
   entityType: AttributeEntityType;
   entityId: string;
   entityLabel: string;
   canManage: boolean;
+  sectionTitle?: string;
+  manageLabel?: string;
+  modalSubtitle?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [initialTypeKey, setInitialTypeKey] = useState("");
@@ -1148,13 +1156,13 @@ export function AttributeSummarySection({
     <>
       <div className="card">
         <div className="person-photo-gallery-toolbar">
-          <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Attributes</h4>
+          <h4 className="ui-section-title" style={{ marginBottom: 0 }}>{sectionTitle}</h4>
           {canManage ? (
             <button type="button" className="button tap-button" onClick={() => {
               setInitialTypeKey("");
               setOpen(true);
             }}>
-              Manage Attributes
+              {manageLabel}
             </button>
           ) : null}
         </div>
@@ -1213,6 +1221,7 @@ export function AttributeSummarySection({
         entityType={entityType}
         entityId={entityId}
         entityLabel={entityLabel}
+        modalSubtitle={modalSubtitle}
         initialTypeKey={initialTypeKey}
         onClose={() => setOpen(false)}
         onSaved={() => {

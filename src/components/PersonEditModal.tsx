@@ -92,6 +92,12 @@ function toMonthDay(value: string) {
   return raw || "-";
 }
 
+function firstNameFromDisplayName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "Person";
+  return trimmed.split(/\s+/)[0] || "Person";
+}
+
 function parseDate(value?: string) {
   const raw = (value ?? "").trim();
   if (!raw) return null;
@@ -581,6 +587,7 @@ export function PersonEditModal({
     });
     return map;
   }, [households]);
+  const aboutLabel = useMemo(() => `About ${firstNameFromDisplayName(displayName || person?.displayName || "")}`, [displayName, person?.displayName]);
 
   useEffect(() => {
     setLocalPeople(people);
@@ -1375,10 +1382,10 @@ export function PersonEditModal({
 
         <div className="person-modal-tabs">
           <button type="button" className={`tab-pill ${activeTab === "contact" ? "active" : ""}`} onClick={() => setActiveTab("contact")}>Contact Info</button>
-          <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => setActiveTab("attributes")}>Attributes</button>
+          <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => setActiveTab("attributes")}>{aboutLabel}</button>
           <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
         </div>
-        <div className="person-modal-content">
+        <div className="person-modal-content" style={{ minHeight: "62vh" }}>
 
         {activeTab === "contact" ? (
           <>
@@ -1542,6 +1549,9 @@ export function PersonEditModal({
               entityId={person.personId}
               entityLabel={person.displayName}
               canManage={canManage}
+              sectionTitle={aboutLabel}
+              manageLabel={`Manage ${aboutLabel}`}
+              modalSubtitle={aboutLabel}
             />
           </>
         ) : null}
