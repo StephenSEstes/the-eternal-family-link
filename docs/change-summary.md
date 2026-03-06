@@ -1695,3 +1695,23 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Existing person/household photo upload and linkage behavior remains unchanged when `attributeId` is not supplied.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-05 (person attributes UX redesign to list + detail drawer + add modal; media-card click-to-edit)
+
+- `Change`: Refactored the Person/Household `AttributesModal` into a 3-part flow (list-only default view, attribute detail drawer with view/edit toggle, and dedicated add-attribute modal) while preserving existing attribute/media API routes and payloads. Also updated Media Library cards so clicking a thumbnail opens the edit photo panel, removing the separate `Edit Photo` button.
+- `Type`: UI, UX
+- `Why`: Root cause was a mixed single-screen attributes experience (list + add/edit + attachments together), which made workflows hard to follow; media edit affordance was split between thumbnail and a secondary button.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `AttributesModal` opens to list-only view with filter tabs + search.
+  - Clicking an attribute opens detail drawer; edit toggle and delete keep existing behavior.
+  - `+ Add Attribute` opens dedicated modal and saves via existing `/api/attributes` create flow.
+  - Attribute media attach/remove in drawer still uses existing upload/remove routes.
+  - Media Library thumbnail click opens photo editor; separate card `Edit Photo` button is no longer shown.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

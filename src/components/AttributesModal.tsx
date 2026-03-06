@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -52,7 +53,7 @@ function summarizeSingle(item: AttributeItem) {
     : "";
   const location = item.location.trim();
   const parts = [value, datePart, location].filter(Boolean);
-  return parts.join(" • ") || "-";
+  return parts.join(" | ") || "-";
 }
 
 function typeListForCategory(category: AttributeCategory) {
@@ -127,11 +128,24 @@ export function AttributesModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // UI flow:
+  // - Base view is list-only (grouped descriptors/events + search/filter).
+  // - Item click opens detail drawer (view first, optional edit mode).
+  // - Add flow uses a dedicated modal.
+  // State:
+  // - Parent owns fetched records + filtering state.
+  // - Shared editor state powers both add and edit save behavior.
   const [items, setItems] = useState<AttributeItem[]>([]);
   const [tab, setTab] = useState<AttributeTab>("all");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const [selectedAttributeId, setSelectedAttributeId] = useState("");
+  const [drawerEditMode, setDrawerEditMode] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addDetailsOpen, setAddDetailsOpen] = useState(false);
+
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
   const [typeKey, setTypeKey] = useState("hobbies");
@@ -141,6 +155,7 @@ export function AttributesModal({
   const [dateEnd, setDateEnd] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState("");
   const [captureSource, setCaptureSource] = useState("library");
@@ -161,6 +176,9 @@ export function AttributesModal({
   useEffect(() => {
     if (!open) return;
     setStatus("Loading...");
+    setSelectedAttributeId("");
+    setDrawerEditMode(false);
+    setAddModalOpen(false);
     void refresh().then(() => setStatus(""));
     if (initialTypeKey) {
       setTypeKey(initialTypeKey);
@@ -183,7 +201,10 @@ export function AttributesModal({
     });
   }, [items, query, tab]);
 
-  const editingItem = useMemo(() => items.find((item) => item.attributeId === editingId) ?? null, [items, editingId]);
+  const selectedItem = useMemo(
+    () => items.find((item) => item.attributeId === selectedAttributeId) ?? null,
+    [items, selectedAttributeId],
+  );
 
   const resetEditor = () => {
     setEditingId("");
@@ -195,17 +216,14 @@ export function AttributesModal({
     setDateEnd("");
     setLocation("");
     setNotes("");
+    setAddDetailsOpen(false);
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     setPendingPreview("");
     setPendingFile(null);
     setCaptureSource("library");
   };
 
-  const openEditor = (item?: AttributeItem) => {
-    if (!item) {
-      resetEditor();
-      return;
-    }
+  const loadEditorFromItem = (item: AttributeItem) => {
     setEditingId(item.attributeId);
     setCategory(item.category);
     setTypeKey(item.typeKey);
@@ -215,6 +233,7 @@ export function AttributesModal({
     setDateEnd(item.dateEnd);
     setLocation(item.location);
     setNotes(item.notes);
+    setAddDetailsOpen(Boolean(item.category === "event" || item.dateStart || item.dateEnd || item.location || item.notes));
   };
 
   const validateEditor = () => {
@@ -256,12 +275,18 @@ export function AttributesModal({
       setBusy(false);
       return;
     }
+    const savedId = String(body?.attribute?.attributeId || editingId || "");
     setBusy(false);
     setStatus("Saved.");
     await refresh();
     onSaved();
-    if (!editingId && body?.attribute?.attributeId) {
-      setEditingId(String(body.attribute.attributeId));
+    if (savedId) {
+      setSelectedAttributeId(savedId);
+      setDrawerEditMode(false);
+    }
+    if (!editingId) {
+      setAddModalOpen(false);
+      resetEditor();
     }
   };
 
@@ -279,6 +304,10 @@ export function AttributesModal({
     await refresh();
     onSaved();
     if (editingId === attributeId) resetEditor();
+    if (selectedAttributeId === attributeId) {
+      setSelectedAttributeId("");
+      setDrawerEditMode(false);
+    }
   };
 
   const removeMedia = async (attributeId: string, linkId: string) => {
@@ -339,6 +368,62 @@ export function AttributesModal({
     onSaved();
   };
 
+  const openAddModal = () => {
+    resetEditor();
+    const nextCategory = initialTypeKey ? inferCategory(initialTypeKey) : "descriptor";
+    setCategory(nextCategory);
+    setTypeKey(initialTypeKey || (nextCategory === "event" ? EVENT_TYPES[0] : DESCRIPTOR_TYPES[0]));
+    setAddDetailsOpen(nextCategory === "event");
+    setAddModalOpen(true);
+    setDrawerEditMode(false);
+  };
+
+  const openAttributeDrawer = (item: AttributeItem) => {
+    setSelectedAttributeId(item.attributeId);
+    setDrawerEditMode(false);
+    setStatus("");
+  };
+
+  const beginEditSelected = () => {
+    if (!selectedItem) return;
+    loadEditorFromItem(selectedItem);
+    setDrawerEditMode(true);
+  };
+
+  const cancelEditSelected = () => {
+    if (!selectedItem) return;
+    setDrawerEditMode(false);
+    setEditingId("");
+    loadEditorFromItem(selectedItem);
+    setEditingId("");
+  };
+
+  const grouped = useMemo(() => {
+    const descriptorMap = new Map<string, AttributeItem[]>();
+    const eventMap = new Map<string, AttributeItem[]>();
+    filtered.forEach((item) => {
+      const map = item.category === "event" ? eventMap : descriptorMap;
+      if (!map.has(item.typeKey)) map.set(item.typeKey, []);
+      map.get(item.typeKey)!.push(item);
+    });
+    const toRows = (map: Map<string, AttributeItem[]>) =>
+      Array.from(map.entries())
+        .map(([key, rows]) => ({
+          key,
+          label: prettyLabel(key, rows[0]?.label || ""),
+          rows: rows.slice().sort((a, b) => (b.dateStart || "").localeCompare(a.dateStart || "")),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+    return {
+      descriptor: toRows(descriptorMap),
+      event: toRows(eventMap),
+    };
+  }, [filtered]);
+
+  const showDescriptors = tab === "all" || tab === "descriptor";
+  const showEvents = tab === "all" || tab === "event";
+
   if (!open) return null;
 
   return (
@@ -347,103 +432,193 @@ export function AttributesModal({
         <div className="person-modal-sticky-head">
           <div className="person-modal-header">
             <div>
-              <h3 className="person-modal-title">Attributes</h3>
-              <p className="person-modal-meta">{entityLabel}</p>
+              <h3 className="person-modal-title">{entityLabel}</h3>
+              <p className="person-modal-meta">Attributes</p>
             </div>
-            <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
+            <button type="button" className="button secondary tap-button" onClick={onClose} aria-label="Close attributes">
+              X
+            </button>
           </div>
           <div className="settings-chip-list">
             <button type="button" className={`tab-pill ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>All</button>
             <button type="button" className={`tab-pill ${tab === "descriptor" ? "active" : ""}`} onClick={() => setTab("descriptor")}>Descriptors</button>
             <button type="button" className={`tab-pill ${tab === "event" ? "active" : ""}`} onClick={() => setTab("event")}>Events</button>
-            <button type="button" className="button tap-button" onClick={() => openEditor()} disabled={busy}>+ Add Attribute</button>
           </div>
-          <label className="label" style={{ marginTop: "0.65rem" }}>Search</label>
-          <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search type, value, location, notes" />
+          <input
+            className="input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search attributes"
+            style={{ marginTop: "0.65rem" }}
+          />
         </div>
 
-        <div className="person-modal-body">
-          <div className="card">
-            <h4 className="ui-section-title" style={{ marginTop: 0 }}>Attribute Records</h4>
-            <div className="person-association-list">
-              {filtered.length > 0 ? filtered.map((item) => (
-                <div key={item.attributeId} className="person-linked-row">
-                  <div style={{ minWidth: 0 }}>
-                    <strong>{prettyLabel(item.typeKey, item.label)}</strong>
-                    <div className="page-subtitle" style={{ margin: 0 }}>{summarizeSingle(item)}</div>
+        <div className="person-modal-body" style={{ background: "#F7F8FA" }}>
+          {showDescriptors ? (
+            <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
+              <h4 className="ui-section-title" style={{ marginTop: 0 }}>Descriptors</h4>
+              <div style={{ display: "grid", gap: "0.8rem" }}>
+                {grouped.descriptor.length > 0 ? grouped.descriptor.map((group) => (
+                  <section key={`desc-${group.key}`}>
+                    <h5 style={{ margin: "0 0 0.35rem" }}>{group.label}</h5>
+                    <div className="settings-chip-list" style={{ rowGap: "0.4rem" }}>
+                      {group.rows.map((item) => (
+                        <button
+                          key={item.attributeId}
+                          type="button"
+                          className="button secondary tap-button"
+                          style={{ borderRadius: "999px" }}
+                          onClick={() => openAttributeDrawer(item)}
+                        >
+                          {item.valueText || "-"}
+                          {(item.media?.length ?? 0) > 0 ? ` | Media ${item.media.length}` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )) : (
+                  <p className="page-subtitle" style={{ margin: 0 }}>No descriptor attributes.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {showEvents ? (
+            <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
+              <h4 className="ui-section-title" style={{ marginTop: 0 }}>Events</h4>
+              <div style={{ display: "grid", gap: "0.8rem" }}>
+                {grouped.event.length > 0 ? grouped.event.map((group) => (
+                  <section key={`event-${group.key}`}>
+                    <h5 style={{ margin: "0 0 0.35rem" }}>{group.label}</h5>
+                    <div className="person-association-list">
+                      {group.rows.map((item) => (
+                        <button
+                          key={item.attributeId}
+                          type="button"
+                          className="person-linked-row"
+                          style={{ width: "100%", textAlign: "left", background: "#fff" }}
+                          onClick={() => openAttributeDrawer(item)}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <strong>{item.valueText || "-"}</strong>
+                            <div className="page-subtitle" style={{ margin: 0 }}>
+                              {[item.dateStart, item.dateEnd].filter(Boolean).join(" - ") || "No dates"}
+                            </div>
+                          </div>
+                          {(item.media?.length ?? 0) > 0 ? <span className="status-chip status-chip--neutral">Media {item.media.length}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )) : (
+                  <p className="page-subtitle" style={{ margin: 0 }}>No event attributes.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {filtered.length === 0 ? (
+            <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
+              <p className="page-subtitle" style={{ margin: 0 }}>No attributes yet.</p>
+              <div style={{ marginTop: "0.6rem" }}>
+                <button type="button" className="button tap-button" onClick={openAddModal} disabled={busy}>+ Add Attribute</button>
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ position: "sticky", bottom: 0, background: "linear-gradient(180deg, rgba(247,248,250,0) 0%, #F7F8FA 28%)", paddingTop: "1rem" }}>
+            <button type="button" className="button tap-button" onClick={openAddModal} disabled={busy} style={{ width: "100%" }}>
+              + Add Attribute
+            </button>
+          </div>
+
+          {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+        </div>
+      </div>
+
+      {selectedItem ? (
+        <div className="person-modal-backdrop" onClick={() => { setSelectedAttributeId(""); setDrawerEditMode(false); setEditingId(""); }} style={{ zIndex: 1200 }}>
+          <div className="person-modal-panel" style={{ maxWidth: "560px", marginLeft: "auto" }} onClick={(event) => event.stopPropagation()}>
+            <div className="person-modal-sticky-head">
+              <div className="person-modal-header">
+                <div>
+                  <h3 className="person-modal-title">{prettyLabel(selectedItem.typeKey, selectedItem.label)}: {selectedItem.valueText || "-"}</h3>
+                  <p className="person-modal-meta">{selectedItem.category === "event" ? "Event" : "Descriptor"}</p>
+                </div>
+                <button type="button" className="button secondary tap-button" aria-label="Close attribute details" onClick={() => { setSelectedAttributeId(""); setDrawerEditMode(false); setEditingId(""); }}>
+                  X
+                </button>
+              </div>
+            </div>
+
+            <div className="person-modal-body">
+              {!drawerEditMode ? (
+                <>
+                  <div className="card">
+                    <h4 className="ui-section-title" style={{ marginTop: 0 }}>Details</h4>
+                    <div className="person-association-list">
+                      <div className="person-linked-row"><strong>Type</strong><span>{selectedItem.category === "event" ? "Event" : "Descriptor"}</span></div>
+                      {selectedItem.dateStart ? <div className="person-linked-row"><strong>Start Date</strong><span>{selectedItem.dateStart}</span></div> : null}
+                      {selectedItem.dateEnd ? <div className="person-linked-row"><strong>End Date</strong><span>{selectedItem.dateEnd}</span></div> : null}
+                      {selectedItem.location ? <div className="person-linked-row"><strong>Location</strong><span>{selectedItem.location}</span></div> : null}
+                      {selectedItem.notes ? <div className="person-linked-row"><strong>Notes</strong><span>{selectedItem.notes}</span></div> : null}
+                    </div>
                   </div>
+                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                    <button type="button" className="button tap-button" onClick={beginEditSelected} disabled={busy}>Edit</button>
+                    <button type="button" className="button secondary tap-button" onClick={() => void removeAttribute(selectedItem.attributeId)} disabled={busy}>Delete</button>
+                  </div>
+                </>
+              ) : (
+                <div className="card">
+                  <h4 className="ui-section-title" style={{ marginTop: 0 }}>Edit Attribute</h4>
                   <div className="settings-chip-list">
-                    <span className="status-chip status-chip--neutral">Media {item.media?.length ?? 0}</span>
-                    <button type="button" className="button secondary tap-button" onClick={() => openEditor(item)}>Edit</button>
-                    <button type="button" className="button secondary tap-button" onClick={() => void removeAttribute(item.attributeId)}>Delete</button>
+                    <select className="input" value={category} onChange={(e) => {
+                      const nextCategory = e.target.value as AttributeCategory;
+                      setCategory(nextCategory);
+                      const defaults = typeListForCategory(nextCategory);
+                      if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
+                    }}>
+                      <option value="descriptor">Descriptor</option>
+                      <option value="event">Event</option>
+                    </select>
+                    <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
+                      {typeListForCategory(category).map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <label className="label">Label</label>
+                  <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
+                  <label className="label">Value</label>
+                  <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
+                  <div className="settings-chip-list">
+                    <div style={{ flex: 1, minWidth: "170px" }}>
+                      <label className="label">Start Date</label>
+                      <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: "170px" }}>
+                      <label className="label">End Date</label>
+                      <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
+                    </div>
+                  </div>
+                  <label className="label">Location</label>
+                  <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
+                  <label className="label">Notes</label>
+                  <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                    <button type="button" className="button tap-button" disabled={busy} onClick={() => void saveAttribute()}>
+                      {busy ? "Saving..." : "Save"}
+                    </button>
+                    <button type="button" className="button secondary tap-button" disabled={busy} onClick={cancelEditSelected}>Cancel</button>
                   </div>
                 </div>
-              )) : (
-                <p className="page-subtitle" style={{ margin: 0 }}>No attributes found.</p>
               )}
-            </div>
-          </div>
 
-          <div className="card">
-            <h4 className="ui-section-title" style={{ marginTop: 0 }}>{editingId ? "Edit Attribute" : "Add Attribute"}</h4>
-            <div className="settings-chip-list">
-              <select className="input" value={category} onChange={(e) => {
-                const nextCategory = e.target.value as AttributeCategory;
-                setCategory(nextCategory);
-                const defaults = typeListForCategory(nextCategory);
-                if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
-              }}>
-                <option value="descriptor">Descriptor</option>
-                <option value="event">Event</option>
-              </select>
-              <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
-                {typeListForCategory(category).map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-                <option value="custom">custom</option>
-              </select>
-              {typeKey === "custom" ? (
-                <input className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)} placeholder="custom_type_key" />
-              ) : null}
-            </div>
-            <label className="label">Label</label>
-            <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
-            <label className="label">Value</label>
-            <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
-            <div className="settings-chip-list">
-              <div style={{ flex: 1, minWidth: "180px" }}>
-                <label className="label">Start Date</label>
-                <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: "180px" }}>
-                <label className="label">End Date</label>
-                <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
-              </div>
-            </div>
-            <label className="label">Location</label>
-            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
-            <label className="label">Notes</label>
-            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
-            <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-              <button type="button" className="button tap-button" disabled={busy} onClick={() => void saveAttribute()}>
-                {busy ? "Saving..." : "Save Attribute"}
-              </button>
-              {editingId ? (
-                <button type="button" className="button secondary tap-button" disabled={busy} onClick={resetEditor}>
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="card">
-            <h4 className="ui-section-title" style={{ marginTop: 0 }}>Attachments</h4>
-            {!editingItem ? (
-              <p className="page-subtitle" style={{ margin: 0 }}>Save an attribute first to attach media.</p>
-            ) : (
-              <>
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 className="ui-section-title" style={{ marginTop: 0 }}>Media</h4>
                 <div className="person-association-list">
-                  {(editingItem.media ?? []).length > 0 ? editingItem.media.map((item) => (
+                  {(selectedItem.media ?? []).length > 0 ? selectedItem.media.map((item) => (
                     <div key={item.linkId} className="person-linked-row">
                       <div className="person-linked-main">
                         <img src={getPhotoProxyPath(item.fileId, tenantKey)} alt={item.label || "media"} className="person-linked-avatar" />
@@ -454,7 +629,7 @@ export function AttributesModal({
                         className="person-chip-remove"
                         disabled={busy}
                         aria-label={`Remove ${item.label || item.fileId} from attribute`}
-                        onClick={() => void removeMedia(editingItem.attributeId, item.linkId)}
+                        onClick={() => void removeMedia(selectedItem.attributeId, item.linkId)}
                       >
                         x
                       </button>
@@ -479,7 +654,7 @@ export function AttributesModal({
                   </div>
                 ) : null}
                 <input
-                  id={`attribute-upload-${editingItem.attributeId}`}
+                  id={`attribute-upload-${selectedItem.attributeId}`}
                   type="file"
                   accept="image/*,video/*,audio/*"
                   style={{ display: "none" }}
@@ -494,7 +669,7 @@ export function AttributesModal({
                   }}
                 />
                 <input
-                  id={`attribute-upload-camera-${editingItem.attributeId}`}
+                  id={`attribute-upload-camera-${selectedItem.attributeId}`}
                   type="file"
                   accept="image/*,video/*"
                   capture="environment"
@@ -510,7 +685,7 @@ export function AttributesModal({
                   }}
                 />
                 <input
-                  id={`attribute-upload-audio-${editingItem.attributeId}`}
+                  id={`attribute-upload-audio-${selectedItem.attributeId}`}
                   type="file"
                   accept="audio/*"
                   capture="user"
@@ -526,25 +701,127 @@ export function AttributesModal({
                   }}
                 />
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-${editingItem.attributeId}`)?.click()}>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => {
+                      setEditingId(selectedItem.attributeId);
+                      document.getElementById(`attribute-upload-${selectedItem.attributeId}`)?.click();
+                    }}
+                  >
                     Choose File
                   </button>
-                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-camera-${editingItem.attributeId}`)?.click()}>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => {
+                      setEditingId(selectedItem.attributeId);
+                      document.getElementById(`attribute-upload-camera-${selectedItem.attributeId}`)?.click();
+                    }}
+                  >
                     Camera
                   </button>
-                  <button type="button" className="button secondary tap-button" onClick={() => document.getElementById(`attribute-upload-audio-${editingItem.attributeId}`)?.click()}>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => {
+                      setEditingId(selectedItem.attributeId);
+                      document.getElementById(`attribute-upload-audio-${selectedItem.attributeId}`)?.click();
+                    }}
+                  >
                     Audio
                   </button>
                   <button type="button" className="button tap-button" disabled={!pendingFile || busy} onClick={() => void uploadAttachment()}>
                     {busy ? "Uploading..." : "Attach Media"}
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+              {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+            </div>
           </div>
-          {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
         </div>
-      </div>
+      ) : null}
+
+      {addModalOpen ? (
+        <div className="person-modal-backdrop" onClick={() => { setAddModalOpen(false); resetEditor(); }} style={{ zIndex: 1300 }}>
+          <div className="person-modal-panel" style={{ maxWidth: "680px" }} onClick={(event) => event.stopPropagation()}>
+            <div className="person-modal-sticky-head">
+              <div className="person-modal-header">
+                <div>
+                  <h3 className="person-modal-title">Add Attribute</h3>
+                  <p className="person-modal-meta">{entityLabel}</p>
+                </div>
+                <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} aria-label="Close add attribute">X</button>
+              </div>
+            </div>
+            <div className="person-modal-body">
+              <div className="card">
+                <label className="label">Type</label>
+                <select className="input" value={category} onChange={(e) => {
+                  const nextCategory = e.target.value as AttributeCategory;
+                  setCategory(nextCategory);
+                  const defaults = typeListForCategory(nextCategory);
+                  if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
+                  if (nextCategory === "event") setAddDetailsOpen(true);
+                }}>
+                  <option value="descriptor">Descriptor</option>
+                  <option value="event">Event</option>
+                </select>
+                <label className="label">Category</label>
+                <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
+                  {typeListForCategory(category).map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+                <label className="label">Value</label>
+                <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="One value per record" />
+
+                <div style={{ marginTop: "0.75rem" }}>
+                  <button type="button" className="button secondary tap-button" onClick={() => setAddDetailsOpen((prev) => !prev)}>
+                    {addDetailsOpen ? "Hide Optional Details" : "Show Optional Details"}
+                  </button>
+                </div>
+
+                {addDetailsOpen ? (
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <label className="label">Label</label>
+                    <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label override" />
+                    <div className="settings-chip-list">
+                      <div style={{ flex: 1, minWidth: "170px" }}>
+                        <label className="label">Start Date</label>
+                        <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: "170px" }}>
+                        <label className="label">End Date</label>
+                        <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
+                      </div>
+                    </div>
+                    <label className="label">Location</label>
+                    <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
+                    <label className="label">Notes</label>
+                    <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  </div>
+                ) : null}
+
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                  <button type="button" className="button secondary tap-button" disabled>Add Photo</button>
+                  <button type="button" className="button secondary tap-button" disabled>Add Video</button>
+                  <button type="button" className="button secondary tap-button" disabled>Add Audio</button>
+                </div>
+                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Save first, then attach media from the detail drawer.</p>
+
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                  <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} disabled={busy}>Cancel</button>
+                  <button type="button" className="button tap-button" onClick={() => void saveAttribute()} disabled={busy}>
+                    {busy ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
+              {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -602,7 +879,7 @@ export function AttributeSummarySection({
             typeKey,
             label: prettyLabel(typeKey, latest?.label || ""),
             count: entries.length,
-            summary: entries.length === 1 ? summarizeSingle(latest) : `${entries.length} entries • ${summarizeSingle(latest)}`,
+            summary: entries.length === 1 ? summarizeSingle(latest) : `${entries.length} entries | ${summarizeSingle(latest)}`,
             mediaCount,
           };
         })

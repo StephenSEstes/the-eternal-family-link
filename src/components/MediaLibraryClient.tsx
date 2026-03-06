@@ -1017,7 +1017,23 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             const kind = inferMediaKind(item.fileId, item.mediaMetadata);
             return (
               <article key={item.fileId} className="card" style={{ padding: "0.6rem" }}>
-                <div style={{ marginBottom: "0.5rem", minHeight: "120px", display: "grid", placeItems: "center", background: "#f6f7f9", borderRadius: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => void openPhotoEditor(item.fileId)}
+                  className="button-ghost tap-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "0.5rem",
+                    minHeight: "120px",
+                    display: "grid",
+                    placeItems: "center",
+                    background: "#f6f7f9",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border)",
+                    padding: 0,
+                  }}
+                  aria-label={`Edit ${item.name || item.fileId}`}
+                >
                   {kind === "video" ? (
                     <video src={getPhotoProxyPath(item.fileId, tenantKey)} controls muted playsInline style={{ width: "100%", maxHeight: "160px", borderRadius: "8px" }} />
                   ) : kind === "audio" ? (
@@ -1029,20 +1045,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       style={{ width: "100%", maxHeight: "160px", objectFit: "cover", objectPosition: "top center", borderRadius: "8px" }}
                     />
                   )}
-                </div>
+                </button>
                 <div style={{ fontSize: "0.85rem", display: "grid", gap: "0.2rem" }}>
                   <strong style={{ overflowWrap: "anywhere" }}>{item.name || item.fileId}</strong>
                   {item.date ? <span>{item.date}</span> : null}
                   <span>People: {item.people.length} | Households: {item.households.length}</span>
-                  <div>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => void openPhotoEditor(item.fileId)}
-                    >
-                      Edit Photo
-                    </button>
-                  </div>
                 </div>
               </article>
             );
