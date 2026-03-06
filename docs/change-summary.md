@@ -1821,3 +1821,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (about tab: fixed-size 4-panel scaffold + full-width unknowns section)
+
+- `Change`: Replaced the Person modal `About [FirstName]` tab content with a fixed two-column/four-panel layout (`Main Events`, `Things about [Name]`, `Stories`, `Timeline`) plus a full-width `What we don't yet know about you` section matching Contact tab notes placement. Added `Add (coming soon)` buttons at the bottom of sections 1-4 and removed the embedded manage-attributes summary panel from this tab.
+- `Type`: UI, UX
+- `Why`: Root cause was the About tab using a different embedded modal/screen pattern than Contact Info, which caused inconsistent sizing/shape and mismatched layout expectations.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - About tab keeps the same modal shell size pattern as Contact Info.
+  - Four cards render in the requested positions with section titles.
+  - Sections 1-4 each show `Add (coming soon)` at the bottom.
+  - Full-width `What we don't yet know about you` section renders in row-spanning position.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

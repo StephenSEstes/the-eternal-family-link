@@ -5,7 +5,6 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
-import { AttributeSummarySection } from "@/components/AttributesModal";
 
 type PersonItem = {
   personId: string;
@@ -104,6 +103,12 @@ function parseDate(value?: string) {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function formatDisplayDate(value?: string) {
+  const parsed = parseDate(value);
+  if (!parsed) return "-";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
 }
 
 function parseMediaMetadata(raw?: string) {
@@ -733,6 +738,22 @@ export function PersonEditModal({
     () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
     [spouseId, spouseOptions],
   );
+  const selectedSpouseName = useMemo(() => {
+    if (!spouseId) return "-";
+    const spouse = localPeople.find((item) => item.personId === spouseId);
+    return spouse?.displayName || "-";
+  }, [localPeople, spouseId]);
+  const timelineItems = useMemo(() => {
+    const mediaTypes = new Set(["photo", "media", "audio", "video"]);
+    return attributes
+      .filter((item) => !mediaTypes.has(item.attributeType.toLowerCase()))
+      .sort((a, b) => {
+        const aDate = parseDate(a.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const bDate = parseDate(b.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        return aDate - bDate;
+      })
+      .slice(0, 8);
+  }, [attributes]);
   useEffect(() => {
     if (!spouseId) {
       pendingCreatedSpouseIdRef.current = "";
@@ -1553,16 +1574,64 @@ export function PersonEditModal({
 
         {activeTab === "attributes" ? (
           <>
-            <AttributeSummarySection
-              tenantKey={tenantKey}
-              entityType="person"
-              entityId={person.personId}
-              entityLabel={person.displayName}
-              canManage={canManage}
-              sectionTitle={aboutLabel}
-              manageLabel={`Manage ${aboutLabel}`}
-              modalSubtitle={aboutLabel}
-            />
+            <div className="person-section-grid">
+              <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
+                <h4 className="ui-section-title">Main Events</h4>
+                <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Born:</strong> {formatDisplayDate(birthDate)}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> -</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Married:</strong> {selectedSpouseName}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Major Accomplishments and Events:</strong> -</p>
+                </div>
+                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
+                  Add (coming soon)
+                </button>
+              </div>
+
+              <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
+                <h4 className="ui-section-title">Things about {firstNameFromDisplayName(displayName || person.displayName)}</h4>
+                <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Hobbies and Interests:</strong> {hobbies.trim() || "-"}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Health:</strong> Hair Color: -, Eye Color: -, Height: -, Blood Type: -, Allergies: -</p>
+                </div>
+                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
+                  Add (coming soon)
+                </button>
+              </div>
+
+              <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
+                <h4 className="ui-section-title">Stories</h4>
+                <div style={{ flex: 1 }} />
+                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
+                  Add (coming soon)
+                </button>
+              </div>
+
+              <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
+                <h4 className="ui-section-title">Timeline</h4>
+                <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                  {timelineItems.length > 0 ? (
+                    timelineItems.map((item) => (
+                      <p key={item.attributeId} className="page-subtitle" style={{ margin: 0 }}>
+                        <strong>{item.startDate ? `${formatDisplayDate(item.startDate)}:` : "Event:"}</strong> {item.label || item.valueText || item.attributeType}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="page-subtitle" style={{ margin: 0 }}>No events listed yet.</p>
+                  )}
+                </div>
+                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
+                  Add (coming soon)
+                </button>
+              </div>
+
+              <div className="card field-span-2">
+                <h4 className="ui-section-title">What we don&apos;t yet know about you</h4>
+                <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                  This section will list missing details to collect.
+                </p>
+              </div>
+            </div>
           </>
         ) : null}
 

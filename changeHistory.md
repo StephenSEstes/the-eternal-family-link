@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Replaced Person About tab with fixed 4-section scaffold plus full-width "What we don't yet know about you" section and section-level "Add (coming soon)" actions. See `docs/change-summary.md`.
 - 2026-03-05: Updated Media Library selected-link labels and ordering so selected chips appear above search inputs across upload/filter/edit flows. See `docs/change-summary.md`.
 
 - 2026-03-05: Redesigned Attributes UX into list + detail drawer + add modal and changed Media Library cards to open edit on thumbnail click. See `docs/change-summary.md`.
