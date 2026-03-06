@@ -1566,7 +1566,7 @@ main,
 
 .person-modal-panel {
   width: min(980px, 100%);
-  height: min(92vh, 920px);
+  height: min(96vh, 1058px);
   overflow: hidden;
   display: flex;
   flex-direction: column;

@@ -1856,3 +1856,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-06 (person modal fixed panel height increased ~15%)
+
+- `Change`: Increased the person modal fixed panel height budget from `min(92vh, 920px)` to `min(96vh, 1058px)` to show more content at once while keeping fixed-frame behavior.
+- `Type`: UI, UX
+- `Why`: Root cause was limited visible content area after switching to fixed panel mode; this adjustment increases available viewport space without reverting to content-driven frame resizing.
+- `Files`:
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Person modal frame remains fixed across tab switches.
+  - Visible content area is noticeably taller than prior fixed-height release.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.

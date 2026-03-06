@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Increased fixed person modal height by about 15% to show more content while preserving fixed-frame tab behavior. See `docs/change-summary.md`.
 - 2026-03-06: Fixed person modal to a constant panel height with internal tab scrolling so Contact/About/Pictures no longer resize the frame. See `docs/change-summary.md`.
 - 2026-03-06: Replaced Person About tab with fixed 4-section scaffold plus full-width "What we don't yet know about you" section and section-level "Add (coming soon)" actions. See `docs/change-summary.md`.
 - 2026-03-05: Updated Media Library selected-link labels and ordering so selected chips appear above search inputs across upload/filter/edit flows. See `docs/change-summary.md`.
