@@ -145,6 +145,18 @@ function formatDisplayDate(value?: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
 }
 
+function computeYearsSince(value?: string) {
+  const parsed = parseDate(value);
+  if (!parsed) return "";
+  const now = new Date();
+  let years = now.getFullYear() - parsed.getFullYear();
+  const beforeAnniversary =
+    now.getMonth() < parsed.getMonth() ||
+    (now.getMonth() === parsed.getMonth() && now.getDate() < parsed.getDate());
+  if (beforeAnniversary) years -= 1;
+  return years >= 0 ? String(years) : "";
+}
+
 function parseMediaMetadata(raw?: string) {
   const text = (raw ?? "").trim();
   if (!text) return null;
@@ -990,6 +1002,24 @@ export function PersonEditModal({
     const spouse = localPeople.find((item) => item.personId === spouseId);
     return spouse?.displayName || "-";
   }, [localPeople, spouseId]);
+  const marriedAttribute = useMemo(() => {
+    const rows = aboutAttributes.filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "family_relationship");
+    return rows.find((item) => normalizeAttributeKey(item.attributeTypeCategory) === "married") ?? null;
+  }, [aboutAttributes]);
+  const marriedDateText = useMemo(() => {
+    const raw = marriedAttribute?.attributeDate || "";
+    if (!raw) return "";
+    const formatted = formatDisplayDate(raw);
+    return formatted === "-" ? "" : formatted;
+  }, [marriedAttribute]);
+  const yearsMarriedText = useMemo(() => computeYearsSince(marriedAttribute?.attributeDate || ""), [marriedAttribute]);
+  const marriedSummaryText = useMemo(() => {
+    if (!spouseId || selectedSpouseName === "-") return "coming";
+    const parts = [selectedSpouseName];
+    if (marriedDateText) parts.push(marriedDateText);
+    if (yearsMarriedText) parts.push(`${yearsMarriedText} years married`);
+    return parts.join(", ");
+  }, [marriedDateText, selectedSpouseName, spouseId, yearsMarriedText]);
   const chipColorStyle = (rawTypeKey: string) => {
     const color = eventCategoryColorByKey[normalizeAttributeKey(rawTypeKey)] || "#d9e2ec";
     return {
@@ -2029,9 +2059,9 @@ export function PersonEditModal({
                 <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Born:</strong> {formatDisplayDate(birthDate)}</p>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> -</p>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Married:</strong> {selectedSpouseName}</p>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Major Accomplishments and Events:</strong> -</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> coming</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Married:</strong> {marriedSummaryText}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Major Accomplishments and Events:</strong> coming</p>
                 </div>
                 <button
                   type="button"

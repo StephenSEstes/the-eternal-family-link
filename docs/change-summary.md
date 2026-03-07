@@ -133,6 +133,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (person fixed panel main events copy + married summary details)
+
+- `Change`: Updated Person fixed panel `About` > `Life Events` copy so `Schools Attended` and `Major Accomplishments and Events` display `coming`. Enhanced `Married` row to show spouse name plus wedding date and computed years married when a married attribute date exists.
+- `Type`: UI
+- `Why`: Requested content adjustments for contact/fixed-panel summary and clearer marriage snapshot details.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Person fixed panel shows `Schools Attended: coming`.
+  - Person fixed panel shows `Major Accomplishments and Events: coming`.
+  - `Married` shows `Name, Date, X years married` when marriage date exists; otherwise shows available fields/fallback.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.

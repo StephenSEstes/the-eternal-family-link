@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Person fixed panel Life Events text updated (`Schools Attended`/`Major Accomplishments and Events` => `coming`) and Married summary now includes spouse name, date, and years married when available. See `docs/change-summary.md`.
 - 2026-03-07: Family views now prefer real headshots from primary photo attributes, and attribute event category colors are admin-defined and shown on attribute chips. See `docs/change-summary.md`.
 - 2026-03-07: Household profile values are now treated as global by `household_id` (not family-group row scoped), with read-time duplicate merge and active-family visibility filtered by spouse membership. See `docs/change-summary.md`.
 - 2026-03-07: Improved household modal load speed by lazy-loading picture link options and hardened OCI household compatibility DDL against transient `ORA-14411` concurrency errors during save. See `docs/change-summary.md`.
