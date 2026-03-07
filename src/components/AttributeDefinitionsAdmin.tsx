@@ -301,12 +301,6 @@ export function AttributeDefinitionsAdmin({
 
       <div className="card" style={{ marginTop: "0.75rem", position: "sticky", top: 0, zIndex: 2 }}>
         <div className="settings-chip-list">
-          <button type="button" className="button secondary tap-button" onClick={addCategory} disabled={busy}>
-            Add Category
-          </button>
-          <button type="button" className="button secondary tap-button" onClick={addType} disabled={busy || !selectedCategoryKey}>
-            Add Type
-          </button>
           <button type="button" className="button secondary tap-button" onClick={() => void discard()} disabled={busy || !hasUnsavedChanges}>
             Discard
           </button>
@@ -344,6 +338,11 @@ export function AttributeDefinitionsAdmin({
             })}
             {filteredCategories.length === 0 ? <p className="page-subtitle" style={{ margin: 0 }}>No categories found.</p> : null}
           </div>
+          <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
+            <button type="button" className="button secondary tap-button" onClick={addCategory} disabled={busy}>
+              Add Category
+            </button>
+          </div>
         </div>
 
         <div className="card">
@@ -355,22 +354,22 @@ export function AttributeDefinitionsAdmin({
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryLabel: e.target.value })} />
                 </div>
                 <div style={{ width: "120px" }}>
-                  <label className="label">Enabled</label>
-                  <label className="label" style={{ marginBottom: 0 }}>
-                    <input type="checkbox" checked={selectedCategory.isEnabled} onChange={(e) => updateCategory(selectedCategory.categoryKey, { isEnabled: e.target.checked })} /> Yes
-                  </label>
-                </div>
-                <div style={{ width: "120px" }}>
                   <label className="label">Sort</label>
                   <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategory.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
                 </div>
+                <div style={{ flex: 1, minWidth: "220px" }}>
+                  <label className="label">Description</label>
+                  <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategory.categoryKey, { description: e.target.value })} />
+                </div>
               </div>
-              <label className="label">Description</label>
-              <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategory.categoryKey, { description: e.target.value })} />
               <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
                 <button type="button" className="button secondary tap-button" onClick={() => deleteCategory(selectedCategory.categoryKey)} disabled={busy}>
                   Delete Category
                 </button>
+                <label className="label" style={{ marginBottom: 0, display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                  <input type="checkbox" checked={selectedCategory.isEnabled} onChange={(e) => updateCategory(selectedCategory.categoryKey, { isEnabled: e.target.checked })} />
+                  Enabled
+                </label>
               </div>
 
               <label className="label" style={{ marginTop: "0.75rem" }}>Type Categories</label>
@@ -431,6 +430,9 @@ export function AttributeDefinitionsAdmin({
                     </div>
                   </div>
                   <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
+                    <button type="button" className="button secondary tap-button" onClick={addType} disabled={busy || !selectedCategoryKey}>
+                      Add Type
+                    </button>
                     <button type="button" className="button secondary tap-button" onClick={() => deleteType(selectedType.typeKey, selectedType.categoryKey)}>
                       Delete Type Category
                     </button>

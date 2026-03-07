@@ -72,6 +72,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (attribute definitions button placement refinement)
+
+- `Change`: Moved `Add Category` into the left category panel below search, and placed `Add Type` beside `Delete Type Category` in the selected type editor.
+- `Type`: UI
+- `Why`: Align action placement with the editing context and requested workflow.
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Left pane shows `Add Category` below search/list.
+  - Selected type editor shows `Add Type` next to `Delete Type Category`.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.

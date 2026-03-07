@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Refined Attribute Types action placement (`Add Category` moved under category search; `Add Type` moved next to `Delete Type Category`). See `docs/change-summary.md`.
 - 2026-03-07: Updated Attribute Types admin to type-category master/detail editing (list box + focused editor fields) for selected attribute type. See `docs/change-summary.md`.
 - 2026-03-07: Polished Attribute Types admin UX into a two-pane editor and moved Next `themeColor` to `viewport` export to remove unsupported metadata warnings. See `docs/change-summary.md`.
 - 2026-03-07: Added Admin-managed Attribute Event Definitions (categories/types/detail labels/date behavior) with Add Attribute modal now reading family-specific config from `FamilyConfig.attribute_event_definitions_json`. See `docs/change-summary.md`.
