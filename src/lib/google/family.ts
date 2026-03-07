@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { HouseholdRecord, RelationshipRecord } from "@/lib/google/types";
-import { getTableRecords } from "@/lib/google/sheets";
-import { getOciHouseholdsForTenant, getOciRelationshipsForTenant } from "@/lib/oci/tables";
+import { getPeople, getTableRecords } from "@/lib/google/sheets";
+import { getOciRelationshipsForTenant } from "@/lib/oci/tables";
 
 function readCell(record: Record<string, string>, ...keys: string[]) {
   const lowered = new Map(Object.entries(record).map(([k, v]) => [k.trim().toLowerCase(), v]));
@@ -54,26 +54,52 @@ export async function getRelationships(tenantKey?: string): Promise<Relationship
 }
 
 export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[]> {
-  const rows = isOciDataSource()
-    ? await getOciHouseholdsForTenant(tenantKey).catch(() => [])
-    : await getTableRecords("Households", tenantKey);
-  return rows
-    .map((row, idx) => {
-      const data = row.data;
-      const rowTenant = readCell(data, "family_group_key", "tenant_key") || tenantKey;
-      return {
-        id: readCell(data, "household_id", "id") || `fu-${idx + 2}`,
-        tenantKey: rowTenant,
-        partner1PersonId: readCell(data, "husband_person_id"),
-        partner2PersonId: readCell(data, "wife_person_id"),
-        label: readCell(data, "family_label", "label", "family_name"),
-        notes: readCell(data, "notes", "family_notes"),
-        address: readCell(data, "address", "household_address"),
-        city: readCell(data, "city", "household_city"),
-        state: readCell(data, "state", "household_state"),
-        zip: readCell(data, "zip", "postal_code", "household_zip"),
-      } satisfies HouseholdRecord;
-    })
-    .filter((row) => row.partner1PersonId && row.partner2PersonId)
-    .filter((row) => row.tenantKey.toLowerCase() === tenantKey.toLowerCase());
+  const [people, rows] = await Promise.all([
+    getPeople(tenantKey),
+    isOciDataSource()
+      ? getTableRecords("Households").catch(() => [])
+      : getTableRecords("Households", tenantKey),
+  ]);
+  const allowedPersonIds = new Set(people.map((person) => person.personId));
+  const byHouseholdId = new Map<string, HouseholdRecord>();
+  for (let idx = 0; idx < rows.length; idx += 1) {
+    const data = rows[idx]?.data ?? {};
+    const householdId = readCell(data, "household_id", "id") || `fu-${idx + 2}`;
+    const partner1PersonId = readCell(data, "husband_person_id");
+    const partner2PersonId = readCell(data, "wife_person_id");
+    if (!partner1PersonId || !partner2PersonId) continue;
+    if (!allowedPersonIds.has(partner1PersonId) || !allowedPersonIds.has(partner2PersonId)) continue;
+
+    const incoming: HouseholdRecord = {
+      id: householdId,
+      tenantKey,
+      partner1PersonId,
+      partner2PersonId,
+      label: readCell(data, "family_label", "label", "family_name"),
+      notes: readCell(data, "notes", "family_notes"),
+      address: readCell(data, "address", "household_address"),
+      city: readCell(data, "city", "household_city"),
+      state: readCell(data, "state", "household_state"),
+      zip: readCell(data, "zip", "postal_code", "household_zip"),
+    };
+
+    const existing = byHouseholdId.get(householdId);
+    if (!existing) {
+      byHouseholdId.set(householdId, incoming);
+      continue;
+    }
+    byHouseholdId.set(householdId, {
+      ...existing,
+      partner1PersonId: existing.partner1PersonId || incoming.partner1PersonId,
+      partner2PersonId: existing.partner2PersonId || incoming.partner2PersonId,
+      label: existing.label || incoming.label,
+      notes: existing.notes || incoming.notes,
+      address: existing.address || incoming.address,
+      city: existing.city || incoming.city,
+      state: existing.state || incoming.state,
+      zip: existing.zip || incoming.zip,
+    });
+  }
+
+  return Array.from(byHouseholdId.values()).sort((a, b) => a.id.localeCompare(b.id));
 }

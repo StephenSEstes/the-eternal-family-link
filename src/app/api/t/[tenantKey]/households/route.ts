@@ -23,36 +23,47 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
 
     const [people, householdRows] = await Promise.all([
       getPeople(resolved.tenant.tenantKey),
-      getTableRecords("Households", resolved.tenant.tenantKey),
+      getTableRecords("Households"),
     ]);
     const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
-    const households = householdRows
-      .map((row) => {
-        const householdId = readCell(row.data, "household_id", "id");
-        const husbandPersonId = readCell(row.data, "husband_person_id");
-        const wifePersonId = readCell(row.data, "wife_person_id");
-        const label = readCell(row.data, "label", "family_label", "family_name");
-        if (!householdId) {
-          return null;
-        }
-        return {
-          householdId,
-          label,
-          husbandPersonId,
-          wifePersonId,
-          husbandName: peopleById.get(husbandPersonId) || husbandPersonId,
-          wifeName: peopleById.get(wifePersonId) || wifePersonId,
-        };
-      })
-      .filter((item): item is {
+    const allowedPersonIds = new Set(people.map((person) => person.personId));
+    const byHouseholdId = new Map<
+      string,
+      {
         householdId: string;
         label: string;
         husbandPersonId: string;
         wifePersonId: string;
         husbandName: string;
         wifeName: string;
-      } => Boolean(item))
-      .sort((a, b) => a.householdId.localeCompare(b.householdId));
+      }
+    >();
+    for (const row of householdRows) {
+      const householdId = readCell(row.data, "household_id", "id");
+      if (!householdId) continue;
+      const husbandPersonId = readCell(row.data, "husband_person_id");
+      const wifePersonId = readCell(row.data, "wife_person_id");
+      if (!husbandPersonId || !wifePersonId) continue;
+      if (!allowedPersonIds.has(husbandPersonId) || !allowedPersonIds.has(wifePersonId)) continue;
+      const incoming = {
+        householdId,
+        label: readCell(row.data, "label", "family_label", "family_name"),
+        husbandPersonId,
+        wifePersonId,
+        husbandName: peopleById.get(husbandPersonId) || husbandPersonId,
+        wifeName: peopleById.get(wifePersonId) || wifePersonId,
+      };
+      const existing = byHouseholdId.get(householdId);
+      if (!existing) {
+        byHouseholdId.set(householdId, incoming);
+        continue;
+      }
+      byHouseholdId.set(householdId, {
+        ...existing,
+        label: existing.label || incoming.label,
+      });
+    }
+    const households = Array.from(byHouseholdId.values()).sort((a, b) => a.householdId.localeCompare(b.householdId));
 
     return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, households });
   } catch (error) {

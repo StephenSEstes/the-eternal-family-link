@@ -91,6 +91,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (global household profile values across family groups)
+
+- `Change`: Switched household profile reads from family-group row scope to canonical household-id scope, with duplicate-row merge on read for `label/notes/address/city/state/zip` values. Updated tenant household list and family-tree household loading to filter visibility by people membership in the active family group rather than `Households.family_group_key`.
+- `Type`: API, Data
+- `Why`: Household profile fields (wedding date/address/etc.) were diverging between family groups because household rows could be family-scoped/duplicated; users expect one shared household profile across groups.
+- `Files`:
+  - `src/lib/google/family.ts`
+  - `src/app/api/t/[tenantKey]/households/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+- `Data Changes`: No destructive migration in this change; duplicate `household_id` rows are merged logically at read time.
+- `Verify`:
+  - Edit household profile in family group A and save.
+  - Switch to family group B (where the same spouses are visible).
+  - Household profile values appear consistently.
+  - Tenant household list shows only households whose spouses are in active family membership.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.

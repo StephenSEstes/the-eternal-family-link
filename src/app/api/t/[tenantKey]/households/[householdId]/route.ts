@@ -70,33 +70,42 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
 }
 
 async function resolveHousehold(tenantKey: string, householdId: string, peopleById: Map<string, string>) {
-  const rows = await getTableRecords("Households", tenantKey);
-  const match = rows.find((row) => {
+  void tenantKey;
+  const rows = await getTableRecords("Households");
+  const matches = rows.filter((row) => {
     const rowId = readCell(row.data, "household_id", "id");
     return rowId === householdId;
   });
-  if (!match) {
+  if (matches.length === 0) {
     return null;
   }
-  const husbandPersonId = readCell(match.data, "husband_person_id");
-  const wifePersonId = readCell(match.data, "wife_person_id");
+  const merged = matches.reduce<Record<string, string>>((acc, row) => {
+    for (const [key, value] of Object.entries(row.data)) {
+      if (!acc[key] && typeof value === "string" && value.trim()) {
+        acc[key] = value;
+      }
+    }
+    return acc;
+  }, {});
+  const husbandPersonId = readCell(merged, "husband_person_id");
+  const wifePersonId = readCell(merged, "wife_person_id");
 
   return {
-    row: match,
+    row: matches[0],
     dto: {
       householdId,
       husbandPersonId,
       wifePersonId,
       husbandName: peopleById.get(husbandPersonId) || husbandPersonId,
       wifeName: peopleById.get(wifePersonId) || wifePersonId,
-      label: readCell(match.data, "label", "family_label", "family_name"),
-      notes: readCell(match.data, "notes", "family_notes"),
-      weddingPhotoFileId: readCell(match.data, "wedding_photo_file_id"),
-      marriedDate: readCell(match.data, "married_date", "wedding_date"),
-      address: readCell(match.data, "address", "household_address"),
-      city: readCell(match.data, "city", "household_city"),
-      state: readCell(match.data, "state", "household_state"),
-      zip: readCell(match.data, "zip", "postal_code", "household_zip"),
+      label: readCell(merged, "label", "family_label", "family_name"),
+      notes: readCell(merged, "notes", "family_notes"),
+      weddingPhotoFileId: readCell(merged, "wedding_photo_file_id"),
+      marriedDate: readCell(merged, "married_date", "wedding_date"),
+      address: readCell(merged, "address", "household_address"),
+      city: readCell(merged, "city", "household_city"),
+      state: readCell(merged, "state", "household_state"),
+      zip: readCell(merged, "zip", "postal_code", "household_zip"),
     },
   };
 }
@@ -202,18 +211,14 @@ async function buildDeleteHouseholdPreview(tenantKey: string, householdId: strin
   if (!targetHouseholdId) {
     return null;
   }
-  const targetTenantKey = normalize(tenantKey);
+  void tenantKey;
   const [householdRows, relationshipRows] = await Promise.all([
-    getTableRecords("Households", tenantKey).catch(() => []),
+    getTableRecords("Households").catch(() => []),
     getTableRecords("Relationships").catch(() => []),
   ]);
   const householdMatches = householdRows.filter((row) => {
     const rowId = readCell(row.data, "household_id", "id");
-    if (rowId !== targetHouseholdId) {
-      return false;
-    }
-    const rowTenantKey = normalize(readCell(row.data, "family_group_key"));
-    return !rowTenantKey || rowTenantKey === targetTenantKey;
+    return rowId === targetHouseholdId;
   });
   if (householdMatches.length === 0) {
     return null;
