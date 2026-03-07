@@ -2086,3 +2086,17 @@ Concise release notes for what changed, why it changed, and what to verify.
     - `attribute_id, entity_type, entity_id, attribute_type, attribute_type_category, attribute_date, date_is_estimated, estimated_to, attribute_detail, attribute_notes, end_date`.
 - `Rollback Notes`: Restore attributes table from DB backup snapshot and revert this commit.
 - `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).
+## 2026-03-06 (person family spouse fallback + attribute modal flow regressions)
+
+- `Change`: Fixed person Family spouse initialization to fall back to spouse/family relationship edges when no household row is present, prevented parent dropdown changes from auto-clearing spouse to blank, and continued the in-progress Attributes modal fixes for chip text safety, add-modal delete action, and return-to-About-tab flow.
+- `Type`: UI, Logic
+- `Why`: Root cause was data-source mismatch (Family Tree can resolve spouse from relationships while person editor spouse value previously relied on households only), plus add/edit modal branch gaps that caused missing delete action and confusing post-save navigation.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` compiles and completes static generation in this environment (command timeout occurred after completion output; no build errors were emitted).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

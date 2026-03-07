@@ -29,3 +29,4 @@ This file is a quick release-log entry point.
 - 2026-03-05: Polished attributes modal UX (no add-modal X, side-by-side type/category, title-cased options, simplified media sources, steadier tab layout). See `docs/change-summary.md`.
 - 2026-03-06: Person Attributes labels now read About [FirstName], and person modal tab switching keeps a stable frame height. See `docs/change-summary.md`.
 - 2026-03-06: Contact tab updated with Name section, conditional Maiden Name field, and dedicated full-width Notes section. See `docs/change-summary.md`.
+- 2026-03-06: Fixed spouse field initialization in Person Family section by falling back to relationship edges when household rows are missing; also included active Attributes modal regression fixes (chip text safety/delete visibility/tab return). See `docs/change-summary.md`.

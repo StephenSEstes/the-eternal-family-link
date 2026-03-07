@@ -61,6 +61,8 @@ type AboutAttribute = {
   endDate?: string;
   label?: string;
   valueText?: string;
+  shareScope?: string;
+  shareFamilyGroupKey?: string;
 };
 
 type PhotoLibraryItem = {
@@ -203,6 +205,8 @@ function getSafeAttributeText(value: unknown): string {
       const resolved = getSafeAttributeText(candidate);
       if (resolved) return resolved;
     }
+    const primitiveValues = Object.values(record).map((entry) => getSafeAttributeText(entry)).filter(Boolean);
+    if (primitiveValues.length > 0) return primitiveValues[0];
     return "";
   }
   return "";
@@ -644,6 +648,7 @@ export function PersonEditModal({
   const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
+  const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -660,6 +665,8 @@ export function PersonEditModal({
     parent2Id: "",
     spouseId: "",
   });
+  const previousPersonIdRef = useRef("");
+  const wasOpenRef = useRef(false);
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
 
   const parentEdges = useMemo(
@@ -700,6 +707,20 @@ export function PersonEditModal({
     });
     return map;
   }, [households]);
+  const spouseByRelationshipId = useMemo(() => {
+    if (!person) return "";
+    for (const edge of edges) {
+      const relType = edge.label.trim().toLowerCase();
+      if (relType !== "spouse" && relType !== "family") continue;
+      if (edge.fromPersonId === person.personId && edge.toPersonId && edge.toPersonId !== person.personId) {
+        return edge.toPersonId;
+      }
+      if (edge.toPersonId === person.personId && edge.fromPersonId && edge.fromPersonId !== person.personId) {
+        return edge.fromPersonId;
+      }
+    }
+    return "";
+  }, [edges, person]);
   const aboutLabel = useMemo(() => `About ${firstNameFromDisplayName(displayName || person?.displayName || "")}`, [displayName, person?.displayName]);
   const phoneActionItems = useMemo(() => extractPhoneLinkItems(phones), [phones]);
   const attributeLaunchMeta = useMemo(() => {
@@ -757,9 +778,15 @@ export function PersonEditModal({
   useEffect(() => {
     if (!open || !person) {
       setShowAttributeAddModal(false);
+      wasOpenRef.current = false;
       return;
     }
-    setActiveTab("contact");
+    const shouldResetTab = !wasOpenRef.current || previousPersonIdRef.current !== person.personId;
+    if (shouldResetTab) {
+      setActiveTab("contact");
+    }
+    wasOpenRef.current = true;
+    previousPersonIdRef.current = person.personId;
     setDisplayName(person.displayName || "");
     setFirstName(person.firstName || "");
     setMiddleName(person.middleName || "");
@@ -783,7 +810,8 @@ export function PersonEditModal({
       initialSpouseId = partner.partner1PersonId === person.personId ? partner.partner2PersonId : partner.partner1PersonId;
       setSpouseId(initialSpouseId);
     } else {
-      setSpouseId("");
+      initialSpouseId = spouseByRelationshipId;
+      setSpouseId(initialSpouseId);
     }
     initialFamilyRef.current = {
       parent1Id: normalizeId(initialParent1Id),
@@ -818,6 +846,7 @@ export function PersonEditModal({
     setShowPhotoUploadPicker(false);
     setUploadTarget("photo");
     setShowAddSpouse(false);
+    setSelectedAboutAttributeId("");
     setNewSpouseFirstName("");
     setNewSpouseMiddleName("");
     setNewSpouseLastName("");
@@ -830,7 +859,7 @@ export function PersonEditModal({
     setStatus("");
     void loadAttributes(person.personId);
     void loadAboutAttributes(person.personId);
-  }, [open, person, households, parentSelection, tenantKey]);
+  }, [open, person, households, parentSelection, spouseByRelationshipId, tenantKey]);
 
   useEffect(() => {
     return () => {
@@ -910,8 +939,10 @@ export function PersonEditModal({
       .slice(0, 8);
   }, [attributes]);
   const isInLawPerson = useMemo(() => {
-    return attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
-  }, [attributes]);
+    const inLegacyAttributes = attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
+    const inUnifiedAttributes = aboutAttributes.some((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "in_law" && isTruthyFlag(getSafeAttributeText(item.attributeDetail || item.valueText)));
+    return inLegacyAttributes || inUnifiedAttributes;
+  }, [aboutAttributes, attributes]);
   const aboutDescriptorAttributes = useMemo(() => {
     return aboutAttributes.filter((item) => {
       if (item.category) return item.category === "descriptor";
@@ -1686,7 +1717,9 @@ export function PersonEditModal({
                                 setParent1Id(next);
                                 setFamilyTouched(true);
                                 const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                                setSpouseId(spouse);
+                                if (spouse) {
+                                  setSpouseId(spouse);
+                                }
                                 if (spouse && spouse !== person.personId && spouse !== next) {
                                   setParent2Id(spouse);
                                 }
@@ -1708,7 +1741,9 @@ export function PersonEditModal({
                                 setParent2Id(next);
                                 setFamilyTouched(true);
                                 const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                                setSpouseId(spouse);
+                                if (spouse) {
+                                  setSpouseId(spouse);
+                                }
                                 if (spouse && spouse !== person.personId && spouse !== next) {
                                   setParent1Id(spouse);
                                 }
@@ -1799,6 +1834,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("main_events");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1829,6 +1865,7 @@ export function PersonEditModal({
                         }}
                         onClick={() => {
                           setAttributeLaunchSource("things");
+                          setSelectedAboutAttributeId(chip.attributeId);
                           setShowAttributeAddModal(true);
                         }}
                       >
@@ -1855,6 +1892,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("things");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1871,6 +1909,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("stories");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1897,6 +1936,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("timeline");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1923,9 +1963,13 @@ export function PersonEditModal({
             entityLabel={displayName || person.displayName}
             modalSubtitle={aboutLabel}
             initialTypeKey={attributeLaunchMeta.initialTypeKey}
+            initialEditAttributeId={selectedAboutAttributeId}
             startInAddMode
             launchSourceLabel={attributeLaunchMeta.label}
-            onClose={() => setShowAttributeAddModal(false)}
+            onClose={() => {
+              setShowAttributeAddModal(false);
+              setSelectedAboutAttributeId("");
+            }}
             onSaved={() => {
               void loadAttributes(person.personId);
               void loadAboutAttributes(person.personId);

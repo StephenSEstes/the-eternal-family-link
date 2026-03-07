@@ -312,6 +312,7 @@ export function AttributesModal({
   entityLabel,
   modalSubtitle = "Attributes",
   initialTypeKey,
+  initialEditAttributeId = "",
   startInAddMode = false,
   launchSourceLabel = "",
   onClose,
@@ -324,6 +325,7 @@ export function AttributesModal({
   entityLabel: string;
   modalSubtitle?: string;
   initialTypeKey?: string;
+  initialEditAttributeId?: string;
   startInAddMode?: boolean;
   launchSourceLabel?: string;
   onClose: () => void;
@@ -403,6 +405,22 @@ export function AttributesModal({
       setCategory(inferCategory(normalizedType));
     }
   }, [open, entityType, entityId, initialTypeKey, startInAddMode]);
+
+  useEffect(() => {
+    if (!open || !startInAddMode) return;
+    const editId = initialEditAttributeId.trim();
+    if (!editId) {
+      setEditingId("");
+      return;
+    }
+    const match = items.find((item) => item.attributeId === editId);
+    if (!match) return;
+    loadEditorFromItem(match);
+    setEditingId(editId);
+    setAddModalOpen(true);
+    setDrawerEditMode(false);
+    setStatus("");
+  }, [initialEditAttributeId, items, open, startInAddMode]);
 
   useEffect(() => {
     if (!pendingPreview) return;
@@ -553,11 +571,12 @@ export function AttributesModal({
     }
     const savedId = String(body?.attribute?.attributeId || editingId || "");
     const wasEdit = Boolean(editingId);
+    const savedFromAddModal = addModalOpen;
     setBusy(false);
     setStatus("Saved.");
     await refresh();
     onSaved();
-    if (wasEdit && savedId) {
+    if (wasEdit && savedId && !savedFromAddModal) {
       setSelectedAttributeId(savedId);
       setDrawerEditMode(false);
     }
@@ -566,6 +585,12 @@ export function AttributesModal({
       resetEditor();
       setSelectedAttributeId("");
       setDrawerEditMode(false);
+      if (startInAddMode) {
+        onClose();
+      }
+    } else if (savedFromAddModal) {
+      setAddModalOpen(false);
+      resetEditor();
       if (startInAddMode) {
         onClose();
       }
@@ -1352,6 +1377,17 @@ export function AttributesModal({
                 <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Selecting a media option saves first, then opens the chooser.</p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                  {editingId ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      style={{ opacity: 0.82 }}
+                      onClick={() => void removeAttribute(editingId)}
+                      disabled={busy}
+                    >
+                      Delete
+                    </button>
+                  ) : null}
                   <button type="button" className="button secondary tap-button" onClick={closeAddModal} disabled={busy}>Cancel</button>
                   <button type="button" className="button tap-button" onClick={() => void saveAttribute()} disabled={busy}>
                     {busy ? "Saving..." : "Save"}
