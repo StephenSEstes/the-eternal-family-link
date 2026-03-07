@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Removed About-tab chip click path into nested attribute detail/list modals and restyled Things About chips as non-clickable pills with icon and light background. See `docs/change-summary.md`.
 - 2026-03-06: Fixed person birthdate off-by-one display (date-only local parsing) and added inline Contact actions (`Call/Text` on phone row, `Email` on email row). See `docs/change-summary.md`.
 - 2026-03-06: Replaced Things About placeholder text with clickable descriptor chips and enabled chip click to open attribute detail with existing media/edit/delete actions. See `docs/change-summary.md`.
 - 2026-03-06: Adjusted Add Attribute modal row layout (`Date Related` separate; `Type` + `Type of ...` together) and updated About tab labels/data binding so Things About reflects saved descriptor values. See `docs/change-summary.md`.

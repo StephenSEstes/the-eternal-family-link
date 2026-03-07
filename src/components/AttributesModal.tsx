@@ -312,7 +312,6 @@ export function AttributesModal({
   entityLabel,
   modalSubtitle = "Attributes",
   initialTypeKey,
-  initialSelectedAttributeId = "",
   startInAddMode = false,
   launchSourceLabel = "",
   onClose,
@@ -325,7 +324,6 @@ export function AttributesModal({
   entityLabel: string;
   modalSubtitle?: string;
   initialTypeKey?: string;
-  initialSelectedAttributeId?: string;
   startInAddMode?: boolean;
   launchSourceLabel?: string;
   onClose: () => void;
@@ -395,16 +393,16 @@ export function AttributesModal({
   useEffect(() => {
     if (!open) return;
     setStatus("Loading...");
-    setSelectedAttributeId(initialSelectedAttributeId);
+    setSelectedAttributeId("");
     setDrawerEditMode(false);
-    setAddModalOpen(startInAddMode && !initialSelectedAttributeId);
+    setAddModalOpen(startInAddMode);
     void refresh().then(() => setStatus(""));
     if (initialTypeKey) {
       const normalizedType = normalizeTypeKey(initialTypeKey);
       setTypeKey(normalizedType);
       setCategory(inferCategory(normalizedType));
     }
-  }, [open, entityType, entityId, initialTypeKey, initialSelectedAttributeId, startInAddMode]);
+  }, [open, entityType, entityId, initialTypeKey, startInAddMode]);
 
   useEffect(() => {
     if (!pendingPreview) return;

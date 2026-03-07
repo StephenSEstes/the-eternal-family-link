@@ -595,7 +595,6 @@ export function PersonEditModal({
   const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
-  const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -1700,7 +1699,6 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("main_events");
-                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1713,19 +1711,33 @@ export function PersonEditModal({
                 <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: "0.6rem" }}>
                   {thingsChips.length > 0 ? (
                     thingsChips.map((chip) => (
-                      <button
+                      <div
                         key={chip.attributeId}
-                        type="button"
                         className="status-chip status-chip--neutral"
-                        style={{ textAlign: "left", width: "100%", cursor: "pointer" }}
-                        onClick={() => {
-                          setAttributeLaunchSource("things");
-                          setSelectedAboutAttributeId(chip.attributeId);
-                          setShowAttributeAddModal(true);
+                        style={{
+                          textAlign: "left",
+                          width: "100%",
+                          borderRadius: "999px",
+                          border: "1px solid #d9e2ec",
+                          background: "#eef4ff",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          padding: "0.45rem 0.7rem",
                         }}
                       >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: "0.52rem",
+                            height: "0.52rem",
+                            borderRadius: "999px",
+                            background: "#5b6b85",
+                            flex: "0 0 auto",
+                          }}
+                        />
                         {chip.label}
-                      </button>
+                      </div>
                     ))
                   ) : (
                     <p className="page-subtitle" style={{ margin: 0 }}>No attributes added yet.</p>
@@ -1737,7 +1749,6 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("things");
-                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1754,7 +1765,6 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("stories");
-                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1781,7 +1791,6 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("timeline");
-                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1808,13 +1817,9 @@ export function PersonEditModal({
             entityLabel={displayName || person.displayName}
             modalSubtitle={aboutLabel}
             initialTypeKey={attributeLaunchMeta.initialTypeKey}
-            initialSelectedAttributeId={selectedAboutAttributeId}
-            startInAddMode={!selectedAboutAttributeId}
+            startInAddMode
             launchSourceLabel={attributeLaunchMeta.label}
-            onClose={() => {
-              setShowAttributeAddModal(false);
-              setSelectedAboutAttributeId("");
-            }}
+            onClose={() => setShowAttributeAddModal(false)}
             onSaved={() => {
               void loadAttributes(person.personId);
               void loadAboutAttributes(person.personId);

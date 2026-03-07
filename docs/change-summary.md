@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (remove chip detail modal path + pill chip visual update)
+
+- `Change`: Removed chip click navigation into attribute detail/list modal flow from About tab, so this surface now uses add-attribute flow only; updated Things About chips to non-clickable pill styling with a light background, subtle border, and left icon dot.
+- `Type`: UI
+- `Why`: Root cause was chip click wiring that opened nested attribute modals (detail panel then parent attributes panel), creating an unwanted two-form experience.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Clicking a Things About chip does not open attribute detail/list modals.
+  - Add Attribute from About tab still opens the add form and returns to fixed person panel on close.
+  - Things About chips display as pills with border, light fill, and left icon.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (birthdate timezone fix + inline contact actions)
 
 - `Change`: Fixed person birthdate display off-by-one behavior by parsing date-only strings as local calendar dates, and updated Contact section rows so phone has inline `Call/Text` actions and email has an inline `Email` action on the same line.
