@@ -6,6 +6,7 @@ import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
 import { extractPhoneLinkItems } from "@/lib/phone-links";
+import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 
 type PersonItem = {
   personId: string;
@@ -673,6 +674,7 @@ export function PersonEditModal({
   const [contextHouseholds, setContextHouseholds] = useState<HouseholdLink[]>(households);
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [timelineSortOrder, setTimelineSortOrder] = useState<"asc" | "desc">("asc");
+  const [eventCategoryColorByKey, setEventCategoryColorByKey] = useState<Record<string, string>>({});
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
@@ -765,6 +767,28 @@ export function PersonEditModal({
     setContextHouseholds(households);
     setActiveTenantKey(tenantKey);
   }, [edges, households, people, tenantKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const loadDefinitions = async () => {
+      const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/attribute-definitions`, { cache: "no-store" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.definitions || cancelled) return;
+      const defs = body.definitions as AttributeEventDefinitions;
+      const next: Record<string, string> = {};
+      for (const row of defs.categories ?? []) {
+        const key = normalizeAttributeKey(row.categoryKey);
+        const color = String(row.categoryColor ?? "").trim() || "#e5e7eb";
+        if (key) next[key] = color;
+      }
+      setEventCategoryColorByKey(next);
+    };
+    void loadDefinitions();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantKey, open]);
 
   const fallbackAvatar = (person?.gender ?? "unspecified") === "female"
     ? "/placeholders/avatar-female.png"
@@ -966,6 +990,13 @@ export function PersonEditModal({
     const spouse = localPeople.find((item) => item.personId === spouseId);
     return spouse?.displayName || "-";
   }, [localPeople, spouseId]);
+  const chipColorStyle = (rawTypeKey: string) => {
+    const color = eventCategoryColorByKey[normalizeAttributeKey(rawTypeKey)] || "#d9e2ec";
+    return {
+      borderColor: color,
+      background: `${color}33`,
+    } as const;
+  };
   const timelineItems = useMemo(() => {
     const filtered = aboutAttributes.filter((item) => {
       const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
@@ -2031,7 +2062,7 @@ export function PersonEditModal({
                           maxWidth: "100%",
                           borderRadius: "999px",
                           border: "1px solid #d9e2ec",
-                          background: "#eef4ff",
+                          ...chipColorStyle(aboutDescriptorAttributes.find((row) => row.attributeId === chip.attributeId)?.attributeType || ""),
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.45rem",
@@ -2119,7 +2150,7 @@ export function PersonEditModal({
                         style={{
                           borderRadius: "999px",
                           border: "1px solid #d9e2ec",
-                          background: "#eef4ff",
+                          ...chipColorStyle(item.attributeType || item.typeKey || ""),
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.35rem",

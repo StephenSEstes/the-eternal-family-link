@@ -76,6 +76,7 @@ function defaultEventDefinitions(): AttributeEventDefinitions {
   const categories = EVENT_TYPES.map((typeKey, index) => ({
     categoryKey: typeKey,
     categoryLabel: prettyLabel(typeKey, ""),
+    categoryColor: "#e5e7eb",
     description: "",
     sortOrder: (index + 1) * 10,
     isEnabled: true,
@@ -459,6 +460,20 @@ export function AttributesModal({
     }
     return map;
   }, [eventCategoryOptions]);
+  const eventCategoryColorByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of eventCategoryOptions) {
+      map.set(normalizeTypeKey(item.categoryKey), (item.categoryColor || "#e5e7eb").trim() || "#e5e7eb");
+    }
+    return map;
+  }, [eventCategoryOptions]);
+  const chipColorStyleForType = (rawTypeKey: string) => {
+    const color = eventCategoryColorByKey.get(normalizeTypeKey(rawTypeKey)) || "#e5e7eb";
+    return {
+      borderColor: color,
+      background: `${color}33`,
+    } as const;
+  };
 
   const refresh = async () => {
     const res = await fetch(
@@ -981,7 +996,7 @@ export function AttributesModal({
                           key={item.attributeId}
                           type="button"
                           className="button secondary tap-button"
-                          style={{ borderRadius: "999px" }}
+                          style={{ borderRadius: "999px", ...chipColorStyleForType(item.typeKey) }}
                           onClick={() => openAttributeDrawer(item)}
                         >
                           {getSafeAttributeValueText(item.valueText) || "-"}
@@ -1010,7 +1025,7 @@ export function AttributesModal({
                           key={item.attributeId}
                           type="button"
                           className="person-linked-row"
-                          style={{ width: "100%", textAlign: "left", background: "#fff" }}
+                          style={{ width: "100%", textAlign: "left", ...chipColorStyleForType(item.typeKey) }}
                           onClick={() => openAttributeDrawer(item)}
                         >
                           <div style={{ minWidth: 0 }}>

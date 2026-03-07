@@ -110,6 +110,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (family view headshot preference + admin-defined attribute category colors)
+
+- `Change`: Family tree data loader now prefers each person’s primary photo attribute over `People.photo_file_id` fallback so family views show real headshots whenever available. Added `categoryColor` to admin-managed attribute event category definitions and surfaced those colors on person/household/attributes chips.
+- `Type`: UI, API
+- `Why`: Family views were showing fallback avatars even when headshots existed in attributes. Attribute chips needed visual category cues configured by admin (for example Education in light blue).
+- `Files`:
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/lib/attributes/event-definitions-types.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/app/api/t/[tenantKey]/attribute-definitions/route.ts`
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+- `Data Changes`: Existing definitions without `categoryColor` remain valid and are normalized with fallback colors.
+- `Verify`:
+  - Tree/family views show person headshots when a primary photo attribute exists.
+  - Admin > Attribute Event Definitions allows selecting category colors.
+  - Person About timeline chips, Household attribute chips, and Attributes modal chips display category tint colors.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.

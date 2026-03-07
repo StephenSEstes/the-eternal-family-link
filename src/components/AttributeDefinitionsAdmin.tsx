@@ -11,6 +11,7 @@ type TenantOption = {
 type CategoryRow = {
   categoryKey: string;
   categoryLabel: string;
+  categoryColor: string;
   description: string;
   sortOrder: number;
   isEnabled: boolean;
@@ -72,7 +73,12 @@ export function AttributeDefinitionsAdmin({
       return;
     }
     const defs = body?.definitions as DefinitionsPayload | undefined;
-    const nextCategories = Array.isArray(defs?.categories) ? defs.categories : [];
+    const nextCategories = Array.isArray(defs?.categories)
+      ? defs.categories.map((row) => ({
+          ...row,
+          categoryColor: (row.categoryColor || "#e5e7eb").trim() || "#e5e7eb",
+        }))
+      : [];
     const nextTypes = Array.isArray(defs?.types) ? defs.types : [];
     setCategories(nextCategories);
     setTypes(nextTypes);
@@ -167,6 +173,7 @@ export function AttributeDefinitionsAdmin({
           ...row,
           categoryKey: normalizeKey(row.categoryKey),
           categoryLabel: row.categoryLabel.trim(),
+          categoryColor: row.categoryColor.trim(),
           description: row.description.trim(),
           sortOrder: Number.isFinite(row.sortOrder) ? row.sortOrder : (index + 1) * 10,
         })),
@@ -218,6 +225,7 @@ export function AttributeDefinitionsAdmin({
     const next: CategoryRow = {
       categoryKey: `category_${index}`,
       categoryLabel: `Category ${index}`,
+      categoryColor: "#e5e7eb",
       description: "",
       sortOrder: index * 10,
       isEnabled: true,
@@ -332,7 +340,20 @@ export function AttributeDefinitionsAdmin({
                   }}
                   style={{ textAlign: "left", borderColor: active ? "#1f2937" : undefined, background: active ? "#eef2ff" : undefined }}
                 >
-                  <div style={{ fontWeight: 700 }}>{row.categoryLabel || row.categoryKey}</div>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", fontWeight: 700 }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: "0.75rem",
+                        height: "0.75rem",
+                        borderRadius: "999px",
+                        background: row.categoryColor || "#e5e7eb",
+                        border: "1px solid rgba(17,24,39,0.15)",
+                        flex: "0 0 auto",
+                      }}
+                    />
+                    <span>{row.categoryLabel || row.categoryKey}</span>
+                  </div>
                 </button>
               );
             })}
@@ -350,11 +371,20 @@ export function AttributeDefinitionsAdmin({
             <>
               <div
                 className="settings-chip-list"
-                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 96px minmax(220px, 1.2fr)", gap: "0.6rem", alignItems: "end" }}
+                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 110px 96px minmax(220px, 1.2fr)", gap: "0.6rem", alignItems: "end" }}
               >
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Category Label</label>
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryLabel: e.target.value })} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <label className="label">Color</label>
+                  <input
+                    className="input"
+                    type="color"
+                    value={selectedCategory.categoryColor || "#e5e7eb"}
+                    onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryColor: e.target.value })}
+                  />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Sort</label>

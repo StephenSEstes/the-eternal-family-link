@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
+import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 
 type HouseholdSummary = {
   householdId: string;
@@ -233,6 +234,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [householdAttributes, setHouseholdAttributes] = useState<HouseholdAttribute[]>([]);
   const [householdAttributeStatus, setHouseholdAttributeStatus] = useState("");
   const [householdTimelineSort, setHouseholdTimelineSort] = useState<"asc" | "desc">("desc");
+  const [eventCategoryColorByKey, setEventCategoryColorByKey] = useState<Record<string, string>>({});
   const [showHouseholdAttributesModal, setShowHouseholdAttributesModal] = useState(false);
   const [selectedHouseholdAttributeId, setSelectedHouseholdAttributeId] = useState("");
   const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
@@ -583,6 +585,28 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   }, [activeTab, linkOptionsLoaded, open, tenantKey]);
 
   useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const loadDefinitions = async () => {
+      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/attribute-definitions`, { cache: "no-store" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.definitions || cancelled) return;
+      const defs = body.definitions as AttributeEventDefinitions;
+      const next: Record<string, string> = {};
+      for (const row of defs.categories ?? []) {
+        const key = toPlainText(row.categoryKey).toLowerCase();
+        const color = toPlainText(row.categoryColor) || "#e5e7eb";
+        if (key) next[key] = color;
+      }
+      setEventCategoryColorByKey(next);
+    };
+    void loadDefinitions();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, tenantKey]);
+
+  useEffect(() => {
     if (!selectedPhoto || !showPhotoDetail) {
       setSelectedPhotoAssociations({ people: [], households: [] });
       return;
@@ -662,6 +686,13 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
       if (aHas && bHas) return householdTimelineSort === "asc" ? aMs - bMs : bMs - aMs;
       return householdAttributeChipLabel(a).localeCompare(householdAttributeChipLabel(b));
     });
+  const chipColorStyle = (rawTypeKey: string) => {
+    const color = eventCategoryColorByKey[toPlainText(rawTypeKey).toLowerCase()] || "#d9e2ec";
+    return {
+      borderColor: color,
+      background: `${color}33`,
+    } as const;
+  };
   const imageSrc = weddingPhotoFileId
     ? getPhotoProxyPath(weddingPhotoFileId, tenantKey)
     : spouseHeadshotFileId
@@ -802,7 +833,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             style={{
                               borderRadius: "999px",
                               border: "1px solid #d9e2ec",
-                              background: "#eef4ff",
+                              ...chipColorStyle(item.attributeType || item.typeKey || ""),
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "0.35rem",

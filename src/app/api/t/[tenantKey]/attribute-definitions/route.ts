@@ -14,6 +14,7 @@ const payloadSchema = z.object({
       z.object({
         categoryKey: z.string().trim().min(1).max(120),
         categoryLabel: z.string().trim().min(1).max(120),
+        categoryColor: z.string().trim().max(16).optional(),
         description: z.string().trim().max(400).optional(),
         sortOrder: z.number().int().optional(),
         isEnabled: z.boolean().optional(),
@@ -67,6 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     categories: parsed.data.categories.map((row, index) => ({
       categoryKey: row.categoryKey,
       categoryLabel: row.categoryLabel,
+      categoryColor: row.categoryColor ?? "",
       description: row.description ?? "",
       sortOrder: row.sortOrder ?? (index + 1) * 10,
       isEnabled: row.isEnabled ?? true,
@@ -89,4 +91,3 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     definitions: saved,
   });
 }
-

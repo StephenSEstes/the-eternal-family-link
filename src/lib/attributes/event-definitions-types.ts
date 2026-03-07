@@ -3,6 +3,7 @@ export type EventTypeDateMode = "single" | "range";
 export type AttributeEventCategoryDefinition = {
   categoryKey: string;
   categoryLabel: string;
+  categoryColor: string;
   description: string;
   sortOrder: number;
   isEnabled: boolean;
@@ -24,4 +25,3 @@ export type AttributeEventDefinitions = {
   categories: AttributeEventCategoryDefinition[];
   types: AttributeEventTypeDefinition[];
 };
-

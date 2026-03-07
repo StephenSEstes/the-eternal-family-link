@@ -41,6 +41,14 @@ function normalizeLabel(value: string) {
   return value.trim();
 }
 
+function normalizeColor(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const hex = raw.startsWith("#") ? raw : `#${raw}`;
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toLowerCase();
+  return "";
+}
+
 function toBool(value: unknown, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
@@ -59,18 +67,18 @@ export function defaultAttributeEventDefinitions(): AttributeEventDefinitions {
   return {
     version: 1,
     categories: [
-      { categoryKey: "birth", categoryLabel: "Birth", description: "", sortOrder: 10, isEnabled: true },
-      { categoryKey: "education", categoryLabel: "Education", description: "", sortOrder: 20, isEnabled: true },
-      { categoryKey: "religious", categoryLabel: "Religious", description: "", sortOrder: 30, isEnabled: true },
-      { categoryKey: "accomplishment", categoryLabel: "Accomplishment", description: "", sortOrder: 40, isEnabled: true },
-      { categoryKey: "injury_health", categoryLabel: "Injury/Health", description: "", sortOrder: 50, isEnabled: true },
-      { categoryKey: "life_event", categoryLabel: "Life Event", description: "", sortOrder: 60, isEnabled: true },
-      { categoryKey: "moved", categoryLabel: "Moved", description: "", sortOrder: 70, isEnabled: true },
-      { categoryKey: "employment", categoryLabel: "Employment", description: "", sortOrder: 80, isEnabled: true },
-      { categoryKey: "family_relationship", categoryLabel: "Family/Relationship", description: "", sortOrder: 90, isEnabled: true },
-      { categoryKey: "pet", categoryLabel: "Pet", description: "", sortOrder: 100, isEnabled: true },
-      { categoryKey: "travel", categoryLabel: "Travel", description: "", sortOrder: 110, isEnabled: true },
-      { categoryKey: "other", categoryLabel: "Other", description: "", sortOrder: 120, isEnabled: true },
+      { categoryKey: "birth", categoryLabel: "Birth", categoryColor: "#f3f4f6", description: "", sortOrder: 10, isEnabled: true },
+      { categoryKey: "education", categoryLabel: "Education", categoryColor: "#dbeafe", description: "", sortOrder: 20, isEnabled: true },
+      { categoryKey: "religious", categoryLabel: "Religious", categoryColor: "#ede9fe", description: "", sortOrder: 30, isEnabled: true },
+      { categoryKey: "accomplishment", categoryLabel: "Accomplishment", categoryColor: "#dcfce7", description: "", sortOrder: 40, isEnabled: true },
+      { categoryKey: "injury_health", categoryLabel: "Injury/Health", categoryColor: "#fee2e2", description: "", sortOrder: 50, isEnabled: true },
+      { categoryKey: "life_event", categoryLabel: "Life Event", categoryColor: "#ffedd5", description: "", sortOrder: 60, isEnabled: true },
+      { categoryKey: "moved", categoryLabel: "Moved", categoryColor: "#e0f2fe", description: "", sortOrder: 70, isEnabled: true },
+      { categoryKey: "employment", categoryLabel: "Employment", categoryColor: "#fef3c7", description: "", sortOrder: 80, isEnabled: true },
+      { categoryKey: "family_relationship", categoryLabel: "Family/Relationship", categoryColor: "#fce7f3", description: "", sortOrder: 90, isEnabled: true },
+      { categoryKey: "pet", categoryLabel: "Pet", categoryColor: "#dcfce7", description: "", sortOrder: 100, isEnabled: true },
+      { categoryKey: "travel", categoryLabel: "Travel", categoryColor: "#cffafe", description: "", sortOrder: 110, isEnabled: true },
+      { categoryKey: "other", categoryLabel: "Other", categoryColor: "#e5e7eb", description: "", sortOrder: 120, isEnabled: true },
     ],
     types: [
       { typeKey: "enrolled", categoryKey: "education", typeLabel: "Enrolled", detailLabel: "School Name", dateMode: "single", askEndDate: false, sortOrder: 10, isEnabled: true },
@@ -112,6 +120,7 @@ function normalizeConfig(input: unknown): AttributeEventDefinitions {
       return {
         categoryKey,
         categoryLabel,
+        categoryColor: normalizeColor(String(row.categoryColor ?? "")) || normalizeColor(fallback.categories[index]?.categoryColor ?? "") || "#e5e7eb",
         description: normalizeLabel(String(row.description ?? "")),
         sortOrder: toInt(row.sortOrder, (index + 1) * 10),
         isEnabled: toBool(row.isEnabled, true),

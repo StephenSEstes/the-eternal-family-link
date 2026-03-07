@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
 
 export type TreePageData = {
   people: Awaited<ReturnType<typeof getPeople>>;
@@ -32,13 +32,29 @@ export async function loadTreePageData(tenantKey: string): Promise<TreePageData>
   }
 
   const next = (async () => {
-    const people = await getPeople(tenantKey);
-    const peopleInFamily = new Set(people.map((person) => person.personId));
+    const [people, personAttributes] = await Promise.all([
+      getPeople(tenantKey),
+      getPersonAttributes(tenantKey),
+    ]);
+    const preferredPhotoByPersonId = new Map<string, string>();
+    for (const item of personAttributes) {
+      if (item.attributeType !== "photo") continue;
+      if (!item.valueText) continue;
+      const existing = preferredPhotoByPersonId.get(item.personId);
+      if (!existing || item.isPrimary) {
+        preferredPhotoByPersonId.set(item.personId, item.valueText);
+      }
+    }
+    const peopleWithPreferredPhotos = people.map((person) => ({
+      ...person,
+      photoFileId: preferredPhotoByPersonId.get(person.personId) || person.photoFileId || "",
+    }));
+    const peopleInFamily = new Set(peopleWithPreferredPhotos.map((person) => person.personId));
     const [allRelationships, households] = await Promise.all([getRelationships(tenantKey), getHouseholds(tenantKey)]);
     const relationships = allRelationships.filter(
       (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
     );
-    const data = { people, relationships, households };
+    const data = { people: peopleWithPreferredPhotos, relationships, households };
     treePageDataCache.set(cacheKey, { data, expiresAt: Date.now() + TREE_PAGE_CACHE_TTL_MS });
     return data;
   })();
