@@ -4,6 +4,9 @@
  * We filter only that warning code to keep logs actionable.
  */
 export async function register() {
+  // Middleware/edge runtimes do not guarantee a Node.js warning API.
+  if (typeof process === "undefined" || typeof process.emitWarning !== "function") return;
+
   const globalMarker = "__eflDep0169FilterInstalled";
   const globalState = globalThis as typeof globalThis & Record<string, boolean>;
   if (globalState[globalMarker]) return;
