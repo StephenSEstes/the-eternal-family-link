@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Polished Attribute Types admin UX into a two-pane editor and moved Next `themeColor` to `viewport` export to remove unsupported metadata warnings. See `docs/change-summary.md`.
 - 2026-03-07: Added Admin-managed Attribute Event Definitions (categories/types/detail labels/date behavior) with Add Attribute modal now reading family-specific config from `FamilyConfig.attribute_event_definitions_json`. See `docs/change-summary.md`.
 - 2026-03-07: Suppressed dependency-only `DEP0169` (`url.parse`) runtime warning via server instrumentation filter, without changing app business logic. See `docs/change-summary.md`.
 - 2026-03-06: Added family-save safety guard (change-gated relationship updates + no spouse auto-clear) and in-law Family section rule that hides parent selectors with guidance text. See `docs/change-summary.md`.

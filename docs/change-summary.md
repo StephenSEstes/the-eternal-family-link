@@ -39,6 +39,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: Added 2026-03-07 decision for admin-managed event metadata.
 
+## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
+
+- `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.
+- `Type`: UI, Infra
+- `Why`: Admin event-definition editor was functionally correct but hard to manage at scale; Next.js warned that `themeColor` in metadata is unsupported.
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/app/layout.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Attribute Types tab supports category selection + focused type editing with save/discard workflow.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Build output no longer includes `Unsupported metadata themeColor` warnings.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.
