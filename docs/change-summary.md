@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (shared media attach wizard MVP foundation + Media Library integration)
+
+- `Change`: Added a shared image-only media attach wizard and shared attach orchestrator/contract layer, then integrated Media Library upload flow to launch the wizard instead of maintaining duplicated upload/link UI logic.
+- `Type`: UI, API
+- `Why`: Root cause was duplicated media attach logic across screens with drift risk in request payloads and behavior. This centralizes orchestration while preserving existing backend contracts and person attribute-link semantics.
+- `Files`:
+  - `src/lib/media/attach-contracts.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/lib/media/attach-orchestrator.test.ts`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Media Library `Add Media` opens shared wizard.
+  - Wizard supports image device upload, camera capture input, and existing library linking.
+  - Save result status includes `createdLinks`, `createdAttributes`, `skipped`, and `failures`.
+  - Person linking still uses attribute creation semantics (`POST /people/:personId/attributes`).
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (admin-managed attribute event definitions)
 
 - `Change`: Added family-group admin management for Attribute event definitions (categories + types + detail labels + date behavior), stored in `FamilyConfig.attribute_event_definitions_json`, and wired Add Attribute modal to use those definitions at runtime with safe defaults fallback.
