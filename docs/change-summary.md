@@ -57,6 +57,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (household attributes panel flow alignment + OCI household address persistence fix)
+
+- `Change`: Replaced Household Info upper-right `Attributes` panel from `Manage Attributes` summary UI to the same chip-driven add/view modal flow used in person fixed panel (`AttributesModal` in add/edit mode). Fixed household address persistence by extending OCI Households column mapping/compatibility to include `married_date`, `address`, `city`, `state`, and `zip`.
+- `Type`: UI, API, Data
+- `Why`: Root cause 1 was OCI payload normalization dropping address fields because Households headers in OCI mapping did not include those columns. Root cause 2 was using `AttributeSummarySection` (legacy manage flow) instead of the person fixed-panel attribute modal pattern requested for household attributes.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: Adds OCI compatibility `ALTER TABLE households ADD (...)` checks for `married_date/address/city/state/zip` when missing.
+- `Verify`:
+  - In Household Info, upper-right section shows attribute chips with Ascending/Descending sort and `Add Attribute`.
+  - Clicking a chip opens the same add/edit attribute modal flow used by person fixed panel.
+  - Editing household address/city/state/zip and saving persists and reloads correctly in OCI-backed env.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.

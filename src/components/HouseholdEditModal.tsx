@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import { AttributeSummarySection } from "@/components/AttributesModal";
+import { AttributesModal } from "@/components/AttributesModal";
 
 type HouseholdSummary = {
   householdId: string;
@@ -18,6 +18,19 @@ type HouseholdSummary = {
   city: string;
   state: string;
   zip: string;
+};
+
+type HouseholdAttribute = {
+  attributeId: string;
+  attributeType: string;
+  attributeTypeCategory: string;
+  attributeDate: string;
+  endDate: string;
+  attributeDetail: string;
+  valueText: string;
+  category: "descriptor" | "event";
+  typeKey: string;
+  createdAt: string;
 };
 
 type ChildSummary = {
@@ -116,6 +129,48 @@ function isAudioMediaByMetadata(raw?: string) {
   return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
 }
 
+function toPlainText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => toPlainText(item)).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    return (
+      toPlainText(source.label)
+      || toPlainText(source.name)
+      || toPlainText(source.valueText)
+      || toPlainText(source.value)
+      || toPlainText(source.text)
+    );
+  }
+  return "";
+}
+
+function toPrettyLabel(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase())
+    .trim();
+}
+
+function householdAttributeChipLabel(item: HouseholdAttribute) {
+  const category = toPrettyLabel(toPlainText(item.attributeTypeCategory) || toPlainText(item.attributeType) || toPlainText(item.typeKey));
+  const detail = toPlainText(item.attributeDetail) || toPlainText(item.valueText);
+  if (category && detail) return `${category}: ${detail}`;
+  return category || detail || "Attribute";
+}
+
+function toSortTimestamp(item: HouseholdAttribute) {
+  const first = Date.parse(toPlainText(item.attributeDate));
+  if (Number.isFinite(first)) return first;
+  const second = Date.parse(toPlainText(item.endDate));
+  if (Number.isFinite(second)) return second;
+  const created = Date.parse(toPlainText(item.createdAt));
+  if (Number.isFinite(created)) return created;
+  return Number.NaN;
+}
+
 async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
   const result: { width?: number; height?: number; durationSec?: number } = {};
   if (file.type.startsWith("image/")) {
@@ -175,6 +230,11 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [city, setCity] = useState("");
   const [stateValue, setStateValue] = useState("");
   const [zip, setZip] = useState("");
+  const [householdAttributes, setHouseholdAttributes] = useState<HouseholdAttribute[]>([]);
+  const [householdAttributeStatus, setHouseholdAttributeStatus] = useState("");
+  const [householdTimelineSort, setHouseholdTimelineSort] = useState<"asc" | "desc">("desc");
+  const [showHouseholdAttributesModal, setShowHouseholdAttributesModal] = useState(false);
+  const [selectedHouseholdAttributeId, setSelectedHouseholdAttributeId] = useState("");
   const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
@@ -243,6 +303,23 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setSelectedPhotoAssociations({ people: [], households: [] });
     setAssociationStatus("");
     setLinkQuery("");
+    await refreshHouseholdAttributes();
+  };
+
+  const refreshHouseholdAttributes = async () => {
+    const res = await fetch(
+      `/api/attributes?entity_type=household&entity_id=${encodeURIComponent(householdId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setHouseholdAttributeStatus(`Attributes load failed: ${res.status}`);
+      setHouseholdAttributes([]);
+      return;
+    }
+    const next = Array.isArray(body?.attributes) ? (body.attributes as HouseholdAttribute[]) : [];
+    setHouseholdAttributes(next);
+    setHouseholdAttributeStatus("");
   };
 
   const refreshSelectedPhotoAssociations = async (fileId: string) => {
@@ -560,6 +637,22 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
       }
     : null;
   const spouseHeadshotFileId = wifeTile?.photoFileId || husbandTile?.photoFileId || "";
+  const sortedHouseholdTimeline = householdAttributes
+    .filter((item) => {
+      const typeKey = toPlainText(item.attributeType || item.typeKey).toLowerCase();
+      return !["photo", "video", "audio", "media", "in_law"].includes(typeKey);
+    })
+    .slice()
+    .sort((a, b) => {
+      const aMs = toSortTimestamp(a);
+      const bMs = toSortTimestamp(b);
+      const aHas = Number.isFinite(aMs);
+      const bHas = Number.isFinite(bMs);
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      if (aHas && bHas) return householdTimelineSort === "asc" ? aMs - bMs : bMs - aMs;
+      return householdAttributeChipLabel(a).localeCompare(householdAttributeChipLabel(b));
+    });
   const imageSrc = weddingPhotoFileId
     ? getPhotoProxyPath(weddingPhotoFileId, tenantKey)
     : spouseHeadshotFileId
@@ -674,13 +767,67 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
 
                   <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "260px" }}>
                     <h4 className="ui-section-title">Attributes</h4>
-                    <AttributeSummarySection
-                      tenantKey={tenantKey}
-                      entityType="household"
-                      entityId={householdId}
-                      entityLabel={household.label || householdId}
-                      canManage
-                    />
+                    <div className="settings-chip-list" style={{ marginBottom: "0.55rem" }}>
+                      <button
+                        type="button"
+                        className={`button secondary tap-button ${householdTimelineSort === "asc" ? "game-option-selected" : ""}`}
+                        onClick={() => setHouseholdTimelineSort("asc")}
+                      >
+                        Ascending
+                      </button>
+                      <button
+                        type="button"
+                        className={`button secondary tap-button ${householdTimelineSort === "desc" ? "game-option-selected" : ""}`}
+                        onClick={() => setHouseholdTimelineSort("desc")}
+                      >
+                        Descending
+                      </button>
+                    </div>
+                    <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                      {sortedHouseholdTimeline.length > 0 ? (
+                        sortedHouseholdTimeline.map((item) => (
+                          <button
+                            key={item.attributeId}
+                            type="button"
+                            className="status-chip status-chip--neutral"
+                            style={{
+                              borderRadius: "999px",
+                              border: "1px solid #d9e2ec",
+                              background: "#eef4ff",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.4rem 0.65rem",
+                              cursor: "pointer",
+                              width: "auto",
+                              maxWidth: "100%",
+                            }}
+                            onClick={() => {
+                              setSelectedHouseholdAttributeId(item.attributeId);
+                              setShowHouseholdAttributesModal(true);
+                            }}
+                          >
+                            <span>{householdAttributeChipLabel(item)}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="page-subtitle" style={{ margin: 0 }}>No attributes listed yet.</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      style={{ marginTop: "auto" }}
+                      onClick={() => {
+                        setSelectedHouseholdAttributeId("");
+                        setShowHouseholdAttributesModal(true);
+                      }}
+                    >
+                      Add Attribute
+                    </button>
+                    {householdAttributeStatus ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.55rem", marginBottom: 0 }}>{householdAttributeStatus}</p>
+                    ) : null}
                   </div>
 
                   <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "240px" }}>
@@ -1315,6 +1462,26 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               </button>
               <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
             </div>
+            <AttributesModal
+              open={showHouseholdAttributesModal}
+              tenantKey={tenantKey}
+              entityType="household"
+              entityId={householdId}
+              entityLabel={label || household.label || householdId}
+              modalSubtitle="Attributes"
+              initialTypeKey="life_event"
+              initialTypeCategory="story"
+              initialEditAttributeId={selectedHouseholdAttributeId}
+              startInAddMode
+              onClose={() => {
+                setShowHouseholdAttributesModal(false);
+                setSelectedHouseholdAttributeId("");
+              }}
+              onSaved={() => {
+                void refreshHouseholdAttributes();
+                onSaved();
+              }}
+            />
           </>
         ) : null}
 

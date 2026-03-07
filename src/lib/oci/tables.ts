@@ -32,6 +32,7 @@ let cachedWalletDir: string | null = null;
 let poolPromise: Promise<OciPool> | null = null;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
+let householdsTableCompatEnsured = false;
 
 function readWalletJsonPayload() {
   const single = process.env.OCI_WALLET_FILES_JSON;
@@ -132,6 +133,11 @@ const TABLES: Record<string, TableConfig> = {
       "label",
       "notes",
       "wedding_photo_file_id",
+      "married_date",
+      "address",
+      "city",
+      "state",
+      "zip",
     ],
   },
   HouseholdPhotos: {
@@ -407,6 +413,31 @@ async function ensureFamilyConfigTableCompatibility(connection: OciConnection) {
   familyConfigCompatEnsured = true;
 }
 
+async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
+  if (householdsTableCompatEnsured) {
+    return;
+  }
+  const additiveColumns = [
+    "married_date VARCHAR2(32)",
+    "address VARCHAR2(400)",
+    "city VARCHAR2(120)",
+    "state VARCHAR2(80)",
+    "zip VARCHAR2(40)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE households ADD (${columnSql})`);
+      await connection.commit();
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+  householdsTableCompatEnsured = true;
+}
+
 export async function getOciTableRecords(tabName: string | string[]): Promise<SheetRecord[]> {
   const { config } = resolveTab(tabName);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
@@ -416,6 +447,9 @@ export async function getOciTableRecords(tabName: string | string[]): Promise<Sh
     }
     if (config.tableName === "family_config") {
       await ensureFamilyConfigTableCompatibility(connection);
+    }
+    if (config.tableName === "households") {
+      await ensureHouseholdsTableCompatibility(connection);
     }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} ORDER BY ROWID`,
@@ -449,6 +483,9 @@ export async function getOciTableRecordById(
     if (config.tableName === "family_config") {
       await ensureFamilyConfigTableCompatibility(connection);
     }
+    if (config.tableName === "households") {
+      await ensureHouseholdsTableCompatibility(connection);
+    }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} WHERE ${whereColumn} = :id FETCH FIRST 1 ROWS ONLY`,
       [recordId],
@@ -480,6 +517,9 @@ export async function createOciTableRecords(
     }
     if (config.tableName === "family_config") {
       await ensureFamilyConfigTableCompatibility(connection);
+    }
+    if (config.tableName === "households") {
+      await ensureHouseholdsTableCompatibility(connection);
     }
     const normalizedRows = payloads.map((payload) => normalizePayload(payload, config.headers));
     const binds = normalizedRows.map((row) => config.headers.map((h) => row[h] ?? ""));
@@ -513,6 +553,9 @@ export async function updateOciTableRecordById(
     }
     if (config.tableName === "family_config") {
       await ensureFamilyConfigTableCompatibility(connection);
+    }
+    if (config.tableName === "households") {
+      await ensureHouseholdsTableCompatibility(connection);
     }
     const update = await connection.execute(
       `UPDATE ${config.tableName} SET ${setClauses.join(", ")} WHERE ${whereColumn} = :id`,
