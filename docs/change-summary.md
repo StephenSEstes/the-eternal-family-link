@@ -2100,3 +2100,16 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` compiles and completes static generation in this environment (command timeout occurred after completion output; no build errors were emitted).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-06 (attribute editor object-value coercion fix)
+
+- `Change`: Normalized attribute editor field binding to coerce object-shaped runtime values into safe text for `attributeTypeCategory`, `attributeDetail/valueText`, `label`, and date fields before rendering chips/forms.
+- `Type`: UI, Logic
+- `Why`: Root cause was object-shaped payload fragments reaching input bindings during edit-load, causing literal `[object Object]` in `Describe ...` fields and degraded chip labels.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Edit existing attributes no longer renders `[object Object]` in detail inputs.
+  - Things/About chip labels can render `TypeCategory: Detail` when both fields exist.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

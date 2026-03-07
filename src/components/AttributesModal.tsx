@@ -112,23 +112,27 @@ function normalizeTypeKey(value: string) {
 
 function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   const normalizedType = normalizeTypeKey(item.attributeType || item.typeKey || "");
-  const attributeDate = item.attributeDate || item.dateStart || "";
+  const attributeDate = getSafeAttributeValueText(item.attributeDate || item.dateStart);
   const category =
     normalizedType === "other"
       ? (attributeDate ? "event" : "descriptor")
       : inferCategory(normalizedType);
-  const endDate = item.endDate || item.dateEnd || "";
-  const attributeDetail = item.attributeDetail || item.valueText || "";
-  const attributeNotes = item.attributeNotes || item.notes || "";
+  const endDate = getSafeAttributeValueText(item.endDate || item.dateEnd);
+  const attributeTypeCategory = getSafeAttributeValueText(item.attributeTypeCategory);
+  const attributeDetail = getSafeAttributeValueText(item.attributeDetail || item.valueText);
+  const attributeNotes = getSafeAttributeValueText(item.attributeNotes || item.notes);
+  const label = getSafeAttributeValueText(item.label);
   return {
     ...item,
     category,
     attributeType: normalizedType,
+    attributeTypeCategory,
     typeKey: normalizedType,
     attributeDate,
     endDate,
     attributeDetail,
     attributeNotes,
+    label,
     valueText: attributeDetail,
     dateStart: attributeDate,
     dateEnd: endDate,
@@ -508,15 +512,15 @@ export function AttributesModal({
   const loadEditorFromItem = (item: AttributeItem) => {
     setEditingId(item.attributeId);
     setCategory(item.category);
-    setTypeKey(item.attributeType || item.typeKey);
-    setAttributeTypeCategory(item.attributeTypeCategory || "");
+    setTypeKey(normalizeTypeKey(getSafeAttributeValueText(item.attributeType || item.typeKey)));
+    setAttributeTypeCategory(getSafeAttributeValueText(item.attributeTypeCategory));
     setDateIsEstimated(Boolean(item.dateIsEstimated));
     setEstimatedTo((item.estimatedTo as "" | "month" | "year") || "");
-    setLabel(item.label);
-    setValueText(item.attributeDetail || item.valueText);
-    setDateStart(item.attributeDate || item.dateStart);
-    setDateEnd(item.endDate || item.dateEnd);
-    setNotes(item.attributeNotes || item.notes);
+    setLabel(getSafeAttributeValueText(item.label));
+    setValueText(getSafeAttributeValueText(item.attributeDetail || item.valueText));
+    setDateStart(getSafeAttributeValueText(item.attributeDate || item.dateStart));
+    setDateEnd(getSafeAttributeValueText(item.endDate || item.dateEnd));
+    setNotes(getSafeAttributeValueText(item.attributeNotes || item.notes));
   };
 
   const validateEditor = () => {
@@ -606,15 +610,21 @@ export function AttributesModal({
       setBusy(false);
       return;
     }
+    setItems((current) => current.filter((item) => item.attributeId !== attributeId));
     setBusy(false);
     setStatus("Deleted.");
-    await refresh();
     onSaved();
     if (editingId === attributeId) resetEditor();
     if (selectedAttributeId === attributeId) {
       setSelectedAttributeId("");
       setDrawerEditMode(false);
     }
+    setAddModalOpen(false);
+    if (startInAddMode) {
+      onClose();
+      return;
+    }
+    void refresh();
   };
 
   const removeMedia = async (attributeId: string, linkId: string) => {
