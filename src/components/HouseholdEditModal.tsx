@@ -13,6 +13,7 @@ type HouseholdSummary = {
   label: string;
   notes: string;
   weddingPhotoFileId: string;
+  marriedDate: string;
   address: string;
   city: string;
   state: string;
@@ -169,6 +170,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [label, setLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [weddingPhotoFileId, setWeddingPhotoFileId] = useState("");
+  const [marriedDate, setMarriedDate] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateValue, setStateValue] = useState("");
@@ -229,6 +231,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setLargePhotoIsVideo(false);
     setLargePhotoIsAudio(false);
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
+    setMarriedDate(String(next.marriedDate ?? ""));
     setLabel(String(next.label ?? ""));
     setNotes(String(next.notes ?? ""));
     setAddress(String(next.address ?? ""));
@@ -618,73 +621,93 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
           <>
             {activeTab === "info" ? (
               <>
-                <div className="card">
-                  <h4 className="ui-section-title">Household Info</h4>
-                  <label className="label">Household Label</label>
-                  <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
-                  {(husbandTile || wifeTile) ? (
-                    <div className="people-grid album-grid" style={{ marginTop: "0.65rem", marginBottom: "0.55rem" }}>
-                      {[husbandTile, wifeTile]
-                        .filter((item): item is NonNullable<typeof husbandTile> => Boolean(item))
-                        .map((item) => {
-                          const fallbackAvatar = getGenderAvatarSrc(item.gender ?? "unspecified");
-                          const photoSrc = item.photoFileId
-                            ? getPhotoProxyPath(item.photoFileId, tenantKey)
-                            : fallbackAvatar;
-                          return (
-                            <article
-                              key={`household-tile-${item.personId}`}
-                              className="person-card album-card"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => openPersonDetail(item.personId)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  openPersonDetail(item.personId);
-                                }
-                              }}
-                            >
-                              <div className="person-photo-wrap">
-                                <img src={photoSrc} alt={item.displayName} className="person-photo" />
-                              </div>
-                              <div className="person-card-content">
-                                <h3>{item.displayName}</h3>
-                                <p className="person-meta-row">
-                                  <span>{item.gender === "female" ? "Wife" : "Husband"}</span>
-                                </p>
-                              </div>
-                            </article>
-                          );
-                        })}
-                    </div>
-                  ) : null}
-                  <label className="label">Address</label>
-                  <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
-                  <div className="settings-chip-list">
-                    <div style={{ flex: 1, minWidth: 140 }}>
-                      <label className="label">City</label>
-                      <input className="input" value={city} onChange={(e) => setCity(e.target.value)} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 110 }}>
-                      <label className="label">State</label>
-                      <input className="input" value={stateValue} onChange={(e) => setStateValue(e.target.value)} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 110 }}>
-                      <label className="label">ZIP</label>
-                      <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
+                <div className="person-section-grid">
+                  <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "260px" }}>
+                    <h4 className="ui-section-title">Marriage</h4>
+                    <label className="label">Household Label</label>
+                    <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
+                    {(husbandTile || wifeTile) ? (
+                      <div className="people-grid album-grid" style={{ marginTop: "0.65rem", marginBottom: "0.55rem" }}>
+                        {[husbandTile, wifeTile]
+                          .filter((item): item is NonNullable<typeof husbandTile> => Boolean(item))
+                          .map((item) => {
+                            const fallbackAvatar = getGenderAvatarSrc(item.gender ?? "unspecified");
+                            const photoSrc = item.photoFileId
+                              ? getPhotoProxyPath(item.photoFileId, tenantKey)
+                              : fallbackAvatar;
+                            return (
+                              <article
+                                key={`household-tile-${item.personId}`}
+                                className="person-card album-card"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => openPersonDetail(item.personId)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    openPersonDetail(item.personId);
+                                  }
+                                }}
+                              >
+                                <div className="person-photo-wrap">
+                                  <img src={photoSrc} alt={item.displayName} className="person-photo" />
+                                </div>
+                                <div className="person-card-content">
+                                  <h3>{item.displayName}</h3>
+                                  <p className="person-meta-row">
+                                    <span>{item.gender === "female" ? "Wife" : "Husband"}</span>
+                                  </p>
+                                </div>
+                              </article>
+                            );
+                          })}
+                      </div>
+                    ) : null}
+                    <label className="label">Married Date</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={marriedDate}
+                      onChange={(e) => setMarriedDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "260px" }}>
+                    <h4 className="ui-section-title">Attributes</h4>
+                    <AttributeSummarySection
+                      tenantKey={tenantKey}
+                      entityType="household"
+                      entityId={householdId}
+                      entityLabel={household.label || householdId}
+                      canManage
+                    />
+                  </div>
+
+                  <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "240px" }}>
+                    <h4 className="ui-section-title">Address</h4>
+                    <label className="label">Address</label>
+                    <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
+                    <div className="settings-chip-list">
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <label className="label">City</label>
+                        <input className="input" value={city} onChange={(e) => setCity(e.target.value)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 110 }}>
+                        <label className="label">State</label>
+                        <input className="input" value={stateValue} onChange={(e) => setStateValue(e.target.value)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 110 }}>
+                        <label className="label">ZIP</label>
+                        <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
+                      </div>
                     </div>
                   </div>
-                  <label className="label">Notes</label>
-                  <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
+
+                  <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "240px" }}>
+                    <h4 className="ui-section-title">Household Notes</h4>
+                    <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Household notes" />
+                  </div>
                 </div>
-                <AttributeSummarySection
-                  tenantKey={tenantKey}
-                  entityType="household"
-                  entityId={householdId}
-                  entityLabel={household.label || householdId}
-                  canManage
-                />
               </>
             ) : null}
 
@@ -1275,7 +1298,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ label, notes, weddingPhotoFileId, address, city, state: stateValue, zip }),
+                      body: JSON.stringify({ label, notes, weddingPhotoFileId, marriedDate, address, city, state: stateValue, zip }),
                     });
                     if (!res.ok) {
                       const body = await res.text();

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Household Edit Info tab now uses a 4-panel layout (Marriage/Attributes/Address/Household Notes), with Married Date persisted and synced to spouse marriage attributes. See `docs/change-summary.md`.
 - 2026-03-07: Person About tab now defaults Stories add flow to `Story` and Timeline now shows sortable attribute chips (ascending/descending). See `docs/change-summary.md`.
 - 2026-03-07: Compacted selected category editor row so Category Label, Sort, and Description display on one line. See `docs/change-summary.md`.
 - 2026-03-07: Refined Attribute Types action placement (`Add Category` moved under category search; `Add Type` moved next to `Delete Type Category`). See `docs/change-summary.md`.

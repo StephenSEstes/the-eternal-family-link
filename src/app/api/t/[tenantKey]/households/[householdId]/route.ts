@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
+import { createAttribute, deleteAttribute, getAttributesForEntity, updateAttribute } from "@/lib/attributes/store";
 import {
   appendAuditLog,
   deleteTableRows,
@@ -41,11 +42,14 @@ const patchSchema = z.object({
   label: z.string().trim().max(160).optional(),
   notes: z.string().trim().max(4000).optional(),
   weddingPhotoFileId: z.string().trim().max(256).optional(),
+  marriedDate: z.string().trim().max(32).optional(),
   address: z.string().trim().max(400).optional(),
   city: z.string().trim().max(120).optional(),
   state: z.string().trim().max(80).optional(),
   zip: z.string().trim().max(40).optional(),
 });
+
+const MARRIAGE_SYNC_NOTE_PREFIX = "[system] household_marriage_sync:";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
@@ -88,12 +92,103 @@ async function resolveHousehold(tenantKey: string, householdId: string, peopleBy
       label: readCell(match.data, "label", "family_label", "family_name"),
       notes: readCell(match.data, "notes", "family_notes"),
       weddingPhotoFileId: readCell(match.data, "wedding_photo_file_id"),
+      marriedDate: readCell(match.data, "married_date", "wedding_date"),
       address: readCell(match.data, "address", "household_address"),
       city: readCell(match.data, "city", "household_city"),
       state: readCell(match.data, "state", "household_state"),
       zip: readCell(match.data, "zip", "postal_code", "household_zip"),
     },
   };
+}
+
+async function syncMarriageAttributeForPerson(input: {
+  tenantKey: string;
+  personId: string;
+  spouseName: string;
+  householdId: string;
+  marriedDate: string;
+}) {
+  const personId = input.personId.trim();
+  if (!personId) return;
+  const marker = `${MARRIAGE_SYNC_NOTE_PREFIX}${input.householdId}`;
+  const attributes = await getAttributesForEntity(input.tenantKey, "person", personId);
+  const synced = attributes.filter(
+    (item) =>
+      item.attributeType === "family_relationship" &&
+      item.attributeTypeCategory === "married" &&
+      item.attributeNotes.includes(marker),
+  );
+
+  if (!input.marriedDate) {
+    await Promise.all(synced.map((item) => deleteAttribute(input.tenantKey, item.attributeId)));
+    return;
+  }
+
+  const detailText = input.spouseName.trim() || "Spouse";
+  if (synced.length > 0) {
+    const [first, ...duplicates] = synced;
+    await updateAttribute(input.tenantKey, first.attributeId, {
+      attributeType: "family_relationship",
+      attributeTypeCategory: "married",
+      attributeDate: input.marriedDate,
+      endDate: "",
+      attributeDetail: detailText,
+      attributeNotes: marker,
+      dateIsEstimated: false,
+      estimatedTo: "",
+    });
+    if (duplicates.length > 0) {
+      await Promise.all(duplicates.map((item) => deleteAttribute(input.tenantKey, item.attributeId)));
+    }
+    return;
+  }
+
+  await createAttribute(input.tenantKey, {
+    entityType: "person",
+    entityId: personId,
+    category: "event",
+    attributeType: "family_relationship",
+    attributeTypeCategory: "married",
+    attributeDate: input.marriedDate,
+    dateIsEstimated: false,
+    estimatedTo: "",
+    attributeDetail: detailText,
+    attributeNotes: marker,
+    endDate: "",
+    typeKey: "family_relationship",
+    valueText: detailText,
+    dateStart: input.marriedDate,
+    dateEnd: "",
+    location: "",
+    notes: marker,
+  });
+}
+
+async function syncHouseholdMarriageAttributes(input: {
+  tenantKey: string;
+  householdId: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  husbandName: string;
+  wifeName: string;
+  marriedDate: string;
+}) {
+  await Promise.all([
+    syncMarriageAttributeForPerson({
+      tenantKey: input.tenantKey,
+      personId: input.husbandPersonId,
+      spouseName: input.wifeName,
+      householdId: input.householdId,
+      marriedDate: input.marriedDate,
+    }),
+    syncMarriageAttributeForPerson({
+      tenantKey: input.tenantKey,
+      personId: input.wifePersonId,
+      spouseName: input.husbandName,
+      householdId: input.householdId,
+      marriedDate: input.marriedDate,
+    }),
+  ]);
 }
 
 async function buildDeleteHouseholdPreview(tenantKey: string, householdId: string): Promise<{
@@ -270,7 +365,7 @@ export async function PATCH(request: Request, { params }: RouteProps) {
 
     await ensureResolvedTabColumns(
       "Households",
-      ["label", "notes", "wedding_photo_file_id", "address", "city", "state", "zip"],
+      ["label", "notes", "wedding_photo_file_id", "married_date", "address", "city", "state", "zip"],
       resolved.tenant.tenantKey,
     );
     const updated = await updateTableRecordById(
@@ -280,6 +375,7 @@ export async function PATCH(request: Request, { params }: RouteProps) {
         label: parsed.data.label ?? "",
         notes: parsed.data.notes ?? "",
         wedding_photo_file_id: parsed.data.weddingPhotoFileId ?? "",
+        married_date: parsed.data.marriedDate ?? "",
         address: parsed.data.address ?? "",
         city: parsed.data.city ?? "",
         state: parsed.data.state ?? "",
@@ -291,6 +387,20 @@ export async function PATCH(request: Request, { params }: RouteProps) {
     if (!updated) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+
+    const people = await getPeople(resolved.tenant.tenantKey);
+    const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
+    const husbandPersonId = readCell(updated.data, "husband_person_id");
+    const wifePersonId = readCell(updated.data, "wife_person_id");
+    await syncHouseholdMarriageAttributes({
+      tenantKey: resolved.tenant.tenantKey,
+      householdId,
+      husbandPersonId,
+      wifePersonId,
+      husbandName: peopleById.get(husbandPersonId) || "",
+      wifeName: peopleById.get(wifePersonId) || "",
+      marriedDate: parsed.data.marriedDate ?? "",
+    });
 
     await appendAuditLog({
       actorEmail: resolved.session.user?.email ?? "",

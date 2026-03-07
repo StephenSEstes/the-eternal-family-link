@@ -39,6 +39,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: Added 2026-03-07 decision for admin-managed event metadata.
 
+## 2026-03-07 (household info 4-panel layout + married date spouse sync)
+
+- `Change`: Redesigned Household Edit `Info` tab into a 4-panel fixed layout (`Marriage`, `Attributes`, `Address`, `Household Notes`), added a `Married Date` field under spouse tiles, and wired household save to sync a `family_relationship/married` attribute date for both spouses.
+- `Type`: UI, API, Data
+- `Why`: Household info flow needed to match the person fixed-panel structure and capture marriage date once while keeping spouse life-event data in sync.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+- `Data Changes`: Extends household write/read shape with `married_date` column compatibility and creates/updates/removes spouse marriage attributes in `Attributes` (marked with a household sync note marker).
+- `Verify`:
+  - Open Household Edit > `Info` and confirm 4 sections render in two columns on desktop.
+  - Husband/Wife tiles remain clickable.
+  - `Married Date` shows under spouse tiles and persists after save/reload.
+  - Saving household with a married date creates/updates both spouse `married` attributes; clearing married date removes only synced spouse marriage attributes for that household marker.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.
