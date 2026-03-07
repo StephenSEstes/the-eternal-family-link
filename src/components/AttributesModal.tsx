@@ -540,17 +540,23 @@ export function AttributesModal({
       return;
     }
     const savedId = String(body?.attribute?.attributeId || editingId || "");
+    const wasEdit = Boolean(editingId);
     setBusy(false);
     setStatus("Saved.");
     await refresh();
     onSaved();
-    if (savedId) {
+    if (wasEdit && savedId) {
       setSelectedAttributeId(savedId);
       setDrawerEditMode(false);
     }
-    if (!editingId) {
+    if (!wasEdit) {
       setAddModalOpen(false);
       resetEditor();
+      setSelectedAttributeId("");
+      setDrawerEditMode(false);
+      if (startInAddMode) {
+        onClose();
+      }
     }
   };
 
