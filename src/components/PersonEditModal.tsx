@@ -87,6 +87,12 @@ type Props = {
   onEditHousehold: (householdId: string) => void;
 };
 
+type FamilyGroupOption = {
+  key: string;
+  name: string;
+  role: "ADMIN" | "USER";
+};
+
 type TabKey = "contact" | "attributes" | "photos";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 type DraftMeta = {
@@ -298,6 +304,18 @@ function oppositeGender(value: "male" | "female" | "unspecified") {
 
 function normalizeId(value?: string) {
   return (value ?? "").trim();
+}
+
+function buildFamilySwitchPath(currentPath: string, nextTenantKey: string) {
+  const normalizedNext = nextTenantKey.trim().toLowerCase();
+  const parts = currentPath.split("/").filter(Boolean);
+  const hasTenantPrefix = parts[0] === "t" && Boolean(parts[1]);
+  if (hasTenantPrefix) {
+    const tail = parts.slice(2).join("/");
+    return tail ? `/t/${encodeURIComponent(normalizedNext)}/${tail}` : `/t/${encodeURIComponent(normalizedNext)}`;
+  }
+  if (!currentPath || currentPath === "/") return `/t/${encodeURIComponent(normalizedNext)}`;
+  return `/t/${encodeURIComponent(normalizedNext)}${currentPath}`;
 }
 
 function isTruthyFlag(value?: string) {
@@ -649,6 +667,8 @@ export function PersonEditModal({
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
   const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
+  const [familyGroupOptions, setFamilyGroupOptions] = useState<FamilyGroupOption[]>([]);
+  const [familySwitchBusy, setFamilySwitchBusy] = useState(false);
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -860,6 +880,19 @@ export function PersonEditModal({
     void loadAttributes(person.personId);
     void loadAboutAttributes(person.personId);
   }, [open, person, households, parentSelection, spouseByRelationshipId, tenantKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      const res = await fetch("/api/family-groups", { cache: "no-store" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) return;
+      const list = Array.isArray(body?.familyGroups)
+        ? (body.familyGroups as Array<{ key: string; name: string; role: "ADMIN" | "USER" }>)
+        : [];
+      setFamilyGroupOptions(list.filter((item) => item.key && item.name));
+    })();
+  }, [open]);
 
   useEffect(() => {
     return () => {
@@ -1603,6 +1636,44 @@ export function PersonEditModal({
           />
           <div>
             <h3 className="person-modal-title">{displayName || person.displayName}</h3>
+            <p className="person-modal-meta">Family Group: {tenantKey}</p>
+            {familyGroupOptions.length > 1 ? (
+              <div style={{ marginTop: "0.35rem", maxWidth: "320px" }}>
+                <select
+                  className="input"
+                  value={tenantKey}
+                  disabled={familySwitchBusy}
+                  onChange={(e) =>
+                    void (async () => {
+                      const nextKey = e.target.value;
+                      if (!nextKey || nextKey === tenantKey) return;
+                      setFamilySwitchBusy(true);
+                      const response = await fetch("/api/family-groups/active", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ familyGroupKey: nextKey }),
+                      });
+                      if (!response.ok) {
+                        setFamilySwitchBusy(false);
+                        setStatus("Family group switch failed.");
+                        return;
+                      }
+                      if (typeof window !== "undefined") {
+                        const nextPath = buildFamilySwitchPath(window.location.pathname, nextKey);
+                        const query = window.location.search ?? "";
+                        window.location.assign(`${nextPath}${query}`);
+                      }
+                    })()
+                  }
+                >
+                  {familyGroupOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.name} ({option.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <p className="person-modal-meta">
               Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>

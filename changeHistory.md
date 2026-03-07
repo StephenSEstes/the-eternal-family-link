@@ -35,3 +35,4 @@ This file is a quick release-log entry point.
 - 2026-03-06: Added temporary raw JSON debug output under Attribute Save actions to diagnose payload-to-form mapping issues. See `docs/change-summary.md`.
 - 2026-03-06: Fixed OCI CLOB fetching to return strings (not Lob objects), addressing `[object Object]` in attribute payload fields. See `docs/change-summary.md`.
 - 2026-03-06: Added person-flow in-law reconciliation and polished person/attributes UI (chip sizing, dynamic add-modal, contact action alignment/shading, Save/Close order) with Admin Debug Mode gating for attribute payload debug output. See `docs/change-summary.md`.
+- 2026-03-07: Added spouse tiles to Household Info and a family-group switcher row in Person modal header for direct context switching. See `docs/change-summary.md`.

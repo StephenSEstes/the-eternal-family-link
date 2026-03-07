@@ -39,6 +39,7 @@ type PersonOption = {
   personId: string;
   displayName: string;
   gender?: "male" | "female" | "unspecified";
+  photoFileId?: string;
 };
 
 type HouseholdOption = {
@@ -61,6 +62,7 @@ type Props = {
   householdId: string;
   onClose: () => void;
   onSaved: () => void;
+  onEditPerson?: (personId: string) => void;
 };
 
 type TabKey = "info" | "children" | "pictures";
@@ -158,7 +160,7 @@ async function readClientMediaMetadata(file: File): Promise<{ width?: number; he
   return result;
 }
 
-export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved }: Props) {
+export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved, onEditPerson }: Props) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -266,9 +268,16 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     const householdsBody = await householdsRes.json().catch(() => null);
     if (peopleRes.ok) {
       const items = Array.isArray(peopleBody?.people)
-        ? (peopleBody.people as Array<{ personId: string; displayName: string; gender?: "male" | "female" | "unspecified" }>)
+        ? (peopleBody.people as Array<{ personId: string; displayName: string; gender?: "male" | "female" | "unspecified"; photoFileId?: string }>)
         : [];
-      setAvailablePeople(items.map((item) => ({ personId: item.personId, displayName: item.displayName, gender: item.gender ?? "unspecified" })));
+      setAvailablePeople(
+        items.map((item) => ({
+          personId: item.personId,
+          displayName: item.displayName,
+          gender: item.gender ?? "unspecified",
+          photoFileId: item.photoFileId ?? "",
+        })),
+      );
     }
     if (householdsRes.ok) {
       const items = Array.isArray(householdsBody?.households)
@@ -532,6 +541,35 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
             })),
         ].slice(0, 10);
 
+  const husbandTile = household
+    ? availablePeople.find((item) => item.personId === household.husbandPersonId) ?? {
+        personId: household.husbandPersonId,
+        displayName: household.husbandName || "Husband",
+        gender: "male" as const,
+        photoFileId: "",
+      }
+    : null;
+  const wifeTile = household
+    ? availablePeople.find((item) => item.personId === household.wifePersonId) ?? {
+        personId: household.wifePersonId,
+        displayName: household.wifeName || "Wife",
+        gender: "female" as const,
+        photoFileId: "",
+      }
+    : null;
+
+  const openPersonDetail = (personId: string) => {
+    if (!personId) return;
+    if (onEditPerson) {
+      onClose();
+      onEditPerson(personId);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.location.href = `/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}`;
+    }
+  };
+
   return (
     <div
       className="person-modal-backdrop"
@@ -579,6 +617,43 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                   <h4 className="ui-section-title">Household Info</h4>
                   <label className="label">Household Label</label>
                   <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
+                  {(husbandTile || wifeTile) ? (
+                    <div className="people-grid album-grid" style={{ marginTop: "0.65rem", marginBottom: "0.55rem" }}>
+                      {[husbandTile, wifeTile]
+                        .filter((item): item is NonNullable<typeof husbandTile> => Boolean(item))
+                        .map((item) => {
+                          const fallbackAvatar = getGenderAvatarSrc(item.gender ?? "unspecified");
+                          const photoSrc = item.photoFileId
+                            ? getPhotoProxyPath(item.photoFileId, tenantKey)
+                            : fallbackAvatar;
+                          return (
+                            <article
+                              key={`household-tile-${item.personId}`}
+                              className="person-card album-card"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openPersonDetail(item.personId)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openPersonDetail(item.personId);
+                                }
+                              }}
+                            >
+                              <div className="person-photo-wrap">
+                                <img src={photoSrc} alt={item.displayName} className="person-photo" />
+                              </div>
+                              <div className="person-card-content">
+                                <h3>{item.displayName}</h3>
+                                <p className="person-meta-row">
+                                  <span>{item.gender === "female" ? "Wife" : "Husband"}</span>
+                                </p>
+                              </div>
+                            </article>
+                          );
+                        })}
+                    </div>
+                  ) : null}
                   <label className="label">Address</label>
                   <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street address" />
                   <div className="settings-chip-list">

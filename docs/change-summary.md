@@ -2170,3 +2170,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Raw JSON debug block only appears when Admin Debug Mode is On.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (household spouse tiles + person modal family-group switcher)
+
+- `Change`: Added husband/wife person tiles to Household Info tab (between household label and address), wired tile clicks to open person detail/edit flow from People view, and added a person-modal family-group switcher row below the Family Group label in the header.
+- `Type`: UI, Navigation
+- `Why`: Align Household modal UX with People tab card interactions and make cross-family parent/in-law context switching accessible directly from person editing.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Household Info shows spouse tiles between label and address.
+  - Clicking spouse tile opens person edit/detail modal in People view.
+  - Person modal shows family-group switch row under Family Group label and switches active group via `/api/family-groups/active`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

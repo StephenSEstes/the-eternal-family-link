@@ -252,6 +252,10 @@ export function PeopleDirectory({
         householdId={selectedHouseholdId}
         onClose={() => setSelectedHouseholdId("")}
         onSaved={() => router.refresh()}
+        onEditPerson={(personId) => {
+          setSelectedHouseholdId("");
+          setSelectedPersonId(personId);
+        }}
       />
     </main>
   );
