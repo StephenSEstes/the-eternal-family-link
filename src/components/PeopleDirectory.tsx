@@ -13,6 +13,7 @@ type PersonItem = {
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  maidenName?: string;
   nickName?: string;
   birthDate: string;
   gender: "male" | "female" | "unspecified";

@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
+import { AttributesModal } from "@/components/AttributesModal";
 
 type PersonItem = {
   personId: string;
@@ -12,6 +13,7 @@ type PersonItem = {
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  maidenName?: string;
   nickName?: string;
   birthDate?: string;
   gender?: "male" | "female" | "unspecified";
@@ -71,6 +73,7 @@ type Props = {
 };
 
 type TabKey = "contact" | "attributes" | "photos";
+type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 type DraftMeta = {
   label: string;
   description: string;
@@ -495,6 +498,7 @@ export function PersonEditModal({
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [maidenName, setMaidenName] = useState("");
   const [nickName, setNickName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
@@ -542,6 +546,8 @@ export function PersonEditModal({
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
+  const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
+  const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
@@ -593,6 +599,18 @@ export function PersonEditModal({
     return map;
   }, [households]);
   const aboutLabel = useMemo(() => `About ${firstNameFromDisplayName(displayName || person?.displayName || "")}`, [displayName, person?.displayName]);
+  const attributeLaunchMeta = useMemo(() => {
+    if (attributeLaunchSource === "main_events") {
+      return { label: "Main Events", initialTypeKey: "life_event" };
+    }
+    if (attributeLaunchSource === "things") {
+      return { label: "Things About", initialTypeKey: "physical_attribute" };
+    }
+    if (attributeLaunchSource === "stories") {
+      return { label: "Stories", initialTypeKey: "life_event" };
+    }
+    return { label: "Timeline", initialTypeKey: "life_event" };
+  }, [attributeLaunchSource]);
 
   useEffect(() => {
     setLocalPeople(people);
@@ -622,6 +640,7 @@ export function PersonEditModal({
 
   useEffect(() => {
     if (!open || !person) {
+      setShowAttributeAddModal(false);
       return;
     }
     setActiveTab("contact");
@@ -629,6 +648,7 @@ export function PersonEditModal({
     setFirstName(person.firstName || "");
     setMiddleName(person.middleName || "");
     setLastName(person.lastName || "");
+    setMaidenName(person.maidenName || "");
     setNickName(person.nickName || "");
     setBirthDate(person.birthDate || "");
     setGender(person.gender || "unspecified");
@@ -1451,7 +1471,7 @@ export function PersonEditModal({
                   {gender === "female" && hasVisibleSpouseSelection ? (
                     <div>
                       <label className="label">Maiden Name</label>
-                      <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                      <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} disabled={showReadOnly} />
                     </div>
                   ) : (
                     <div>
@@ -1583,8 +1603,16 @@ export function PersonEditModal({
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Married:</strong> {selectedSpouseName}</p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Major Accomplishments and Events:</strong> -</p>
                 </div>
-                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
-                  Add (coming soon)
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  style={{ marginTop: "auto" }}
+                  onClick={() => {
+                    setAttributeLaunchSource("main_events");
+                    setShowAttributeAddModal(true);
+                  }}
+                >
+                  + Add Attribute
                 </button>
               </div>
 
@@ -1594,16 +1622,32 @@ export function PersonEditModal({
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Hobbies and Interests:</strong> {hobbies.trim() || "-"}</p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Health:</strong> Hair Color: -, Eye Color: -, Height: -, Blood Type: -, Allergies: -</p>
                 </div>
-                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
-                  Add (coming soon)
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  style={{ marginTop: "auto" }}
+                  onClick={() => {
+                    setAttributeLaunchSource("things");
+                    setShowAttributeAddModal(true);
+                  }}
+                >
+                  + Add Attribute
                 </button>
               </div>
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Stories</h4>
                 <div style={{ flex: 1 }} />
-                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
-                  Add (coming soon)
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  style={{ marginTop: "auto" }}
+                  onClick={() => {
+                    setAttributeLaunchSource("stories");
+                    setShowAttributeAddModal(true);
+                  }}
+                >
+                  + Add Attribute
                 </button>
               </div>
 
@@ -1620,8 +1664,16 @@ export function PersonEditModal({
                     <p className="page-subtitle" style={{ margin: 0 }}>No events listed yet.</p>
                   )}
                 </div>
-                <button type="button" className="button secondary tap-button" style={{ marginTop: "auto" }} disabled>
-                  Add (coming soon)
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  style={{ marginTop: "auto" }}
+                  onClick={() => {
+                    setAttributeLaunchSource("timeline");
+                    setShowAttributeAddModal(true);
+                  }}
+                >
+                  + Add Attribute
                 </button>
               </div>
 
@@ -1633,6 +1685,25 @@ export function PersonEditModal({
               </div>
             </div>
           </>
+        ) : null}
+
+        {person ? (
+          <AttributesModal
+            open={showAttributeAddModal}
+            tenantKey={tenantKey}
+            entityType="person"
+            entityId={person.personId}
+            entityLabel={displayName || person.displayName}
+            modalSubtitle={aboutLabel}
+            initialTypeKey={attributeLaunchMeta.initialTypeKey}
+            startInAddMode
+            launchSourceLabel={attributeLaunchMeta.label}
+            onClose={() => setShowAttributeAddModal(false)}
+            onSaved={() => {
+              void loadAttributes(person.personId);
+              onSaved();
+            }}
+          />
         ) : null}
 
         {activeTab === "photos" ? (
@@ -2115,6 +2186,7 @@ export function PersonEditModal({
                       first_name: firstName,
                       middle_name: middleName,
                       last_name: lastName,
+                      maiden_name: maidenName,
                       nick_name: nickName,
                       birth_date: birthDate,
                       gender,

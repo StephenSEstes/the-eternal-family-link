@@ -284,7 +284,7 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
       label: readField(row.data, "label"),
       description: readField(row.data, "notes"),
       photoDate: readField(row.data, "start_date"),
-      mediaMetadata: readField(row.data, "media_metadata") || readField(row.data, "value_json"),
+      mediaMetadata: readField(row.data, "value_json"),
     });
   }
 

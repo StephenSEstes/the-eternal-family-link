@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Reset Attributes schema/data to canonical event/descriptor fields, added dynamic type-category flow, and executed one-time attribute data wipe + legacy column cleanup. See `docs/change-summary.md`.
+- 2026-03-06: Removed `Attributes.media_metadata` usage from runtime attribute flows so media is managed via media tables, with no DB drop needed because the column was already absent. See `docs/change-summary.md`.
 - 2026-03-06: Removed legacy OCI `person_attributes` table and remaining runtime references; attributes now run on unified `Attributes` only. See `docs/change-summary.md`.
 - 2026-03-06: Consolidated legacy person attributes into unified Attributes table with migration and compatibility updates across import/integrity/API paths. See `docs/change-summary.md`.
 - 2026-03-06: Increased fixed person modal height by about 15% to show more content while preserving fixed-frame tab behavior. See `docs/change-summary.md`.

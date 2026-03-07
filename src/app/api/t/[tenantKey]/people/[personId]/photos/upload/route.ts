@@ -8,7 +8,6 @@ import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from 
 import { getAttributeById } from "@/lib/attributes/store";
 import {
   createTableRecord,
-  ensureResolvedTabColumns,
   getPersonAttributes,
   getPersonById,
   getTenantConfig,
@@ -141,11 +140,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
 
     const attributeId = targetAttributeId || buildAttributeId(resolved.tenant.tenantKey, personId, attributeType);
     if (!targetAttributeId) {
-      await ensureResolvedTabColumns(
-        PERSON_ATTRIBUTES_TAB,
-        ["media_metadata"],
-        resolved.tenant.tenantKey,
-      );
       await createTableRecord(
         PERSON_ATTRIBUTES_TAB,
         {
@@ -154,7 +148,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
           attribute_type: attributeType,
           value_text: uploaded.fileId,
           value_json: mediaMetadata,
-          media_metadata: mediaMetadata,
           label: shouldBePrimary ? "headshot" : label,
           is_primary: shouldBePrimary ? "TRUE" : "FALSE",
           sort_order: "0",

@@ -14,7 +14,8 @@
     "db:migrate:load": "node oci-migrate-sheets-to-oci.cjs --mode=load --truncate=true",
     "db:parity": "node oci-verify-parity.cjs",
     "media:migrate:backfill": "node oci-media-backfill.cjs",
-    "media:migrate:parity": "node oci-media-parity.cjs"
+    "media:migrate:parity": "node oci-media-parity.cjs",
+    "attributes:reset-schema": "node scripts/reset-attributes-schema.cjs"
   },
   "dependencies": {
     "googleapis": "^171.4.0",

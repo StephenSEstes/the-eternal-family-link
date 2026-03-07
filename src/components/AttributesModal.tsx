@@ -21,6 +21,14 @@ type AttributeItem = {
   entityType: AttributeEntityType;
   entityId: string;
   category: AttributeCategory;
+  attributeType: string;
+  attributeTypeCategory: string;
+  attributeDate: string;
+  dateIsEstimated: boolean;
+  estimatedTo: "" | "month" | "year";
+  attributeDetail: string;
+  attributeNotes: string;
+  endDate: string;
   typeKey: string;
   label: string;
   valueText: string;
@@ -41,13 +49,91 @@ type LibraryMediaItem = {
   date: string;
 };
 
-const DESCRIPTOR_TYPES = ["hobbies", "likes", "blood_type", "allergies", "hair_color", "height", "health"];
-const EVENT_TYPES = ["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"];
-const END_DATE_TYPES = new Set(["missions", "lived_in", "jobs"]);
+const DESCRIPTOR_TYPES = ["physical_attribute", "hobbies_interests", "talent", "other"];
+const EVENT_TYPES = [
+  "birth",
+  "education",
+  "religious",
+  "accomplishment",
+  "injury_health",
+  "life_event",
+  "moved",
+  "employment",
+  "family_relationship",
+  "pet",
+  "travel",
+  "other",
+];
+const EVENT_TYPE_CATEGORY_MAP: Record<string, string[]> = {
+  education: ["enrolled", "awarded", "exam_test", "grade"],
+  religious: ["baptism", "ordinance", "mission", "calling"],
+  employment: ["hired", "departed", "promotion", "awarded"],
+  family_relationship: ["married", "divorced", "adopted"],
+};
+const THINGS_TYPE_CATEGORY_MAP: Record<string, string[]> = {
+  physical_attribute: ["eyes", "height", "blood_type", "allergy", "other"],
+};
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  graduation: "education",
+  missions: "religious",
+  religious_event: "religious",
+  injuries: "injury_health",
+  accomplishments: "accomplishment",
+  stories: "life_event",
+  lived_in: "moved",
+  jobs: "employment",
+  hobbies: "hobbies_interests",
+  likes: "hobbies_interests",
+  allergies: "physical_attribute",
+  blood_type: "physical_attribute",
+  hair_color: "physical_attribute",
+  height: "physical_attribute",
+  health: "physical_attribute",
+};
+
+type AttributeFieldCopy = {
+  valueLabel: string;
+  valuePlaceholder: string;
+  startDateLabel: string;
+  endDateLabel: string;
+  locationLabel: string;
+  notesLabel: string;
+};
 
 function prettyLabel(typeKey: string, label: string) {
   if (label.trim()) return label.trim();
   return typeKey.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function normalizeTypeKey(value: string) {
+  const key = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+  return LEGACY_TYPE_MAP[key] ?? key;
+}
+
+function normalizeAttributeItem(item: AttributeItem): AttributeItem {
+  const normalizedType = normalizeTypeKey(item.attributeType || item.typeKey || "");
+  const attributeDate = item.attributeDate || item.dateStart || "";
+  const category =
+    normalizedType === "other"
+      ? (attributeDate ? "event" : "descriptor")
+      : inferCategory(normalizedType);
+  const endDate = item.endDate || item.dateEnd || "";
+  const attributeDetail = item.attributeDetail || item.valueText || "";
+  const attributeNotes = item.attributeNotes || item.notes || "";
+  return {
+    ...item,
+    category,
+    attributeType: normalizedType,
+    typeKey: normalizedType,
+    attributeDate,
+    endDate,
+    attributeDetail,
+    attributeNotes,
+    valueText: attributeDetail,
+    dateStart: attributeDate,
+    dateEnd: endDate,
+    notes: attributeNotes,
+  };
 }
 
 function summarizeSingle(item: AttributeItem) {
@@ -67,7 +153,29 @@ function typeListForCategory(category: AttributeCategory) {
 }
 
 function inferCategory(typeKey: string): AttributeCategory {
-  return EVENT_TYPES.includes(typeKey) ? "event" : "descriptor";
+  return EVENT_TYPES.includes(normalizeTypeKey(typeKey)) ? "event" : "descriptor";
+}
+
+function fieldCopyFor(category: AttributeCategory, typeKey: string): AttributeFieldCopy {
+  const normalizedType = typeKey.trim().toLowerCase();
+  if (category === "event") {
+    return {
+      valueLabel: normalizedType === "education" ? "School / Program Detail" : "Attribute Detail",
+      valuePlaceholder: normalizedType === "education" ? "e.g. School name, award name, or score detail" : "Enter detail",
+      startDateLabel: "Date",
+      endDateLabel: "End Date",
+      locationLabel: "Attribute Notes",
+      notesLabel: "Additional Notes",
+    };
+  }
+  return {
+    valueLabel: "Attribute Detail",
+    valuePlaceholder: "Enter name/value/detail",
+    startDateLabel: "Date",
+    endDateLabel: "End Date",
+    locationLabel: "Attribute Notes",
+    notesLabel: "Additional Notes",
+  };
 }
 
 function getSafeAttributeValueText(value: unknown): string {
@@ -192,6 +300,8 @@ export function AttributesModal({
   entityLabel,
   modalSubtitle = "Attributes",
   initialTypeKey,
+  startInAddMode = false,
+  launchSourceLabel = "",
   onClose,
   onSaved,
 }: {
@@ -202,6 +312,8 @@ export function AttributesModal({
   entityLabel: string;
   modalSubtitle?: string;
   initialTypeKey?: string;
+  startInAddMode?: boolean;
+  launchSourceLabel?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -226,12 +338,14 @@ export function AttributesModal({
 
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
-  const [typeKey, setTypeKey] = useState("hobbies");
+  const [typeKey, setTypeKey] = useState("hobbies_interests");
+  const [attributeTypeCategory, setAttributeTypeCategory] = useState("");
+  const [dateIsEstimated, setDateIsEstimated] = useState(false);
+  const [estimatedTo, setEstimatedTo] = useState<"" | "month" | "year">("");
   const [label, setLabel] = useState("");
   const [valueText, setValueText] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
-  const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -243,6 +357,13 @@ export function AttributesModal({
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryResults, setLibraryResults] = useState<LibraryMediaItem[]>([]);
   const [isLikelyMobile, setIsLikelyMobile] = useState(false);
+  const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
+  const addTypeSuggestions = useMemo(() => typeListForCategory(category), [category]);
+  const typeCategorySuggestions = useMemo(() => {
+    const normalizedType = normalizeTypeKey(typeKey);
+    if (category === "event") return EVENT_TYPE_CATEGORY_MAP[normalizedType] ?? [];
+    return THINGS_TYPE_CATEGORY_MAP[normalizedType] ?? [];
+  }, [category, typeKey]);
 
   const refresh = async () => {
     const res = await fetch(
@@ -254,7 +375,8 @@ export function AttributesModal({
       setStatus(`Load failed: ${res.status}`);
       return;
     }
-    setItems(Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : []);
+    const rawItems = Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : [];
+    setItems(rawItems.map((item) => normalizeAttributeItem(item)));
   };
 
   useEffect(() => {
@@ -262,13 +384,15 @@ export function AttributesModal({
     setStatus("Loading...");
     setSelectedAttributeId("");
     setDrawerEditMode(false);
-    setAddModalOpen(false);
+    setAddModalOpen(startInAddMode);
     void refresh().then(() => setStatus(""));
     if (initialTypeKey) {
-      setTypeKey(initialTypeKey);
-      setCategory(inferCategory(initialTypeKey));
+      const normalizedType = normalizeTypeKey(initialTypeKey);
+      setTypeKey(normalizedType);
+      setCategory(inferCategory(normalizedType));
+      setAddDetailsOpen(inferCategory(normalizedType) === "event");
     }
-  }, [open, entityType, entityId, initialTypeKey]);
+  }, [open, entityType, entityId, initialTypeKey, startInAddMode]);
 
   useEffect(() => {
     if (!pendingPreview) return;
@@ -294,7 +418,15 @@ export function AttributesModal({
     return items.filter((item) => {
       if (tab !== "all" && item.category !== tab) return false;
       if (!q) return true;
-      const haystack = [item.typeKey, item.label, item.valueText, item.location, item.notes].join(" ").toLowerCase();
+      const haystack = [
+        item.typeKey,
+        item.attributeTypeCategory,
+        item.label,
+        item.attributeDetail,
+        item.attributeNotes,
+      ]
+        .join(" ")
+        .toLowerCase();
       return haystack.includes(q);
     });
   }, [items, query, tab]);
@@ -326,12 +458,14 @@ export function AttributesModal({
   const resetEditor = () => {
     setEditingId("");
     setCategory("descriptor");
-    setTypeKey("hobbies");
+    setTypeKey("hobbies_interests");
+    setAttributeTypeCategory("");
+    setDateIsEstimated(false);
+    setEstimatedTo("");
     setLabel("");
     setValueText("");
     setDateStart("");
     setDateEnd("");
-    setLocation("");
     setNotes("");
     setAddDetailsOpen(false);
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
@@ -347,22 +481,24 @@ export function AttributesModal({
   const loadEditorFromItem = (item: AttributeItem) => {
     setEditingId(item.attributeId);
     setCategory(item.category);
-    setTypeKey(item.typeKey);
+    setTypeKey(item.attributeType || item.typeKey);
+    setAttributeTypeCategory(item.attributeTypeCategory || "");
+    setDateIsEstimated(Boolean(item.dateIsEstimated));
+    setEstimatedTo((item.estimatedTo as "" | "month" | "year") || "");
     setLabel(item.label);
-    setValueText(item.valueText);
-    setDateStart(item.dateStart);
-    setDateEnd(item.dateEnd);
-    setLocation(item.location);
-    setNotes(item.notes);
-    setAddDetailsOpen(Boolean(item.category === "event" || item.dateStart || item.dateEnd || item.location || item.notes));
+    setValueText(item.attributeDetail || item.valueText);
+    setDateStart(item.attributeDate || item.dateStart);
+    setDateEnd(item.endDate || item.dateEnd);
+    setNotes(item.attributeNotes || item.notes);
+    setAddDetailsOpen(Boolean(item.category === "event" || item.attributeDate || item.endDate || item.attributeNotes));
   };
 
   const validateEditor = () => {
-    const normalizedType = typeKey.trim().toLowerCase();
+    const normalizedType = normalizeTypeKey(typeKey);
     if (!normalizedType) return "Type is required.";
-    if (category === "descriptor" && !valueText.trim()) return "Value is required for descriptor attributes.";
-    if (category === "event" && normalizedType !== "stories" && !dateStart.trim()) return "Start date is required for this event type.";
-    if (dateEnd.trim() && !END_DATE_TYPES.has(normalizedType)) return "End date is only allowed for missions, lived_in, jobs.";
+    if (!valueText.trim()) return "Attribute detail is required.";
+    if (category === "event" && !dateStart.trim()) return "Date is required for event attributes.";
+    if (dateIsEstimated && !estimatedTo) return "Choose month or year for estimated date.";
     return "";
   };
 
@@ -374,16 +510,25 @@ export function AttributesModal({
       return;
     }
     setBusy(true);
+    const normalizedType = normalizeTypeKey(typeKey);
     const payload = {
       entityType,
       entityId,
       category,
-      typeKey,
+      isDateRelated: category === "event",
+      attributeType: normalizedType,
+      attributeTypeCategory,
+      attributeDate: dateStart,
+      dateIsEstimated,
+      estimatedTo,
+      attributeDetail: valueText,
+      attributeNotes: notes,
+      endDate: dateEnd,
+      typeKey: normalizedType,
       label,
       valueText,
       dateStart,
       dateEnd,
-      location,
       notes,
     };
     const res = await fetch(editingId ? `/api/attributes/${encodeURIComponent(editingId)}` : "/api/attributes", {
@@ -541,9 +686,12 @@ export function AttributesModal({
 
   const openAddModal = () => {
     resetEditor();
-    const nextCategory = initialTypeKey ? inferCategory(initialTypeKey) : "descriptor";
+    const normalizedInitialType = initialTypeKey ? normalizeTypeKey(initialTypeKey) : "";
+    const defaultCategory: AttributeCategory =
+      launchSourceLabel.toLowerCase().includes("things") ? "descriptor" : "event";
+    const nextCategory = normalizedInitialType ? inferCategory(normalizedInitialType) : defaultCategory;
     setCategory(nextCategory);
-    setTypeKey(initialTypeKey || (nextCategory === "event" ? EVENT_TYPES[0] : DESCRIPTOR_TYPES[0]));
+    setTypeKey(normalizedInitialType || (nextCategory === "event" ? EVENT_TYPES[0] : DESCRIPTOR_TYPES[0]));
     setAddDetailsOpen(nextCategory === "event");
     setAddModalOpen(true);
     setDrawerEditMode(false);
@@ -734,21 +882,24 @@ export function AttributesModal({
                     <h4 className="ui-section-title" style={{ marginTop: 0 }}>Details</h4>
                     <div style={{ display: "grid", gap: "0.55rem" }}>
                       <div className="person-linked-row"><strong>Type</strong><span>{getAttributeDisplayType(selectedItem)}</span></div>
-                      {formatAttributeDateRange(selectedItem.dateStart, selectedItem.dateEnd) ? (
+                      {formatAttributeDateRange(selectedItem.attributeDate || selectedItem.dateStart, selectedItem.endDate || selectedItem.dateEnd) ? (
                         <div className="person-linked-row">
                           <strong>Dates</strong>
-                          <span>{formatAttributeDateRange(selectedItem.dateStart, selectedItem.dateEnd)}</span>
+                          <span>{formatAttributeDateRange(selectedItem.attributeDate || selectedItem.dateStart, selectedItem.endDate || selectedItem.dateEnd)}</span>
                         </div>
                       ) : null}
-                      {getSafeAttributeValueText(selectedItem.location) ? (
-                        <div className="person-linked-row"><strong>Location</strong><span>{getSafeAttributeValueText(selectedItem.location)}</span></div>
+                      {getSafeAttributeValueText(selectedItem.attributeTypeCategory) ? (
+                        <div className="person-linked-row"><strong>Category</strong><span>{getSafeAttributeValueText(selectedItem.attributeTypeCategory)}</span></div>
+                      ) : null}
+                      {selectedItem.dateIsEstimated ? (
+                        <div className="person-linked-row"><strong>Estimated</strong><span>{selectedItem.estimatedTo ? `To ${selectedItem.estimatedTo}` : "Yes"}</span></div>
                       ) : null}
                     </div>
                   </div>
-                  {getSafeAttributeValueText(selectedItem.notes) ? (
+                  {getSafeAttributeValueText(selectedItem.attributeNotes || selectedItem.notes) ? (
                     <div className="card" style={{ marginTop: "0.75rem", border: "1px solid #E7EAF0", borderRadius: "1rem" }}>
                       <h4 className="ui-section-title" style={{ marginTop: 0 }}>Notes</h4>
-                      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{getSafeAttributeValueText(selectedItem.notes)}</p>
+                      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{getSafeAttributeValueText(selectedItem.attributeNotes || selectedItem.notes)}</p>
                     </div>
                   ) : null}
                 </>
@@ -760,20 +911,38 @@ export function AttributesModal({
                       const nextCategory = e.target.value as AttributeCategory;
                       setCategory(nextCategory);
                       const defaults = typeListForCategory(nextCategory);
-                      if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
+                      const normalizedCurrent = normalizeTypeKey(typeKey);
+                      if (!defaults.includes(normalizedCurrent)) {
+                        setTypeKey(defaults[0] || "");
+                        setAttributeTypeCategory("");
+                      }
                     }}>
                       <option value="descriptor">Descriptor</option>
                       <option value="event">Event</option>
                     </select>
-                    <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
+                    <select className="input" value={typeKey} onChange={(e) => {
+                      setTypeKey(normalizeTypeKey(e.target.value));
+                      setAttributeTypeCategory("");
+                    }}>
                       {typeListForCategory(category).map((item) => (
                         <option key={item} value={item}>{prettyLabel(item, "")}</option>
                       ))}
                     </select>
                   </div>
+                  {typeCategorySuggestions.length > 0 ? (
+                    <>
+                      <label className="label">Attribute Type Category</label>
+                      <select className="input" value={attributeTypeCategory} onChange={(e) => setAttributeTypeCategory(e.target.value)}>
+                        <option value="">Select category</option>
+                        {typeCategorySuggestions.map((item) => (
+                          <option key={item} value={item}>{prettyLabel(item, "")}</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : null}
                   <label className="label">Display Label (optional)</label>
                   <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
-                  <label className="label">Value / Event Name</label>
+                  <label className="label">Attribute Detail</label>
                   <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
                   <div className="settings-chip-list">
                     <div style={{ flex: 1, minWidth: "170px" }}>
@@ -785,9 +954,34 @@ export function AttributesModal({
                       <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
                     </div>
                   </div>
-                  <label className="label">Location</label>
-                  <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
-                  <label className="label">Notes</label>
+                  <div className="settings-chip-list">
+                    <div style={{ flex: 1, minWidth: "170px" }}>
+                      <label className="label">Date Is Estimated?</label>
+                      <select
+                        className="input"
+                        value={dateIsEstimated ? "yes" : "no"}
+                        onChange={(e) => {
+                          const next = e.target.value === "yes";
+                          setDateIsEstimated(next);
+                          if (!next) setEstimatedTo("");
+                        }}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </div>
+                    {dateIsEstimated ? (
+                      <div style={{ flex: 1, minWidth: "170px" }}>
+                        <label className="label">Estimated To</label>
+                        <select className="input" value={estimatedTo} onChange={(e) => setEstimatedTo(e.target.value as "" | "month" | "year")}>
+                          <option value="">Select one</option>
+                          <option value="month">Month</option>
+                          <option value="year">Year</option>
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                  <label className="label">Attribute Notes</label>
                   <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
                   <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
                     <button type="button" className="button tap-button" disabled={busy} onClick={() => void saveAttribute()}>
@@ -990,7 +1184,7 @@ export function AttributesModal({
                 <div className="person-modal-header">
                   <div>
                     <h3 className="person-modal-title">Add Attribute</h3>
-                    <p className="person-modal-meta">{entityLabel}</p>
+                    <p className="person-modal-meta">{launchSourceLabel ? `${entityLabel} | ${launchSourceLabel}` : entityLabel}</p>
                   </div>
               </div>
             </div>
@@ -998,29 +1192,72 @@ export function AttributesModal({
               <div className="card">
                 <div className="settings-chip-list">
                   <div style={{ flex: 1, minWidth: "190px" }}>
-                    <label className="label">Type</label>
-                    <select className="input" value={category} onChange={(e) => {
-                      const nextCategory = e.target.value as AttributeCategory;
-                      setCategory(nextCategory);
-                      const defaults = typeListForCategory(nextCategory);
-                      if (!defaults.includes(typeKey)) setTypeKey(defaults[0] || "");
-                      if (nextCategory === "event") setAddDetailsOpen(true);
-                    }}>
-                      <option value="descriptor">Descriptor</option>
-                      <option value="event">Event</option>
+                    <label className="label">Date Related?</label>
+                    <select
+                      className="input"
+                      value={category === "event" ? "yes" : "no"}
+                      onChange={(e) => {
+                        const isDateRelated = e.target.value === "yes";
+                        const nextCategory: AttributeCategory = isDateRelated ? "event" : "descriptor";
+                        setCategory(nextCategory);
+                        const defaults = typeListForCategory(nextCategory);
+                        const normalizedCurrent = normalizeTypeKey(typeKey);
+                        if (!defaults.includes(normalizedCurrent)) {
+                          setTypeKey(defaults[0] || "");
+                          setAttributeTypeCategory("");
+                        }
+                        if (isDateRelated) setAddDetailsOpen(true);
+                      }}
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
                     </select>
                   </div>
                   <div style={{ flex: 1, minWidth: "190px" }}>
-                    <label className="label">Category</label>
-                    <select className="input" value={typeKey} onChange={(e) => setTypeKey(e.target.value)}>
-                      {typeListForCategory(category).map((item) => (
-                        <option key={item} value={item}>{prettyLabel(item, "")}</option>
+                    <label className="label">{category === "event" ? "Event Type" : "Descriptor Type"}</label>
+                    <input
+                      className="input"
+                      value={typeKey}
+                      onChange={(e) => {
+                        setTypeKey(normalizeTypeKey(e.target.value));
+                        setAttributeTypeCategory("");
+                      }}
+                      placeholder={category === "event" ? "e.g. education" : "e.g. hobbies interests"}
+                      list={`attribute-type-list-${entityId}`}
+                    />
+                    <datalist id={`attribute-type-list-${entityId}`}>
+                      {addTypeSuggestions.map((item) => (
+                        <option key={item} value={item}>
+                          {prettyLabel(item, "")}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+                {typeCategorySuggestions.length > 0 ? (
+                  <div style={{ marginTop: "0.7rem" }}>
+                    <label className="label">Attribute Type Category</label>
+                    <select
+                      className="input"
+                      value={attributeTypeCategory}
+                      onChange={(e) => setAttributeTypeCategory(e.target.value)}
+                    >
+                      <option value="">Select category</option>
+                      {typeCategorySuggestions.map((item) => (
+                        <option key={item} value={item}>
+                          {prettyLabel(item, "")}
+                        </option>
                       ))}
                     </select>
                   </div>
-                </div>
-                <label className="label">Value / Event Name</label>
-                <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
+                ) : null}
+                <label className="label">{addFormCopy.valueLabel}</label>
+                <input
+                  className="input"
+                  value={valueText}
+                  onChange={(e) => setValueText(e.target.value)}
+                  placeholder={addFormCopy.valuePlaceholder}
+                />
 
                 <div style={{ marginTop: "0.75rem" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setAddDetailsOpen((prev) => !prev)}>
@@ -1034,17 +1271,42 @@ export function AttributesModal({
                     <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
-                        <label className="label">Start Date</label>
+                        <label className="label">Date</label>
                         <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
                       </div>
                       <div style={{ flex: 1, minWidth: "170px" }}>
-                        <label className="label">End Date</label>
+                        <label className="label">{addFormCopy.endDateLabel}</label>
                         <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
                       </div>
                     </div>
-                    <label className="label">Location</label>
-                    <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} />
-                    <label className="label">Notes</label>
+                    <div className="settings-chip-list">
+                      <div style={{ flex: 1, minWidth: "170px" }}>
+                        <label className="label">Date Is Estimated?</label>
+                        <select
+                          className="input"
+                          value={dateIsEstimated ? "yes" : "no"}
+                          onChange={(e) => {
+                            const next = e.target.value === "yes";
+                            setDateIsEstimated(next);
+                            if (!next) setEstimatedTo("");
+                          }}
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+                      {dateIsEstimated ? (
+                        <div style={{ flex: 1, minWidth: "170px" }}>
+                          <label className="label">Estimated To</label>
+                          <select className="input" value={estimatedTo} onChange={(e) => setEstimatedTo(e.target.value as "" | "month" | "year")}>
+                            <option value="">Select one</option>
+                            <option value="month">Month</option>
+                            <option value="year">Year</option>
+                          </select>
+                        </div>
+                      ) : null}
+                    </div>
+                    <label className="label">Attribute Notes</label>
                     <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
                   </div>
                 ) : null}

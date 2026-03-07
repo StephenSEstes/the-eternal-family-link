@@ -31,9 +31,45 @@ function normalize(value: string | undefined) {
 }
 
 const EVENT_TYPE_KEYS = new Set(["graduation", "missions", "religious_event", "injuries", "accomplishments", "stories", "lived_in", "jobs"]);
+const CANONICAL_TYPE_KEY_MAP: Record<string, string> = {
+  graduation: "education",
+  missions: "religious",
+  religious_event: "religious",
+  injuries: "injury_health",
+  accomplishments: "accomplishment",
+  stories: "life_event",
+  lived_in: "moved",
+  jobs: "employment",
+  hobbies: "hobbies_interests",
+  likes: "hobbies_interests",
+  allergies: "physical_attribute",
+  blood_type: "physical_attribute",
+  hair_color: "physical_attribute",
+  height: "physical_attribute",
+  health: "physical_attribute",
+};
 
 function inferCategoryFromTypeKey(typeKey: string) {
-  return EVENT_TYPE_KEYS.has(typeKey.trim().toLowerCase()) ? "event" : "descriptor";
+  const normalized = (CANONICAL_TYPE_KEY_MAP[typeKey.trim().toLowerCase()] ?? typeKey.trim().toLowerCase());
+  if (
+    [
+      "birth",
+      "education",
+      "religious",
+      "accomplishment",
+      "injury_health",
+      "life_event",
+      "moved",
+      "employment",
+      "family_relationship",
+      "pet",
+      "travel",
+      "other",
+    ].includes(normalized)
+  ) {
+    return "event";
+  }
+  return EVENT_TYPE_KEYS.has(normalized) ? "event" : "descriptor";
 }
 
 async function ensureAttributesStorage(tenantKey: string) {
@@ -49,25 +85,14 @@ async function ensureAttributesStorage(tenantKey: string) {
       "attribute_id",
       "entity_type",
       "entity_id",
-      "category",
-      "type_key",
-      "person_id",
       "attribute_type",
-      "value_json",
-      "media_metadata",
-      "is_primary",
-      "sort_order",
-      "start_date",
+      "attribute_type_category",
+      "attribute_date",
+      "date_is_estimated",
+      "estimated_to",
+      "attribute_detail",
+      "attribute_notes",
       "end_date",
-      "visibility",
-      "share_scope",
-      "share_family_group_key",
-      "label",
-      "value_text",
-      "date_start",
-      "date_end",
-      "location",
-      "notes",
       "created_at",
       "updated_at",
     ],
@@ -77,23 +102,41 @@ async function ensureAttributesStorage(tenantKey: string) {
 }
 
 function toAttributeRecord(row: Record<string, string>): AttributeRecord {
-  const typeKey = readCell(row, "type_key", "attribute_type");
+  const rawType = readCell(row, "attribute_type", "type_key");
+  const typeKey = CANONICAL_TYPE_KEY_MAP[rawType.trim().toLowerCase()] ?? rawType;
   const entityType = (readCell(row, "entity_type") ||
     (readCell(row, "person_id") ? "person" : readCell(row, "household_id") ? "household" : "person")) as AttributeEntityType;
   const entityId = readCell(row, "entity_id", "person_id", "household_id");
-  const category = (readCell(row, "category") || inferCategoryFromTypeKey(typeKey)) as "descriptor" | "event";
+  const category = inferCategoryFromTypeKey(typeKey) as "descriptor" | "event";
+  const attributeTypeCategory = readCell(row, "attribute_type_category", "type_category");
+  const attributeDate = readCell(row, "attribute_date", "date", "date_start", "start_date");
+  const attributeDetail = readCell(row, "attribute_detail", "value_text");
+  const attributeNotes = readCell(row, "attribute_notes", "notes");
+  const endDate = readCell(row, "end_date", "date_end");
   return {
     attributeId: readCell(row, "attribute_id"),
     entityType,
     entityId,
     category,
+    attributeType: typeKey,
+    attributeTypeCategory,
+    attributeDate,
+    dateIsEstimated: normalize(readCell(row, "date_is_estimated")) === "true",
+    estimatedTo: ((): "" | "month" | "year" => {
+      const value = normalize(readCell(row, "estimated_to"));
+      if (value === "month" || value === "year") return value;
+      return "";
+    })(),
+    attributeDetail,
+    attributeNotes,
+    endDate,
     typeKey,
     label: readCell(row, "label") || typeKey,
-    valueText: readCell(row, "value_text"),
-    dateStart: readCell(row, "date_start", "start_date"),
-    dateEnd: readCell(row, "date_end", "end_date"),
-    location: readCell(row, "location"),
-    notes: readCell(row, "notes"),
+    valueText: attributeDetail,
+    dateStart: attributeDate,
+    dateEnd: endDate,
+    location: "",
+    notes: attributeNotes,
     createdAt: readCell(row, "created_at"),
     updatedAt: readCell(row, "updated_at"),
   };
@@ -129,25 +172,14 @@ export async function createAttribute(
     attribute_id: attributeId,
     entity_type: input.entityType,
     entity_id: input.entityId,
-    category: input.category,
-    type_key: input.typeKey,
-    person_id: input.entityType === "person" ? input.entityId : "",
-    attribute_type: input.typeKey,
-    value_json: "",
-    media_metadata: "",
-    is_primary: "FALSE",
-    sort_order: "0",
-    start_date: input.dateStart,
-    end_date: input.dateEnd,
-    visibility: "family",
-    share_scope: "both_families",
-    share_family_group_key: "",
-    label: (input.label ?? "").trim() || input.typeKey,
-    value_text: input.valueText,
-    date_start: input.dateStart,
-    date_end: input.dateEnd,
-    location: input.location,
-    notes: input.notes,
+    attribute_type: input.attributeType || input.typeKey,
+    attribute_type_category: input.attributeTypeCategory,
+    attribute_date: input.attributeDate || input.dateStart,
+    date_is_estimated: input.dateIsEstimated ? "TRUE" : "FALSE",
+    estimated_to: input.estimatedTo || "",
+    attribute_detail: input.attributeDetail || input.valueText,
+    attribute_notes: input.attributeNotes || input.notes,
+    end_date: input.endDate || input.dateEnd,
     created_at: now,
     updated_at: now,
   };
@@ -164,17 +196,18 @@ export async function updateAttribute(
   const payload: Record<string, string> = {
     updated_at: new Date().toISOString(),
   };
-  if (patch.category !== undefined) payload.category = patch.category;
-  if (patch.typeKey !== undefined) payload.type_key = patch.typeKey;
   if (patch.typeKey !== undefined) payload.attribute_type = patch.typeKey;
-  if (patch.label !== undefined) payload.label = patch.label;
-  if (patch.valueText !== undefined) payload.value_text = patch.valueText;
-  if (patch.dateStart !== undefined) payload.date_start = patch.dateStart;
-  if (patch.dateStart !== undefined) payload.start_date = patch.dateStart;
-  if (patch.dateEnd !== undefined) payload.date_end = patch.dateEnd;
-  if (patch.dateEnd !== undefined) payload.end_date = patch.dateEnd;
-  if (patch.location !== undefined) payload.location = patch.location;
-  if (patch.notes !== undefined) payload.notes = patch.notes;
+  if (patch.attributeType !== undefined) payload.attribute_type = patch.attributeType;
+  if (patch.attributeTypeCategory !== undefined) payload.attribute_type_category = patch.attributeTypeCategory;
+  if (patch.valueText !== undefined) payload.attribute_detail = patch.valueText;
+  if (patch.attributeDetail !== undefined) payload.attribute_detail = patch.attributeDetail;
+  if (patch.dateStart !== undefined) payload.attribute_date = patch.dateStart;
+  if (patch.attributeDate !== undefined) payload.attribute_date = patch.attributeDate;
+  if (patch.endDate !== undefined) payload.end_date = patch.endDate;
+  if (patch.dateIsEstimated !== undefined) payload.date_is_estimated = patch.dateIsEstimated ? "TRUE" : "FALSE";
+  if (patch.estimatedTo !== undefined) payload.estimated_to = patch.estimatedTo;
+  if (patch.notes !== undefined) payload.attribute_notes = patch.notes;
+  if (patch.attributeNotes !== undefined) payload.attribute_notes = patch.attributeNotes;
   const updated = await updateTableRecordById(ATTRIBUTES_TAB, attributeId, payload, "attribute_id", tenantKey);
   return updated ? toAttributeRecord(updated.data) : null;
 }

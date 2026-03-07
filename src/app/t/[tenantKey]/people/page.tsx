@@ -136,6 +136,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
           firstName: person.firstName,
           middleName: person.middleName,
           lastName: person.lastName,
+          maidenName: person.maidenName,
           nickName: person.nickName,
           birthDate: person.birthDate,
           gender: person.gender,

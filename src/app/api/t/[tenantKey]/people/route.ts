@@ -32,6 +32,7 @@ const createPersonSchema = z.object({
   first_name: z.string().trim().min(1).max(80),
   middle_name: z.string().trim().max(80).optional().default(""),
   last_name: z.string().trim().min(1).max(80),
+  maiden_name: z.string().trim().max(80).optional().default(""),
   nick_name: z.string().trim().max(80).optional().default(""),
   display_name: z.string().trim().max(140).optional().default(""),
   birth_date: z.string().trim().min(1).max(64),
@@ -197,6 +198,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         first_name: existingGlobal.firstName,
         middle_name: existingGlobal.middleName,
         last_name: existingGlobal.lastName,
+        maiden_name: existingGlobal.maidenName,
         nick_name: existingGlobal.nickName,
         birth_date: existingGlobal.birthDate,
         gender: existingGlobal.gender,
@@ -210,7 +212,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       },
     };
   } else {
-    await ensureResolvedTabColumns("People", ["email"], resolved.tenant.tenantKey);
+    await ensureResolvedTabColumns("People", ["email", "maiden_name"], resolved.tenant.tenantKey);
     record = await createTableRecord(
       "People",
       {
@@ -219,6 +221,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
         first_name: parsed.data.first_name,
         middle_name: parsed.data.middle_name,
         last_name: parsed.data.last_name,
+        maiden_name: parsed.data.maiden_name,
         nick_name: parsed.data.nick_name,
         birth_date: parsed.data.birth_date,
         gender: parsed.data.gender,

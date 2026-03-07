@@ -83,6 +83,7 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "first_name",
     "middle_name",
     "last_name",
+    "maiden_name",
     "nick_name",
     "birth_date",
     "gender",
@@ -121,25 +122,14 @@ const TENANT_TABLE_HEADERS: Record<string, string[]> = {
     "attribute_id",
     "entity_type",
     "entity_id",
-    "category",
-    "type_key",
-    "person_id",
     "attribute_type",
-    "value_json",
-    "media_metadata",
-    "is_primary",
-    "sort_order",
-    "start_date",
+    "attribute_type_category",
+    "attribute_date",
+    "date_is_estimated",
+    "estimated_to",
+    "attribute_detail",
+    "attribute_notes",
     "end_date",
-    "visibility",
-    "share_scope",
-    "share_family_group_key",
-    "label",
-    "value_text",
-    "date_start",
-    "date_end",
-    "location",
-    "notes",
     "created_at",
     "updated_at",
   ],
@@ -1093,6 +1083,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
   const firstName = getCell(row, idx, "first_name").trim();
   const middleName = getCell(row, idx, "middle_name").trim();
   const lastName = getCell(row, idx, "last_name").trim();
+  const maidenName = getCell(row, idx, "maiden_name").trim();
   const nickName = getCell(row, idx, "nick_name").trim();
   const fallbackDisplayName = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
   return {
@@ -1101,6 +1092,7 @@ function rowToPerson(headers: string[], row: string[]): PersonRecord {
     firstName,
     middleName,
     lastName,
+    maidenName,
     nickName,
     birthDate: getCell(row, idx, "birth_date"),
     gender: ((): "male" | "female" | "unspecified" => {
@@ -1919,7 +1911,7 @@ function personAttributesFromUnifiedMatrix(matrix: SheetMatrix, tenantKey: strin
         return null;
       }
       const valueJson = getCell(row, idx, "value_json").trim();
-      const mediaMetadata = getCell(row, idx, "media_metadata").trim() || valueJson;
+      const mediaMetadata = "";
       const startDate = normalizeDate(getCell(row, idx, "start_date").trim() || getCell(row, idx, "date_start").trim());
       const endDate = normalizeDate(getCell(row, idx, "end_date").trim() || getCell(row, idx, "date_end").trim());
       return {
@@ -1955,7 +1947,7 @@ export async function getPersonAttributes(
   try {
     await ensureResolvedTabColumns(
       PERSON_ATTRIBUTES_TAB,
-      ["share_scope", "share_family_group_key", "media_metadata", "person_id", "attribute_type"],
+      ["share_scope", "share_family_group_key", "person_id", "attribute_type"],
       normalizedTenantKey,
     );
     const tabName = await resolveTenantTabName(PERSON_ATTRIBUTES_TAB, normalizedTenantKey);
@@ -2007,6 +1999,7 @@ export async function updatePerson(
     if (updates.first_name !== undefined) payload.first_name = updates.first_name;
     if (updates.middle_name !== undefined) payload.middle_name = updates.middle_name;
     if (updates.last_name !== undefined) payload.last_name = updates.last_name;
+    if (updates.maiden_name !== undefined) payload.maiden_name = updates.maiden_name;
     if (updates.nick_name !== undefined) payload.nick_name = updates.nick_name;
     if (updates.gender) payload.gender = updates.gender;
     if (updates.email !== undefined) payload.email = updates.email;
@@ -2016,7 +2009,7 @@ export async function updatePerson(
     }
     return getPersonById(personId, tenantKey);
   }
-  await ensureResolvedTabColumns(PEOPLE_TAB, ["email"], tenantKey);
+  await ensureResolvedTabColumns(PEOPLE_TAB, ["email", "maiden_name"], tenantKey);
   const tabName = await resolveTenantTabName(PEOPLE_TAB, tenantKey);
   const { headers, rows } = await readTab(tabName);
   if (headers.length === 0) {
@@ -2040,6 +2033,9 @@ export async function updatePerson(
   }
   if (updates.last_name !== undefined) {
     setCell(mutableRow, idx, "last_name", updates.last_name);
+  }
+  if (updates.maiden_name !== undefined) {
+    setCell(mutableRow, idx, "maiden_name", updates.maiden_name);
   }
   if (updates.nick_name !== undefined) {
     setCell(mutableRow, idx, "nick_name", updates.nick_name);

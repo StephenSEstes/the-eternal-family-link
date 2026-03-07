@@ -1857,6 +1857,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-06 (attributes: remove embedded media_metadata usage from Attributes flows)
+
+- `Change`: Removed `media_metadata` dependency from attribute schema headers and attribute write paths. Attribute media linking remains in `MediaAssets`/`MediaLinks`; Attributes now no longer writes/depends on `media_metadata`.
+- `Type`: Architecture, Data, API cleanup
+- `Why`: Root cause was mixed media storage responsibility, with media metadata still being written/read on `Attributes` while link tables already exist for media associations.
+- `Files`:
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/import/csv/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+- `Data Changes`: No net DB mutation required in current environment.
+  - Verified via OCI query that `attributes.media_metadata` was already absent (`Column already absent`).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Attribute create/update/upload flows no longer attempt to write `media_metadata` on Attributes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (person modal fixed panel height increased ~15%)
 
 - `Change`: Increased the person modal fixed panel height budget from `min(92vh, 920px)` to `min(96vh, 1058px)` to show more content at once while keeping fixed-frame behavior.
@@ -1921,4 +1942,35 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run lint` passes.
   - `npm run build` passes.
 - `Rollback Notes`: Restore from DB backup/snapshot if legacy table is needed again.
+- `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).
+## 2026-03-06 (attributes schema reset to event/descriptor model with dynamic type categories)
+
+- `Change`: Reworked attribute create/edit payloads and storage mapping to a simplified schema focused on event/descriptor facts, and added a one-time OCI reset script that deletes all existing attribute rows and drops legacy columns.
+- `Type`: Data, Schema, UI
+- `Why`: Root cause was legacy attribute shape drift (`type_key/category/value_text/date_start/...`) from older flows, which conflicted with the new desired model and made Add Attribute behavior inconsistent.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/validation/attributes.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+  - `scripts/reset-attributes-schema.cjs`
+  - `package.json`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: Yes.
+  - Executed `npm run attributes:reset-schema`.
+  - Evidence:
+    - `attributes rows before delete: 2`
+    - `attributes rows after delete: 0`
+    - `columns added: 6`
+    - `legacy columns dropped: 8`
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Add Attribute flow now writes canonical fields:
+    - `attribute_id, entity_type, entity_id, attribute_type, attribute_type_category, attribute_date, date_is_estimated, estimated_to, attribute_detail, attribute_notes, end_date`.
+- `Rollback Notes`: Restore attributes table from DB backup snapshot and revert this commit.
 - `Design Decision Change`: Updated (`docs/design-decisions.md`, `designchoices.md`).

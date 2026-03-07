@@ -27,6 +27,7 @@ type OciPool = {
 
 let cachedWalletDir: string | null = null;
 let poolPromise: Promise<OciPool> | null = null;
+let peopleTableCompatEnsured = false;
 
 function readWalletJsonPayload() {
   const single = process.env.OCI_WALLET_FILES_JSON;
@@ -95,6 +96,7 @@ const TABLES: Record<string, TableConfig> = {
       "first_name",
       "middle_name",
       "last_name",
+      "maiden_name",
       "nick_name",
       "birth_date",
       "gender",
@@ -164,25 +166,14 @@ const TABLES: Record<string, TableConfig> = {
       "attribute_id",
       "entity_type",
       "entity_id",
-      "category",
-      "type_key",
-      "person_id",
       "attribute_type",
-      "value_json",
-      "media_metadata",
-      "is_primary",
-      "sort_order",
-      "start_date",
+      "attribute_type_category",
+      "attribute_date",
+      "date_is_estimated",
+      "estimated_to",
+      "attribute_detail",
+      "attribute_notes",
       "end_date",
-      "visibility",
-      "share_scope",
-      "share_family_group_key",
-      "label",
-      "value_text",
-      "date_start",
-      "date_end",
-      "location",
-      "notes",
       "created_at",
       "updated_at",
     ],
@@ -248,20 +239,20 @@ export async function ensureOciAttributesTable() {
            attribute_id VARCHAR2(128) PRIMARY KEY,
            entity_type VARCHAR2(32) NOT NULL,
            entity_id VARCHAR2(128) NOT NULL,
-           category VARCHAR2(32) NOT NULL,
-           type_key VARCHAR2(80) NOT NULL,
-           label VARCHAR2(160),
-           value_text CLOB,
-           date_start VARCHAR2(32),
-           date_end VARCHAR2(32),
-           location VARCHAR2(400),
-           notes CLOB,
+           attribute_type VARCHAR2(80) NOT NULL,
+           attribute_type_category VARCHAR2(120),
+           attribute_date VARCHAR2(32),
+           date_is_estimated VARCHAR2(8),
+           estimated_to VARCHAR2(16),
+           attribute_detail CLOB,
+           attribute_notes CLOB,
+           end_date VARCHAR2(32),
            created_at VARCHAR2(64),
            updated_at VARCHAR2(64)
          )`,
       );
       await connection.execute(
-        `CREATE INDEX idx_attributes_entity ON attributes(entity_type, entity_id, category, type_key)`,
+        `CREATE INDEX idx_attributes_entity ON attributes(entity_type, entity_id, attribute_type)`,
       );
       await connection.commit();
     } catch (error) {
@@ -272,17 +263,15 @@ export async function ensureOciAttributesTable() {
     }
 
     const additiveColumns = [
-      "person_id VARCHAR2(128)",
       "attribute_type VARCHAR2(80)",
-      "value_json CLOB",
-      "media_metadata CLOB",
-      "is_primary VARCHAR2(8)",
-      "sort_order VARCHAR2(16)",
-      "start_date VARCHAR2(32)",
+      "attribute_type_category VARCHAR2(120)",
+      "attribute_date VARCHAR2(32)",
+      "date_is_estimated VARCHAR2(8)",
+      "estimated_to VARCHAR2(16)",
+      "attribute_detail CLOB",
+      "attribute_notes CLOB",
       "end_date VARCHAR2(32)",
-      "visibility VARCHAR2(32)",
-      "share_scope VARCHAR2(32)",
-      "share_family_group_key VARCHAR2(128)",
+      "updated_at VARCHAR2(64)",
     ];
     for (const columnSql of additiveColumns) {
       try {
@@ -382,10 +371,29 @@ function normalizePayload(payload: Record<string, string>, headers: string[]) {
   return out;
 }
 
+async function ensurePeopleTableCompatibility(connection: OciConnection) {
+  if (peopleTableCompatEnsured) {
+    return;
+  }
+  try {
+    await connection.execute(`ALTER TABLE people ADD (maiden_name VARCHAR2(128))`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+      throw error;
+    }
+  }
+  peopleTableCompatEnsured = true;
+}
+
 export async function getOciTableRecords(tabName: string | string[]): Promise<SheetRecord[]> {
   const { config } = resolveTab(tabName);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   return withConnection(async (connection) => {
+    if (config.tableName === "people") {
+      await ensurePeopleTableCompatibility(connection);
+    }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} ORDER BY ROWID`,
       [],
@@ -412,6 +420,9 @@ export async function getOciTableRecordById(
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   const whereColumn = effectiveIdColumn === "date" ? "date_value" : effectiveIdColumn;
   return withConnection(async (connection) => {
+    if (config.tableName === "people") {
+      await ensurePeopleTableCompatibility(connection);
+    }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} WHERE ${whereColumn} = :id FETCH FIRST 1 ROWS ONLY`,
       [recordId],
@@ -438,6 +449,9 @@ export async function createOciTableRecords(
   const sql = `INSERT INTO ${config.tableName} (${insertCols.join(", ")}) VALUES (${bindSlots})`;
 
   return withConnection(async (connection) => {
+    if (config.tableName === "people") {
+      await ensurePeopleTableCompatibility(connection);
+    }
     const normalizedRows = payloads.map((payload) => normalizePayload(payload, config.headers));
     const binds = normalizedRows.map((row) => config.headers.map((h) => row[h] ?? ""));
     await connection.executeMany(sql, binds, { autoCommit: true });
@@ -465,6 +479,9 @@ export async function updateOciTableRecordById(
   binds.push(recordId);
 
   return withConnection(async (connection) => {
+    if (config.tableName === "people") {
+      await ensurePeopleTableCompatibility(connection);
+    }
     const update = await connection.execute(
       `UPDATE ${config.tableName} SET ${setClauses.join(", ")} WHERE ${whereColumn} = :id`,
       binds,
@@ -719,6 +736,7 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[
   const cols = TABLES.People.headers.join(", ");
   if (!tenantKey) {
     return withConnection(async (connection) => {
+      await ensurePeopleTableCompatibility(connection);
       const result = await connection.execute(
         `SELECT ${cols} FROM people ORDER BY display_name, person_id`,
         [],
@@ -733,6 +751,7 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[
   }
   const normalized = tenantKey.trim().toLowerCase();
   return withConnection(async (connection) => {
+    await ensurePeopleTableCompatibility(connection);
     const result = await connection.execute(
       `SELECT ${TABLES.People.headers.map((h) => `p.${h}`).join(", ")}
        FROM people p

@@ -184,7 +184,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       payload.date_start = payload.date_start ?? payload.start_date ?? "";
       payload.date_end = payload.date_end ?? payload.end_date ?? "";
       payload.value_json = payload.value_json ?? "";
-      payload.media_metadata = payload.media_metadata ?? payload.value_json;
       payload.visibility = payload.visibility ?? "family";
       payload.sort_order = payload.sort_order ?? "0";
       payload.is_primary = payload.is_primary ?? "FALSE";

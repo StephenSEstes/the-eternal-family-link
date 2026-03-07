@@ -55,6 +55,14 @@ export async function PATCH(request: Request, { params }: RouteProps) {
 
   const updated = await updateAttribute(tenant.tenantKey, attributeId, {
     category: parsed.data.category,
+    attributeType: parsed.data.attributeType,
+    attributeTypeCategory: parsed.data.attributeTypeCategory,
+    attributeDate: parsed.data.attributeDate,
+    dateIsEstimated: parsed.data.dateIsEstimated,
+    estimatedTo: parsed.data.estimatedTo,
+    attributeDetail: parsed.data.attributeDetail,
+    attributeNotes: parsed.data.attributeNotes,
+    endDate: parsed.data.endDate,
     typeKey: parsed.data.typeKey,
     label: parsed.data.label,
     valueText: parsed.data.valueText,

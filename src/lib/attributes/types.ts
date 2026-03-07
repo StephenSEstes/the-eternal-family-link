@@ -6,6 +6,14 @@ export type AttributeRecord = {
   entityType: AttributeEntityType;
   entityId: string;
   category: AttributeCategory;
+  attributeType: string;
+  attributeTypeCategory: string;
+  attributeDate: string;
+  dateIsEstimated: boolean;
+  estimatedTo: "month" | "year" | "";
+  attributeDetail: string;
+  attributeNotes: string;
+  endDate: string;
   typeKey: string;
   label: string;
   valueText: string;

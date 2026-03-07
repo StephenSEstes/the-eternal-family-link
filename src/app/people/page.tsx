@@ -131,6 +131,7 @@ export default async function PeoplePage() {
           firstName: person.firstName,
           middleName: person.middleName,
           lastName: person.lastName,
+          maidenName: person.maidenName,
           nickName: person.nickName,
           birthDate: person.birthDate,
           gender: person.gender,
