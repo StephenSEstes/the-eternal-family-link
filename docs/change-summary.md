@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (things-about chip label safety + click-to-open add form)
+
+- `Change`: Fixed Things About chip text rendering to safely handle non-string/object-backed values (preventing `[object Object]` labels) and restored chip click behavior to open the Things About attribute add form.
+- `Type`: UI
+- `Why`: Root cause was direct string operations on attribute values that could be objects, plus prior chip behavior change to non-clickable pills.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Things About chips render readable labels (for example `Eyes: Blue`) and never `[object Object]`.
+  - Clicking a Things About chip opens the Things About add form.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (remove chip detail modal path + pill chip visual update)
 
 - `Change`: Removed chip click navigation into attribute detail/list modal flow from About tab, so this surface now uses add-attribute flow only; updated Things About chips to non-clickable pill styling with a light background, subtle border, and left icon dot.

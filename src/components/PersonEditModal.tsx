@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
-import { PhoneLinkActions } from "@/components/PhoneLinkActions";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
+import { extractPhoneLinkItems } from "@/lib/phone-links";
 
 type PersonItem = {
   personId: string;
@@ -170,10 +170,49 @@ function toTitleWords(value?: string) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function getSafeAttributeText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") return "";
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        return getSafeAttributeText(JSON.parse(trimmed));
+      } catch {
+        return trimmed;
+      }
+    }
+    return trimmed;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map((entry) => getSafeAttributeText(entry)).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = [
+      record.displayLabel,
+      record.label,
+      record.title,
+      record.name,
+      record.valueText,
+      record.value,
+      record.text,
+    ];
+    for (const candidate of preferred) {
+      const resolved = getSafeAttributeText(candidate);
+      if (resolved) return resolved;
+    }
+    return "";
+  }
+  return "";
+}
+
 function getThingsChipLabel(item: AboutAttribute) {
   const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
-  const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
-  const detail = (item.attributeDetail || item.valueText || "").trim();
+  const typeCategoryText = getSafeAttributeText(item.attributeTypeCategory);
+  const typeCategory = normalizeAttributeKey(typeCategoryText);
+  const detail = getSafeAttributeText(item.attributeDetail || item.valueText);
   const categoryLabel = toTitleWords(typeCategory);
   if (typeKey === "physical_attribute") {
     if (categoryLabel && detail) return `${categoryLabel}: ${detail}`;
@@ -647,6 +686,7 @@ export function PersonEditModal({
     return map;
   }, [households]);
   const aboutLabel = useMemo(() => `About ${firstNameFromDisplayName(displayName || person?.displayName || "")}`, [displayName, person?.displayName]);
+  const phoneActionItems = useMemo(() => extractPhoneLinkItems(phones), [phones]);
   const attributeLaunchMeta = useMemo(() => {
     if (attributeLaunchSource === "main_events") {
       return { label: "Main Events", initialTypeKey: "life_event" };
@@ -1491,10 +1531,9 @@ export function PersonEditModal({
               Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>
             <p className="person-modal-meta">
-              Email: {email || "-"} | Phone: <PhoneLinkActions value={phones} />
+              Email: {email || "-"} | Phone: {phones || "-"}
             </p>
           </div>
-          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
           </div>
         </div>
 
@@ -1563,7 +1602,20 @@ export function PersonEditModal({
                     onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
                     disabled={showReadOnly}
                   />
-                  <PhoneLinkActions value={phones} emptyText="" showNumber={false} />
+                  {phoneActionItems.length > 0 ? (
+                    <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", alignSelf: "stretch" }}>
+                      {phoneActionItems.map((item) => (
+                        <span key={item.smsHref} style={{ display: "inline-flex", gap: "0.4rem" }}>
+                          <a href={item.telHref} className="button secondary tap-button" style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}>
+                            Call
+                          </a>
+                          <a href={item.smsHref} className="button secondary tap-button" style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}>
+                            Text
+                          </a>
+                        </span>
+                      ))}
+                    </div>
+                  ) : <span />}
                 </div>
                 <label className="label">Email</label>
                 <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", marginBottom: "0.6rem" }}>
@@ -1572,7 +1624,7 @@ export function PersonEditModal({
                     <a
                       href={`mailto:${email.trim()}`}
                       className="button secondary tap-button"
-                      style={{ padding: "0.2rem 0.45rem", minHeight: "auto", whiteSpace: "nowrap" }}
+                      style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}
                     >
                       Email
                     </a>
@@ -1711,8 +1763,9 @@ export function PersonEditModal({
                 <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: "0.6rem" }}>
                   {thingsChips.length > 0 ? (
                     thingsChips.map((chip) => (
-                      <div
+                      <button
                         key={chip.attributeId}
+                        type="button"
                         className="status-chip status-chip--neutral"
                         style={{
                           textAlign: "left",
@@ -1724,6 +1777,11 @@ export function PersonEditModal({
                           alignItems: "center",
                           gap: "0.45rem",
                           padding: "0.45rem 0.7rem",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setAttributeLaunchSource("things");
+                          setShowAttributeAddModal(true);
                         }}
                       >
                         <span
@@ -1737,7 +1795,7 @@ export function PersonEditModal({
                           }}
                         />
                         {chip.label}
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <p className="page-subtitle" style={{ margin: 0 }}>No attributes added yet.</p>
