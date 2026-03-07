@@ -56,6 +56,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (attribute type-category master/detail editor flow)
+
+- `Change`: Updated the Attribute Types admin right pane to a master/detail flow: type category list box for the selected attribute type, and an edit box below for the selected type category (detail label, date mode, ask end date, enabled, sort order).
+- `Type`: UI
+- `Why`: Reduce editing complexity and match requested workflow (select type category first, then edit focused fields).
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Select an attribute type in left pane.
+  - Type categories appear in list box on right.
+  - Selecting one opens editable fields below.
+  - Save persists as before.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.

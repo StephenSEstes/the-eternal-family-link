@@ -57,6 +57,7 @@ export function AttributeDefinitionsAdmin({
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState("");
+  const [selectedTypeKey, setSelectedTypeKey] = useState("");
   const [search, setSearch] = useState("");
   const [baseline, setBaseline] = useState("");
 
@@ -79,6 +80,11 @@ export function AttributeDefinitionsAdmin({
       .sort((a, b) => a.sortOrder - b.sortOrder || a.categoryLabel.localeCompare(b.categoryLabel))[0]
       ?.categoryKey ?? "";
     setSelectedCategoryKey(firstCategory);
+    const firstType = [...nextTypes]
+      .filter((row) => row.categoryKey === firstCategory)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
+      ?.typeKey ?? "";
+    setSelectedTypeKey(firstType);
     const snapshot = stableStringify({ version: 1, categories: nextCategories, types: nextTypes });
     setBaseline(snapshot);
     setStatus("");
@@ -115,6 +121,21 @@ export function AttributeDefinitionsAdmin({
         .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel)),
     [types, selectedCategoryKey],
   );
+
+  const selectedType = useMemo(
+    () => categoryTypes.find((row) => row.typeKey === selectedTypeKey) ?? null,
+    [categoryTypes, selectedTypeKey],
+  );
+
+  useEffect(() => {
+    if (categoryTypes.length === 0) {
+      setSelectedTypeKey("");
+      return;
+    }
+    if (!categoryTypes.some((row) => row.typeKey === selectedTypeKey)) {
+      setSelectedTypeKey(categoryTypes[0]?.typeKey ?? "");
+    }
+  }, [categoryTypes, selectedTypeKey]);
 
   const duplicateCategoryKeys = useMemo(() => {
     const counts = new Map<string, number>();
@@ -203,6 +224,7 @@ export function AttributeDefinitionsAdmin({
     };
     setCategories((prev) => [...prev, next]);
     setSelectedCategoryKey(next.categoryKey);
+    setSelectedTypeKey("");
   };
 
   const updateCategory = (categoryKey: string, patch: Partial<CategoryRow>) => {
@@ -215,6 +237,11 @@ export function AttributeDefinitionsAdmin({
     if (selectedCategoryKey === categoryKey) {
       const fallback = sortedCategories.find((row) => row.categoryKey !== categoryKey)?.categoryKey ?? "";
       setSelectedCategoryKey(fallback);
+      const fallbackType = types
+        .filter((row) => row.categoryKey === fallback)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
+        ?.typeKey ?? "";
+      setSelectedTypeKey(fallbackType);
     }
   };
 
@@ -234,6 +261,7 @@ export function AttributeDefinitionsAdmin({
         isEnabled: true,
       },
     ]);
+    setSelectedTypeKey(`${selectedCategoryKey}_type_${next}`);
   };
 
   const updateType = (typeKey: string, categoryKey: string, patch: Partial<TypeRow>) => {
@@ -244,6 +272,10 @@ export function AttributeDefinitionsAdmin({
 
   const deleteType = (typeKey: string, categoryKey: string) => {
     setTypes((prev) => prev.filter((row) => !(row.typeKey === typeKey && row.categoryKey === categoryKey)));
+    if (selectedTypeKey === typeKey) {
+      const fallback = categoryTypes.find((row) => row.typeKey !== typeKey)?.typeKey ?? "";
+      setSelectedTypeKey(fallback);
+    }
   };
 
   return (
@@ -296,11 +328,17 @@ export function AttributeDefinitionsAdmin({
                   key={row.categoryKey}
                   type="button"
                   className="button secondary tap-button"
-                  onClick={() => setSelectedCategoryKey(row.categoryKey)}
+                  onClick={() => {
+                    setSelectedCategoryKey(row.categoryKey);
+                    const firstType = types
+                      .filter((item) => item.categoryKey === row.categoryKey)
+                      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
+                      ?.typeKey ?? "";
+                    setSelectedTypeKey(firstType);
+                  }}
                   style={{ textAlign: "left", borderColor: active ? "#1f2937" : undefined, background: active ? "#eef2ff" : undefined }}
                 >
                   <div style={{ fontWeight: 700 }}>{row.categoryLabel || row.categoryKey}</div>
-                  <div className="page-subtitle" style={{ margin: 0 }}>{row.categoryKey}</div>
                 </button>
               );
             })}
@@ -315,24 +353,6 @@ export function AttributeDefinitionsAdmin({
                 <div style={{ flex: 1, minWidth: "160px" }}>
                   <label className="label">Category Label</label>
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryLabel: e.target.value })} />
-                </div>
-                <div style={{ flex: 1, minWidth: "160px" }}>
-                  <label className="label">Category Key</label>
-                  <input
-                    className="input"
-                    value={selectedCategory.categoryKey}
-                    onChange={(e) => {
-                      const nextKey = normalizeKey(e.target.value);
-                      if (!nextKey) return;
-                      const oldKey = selectedCategory.categoryKey;
-                      setCategories((prev) => prev.map((row) => (row.categoryKey === oldKey ? { ...row, categoryKey: nextKey } : row)));
-                      setTypes((prev) => prev.map((row) => (row.categoryKey === oldKey ? { ...row, categoryKey: nextKey } : row)));
-                      setSelectedCategoryKey(nextKey);
-                    }}
-                  />
-                  {duplicateCategoryKeys.has(normalizeKey(selectedCategory.categoryKey)) ? (
-                    <p className="page-subtitle" style={{ marginTop: "0.3rem", color: "#b91c1c" }}>Duplicate category key.</p>
-                  ) : null}
                 </div>
                 <div style={{ width: "120px" }}>
                   <label className="label">Enabled</label>
@@ -353,54 +373,70 @@ export function AttributeDefinitionsAdmin({
                 </button>
               </div>
 
-              <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
-                <table className="settings-table settings-table-compact">
-                  <thead>
-                    <tr>
-                      <th>Type Label</th>
-                      <th>Type Key</th>
-                      <th>Detail Label</th>
-                      <th>Date Mode</th>
-                      <th>End Date</th>
-                      <th>Enabled</th>
-                      <th>Sort</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {categoryTypes.map((row) => {
-                      const typeDuplicate = duplicateTypeKeys.has(`${normalizeKey(row.categoryKey)}:${normalizeKey(row.typeKey)}`);
-                      return (
-                        <tr key={`${row.categoryKey}:${row.typeKey}`}>
-                          <td><input className="input" value={row.typeLabel} onChange={(e) => updateType(row.typeKey, row.categoryKey, { typeLabel: e.target.value })} /></td>
-                          <td>
-                            <input className="input" value={row.typeKey} onChange={(e) => updateType(row.typeKey, row.categoryKey, { typeKey: normalizeKey(e.target.value) })} />
-                            {typeDuplicate ? <p className="page-subtitle" style={{ marginTop: "0.25rem", color: "#b91c1c" }}>Duplicate key.</p> : null}
-                          </td>
-                          <td><input className="input" value={row.detailLabel} onChange={(e) => updateType(row.typeKey, row.categoryKey, { detailLabel: e.target.value })} /></td>
-                          <td>
-                            <select className="input" value={row.dateMode} onChange={(e) => updateType(row.typeKey, row.categoryKey, { dateMode: e.target.value as "single" | "range" })}>
-                              <option value="single">Single</option>
-                              <option value="range">Range</option>
-                            </select>
-                          </td>
-                          <td><input type="checkbox" checked={row.askEndDate} onChange={(e) => updateType(row.typeKey, row.categoryKey, { askEndDate: e.target.checked })} /></td>
-                          <td><input type="checkbox" checked={row.isEnabled} onChange={(e) => updateType(row.typeKey, row.categoryKey, { isEnabled: e.target.checked })} /></td>
-                          <td><input className="input" type="number" value={row.sortOrder} onChange={(e) => updateType(row.typeKey, row.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} /></td>
-                          <td>
-                            <button type="button" className="button secondary tap-button" onClick={() => deleteType(row.typeKey, row.categoryKey)}>
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {categoryTypes.length === 0 ? (
-                      <tr><td colSpan={8}>No types yet. Click Add Type.</td></tr>
-                    ) : null}
-                  </tbody>
-                </table>
+              <label className="label" style={{ marginTop: "0.75rem" }}>Type Categories</label>
+              <div className="card" style={{ maxHeight: "220px", overflow: "auto", display: "grid", gap: "0.45rem" }}>
+                {categoryTypes.map((row) => {
+                  const active = row.typeKey === selectedTypeKey;
+                  return (
+                    <button
+                      key={`${row.categoryKey}:${row.typeKey}`}
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => setSelectedTypeKey(row.typeKey)}
+                      style={{ textAlign: "left", borderColor: active ? "#1f2937" : undefined, background: active ? "#eef2ff" : undefined }}
+                    >
+                      {row.typeLabel || "Untitled Type"}
+                    </button>
+                  );
+                })}
+                {categoryTypes.length === 0 ? <p className="page-subtitle" style={{ margin: 0 }}>No types yet. Click Add Type.</p> : null}
               </div>
+
+              {selectedType ? (
+                <div className="card" style={{ marginTop: "0.75rem" }}>
+                  <h4 style={{ marginTop: 0, marginBottom: "0.6rem" }}>Edit Type Category</h4>
+                  <div className="settings-chip-list">
+                    <div style={{ flex: 1, minWidth: "180px" }}>
+                      <label className="label">Type Category</label>
+                      <input className="input" value={selectedType.typeLabel} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { typeLabel: e.target.value })} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: "180px" }}>
+                      <label className="label">Detail Label</label>
+                      <input className="input" value={selectedType.detailLabel} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { detailLabel: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="settings-chip-list">
+                    <div style={{ minWidth: "180px" }}>
+                      <label className="label">Date Mode</label>
+                      <select className="input" value={selectedType.dateMode} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { dateMode: e.target.value as "single" | "range" })}>
+                        <option value="single">Single</option>
+                        <option value="range">Range</option>
+                      </select>
+                    </div>
+                    <div style={{ minWidth: "140px" }}>
+                      <label className="label">Ask End Date</label>
+                      <label className="label" style={{ marginBottom: 0 }}>
+                        <input type="checkbox" checked={selectedType.askEndDate} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { askEndDate: e.target.checked })} /> Yes
+                      </label>
+                    </div>
+                    <div style={{ minWidth: "120px" }}>
+                      <label className="label">Enabled</label>
+                      <label className="label" style={{ marginBottom: 0 }}>
+                        <input type="checkbox" checked={selectedType.isEnabled} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { isEnabled: e.target.checked })} /> Yes
+                      </label>
+                    </div>
+                    <div style={{ minWidth: "120px" }}>
+                      <label className="label">Sort Order</label>
+                      <input className="input" type="number" value={selectedType.sortOrder} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
+                    </div>
+                  </div>
+                  <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
+                    <button type="button" className="button secondary tap-button" onClick={() => deleteType(selectedType.typeKey, selectedType.categoryKey)}>
+                      Delete Type Category
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="page-subtitle" style={{ margin: 0 }}>Select a category on the left.</p>
@@ -414,4 +450,3 @@ export function AttributeDefinitionsAdmin({
     </section>
   );
 }
-
