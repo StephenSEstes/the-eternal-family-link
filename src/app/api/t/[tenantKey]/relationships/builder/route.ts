@@ -17,6 +17,7 @@ const payloadSchema = z.object({
   parentIds: z.array(z.string().trim().min(1)).default([]),
   childIds: z.array(z.string().trim().min(1)).default([]),
   spouseId: z.string().trim().optional().default(""),
+  familyChanged: z.boolean().optional().default(true),
 });
 
 function makeRelId(fromPersonId: string, toPersonId: string, relType: string) {
@@ -162,12 +163,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     parentCount: parsed.data.parentIds.length,
     childCount: parsed.data.childIds.length,
     spouseId: parsed.data.spouseId ?? "",
+    familyChanged: parsed.data.familyChanged,
   };
   try {
     debugContext.phase = "prepare";
     const parentIds = Array.from(new Set(parsed.data.parentIds.filter((id) => id !== parsed.data.personId)));
     const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
     const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
+    if (!parsed.data.familyChanged) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "family_not_changed",
+        personId: parsed.data.personId,
+      });
+    }
 
     debugContext.phase = "load_relationships";
     const existing = await getTableRecords("Relationships", normalizedTenantKey);

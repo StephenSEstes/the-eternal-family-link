@@ -292,6 +292,15 @@ function oppositeGender(value: "male" | "female" | "unspecified") {
   return "unspecified";
 }
 
+function normalizeId(value?: string) {
+  return (value ?? "").trim();
+}
+
+function isTruthyFlag(value?: string) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonItem>) {
   let motherId = "";
   let fatherId = "";
@@ -598,6 +607,7 @@ export function PersonEditModal({
   const [spouseId, setSpouseId] = useState("");
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [familyTouched, setFamilyTouched] = useState(false);
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
   const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
@@ -645,6 +655,11 @@ export function PersonEditModal({
   const [newSpouseInLaw, setNewSpouseInLaw] = useState(true);
   const [creatingSpouse, setCreatingSpouse] = useState(false);
   const pendingCreatedSpouseIdRef = useRef("");
+  const initialFamilyRef = useRef<{ parent1Id: string; parent2Id: string; spouseId: string }>({
+    parent1Id: "",
+    parent2Id: "",
+    spouseId: "",
+  });
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
 
   const parentEdges = useMemo(
@@ -758,14 +773,24 @@ export function PersonEditModal({
     setAddress(person.address || "");
     setHobbies(person.hobbies || "");
     setNotes(person.notes || "");
-    setParent1Id(parentSelection.motherId);
-    setParent2Id(parentSelection.fatherId);
+    const initialParent1Id = parentSelection.motherId;
+    const initialParent2Id = parentSelection.fatherId;
+    setParent1Id(initialParent1Id);
+    setParent2Id(initialParent2Id);
     const partner = households.find((item) => item.partner1PersonId === person.personId || item.partner2PersonId === person.personId);
+    let initialSpouseId = "";
     if (partner) {
-      setSpouseId(partner.partner1PersonId === person.personId ? partner.partner2PersonId : partner.partner1PersonId);
+      initialSpouseId = partner.partner1PersonId === person.personId ? partner.partner2PersonId : partner.partner1PersonId;
+      setSpouseId(initialSpouseId);
     } else {
       setSpouseId("");
     }
+    initialFamilyRef.current = {
+      parent1Id: normalizeId(initialParent1Id),
+      parent2Id: normalizeId(initialParent2Id),
+      spouseId: normalizeId(initialSpouseId),
+    };
+    setFamilyTouched(false);
     setNewPhotoLabel("portrait");
     setNewPhotoDescription("");
     setNewPhotoDate("");
@@ -849,12 +874,20 @@ export function PersonEditModal({
   }, [childBirthDate, parent1Id, parent2Id, personOptions]);
 
   const spouseOptions = useMemo(
-    () =>
-      personOptions.filter((option) => {
+    () => {
+      const base = personOptions.filter((option) => {
         const marriedTo = spouseByPersonId.get(option.personId);
         return !marriedTo || marriedTo === person?.personId;
-      }),
-    [person?.personId, personOptions, spouseByPersonId],
+      });
+      if (spouseId && !base.some((option) => option.personId === spouseId)) {
+        const selected = personOptions.find((option) => option.personId === spouseId) ?? localPeople.find((option) => option.personId === spouseId);
+        if (selected && selected.personId !== person?.personId) {
+          return [selected, ...base];
+        }
+      }
+      return base;
+    },
+    [localPeople, person?.personId, personOptions, spouseByPersonId, spouseId],
   );
   const hasVisibleSpouseSelection = useMemo(
     () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
@@ -875,6 +908,9 @@ export function PersonEditModal({
         return aDate - bDate;
       })
       .slice(0, 8);
+  }, [attributes]);
+  const isInLawPerson = useMemo(() => {
+    return attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
   }, [attributes]);
   const aboutDescriptorAttributes = useMemo(() => {
     return aboutAttributes.filter((item) => {
@@ -904,9 +940,6 @@ export function PersonEditModal({
     }
     if (pendingCreatedSpouseIdRef.current === spouseId) {
       return;
-    }
-    if (!spouseOptions.some((option) => option.personId === spouseId)) {
-      setSpouseId("");
     }
   }, [spouseId, spouseOptions]);
   const selectedPhoto = useMemo(
@@ -1474,6 +1507,7 @@ export function PersonEditModal({
               parentIds: [parent1Id, parent2Id].filter(Boolean),
               childIds,
               spouseId: createdPersonId,
+              familyChanged: true,
             }),
           },
         );
@@ -1495,6 +1529,7 @@ export function PersonEditModal({
       });
       pendingCreatedSpouseIdRef.current = createdPersonId;
       setSpouseId(createdPersonId);
+      setFamilyTouched(true);
       setShowAddSpouse(false);
       if (relationSaved) {
         setStatus("Spouse created, linked, and household created.");
@@ -1639,51 +1674,64 @@ export function PersonEditModal({
                 {canManage ? (
                   <>
                     <div className="settings-chip-list">
-                      <div style={{ flex: 1, minWidth: 180 }}>
-                        <label className="label">Mother</label>
-                        <select
-                          className="input"
-                          value={parent1Id}
-                          onChange={(e) => {
-                            const next = e.target.value;
-                            setParent1Id(next);
-                            const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                            setSpouseId(spouse);
-                            if (spouse && spouse !== person.personId && spouse !== next) {
-                              setParent2Id(spouse);
-                            }
-                          }}
-                        >
-                          <option value="">None</option>
-                          {motherOptions.map((option) => (
-                            <option key={`p1-${option.personId}`} value={option.personId}>{option.displayName}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 180 }}>
-                        <label className="label">Father</label>
-                        <select
-                          className="input"
-                          value={parent2Id}
-                          onChange={(e) => {
-                            const next = e.target.value;
-                            setParent2Id(next);
-                            const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                            setSpouseId(spouse);
-                            if (spouse && spouse !== person.personId && spouse !== next) {
-                              setParent1Id(spouse);
-                            }
-                          }}
-                        >
-                          <option value="">None</option>
-                          {fatherOptions.map((option) => (
-                            <option key={`p2-${option.personId}`} value={option.personId}>{option.displayName}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {!isInLawPerson ? (
+                        <>
+                          <div style={{ flex: 1, minWidth: 180 }}>
+                            <label className="label">Mother</label>
+                            <select
+                              className="input"
+                              value={parent1Id}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setParent1Id(next);
+                                setFamilyTouched(true);
+                                const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
+                                setSpouseId(spouse);
+                                if (spouse && spouse !== person.personId && spouse !== next) {
+                                  setParent2Id(spouse);
+                                }
+                              }}
+                            >
+                              <option value="">None</option>
+                              {motherOptions.map((option) => (
+                                <option key={`p1-${option.personId}`} value={option.personId}>{option.displayName}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 180 }}>
+                            <label className="label">Father</label>
+                            <select
+                              className="input"
+                              value={parent2Id}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setParent2Id(next);
+                                setFamilyTouched(true);
+                                const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
+                                setSpouseId(spouse);
+                                if (spouse && spouse !== person.personId && spouse !== next) {
+                                  setParent1Id(spouse);
+                                }
+                              }}
+                            >
+                              <option value="">None</option>
+                              {fatherOptions.map((option) => (
+                                <option key={`p2-${option.personId}`} value={option.personId}>{option.displayName}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="page-subtitle field-span-2" style={{ marginBottom: 0 }}>
+                          As an in-law your parents are not visible in this view. To see/Select your parents, change the family group.
+                        </p>
+                      )}
                       <div style={{ flex: 1, minWidth: 180 }}>
                         <label className="label">Spouse</label>
-                        <select className="input" value={spouseId} onChange={(e) => setSpouseId(e.target.value)}>
+                        <select className="input" value={spouseId} onChange={(e) => {
+                          setSpouseId(e.target.value);
+                          setFamilyTouched(true);
+                        }}>
                           <option value="">None</option>
                           {spouseOptions.map((option) => (
                             <option key={`sp-${option.personId}`} value={option.personId}>{option.displayName}</option>
@@ -2385,6 +2433,13 @@ export function PersonEditModal({
                   return;
                 }
                 if (canManage) {
+                  const initialFamily = initialFamilyRef.current;
+                  const familyChanged =
+                    familyTouched ||
+                    normalizeId(parent1Id) !== normalizeId(initialFamily.parent1Id) ||
+                    normalizeId(parent2Id) !== normalizeId(initialFamily.parent2Id) ||
+                    normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
+                  if (familyChanged) {
                   const relationshipRes = await fetch(
                     `/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`,
                     {
@@ -2395,6 +2450,7 @@ export function PersonEditModal({
                         parentIds: [parent1Id, parent2Id].filter(Boolean),
                         childIds,
                         spouseId,
+                        familyChanged: true,
                       }),
                     },
                   );
@@ -2405,6 +2461,7 @@ export function PersonEditModal({
                     setStatus(`Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`);
                     setSaving(false);
                     return;
+                  }
                   }
                 }
                 setStatus("Saved.");

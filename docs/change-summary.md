@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (family relationship safety guard + in-law parent visibility rule)
+
+- `Change`: Hardened Family section persistence to prevent accidental relationship/household deletion by preserving selected spouse values in dropdowns, removing UI auto-clear behavior, tracking explicit family edits, and only invoking relationship prune/update when family values change (`familyChanged=true`). Added in-law UX rule to hide Mother/Father selectors and show guidance text.
+- `Type`: UI, API
+- `Why`: Root cause was a regression path where filtered spouse options could clear UI values and save payloads would be interpreted as intentional deletes in relationship builder prune logic.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Opening/saving person without family edits does not remove existing spouse/parent relationships.
+  - Selected spouse remains visible in dropdown even when normally filtered out.
+  - Relationship builder returns `skipped: true` when `familyChanged` is false.
+  - In-law people hide Mother/Father dropdowns and show:
+    `As an in-law your parents are not visible in this view. To see/Select your parents, change the family group.`
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (things-about chip label safety + click-to-open add form)
 
 - `Change`: Fixed Things About chip text rendering to safely handle non-string/object-backed values (preventing `[object Object]` labels) and restored chip click behavior to open the Things About attribute add form.

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Added family-save safety guard (change-gated relationship updates + no spouse auto-clear) and in-law Family section rule that hides parent selectors with guidance text. See `docs/change-summary.md`.
 - 2026-03-06: Fixed Things About chip `[object Object]` labels and restored chip click to open Things About add form. See `docs/change-summary.md`.
 - 2026-03-06: Removed About-tab chip click path into nested attribute detail/list modals and restyled Things About chips as non-clickable pills with icon and light background. See `docs/change-summary.md`.
 - 2026-03-06: Fixed person birthdate off-by-one display (date-only local parsing) and added inline Contact actions (`Call/Text` on phone row, `Email` on email row). See `docs/change-summary.md`.
