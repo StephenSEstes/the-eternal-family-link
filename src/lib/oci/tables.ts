@@ -797,7 +797,7 @@ export async function getOciRelationshipsForTenant(tenantKey: string): Promise<S
          AND (${enabledExpr("m_from.is_enabled")} OR TRIM(NVL(m_from.is_enabled, '')) = '')
          AND (${enabledExpr("m_to.is_enabled")} OR TRIM(NVL(m_to.is_enabled, '')) = '')
        ORDER BY r.rel_id`,
-      [normalized],
+      { tenantKey: normalized },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];

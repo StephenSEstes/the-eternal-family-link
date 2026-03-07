@@ -513,7 +513,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     return null;
   }
 
-  const imageSrc = weddingPhotoFileId ? getPhotoProxyPath(weddingPhotoFileId, tenantKey) : "/WeddingAvatar1.png";
   const linkedPersonIds = new Set(selectedPhotoAssociations.people.map((item) => item.personId));
   const linkedHouseholdIds = new Set(selectedPhotoAssociations.households.map((item) => item.householdId));
   const peopleById = new Map(availablePeople.map((item) => [item.personId, item]));
@@ -557,6 +556,12 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         photoFileId: "",
       }
     : null;
+  const spouseHeadshotFileId = wifeTile?.photoFileId || husbandTile?.photoFileId || "";
+  const imageSrc = weddingPhotoFileId
+    ? getPhotoProxyPath(weddingPhotoFileId, tenantKey)
+    : spouseHeadshotFileId
+      ? getPhotoProxyPath(spouseHeadshotFileId, tenantKey)
+      : "/WeddingAvatar1.png";
 
   const openPersonDetail = (personId: string) => {
     if (!personId) return;

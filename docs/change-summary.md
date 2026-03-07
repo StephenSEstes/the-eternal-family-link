@@ -2199,3 +2199,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Family section data (parents/spouse/in-law visibility) updates to selected group context.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (fix tenant relationship query bind mismatch + household headshot fallback)
+
+- `Change`: Fixed OCI tenant-scoped relationship query bind usage to prevent NJS-098, and updated household modal header image fallback to use spouse primary headshot when wedding photo is absent.
+- `Type`: Backend, UI
+- `Why`: Family-group switching triggered client failure due to server-side bind mismatch in relationship loading; household should display available primary person headshot when no wedding image exists.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/components/HouseholdEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - `/api/t/{tenantKey}/tree` no longer logs NJS-098 bind placeholder error.
+  - Household modal header uses wife/husband headshot fallback if wedding photo not set.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
