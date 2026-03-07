@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
+
+- `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.
+- `Type`: Infra
+- `Why`: Root cause is dependency usage (`next-auth -> openid-client@5.7.1`, plus Next internals) of legacy `url.parse()`, not application code.
+- `Files`:
+  - `src/instrumentation.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Runtime logs no longer include `(node:*) [DEP0169] ... url.parse()` for dependency paths.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (family relationship safety guard + in-law parent visibility rule)
 
 - `Change`: Hardened Family section persistence to prevent accidental relationship/household deletion by preserving selected spouse values in dropdowns, removing UI auto-clear behavior, tracking explicit family edits, and only invoking relationship prune/update when family values change (`familyChanged=true`). Added in-law UX rule to hide Mother/Father selectors and show guidance text.
