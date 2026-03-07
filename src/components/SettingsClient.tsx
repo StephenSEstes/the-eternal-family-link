@@ -252,6 +252,7 @@ export function SettingsClient({
 }: SettingsClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>("user_admin");
+  const [debugModeEnabled, setDebugModeEnabled] = useState(false);
   const [selectedTenantKey, setSelectedTenantKey] = useState(tenantKey);
   const [visibleAccessItems, setVisibleAccessItems] = useState<AccessItem[]>(accessItems);
   const [userEmail, setUserEmail] = useState("");
@@ -1576,6 +1577,11 @@ export function SettingsClient({
     );
   }, [existingParentLookupOptions, matriarchLookupQuery]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setDebugModeEnabled(window.localStorage.getItem("efl_debug_mode") === "1");
+  }, []);
+
   return (
     <div className="settings-stack">
       <div className="settings-top-tabs" role="tablist" aria-label="Settings sections">
@@ -1599,6 +1605,21 @@ export function SettingsClient({
           onClick={() => setActiveTab("integrity")}
         >
           Data &amp; System
+        </button>
+      </div>
+      <div className="settings-chip-list" style={{ marginTop: "0.5rem" }}>
+        <button
+          type="button"
+          className={`button secondary tap-button ${debugModeEnabled ? "game-option-selected" : ""}`}
+          onClick={() => {
+            if (typeof window === "undefined") return;
+            const next = !debugModeEnabled;
+            window.localStorage.setItem("efl_debug_mode", next ? "1" : "0");
+            setDebugModeEnabled(next);
+            window.dispatchEvent(new Event("efl-debug-mode-changed"));
+          }}
+        >
+          Debug Mode: {debugModeEnabled ? "On" : "Off"}
         </button>
       </div>
 

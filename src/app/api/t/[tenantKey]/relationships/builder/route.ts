@@ -9,6 +9,7 @@ import {
   deleteTableRows,
   ensurePersonFamilyGroupMembership,
   getTableRecords,
+  updateTableRecordById,
 } from "@/lib/google/sheets";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
@@ -95,6 +96,79 @@ function parseEnabledMembership(value: string) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return true;
   return normalized === "true" || normalized === "yes" || normalized === "1";
+}
+
+function isInLawAttributeForFamily(row: Record<string, string>, familyGroupKey: string) {
+  const attributeType = readField(row, "attribute_type").toLowerCase();
+  if (attributeType !== "in_law") return false;
+  const shareScope = readField(row, "share_scope").toLowerCase();
+  const shareFamilyGroupKey = readField(row, "share_family_group_key").toLowerCase();
+  if (shareScope !== "one_family" && shareScope !== "single_family") return false;
+  return shareFamilyGroupKey === familyGroupKey;
+}
+
+async function reconcileInLawMarkerForFamily(
+  tenantKey: string,
+  personId: string,
+  shouldBeInLaw: boolean,
+  attributesRows: Array<{ rowNumber: number; data: Record<string, string> }>,
+) {
+  const scopedRows = attributesRows.filter((row) => {
+    const rowPersonId = readField(row.data, "person_id");
+    if (rowPersonId !== personId) return false;
+    return isInLawAttributeForFamily(row.data, tenantKey);
+  });
+  if (shouldBeInLaw) {
+    if (scopedRows.length > 0) {
+      await Promise.all(
+        scopedRows.map((row) =>
+          updateTableRecordById(
+            "PersonAttributes",
+            readField(row.data, "attribute_id"),
+            {
+              value_text: "TRUE",
+              label: "in-law",
+              visibility: "family",
+              share_scope: "one_family",
+              share_family_group_key: tenantKey,
+            },
+            "attribute_id",
+            tenantKey,
+          ),
+        ),
+      );
+      return;
+    }
+    await createTableRecord(
+      "PersonAttributes",
+      {
+        attribute_id: buildEntityId("attr", `${tenantKey}|${personId}|in_law|${Date.now()}`),
+        person_id: personId,
+        attribute_type: "in_law",
+        value_text: "TRUE",
+        label: "in-law",
+        is_primary: "FALSE",
+        sort_order: "0",
+        visibility: "family",
+        share_scope: "one_family",
+        share_family_group_key: tenantKey,
+        notes: "",
+      },
+      tenantKey,
+    );
+    return;
+  }
+  if (scopedRows.length === 0) return;
+  await Promise.all(
+    scopedRows.map((row) =>
+      deleteTableRecordById(
+        "PersonAttributes",
+        readField(row.data, "attribute_id"),
+        "attribute_id",
+        tenantKey,
+      ),
+    ),
+  );
 }
 
 async function createFamilyUnit(
@@ -460,6 +534,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
           await createFamilyUnit(familyGroupKey, parsed.data.personId, spouseId, peopleById);
         }
       }
+    }
+
+    debugContext.phase = "reconcile_in_law";
+    const finalRelationships = await getTableRecords("Relationships", normalizedTenantKey);
+    const attributesRows = await getTableRecords("PersonAttributes", normalizedTenantKey).catch(() => []);
+    const affectedPersonIds = new Set<string>([parsed.data.personId]);
+    if (spouseId) affectedPersonIds.add(spouseId);
+    for (const affectedPersonId of affectedPersonIds) {
+      const hasParentInFamily = finalRelationships.some((row) => {
+        const relType = readField(row.data, "rel_type").toLowerCase();
+        if (relType !== "parent") return false;
+        return readField(row.data, "to_person_id") === affectedPersonId;
+      });
+      const hasSpouseInFamily = finalRelationships.some((row) => {
+        const relType = readField(row.data, "rel_type").toLowerCase();
+        if (relType !== "spouse" && relType !== "family") return false;
+        const fromPersonId = readField(row.data, "from_person_id");
+        const toPersonId = readField(row.data, "to_person_id");
+        return fromPersonId === affectedPersonId || toPersonId === affectedPersonId;
+      });
+      const shouldBeInLaw = hasSpouseInFamily && !hasParentInFamily;
+      await reconcileInLawMarkerForFamily(
+        normalizedTenantKey,
+        affectedPersonId,
+        shouldBeInLaw,
+        attributesRows,
+      );
     }
 
     debugContext.phase = "done";

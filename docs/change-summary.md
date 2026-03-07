@@ -2149,3 +2149,24 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Attribute GET payload returns text for `attributeDetail/valueText` instead of `[object Object]` when source column is CLOB.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-06 (person modal polish + in-law reconciliation + debug toggle)
+
+- `Change`: Implemented relationship-save in-law reconciliation (family-group scoped), improved person contact action button alignment and shading, swapped footer button order (Close then Save), made About chips size-to-content, switched Add Attribute modal to dynamic height, and gated attribute debug payload output behind an Admin Debug Mode toggle.
+- `Type`: UI, Logic
+- `Why`: Resolve in-law drift in person flow and UI consistency issues while keeping diagnosis tooling available only when intentionally enabled.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `TODO.md`
+- `Data Changes`: No.
+- `Verify`:
+  - Saving person family updates now reconciles scoped in-law marker for person/spouse in active family group.
+  - Contact action buttons align with input rows and show subtle shaded style.
+  - Person footer action order is Close (left) and Save (right).
+  - Things/About chips render at text width.
+  - Add Attribute modal uses dynamic height.
+  - Raw JSON debug block only appears when Admin Debug Mode is On.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

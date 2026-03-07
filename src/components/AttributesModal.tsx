@@ -379,6 +379,7 @@ export function AttributesModal({
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryResults, setLibraryResults] = useState<LibraryMediaItem[]>([]);
   const [isLikelyMobile, setIsLikelyMobile] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
   const addTypeSuggestions = useMemo(() => typeListForCategory(category), [category]);
   const typeCategorySuggestions = useMemo(() => {
@@ -440,6 +441,22 @@ export function AttributesModal({
   useEffect(() => {
     if (typeof window === "undefined") return;
     setIsLikelyMobile(window.matchMedia("(pointer: coarse)").matches || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const readDebugMode = () => {
+      const value = window.localStorage.getItem("efl_debug_mode");
+      setDebugMode(value === "1");
+    };
+    readDebugMode();
+    const onStorage = () => readDebugMode();
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("efl-debug-mode-changed", onStorage as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("efl-debug-mode-changed", onStorage as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -1246,7 +1263,7 @@ export function AttributesModal({
 
       {addModalOpen ? (
         <div className="person-modal-backdrop" onClick={closeAddModal} style={{ zIndex: 1300 }}>
-          <div className="person-modal-panel" style={{ maxWidth: "680px" }} onClick={(event) => event.stopPropagation()}>
+          <div className="person-modal-panel" style={{ maxWidth: "680px", height: "auto", maxHeight: "none" }} onClick={(event) => event.stopPropagation()}>
             <div className="person-modal-sticky-head">
                 <div className="person-modal-header">
                   <div>
@@ -1414,6 +1431,7 @@ export function AttributesModal({
                     {busy ? "Saving..." : "Save"}
                   </button>
                 </div>
+                {debugMode ? (
                 <div style={{ marginTop: "0.65rem" }}>
                   <label className="label" style={{ marginBottom: "0.35rem" }}>Debug: raw GET attribute JSON</label>
                   <pre
@@ -1431,6 +1449,7 @@ export function AttributesModal({
                     {JSON.stringify(selectedRawItem ?? rawItems[0] ?? null, null, 2)}
                   </pre>
                 </div>
+                ) : null}
               </div>
               {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
             </div>

@@ -941,8 +941,18 @@ export function PersonEditModal({
   const isInLawPerson = useMemo(() => {
     const inLegacyAttributes = attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
     const inUnifiedAttributes = aboutAttributes.some((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "in_law" && isTruthyFlag(getSafeAttributeText(item.attributeDetail || item.valueText)));
+    const hasSpouseInFamily = edges.some((edge) => {
+      const relType = edge.label.trim().toLowerCase();
+      if (relType !== "spouse" && relType !== "family") return false;
+      if (!person) return false;
+      return edge.fromPersonId === person.personId || edge.toPersonId === person.personId;
+    });
+    const hasParentsInFamily = parentIds.length > 0;
+    const hasGraphSignals = hasSpouseInFamily || hasParentsInFamily;
+    const inferredInLawByGraph = hasSpouseInFamily && !hasParentsInFamily;
+    if (hasGraphSignals) return inferredInLawByGraph;
     return inLegacyAttributes || inUnifiedAttributes;
-  }, [aboutAttributes, attributes]);
+  }, [aboutAttributes, attributes, edges, parentIds.length, person]);
   const aboutDescriptorAttributes = useMemo(() => {
     return aboutAttributes.filter((item) => {
       if (item.category) return item.category === "descriptor";
@@ -1660,7 +1670,7 @@ export function PersonEditModal({
               <div className="card">
                 <h4 className="ui-section-title">Contact</h4>
                 <label className="label">Phone</label>
-                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", marginBottom: "0.6rem" }}>
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "stretch", marginBottom: "0.6rem" }}>
                   <input
                     className="input"
                     value={phones}
@@ -1669,13 +1679,39 @@ export function PersonEditModal({
                     disabled={showReadOnly}
                   />
                   {phoneActionItems.length > 0 ? (
-                    <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", alignSelf: "stretch" }}>
+                    <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "stretch", alignSelf: "stretch" }}>
                       {phoneActionItems.map((item) => (
-                        <span key={item.smsHref} style={{ display: "inline-flex", gap: "0.4rem" }}>
-                          <a href={item.telHref} className="button secondary tap-button" style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}>
+                        <span key={item.smsHref} style={{ display: "inline-flex", gap: "0.4rem", alignItems: "stretch" }}>
+                          <a
+                            href={item.telHref}
+                            className="button secondary tap-button"
+                            style={{
+                              minHeight: "44px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "0 0.8rem",
+                              whiteSpace: "nowrap",
+                              background: "#eef2f7",
+                              border: "1px solid #d3dbe6",
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+                            }}
+                          >
                             Call
                           </a>
-                          <a href={item.smsHref} className="button secondary tap-button" style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}>
+                          <a
+                            href={item.smsHref}
+                            className="button secondary tap-button"
+                            style={{
+                              minHeight: "44px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "0 0.8rem",
+                              whiteSpace: "nowrap",
+                              background: "#eef2f7",
+                              border: "1px solid #d3dbe6",
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+                            }}
+                          >
                             Text
                           </a>
                         </span>
@@ -1684,13 +1720,23 @@ export function PersonEditModal({
                   ) : <span />}
                 </div>
                 <label className="label">Email</label>
-                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", marginBottom: "0.6rem" }}>
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "stretch", marginBottom: "0.6rem" }}>
                   <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
                   {email.trim() ? (
                     <a
                       href={`mailto:${email.trim()}`}
                       className="button secondary tap-button"
-                      style={{ minHeight: "44px", padding: "0 0.8rem", whiteSpace: "nowrap" }}
+                      style={{
+                        minHeight: "44px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "0 0.8rem",
+                        whiteSpace: "nowrap",
+                        alignSelf: "stretch",
+                        background: "#eef2f7",
+                        border: "1px solid #d3dbe6",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+                      }}
                     >
                       Email
                     </a>
@@ -1844,7 +1890,7 @@ export function PersonEditModal({
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Things about {firstNameFromDisplayName(displayName || person.displayName)}</h4>
-                <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: "0.6rem" }}>
+                <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.6rem" }}>
                   {thingsChips.length > 0 ? (
                     thingsChips.map((chip) => (
                       <button
@@ -1853,7 +1899,8 @@ export function PersonEditModal({
                         className="status-chip status-chip--neutral"
                         style={{
                           textAlign: "left",
-                          width: "100%",
+                          width: "auto",
+                          maxWidth: "100%",
                           borderRadius: "999px",
                           border: "1px solid #d9e2ec",
                           background: "#eef4ff",
@@ -2439,6 +2486,7 @@ export function PersonEditModal({
         ) : null}
 
         <div className="settings-chip-list" style={{ marginTop: "1rem" }}>
+          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
           <PrimaryButton
             type="button"
             className="tap-button"
@@ -2517,7 +2565,6 @@ export function PersonEditModal({
           >
             {saving ? "Saving..." : "Save"}
           </PrimaryButton>
-          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
         </div>
 
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
