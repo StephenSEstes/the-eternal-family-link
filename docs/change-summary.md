@@ -2125,3 +2125,15 @@ Concise release notes for what changed, why it changed, and what to verify.
   - DB rows remain unchanged; UI now shows text instead of blank for object-shaped values.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-06 (temporary attribute raw JSON debug panel)
+
+- `Change`: Added a temporary debug panel under the Add/Edit Attribute Save actions to display raw JSON from the GET attributes payload (selected/editing item preferred).
+- `Type`: Debug
+- `Why`: Diagnose mismatch between stored `attribute_detail` values and form/chip rendering without guessing.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Open Add/Edit Attribute modal and confirm raw object payload is visible below Save.
+- `Rollback Notes`: Remove debug panel once diagnosis is complete.
+- `Design Decision Change`: No design decision change.

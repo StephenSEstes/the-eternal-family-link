@@ -347,6 +347,7 @@ export function AttributesModal({
   // - Parent owns fetched records + filtering state.
   // - Shared editor state powers both add and edit save behavior.
   const [items, setItems] = useState<AttributeItem[]>([]);
+  const [rawItems, setRawItems] = useState<AttributeItem[]>([]);
   const [tab, setTab] = useState<AttributeTab>("all");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -396,8 +397,9 @@ export function AttributesModal({
       setStatus(`Load failed: ${res.status}`);
       return;
     }
-    const rawItems = Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : [];
-    setItems(rawItems.map((item) => normalizeAttributeItem(item)));
+    const nextRawItems = Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : [];
+    setRawItems(nextRawItems);
+    setItems(nextRawItems.map((item) => normalizeAttributeItem(item)));
   };
 
   useEffect(() => {
@@ -471,6 +473,11 @@ export function AttributesModal({
     () => items.find((item) => item.attributeId === selectedAttributeId) ?? null,
     [items, selectedAttributeId],
   );
+  const selectedRawItem = useMemo(() => {
+    const currentId = editingId || selectedAttributeId || initialEditAttributeId.trim();
+    if (!currentId) return null;
+    return rawItems.find((item) => item.attributeId === currentId) ?? null;
+  }, [editingId, initialEditAttributeId, rawItems, selectedAttributeId]);
 
   useEffect(() => {
     if (!selectedItem || !pendingUploadIntent) return;
@@ -1406,6 +1413,23 @@ export function AttributesModal({
                   <button type="button" className="button tap-button" onClick={() => void saveAttribute()} disabled={busy}>
                     {busy ? "Saving..." : "Save"}
                   </button>
+                </div>
+                <div style={{ marginTop: "0.65rem" }}>
+                  <label className="label" style={{ marginBottom: "0.35rem" }}>Debug: raw GET attribute JSON</label>
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: "0.65rem",
+                      borderRadius: "0.65rem",
+                      border: "1px solid #E7EAF0",
+                      background: "#F8FAFC",
+                      fontSize: "0.75rem",
+                      overflowX: "auto",
+                      maxHeight: "180px",
+                    }}
+                  >
+                    {JSON.stringify(selectedRawItem ?? rawItems[0] ?? null, null, 2)}
+                  </pre>
                 </div>
               </div>
               {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
