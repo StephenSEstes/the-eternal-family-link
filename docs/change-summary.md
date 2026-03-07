@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (birthdate timezone fix + inline contact actions)
+
+- `Change`: Fixed person birthdate display off-by-one behavior by parsing date-only strings as local calendar dates, and updated Contact section rows so phone has inline `Call/Text` actions and email has an inline `Email` action on the same line.
+- `Type`: UI
+- `Why`: Root cause was `new Date("YYYY-MM-DD")` timezone conversion (UTC -> local) shifting displayed date in US timezones; Contact actions were separated from their fields and less direct to use.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/PhoneLinkActions.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Birthdate shown in About/Life Events matches the stored calendar date (no one-day shift).
+  - In Contact section, phone row shows editable number with `Call`/`Text` actions inline.
+  - In Contact section, email row shows editable email with `Email` action inline when value is present.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (things-about chips + click-to-open attribute detail)
 
 - `Change`: Replaced static Things About placeholder/summary text with clickable chips derived from saved descriptor attributes (for example `Eyes: Blue`, `Allergy: Penicillin`) and wired chip clicks to open the existing attribute detail modal for that specific attribute.

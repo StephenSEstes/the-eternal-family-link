@@ -116,6 +116,13 @@ function firstNameFromDisplayName(value: string) {
 function parseDate(value?: string) {
   const raw = (value ?? "").trim();
   if (!raw) return null;
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
@@ -1549,15 +1556,29 @@ export function PersonEditModal({
               <div className="card">
                 <h4 className="ui-section-title">Contact</h4>
                 <label className="label">Phone</label>
-                <input
-                  className="input"
-                  value={phones}
-                  onChange={(e) => setPhones(e.target.value)}
-                  onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
-                  disabled={showReadOnly}
-                />
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", marginBottom: "0.6rem" }}>
+                  <input
+                    className="input"
+                    value={phones}
+                    onChange={(e) => setPhones(e.target.value)}
+                    onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
+                    disabled={showReadOnly}
+                  />
+                  <PhoneLinkActions value={phones} emptyText="" showNumber={false} />
+                </div>
                 <label className="label">Email</label>
-                <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", marginBottom: "0.6rem" }}>
+                  <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
+                  {email.trim() ? (
+                    <a
+                      href={`mailto:${email.trim()}`}
+                      className="button secondary tap-button"
+                      style={{ padding: "0.2rem 0.45rem", minHeight: "auto", whiteSpace: "nowrap" }}
+                    >
+                      Email
+                    </a>
+                  ) : null}
+                </div>
                 <label className="label">Address</label>
                 <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
               </div>
