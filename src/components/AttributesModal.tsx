@@ -333,7 +333,6 @@ export function AttributesModal({
   const [selectedAttributeId, setSelectedAttributeId] = useState("");
   const [drawerEditMode, setDrawerEditMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [addDetailsOpen, setAddDetailsOpen] = useState(false);
   const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "library">("");
 
   const [editingId, setEditingId] = useState("");
@@ -390,7 +389,6 @@ export function AttributesModal({
       const normalizedType = normalizeTypeKey(initialTypeKey);
       setTypeKey(normalizedType);
       setCategory(inferCategory(normalizedType));
-      setAddDetailsOpen(inferCategory(normalizedType) === "event");
     }
   }, [open, entityType, entityId, initialTypeKey, startInAddMode]);
 
@@ -467,7 +465,6 @@ export function AttributesModal({
     setDateStart("");
     setDateEnd("");
     setNotes("");
-    setAddDetailsOpen(false);
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     setPendingPreview("");
     setPendingFile(null);
@@ -490,7 +487,6 @@ export function AttributesModal({
     setDateStart(item.attributeDate || item.dateStart);
     setDateEnd(item.endDate || item.dateEnd);
     setNotes(item.attributeNotes || item.notes);
-    setAddDetailsOpen(Boolean(item.category === "event" || item.attributeDate || item.endDate || item.attributeNotes));
   };
 
   const validateEditor = () => {
@@ -692,9 +688,16 @@ export function AttributesModal({
     const nextCategory = normalizedInitialType ? inferCategory(normalizedInitialType) : defaultCategory;
     setCategory(nextCategory);
     setTypeKey(normalizedInitialType || (nextCategory === "event" ? EVENT_TYPES[0] : DESCRIPTOR_TYPES[0]));
-    setAddDetailsOpen(nextCategory === "event");
     setAddModalOpen(true);
     setDrawerEditMode(false);
+  };
+
+  const closeAddModal = () => {
+    resetEditor();
+    setAddModalOpen(false);
+    if (startInAddMode) {
+      onClose();
+    }
   };
 
   const startAddAndAttach = (intent: "photo" | "video" | "library") => {
@@ -1178,7 +1181,7 @@ export function AttributesModal({
       ) : null}
 
       {addModalOpen ? (
-        <div className="person-modal-backdrop" onClick={() => { setAddModalOpen(false); resetEditor(); }} style={{ zIndex: 1300 }}>
+        <div className="person-modal-backdrop" onClick={closeAddModal} style={{ zIndex: 1300 }}>
           <div className="person-modal-panel" style={{ maxWidth: "680px" }} onClick={(event) => event.stopPropagation()}>
             <div className="person-modal-sticky-head">
                 <div className="person-modal-header">
@@ -1206,7 +1209,6 @@ export function AttributesModal({
                           setTypeKey(defaults[0] || "");
                           setAttributeTypeCategory("");
                         }
-                        if (isDateRelated) setAddDetailsOpen(true);
                       }}
                     >
                       <option value="no">No</option>
@@ -1215,23 +1217,18 @@ export function AttributesModal({
                   </div>
                   <div style={{ flex: 1, minWidth: "190px" }}>
                     <label className="label">{category === "event" ? "Event Type" : "Descriptor Type"}</label>
-                    <input
+                    <select
                       className="input"
                       value={typeKey}
                       onChange={(e) => {
                         setTypeKey(normalizeTypeKey(e.target.value));
                         setAttributeTypeCategory("");
                       }}
-                      placeholder={category === "event" ? "e.g. education" : "e.g. hobbies interests"}
-                      list={`attribute-type-list-${entityId}`}
-                    />
-                    <datalist id={`attribute-type-list-${entityId}`}>
+                    >
                       {addTypeSuggestions.map((item) => (
-                        <option key={item} value={item}>
-                          {prettyLabel(item, "")}
-                        </option>
+                        <option key={item} value={item}>{prettyLabel(item, "")}</option>
                       ))}
-                    </datalist>
+                    </select>
                   </div>
                 </div>
                 {typeCategorySuggestions.length > 0 ? (
@@ -1260,15 +1257,6 @@ export function AttributesModal({
                 />
 
                 <div style={{ marginTop: "0.75rem" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => setAddDetailsOpen((prev) => !prev)}>
-                    {addDetailsOpen ? "Hide Optional Details" : "Show Optional Details"}
-                  </button>
-                </div>
-
-                {addDetailsOpen ? (
-                  <div style={{ marginTop: "0.75rem" }}>
-                    <label className="label">Display Label (optional)</label>
-                    <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
                         <label className="label">Date</label>
@@ -1281,19 +1269,19 @@ export function AttributesModal({
                     </div>
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
-                        <label className="label">Date Is Estimated?</label>
-                        <select
-                          className="input"
-                          value={dateIsEstimated ? "yes" : "no"}
-                          onChange={(e) => {
-                            const next = e.target.value === "yes";
-                            setDateIsEstimated(next);
-                            if (!next) setEstimatedTo("");
-                          }}
-                        >
-                          <option value="no">No</option>
-                          <option value="yes">Yes</option>
-                        </select>
+                        <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                          <input
+                            type="checkbox"
+                            checked={dateIsEstimated}
+                            onChange={(e) => {
+                              const next = e.target.checked;
+                              setDateIsEstimated(next);
+                              if (!next) setEstimatedTo("");
+                            }}
+                            style={{ width: "14px", height: "14px" }}
+                          />
+                          Date Is Estimated
+                        </label>
                       </div>
                       {dateIsEstimated ? (
                         <div style={{ flex: 1, minWidth: "170px" }}>
@@ -1308,8 +1296,7 @@ export function AttributesModal({
                     </div>
                     <label className="label">Attribute Notes</label>
                     <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                  </div>
-                ) : null}
+                </div>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)} disabled={busy}>
@@ -1328,7 +1315,7 @@ export function AttributesModal({
                 <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Selecting a media option saves first, then opens the chooser.</p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => setAddModalOpen(false)} disabled={busy}>Cancel</button>
+                  <button type="button" className="button secondary tap-button" onClick={closeAddModal} disabled={busy}>Cancel</button>
                   <button type="button" className="button tap-button" onClick={() => void saveAttribute()} disabled={busy}>
                     {busy ? "Saving..." : "Save"}
                   </button>
