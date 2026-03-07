@@ -344,6 +344,7 @@ export function AttributesModal({
   entityLabel,
   modalSubtitle = "Attributes",
   initialTypeKey,
+  initialTypeCategory,
   initialEditAttributeId = "",
   startInAddMode = false,
   launchSourceLabel = "",
@@ -357,6 +358,7 @@ export function AttributesModal({
   entityLabel: string;
   modalSubtitle?: string;
   initialTypeKey?: string;
+  initialTypeCategory?: string;
   initialEditAttributeId?: string;
   startInAddMode?: boolean;
   launchSourceLabel?: string;
@@ -485,7 +487,10 @@ export function AttributesModal({
       setTypeKey(normalizedType);
       setCategory(inferCategory(normalizedType));
     }
-  }, [open, entityType, entityId, initialTypeKey, startInAddMode]);
+    if (initialTypeCategory) {
+      setAttributeTypeCategory(normalizeTypeKey(initialTypeCategory));
+    }
+  }, [open, entityType, entityId, initialTypeKey, initialTypeCategory, startInAddMode]);
 
   useEffect(() => {
     if (!open) return;

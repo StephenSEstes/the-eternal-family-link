@@ -63,6 +63,8 @@ type AboutAttribute = {
   valueText?: string;
   shareScope?: string;
   shareFamilyGroupKey?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type PhotoLibraryItem = {
@@ -233,6 +235,15 @@ function getThingsChipLabel(item: AboutAttribute) {
   if (typeKey === "talent") return detail ? `Talent: ${detail}` : "Talent";
   if (detail) return `${toTitleWords(typeKey) || "Attribute"}: ${detail}`;
   return toTitleWords(typeCategory || typeKey) || "Attribute";
+}
+
+function getTimelineChipLabel(item: AboutAttribute) {
+  const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
+  const typeCategoryLabel = toTitleWords(getSafeAttributeText(item.attributeTypeCategory));
+  const detail = getSafeAttributeText(item.attributeDetail || item.valueText || item.label);
+  const primary = typeCategoryLabel || toTitleWords(typeKey) || "Attribute";
+  if (detail) return `${primary}: ${detail}`;
+  return primary;
 }
 
 async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
@@ -661,6 +672,7 @@ export function PersonEditModal({
   const [contextEdges, setContextEdges] = useState<GraphEdge[]>(edges);
   const [contextHouseholds, setContextHouseholds] = useState<HouseholdLink[]>(households);
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
+  const [timelineSortOrder, setTimelineSortOrder] = useState<"asc" | "desc">("asc");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
@@ -736,15 +748,15 @@ export function PersonEditModal({
   const phoneActionItems = useMemo(() => extractPhoneLinkItems(phones), [phones]);
   const attributeLaunchMeta = useMemo(() => {
     if (attributeLaunchSource === "main_events") {
-      return { label: "Main Events", initialTypeKey: "life_event" };
+      return { label: "Main Events", initialTypeKey: "life_event", initialTypeCategory: "" };
     }
     if (attributeLaunchSource === "things") {
-      return { label: "Things About", initialTypeKey: "physical_attribute" };
+      return { label: "Things About", initialTypeKey: "physical_attribute", initialTypeCategory: "" };
     }
     if (attributeLaunchSource === "stories") {
-      return { label: "Stories", initialTypeKey: "life_event" };
+      return { label: "Stories", initialTypeKey: "life_event", initialTypeCategory: "story" };
     }
-    return { label: "Timeline", initialTypeKey: "life_event" };
+    return { label: "Timeline", initialTypeKey: "life_event", initialTypeCategory: "" };
   }, [attributeLaunchSource]);
 
   useEffect(() => {
@@ -955,16 +967,29 @@ export function PersonEditModal({
     return spouse?.displayName || "-";
   }, [localPeople, spouseId]);
   const timelineItems = useMemo(() => {
-    const mediaTypes = new Set(["photo", "media", "audio", "video"]);
-    return attributes
-      .filter((item) => !mediaTypes.has(item.attributeType.toLowerCase()))
-      .sort((a, b) => {
-        const aDate = parseDate(a.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        const bDate = parseDate(b.startDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        return aDate - bDate;
-      })
-      .slice(0, 8);
-  }, [attributes]);
+    const filtered = aboutAttributes.filter((item) => {
+      const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
+      return !["photo", "media", "audio", "video", "in_law"].includes(typeKey);
+    });
+    const toDateMs = (item: AboutAttribute) =>
+      parseDate(item.attributeDate)?.getTime()
+      ?? parseDate(item.endDate)?.getTime()
+      ?? parseDate(item.createdAt)?.getTime()
+      ?? Number.NaN;
+
+    return filtered.sort((a, b) => {
+      const aMs = toDateMs(a);
+      const bMs = toDateMs(b);
+      const aHas = Number.isFinite(aMs);
+      const bHas = Number.isFinite(bMs);
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      if (aHas && bHas) {
+        return timelineSortOrder === "asc" ? aMs - bMs : bMs - aMs;
+      }
+      return getTimelineChipLabel(a).localeCompare(getTimelineChipLabel(b));
+    });
+  }, [aboutAttributes, timelineSortOrder]);
   const isInLawPerson = useMemo(() => {
     const inLegacyAttributes = attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
     const inUnifiedAttributes = aboutAttributes.some((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "in_law" && isTruthyFlag(getSafeAttributeText(item.attributeDetail || item.valueText)));
@@ -2069,12 +2094,41 @@ export function PersonEditModal({
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Timeline</h4>
-                <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+                <div className="settings-chip-list" style={{ marginBottom: "0.55rem" }}>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${timelineSortOrder === "asc" ? "game-option-selected" : ""}`}
+                    onClick={() => setTimelineSortOrder("asc")}
+                  >
+                    Ascending
+                  </button>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${timelineSortOrder === "desc" ? "game-option-selected" : ""}`}
+                    onClick={() => setTimelineSortOrder("desc")}
+                  >
+                    Descending
+                  </button>
+                </div>
+                <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                   {timelineItems.length > 0 ? (
                     timelineItems.map((item) => (
-                      <p key={item.attributeId} className="page-subtitle" style={{ margin: 0 }}>
-                        <strong>{item.startDate ? `${formatDisplayDate(item.startDate)}:` : "Event:"}</strong> {item.label || item.valueText || item.attributeType}
-                      </p>
+                      <span
+                        key={item.attributeId}
+                        className="status-chip status-chip--neutral"
+                        style={{
+                          borderRadius: "999px",
+                          border: "1px solid #d9e2ec",
+                          background: "#eef4ff",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.4rem 0.65rem",
+                        }}
+                      >
+                        {item.attributeDate ? <strong>{formatDisplayDate(item.attributeDate)}</strong> : null}
+                        <span>{getTimelineChipLabel(item)}</span>
+                      </span>
                     ))
                   ) : (
                     <p className="page-subtitle" style={{ margin: 0 }}>No events listed yet.</p>
@@ -2113,6 +2167,7 @@ export function PersonEditModal({
             entityLabel={displayName || person.displayName}
             modalSubtitle={aboutLabel}
             initialTypeKey={attributeLaunchMeta.initialTypeKey}
+            initialTypeCategory={attributeLaunchMeta.initialTypeCategory}
             initialEditAttributeId={selectedAboutAttributeId}
             startInAddMode
             launchSourceLabel={attributeLaunchMeta.label}

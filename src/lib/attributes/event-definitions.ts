@@ -88,6 +88,7 @@ export function defaultAttributeEventDefinitions(): AttributeEventDefinitions {
       { typeKey: "married", categoryKey: "family_relationship", typeLabel: "Married", detailLabel: "Spouse Name", dateMode: "single", askEndDate: false, sortOrder: 10, isEnabled: true },
       { typeKey: "divorced", categoryKey: "family_relationship", typeLabel: "Divorced", detailLabel: "Details", dateMode: "single", askEndDate: false, sortOrder: 20, isEnabled: true },
       { typeKey: "adopted", categoryKey: "family_relationship", typeLabel: "Adopted", detailLabel: "Details", dateMode: "single", askEndDate: false, sortOrder: 30, isEnabled: true },
+      { typeKey: "story", categoryKey: "life_event", typeLabel: "Story", detailLabel: "Story", dateMode: "single", askEndDate: false, sortOrder: 10, isEnabled: true },
     ],
   };
 }

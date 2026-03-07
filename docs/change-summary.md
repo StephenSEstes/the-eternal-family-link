@@ -99,6 +99,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (person About stories default + timeline chips sorting)
+
+- `Change`: In person fixed panel About tab, Stories now launches the shared attribute modal with default event type category `Story`; Timeline now renders all person attributes as chips and supports ascending/descending sort.
+- `Type`: UI
+- `Why`: Align Stories entry with requested default flow and make Timeline more scan-friendly with explicit sort control.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/lib/attributes/event-definitions.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Clicking Stories add opens attribute modal preselected to life_event/story.
+  - Timeline shows chips for person attributes and supports Ascending/Descending toggle.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.
