@@ -306,18 +306,6 @@ function normalizeId(value?: string) {
   return (value ?? "").trim();
 }
 
-function buildFamilySwitchPath(currentPath: string, nextTenantKey: string) {
-  const normalizedNext = nextTenantKey.trim().toLowerCase();
-  const parts = currentPath.split("/").filter(Boolean);
-  const hasTenantPrefix = parts[0] === "t" && Boolean(parts[1]);
-  if (hasTenantPrefix) {
-    const tail = parts.slice(2).join("/");
-    return tail ? `/t/${encodeURIComponent(normalizedNext)}/${tail}` : `/t/${encodeURIComponent(normalizedNext)}`;
-  }
-  if (!currentPath || currentPath === "/") return `/t/${encodeURIComponent(normalizedNext)}`;
-  return `/t/${encodeURIComponent(normalizedNext)}${currentPath}`;
-}
-
 function isTruthyFlag(value?: string) {
   const normalized = (value ?? "").trim().toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
@@ -669,6 +657,9 @@ export function PersonEditModal({
   const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
   const [familyGroupOptions, setFamilyGroupOptions] = useState<FamilyGroupOption[]>([]);
   const [familySwitchBusy, setFamilySwitchBusy] = useState(false);
+  const [activeTenantKey, setActiveTenantKey] = useState(tenantKey);
+  const [contextEdges, setContextEdges] = useState<GraphEdge[]>(edges);
+  const [contextHouseholds, setContextHouseholds] = useState<HouseholdLink[]>(households);
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -690,8 +681,8 @@ export function PersonEditModal({
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
 
   const parentEdges = useMemo(
-    () => edges.filter((edge) => edge.label.trim().toLowerCase() === "parent"),
-    [edges],
+    () => contextEdges.filter((edge) => edge.label.trim().toLowerCase() === "parent"),
+    [contextEdges],
   );
   const childIds = useMemo(() => {
     if (!person) return [] as string[];
@@ -714,19 +705,19 @@ export function PersonEditModal({
 
   const householdId = useMemo(() => {
     if (!person) return "";
-    const match = households.find(
+    const match = contextHouseholds.find(
       (item) => item.partner1PersonId === person.personId || item.partner2PersonId === person.personId,
     );
     return match?.id ?? "";
-  }, [households, person]);
+  }, [contextHouseholds, person]);
   const spouseByPersonId = useMemo(() => {
     const map = new Map<string, string>();
-    households.forEach((unit) => {
+    contextHouseholds.forEach((unit) => {
       map.set(unit.partner1PersonId, unit.partner2PersonId);
       map.set(unit.partner2PersonId, unit.partner1PersonId);
     });
     return map;
-  }, [households]);
+  }, [contextHouseholds]);
   const spouseByRelationshipId = useMemo(() => {
     if (!person) return "";
     for (const edge of edges) {
@@ -758,20 +749,23 @@ export function PersonEditModal({
 
   useEffect(() => {
     setLocalPeople(people);
-  }, [people]);
+    setContextEdges(edges);
+    setContextHouseholds(households);
+    setActiveTenantKey(tenantKey);
+  }, [edges, households, people, tenantKey]);
 
   const fallbackAvatar = (person?.gender ?? "unspecified") === "female"
     ? "/placeholders/avatar-female.png"
     : "/placeholders/avatar-male.png";
-  const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, tenantKey) : fallbackAvatar;
+  const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, activeTenantKey) : fallbackAvatar;
   const photoAttributes = attributes.filter((item) => item.attributeType.toLowerCase() === "photo");
   const allMediaAttributes = attributes.filter((item) => {
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
   });
-  const loadAttributes = async (personId: string) => {
+  const loadAttributes = async (personId: string, scopedTenantKey = activeTenantKey) => {
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
+      `/api/t/${encodeURIComponent(scopedTenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
       { cache: "no-store" },
     );
     const body = await res.json().catch(() => null);
@@ -824,7 +818,7 @@ export function PersonEditModal({
     const initialParent2Id = parentSelection.fatherId;
     setParent1Id(initialParent1Id);
     setParent2Id(initialParent2Id);
-    const partner = households.find((item) => item.partner1PersonId === person.personId || item.partner2PersonId === person.personId);
+    const partner = contextHouseholds.find((item) => item.partner1PersonId === person.personId || item.partner2PersonId === person.personId);
     let initialSpouseId = "";
     if (partner) {
       initialSpouseId = partner.partner1PersonId === person.personId ? partner.partner2PersonId : partner.partner1PersonId;
@@ -879,7 +873,7 @@ export function PersonEditModal({
     setStatus("");
     void loadAttributes(person.personId);
     void loadAboutAttributes(person.personId);
-  }, [open, person, households, parentSelection, spouseByRelationshipId, tenantKey]);
+  }, [open, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -1047,14 +1041,14 @@ export function PersonEditModal({
   );
   const availableHouseholdLinks = useMemo(() => {
     const unique = new Map<string, { householdId: string; label: string }>();
-    households.forEach((item) => {
+    contextHouseholds.forEach((item) => {
       const key = item.id.trim();
       if (!key) return;
       if (unique.has(key)) return;
       unique.set(key, { householdId: key, label: key });
     });
     return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [households]);
+  }, [contextHouseholds]);
   const linkedPersonIdsForSelectedPhoto = useMemo(
     () => new Set(taggedPeople.map((entry) => entry.personId)),
     [taggedPeople],
@@ -1106,7 +1100,7 @@ export function PersonEditModal({
   const refreshSelectedPhotoAssociations = async (fileId: string) => {
     setSelectedPhotoAssociationsBusy(true);
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/photos/search?q=${encodeURIComponent(fileId)}`,
       { cache: "no-store" },
     );
     const body = await res.json().catch(() => null);
@@ -1136,7 +1130,7 @@ export function PersonEditModal({
   const searchPhotoLibrary = async () => {
     setPhotoSearchBusy(true);
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(photoSearchQuery.trim())}`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/photos/search?q=${encodeURIComponent(photoSearchQuery.trim())}`,
       { cache: "no-store" },
     );
     const body = await res.json().catch(() => null);
@@ -1160,7 +1154,7 @@ export function PersonEditModal({
     setPhotoBusy(true);
     setStatus("Saving photo metadata...");
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(selectedPhoto.attributeId)}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1192,7 +1186,7 @@ export function PersonEditModal({
     const nextAttributeType = selectedType === "photo" ? "photo" : "media";
     setPhotoAssociationStatus("Saving association...");
     setStatus("Linking photo to selected person...");
-    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`, {
+    const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1226,7 +1220,7 @@ export function PersonEditModal({
     setPhotoAssociationStatus("Saving association...");
     setStatus("Linking photo to selected household...");
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(targetHouseholdId)}/photos/link`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/households/${encodeURIComponent(targetHouseholdId)}/photos/link`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1258,7 +1252,7 @@ export function PersonEditModal({
     setPhotoBusy(true);
     setPhotoAssociationStatus("Removing association...");
     const attrsRes = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
       { cache: "no-store" },
     );
     const attrsBody = await attrsRes.json().catch(() => null);
@@ -1276,7 +1270,7 @@ export function PersonEditModal({
     );
     for (const match of matches) {
       await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,
+        `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,
         { method: "DELETE" },
       );
     }
@@ -1296,7 +1290,7 @@ export function PersonEditModal({
     setPhotoBusy(true);
     setPhotoAssociationStatus("Removing association...");
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdIdToUnlink)}/photos/${encodeURIComponent(fileId)}`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/households/${encodeURIComponent(householdIdToUnlink)}/photos/${encodeURIComponent(fileId)}`,
       { method: "DELETE" },
     );
     if (!res.ok) {
@@ -1388,7 +1382,7 @@ export function PersonEditModal({
     for (const fileId of selectedLibraryFileIds) {
       const item = photoSearchResults.find((result) => result.fileId === fileId);
       if (!item) continue;
-      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
+      const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1465,7 +1459,7 @@ export function PersonEditModal({
       if (pendingUploadPhotoFile.lastModified) {
         form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
       }
-      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
+      const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
         method: "POST",
         body: form,
       });
@@ -1512,7 +1506,7 @@ export function PersonEditModal({
     };
 
     try {
-      let response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, {
+      let response = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...payload, allow_duplicate_similar: false }),
@@ -1524,7 +1518,7 @@ export function PersonEditModal({
           "Possible duplicate found (same birthdate, similar name). Press OK to add anyway, or Cancel to review existing people.",
         );
         if (confirmAdd) {
-          response = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people`, {
+          response = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...payload, allow_duplicate_similar: true }),
@@ -1553,7 +1547,7 @@ export function PersonEditModal({
 
       if (newSpouseInLaw) {
         await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(createdPersonId)}/attributes`,
+          `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(createdPersonId)}/attributes`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1572,7 +1566,7 @@ export function PersonEditModal({
       let relationSaved = false;
       if (canManage) {
         const relationshipRes = await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`,
+          `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1636,44 +1630,6 @@ export function PersonEditModal({
           />
           <div>
             <h3 className="person-modal-title">{displayName || person.displayName}</h3>
-            <p className="person-modal-meta">Family Group: {tenantKey}</p>
-            {familyGroupOptions.length > 1 ? (
-              <div style={{ marginTop: "0.35rem", maxWidth: "320px" }}>
-                <select
-                  className="input"
-                  value={tenantKey}
-                  disabled={familySwitchBusy}
-                  onChange={(e) =>
-                    void (async () => {
-                      const nextKey = e.target.value;
-                      if (!nextKey || nextKey === tenantKey) return;
-                      setFamilySwitchBusy(true);
-                      const response = await fetch("/api/family-groups/active", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ familyGroupKey: nextKey }),
-                      });
-                      if (!response.ok) {
-                        setFamilySwitchBusy(false);
-                        setStatus("Family group switch failed.");
-                        return;
-                      }
-                      if (typeof window !== "undefined") {
-                        const nextPath = buildFamilySwitchPath(window.location.pathname, nextKey);
-                        const query = window.location.search ?? "";
-                        window.location.assign(`${nextPath}${query}`);
-                      }
-                    })()
-                  }
-                >
-                  {familyGroupOptions.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.name} ({option.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
             <p className="person-modal-meta">
               Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
             </p>
@@ -1819,6 +1775,69 @@ export function PersonEditModal({
 
               <div className="card">
                 <h4 className="ui-section-title">Family</h4>
+                {familyGroupOptions.length > 1 ? (
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <label className="label">Family Group</label>
+                    <select
+                      className="input"
+                      value={activeTenantKey}
+                      disabled={familySwitchBusy}
+                      onChange={(e) =>
+                        void (async () => {
+                          const nextKey = e.target.value;
+                          if (!nextKey || nextKey === activeTenantKey) return;
+                          setFamilySwitchBusy(true);
+                          const response = await fetch("/api/family-groups/active", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ familyGroupKey: nextKey }),
+                          });
+                          if (!response.ok) {
+                            setFamilySwitchBusy(false);
+                            setStatus("Family group switch failed.");
+                            return;
+                          }
+                          const [peopleRes, treeRes] = await Promise.all([
+                            fetch(`/api/t/${encodeURIComponent(nextKey)}/people`, { cache: "no-store" }),
+                            fetch(`/api/t/${encodeURIComponent(nextKey)}/tree`, { cache: "no-store" }),
+                          ]);
+                          const peopleBody = await peopleRes.json().catch(() => null);
+                          const treeBody = await treeRes.json().catch(() => null);
+                          if (!peopleRes.ok || !treeRes.ok) {
+                            setFamilySwitchBusy(false);
+                            setStatus("Family group switch loaded session but failed to load data.");
+                            return;
+                          }
+                          const nextPeople = Array.isArray(peopleBody?.items) ? (peopleBody.items as PersonItem[]) : [];
+                          const nextRelationships = Array.isArray(treeBody?.relationships)
+                            ? (treeBody.relationships as GraphEdge[])
+                            : [];
+                          const nextHouseholds = Array.isArray(treeBody?.households)
+                            ? (treeBody.households as HouseholdLink[])
+                            : [];
+                          setActiveTenantKey(nextKey);
+                          setLocalPeople(nextPeople);
+                          setContextEdges(nextRelationships);
+                          setContextHouseholds(nextHouseholds);
+                          if (person?.personId) {
+                            await Promise.all([
+                              loadAttributes(person.personId, nextKey),
+                              loadAboutAttributes(person.personId),
+                            ]);
+                          }
+                          setFamilySwitchBusy(false);
+                          setStatus("");
+                        })()
+                      }
+                    >
+                      {familyGroupOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 {canManage ? (
                   <>
                     <div className="settings-chip-list">
@@ -2075,7 +2094,7 @@ export function PersonEditModal({
         {person ? (
           <AttributesModal
             open={showAttributeAddModal}
-            tenantKey={tenantKey}
+            tenantKey={activeTenantKey}
             entityType="person"
             entityId={person.personId}
             entityLabel={displayName || person.displayName}
@@ -2137,18 +2156,18 @@ export function PersonEditModal({
                     >
                       {isVideoMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
                         <video
-                          src={getPhotoProxyPath(item.valueText, tenantKey)}
+                          src={getPhotoProxyPath(item.valueText, activeTenantKey)}
                           className="person-photo-tile-image"
                           muted
                           playsInline
                         />
                       ) : isAudioMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
                         <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
-                          <audio src={getPhotoProxyPath(item.valueText, tenantKey)} controls style={{ width: "100%" }} />
+                          <audio src={getPhotoProxyPath(item.valueText, activeTenantKey)} controls style={{ width: "100%" }} />
                         </div>
                       ) : (
                         <img
-                          src={getPhotoProxyPath(item.valueText, tenantKey)}
+                          src={getPhotoProxyPath(item.valueText, activeTenantKey)}
                           alt={item.label || "photo"}
                           className="person-photo-tile-image"
                         />
@@ -2181,20 +2200,20 @@ export function PersonEditModal({
                   <div className="card">
                     {isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <video
-                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
                         className="person-photo-detail-preview"
                         controls
                         playsInline
                       />
                     ) : isAudioMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <audio
-                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
                         className="person-photo-detail-preview"
                         controls
                       />
                     ) : (
                       <img
-                        src={getPhotoProxyPath(selectedPhoto.valueText, tenantKey)}
+                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
                         alt={selectedPhoto.label || "photo"}
                         className="person-photo-detail-preview"
                       />
@@ -2283,7 +2302,7 @@ export function PersonEditModal({
                         return (
                           <label key={`search-${item.fileId}`} className="person-library-tile">
                             <img
-                              src={getPhotoProxyPath(item.fileId, tenantKey)}
+                              src={getPhotoProxyPath(item.fileId, activeTenantKey)}
                               alt={item.name || "media"}
                               className="person-library-image"
                             />
@@ -2472,20 +2491,20 @@ export function PersonEditModal({
               >
                 {largePhotoIsVideo ? (
                   <video
-                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
                     controls
                     playsInline
                     style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
                 ) : largePhotoIsAudio ? (
                   <audio
-                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
                     controls
                     style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
                 ) : (
                   <img
-                    src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
                     alt="Large preview"
                     style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
@@ -2568,7 +2587,7 @@ export function PersonEditModal({
                 setSaving(true);
                 setStatus("Saving person...");
                 const personRes = await fetch(
-                  `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}`,
+                  `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
                   {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -2604,7 +2623,7 @@ export function PersonEditModal({
                     normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
                   if (familyChanged) {
                   const relationshipRes = await fetch(
-                    `/api/t/${encodeURIComponent(tenantKey)}/relationships/builder`,
+                    `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
                     {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },

@@ -2186,3 +2186,16 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Person modal shows family-group switch row under Family Group label and switches active group via `/api/family-groups/active`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (person modal in-place family-group switch)
+
+- `Change`: Updated person modal family-group switcher to stay in modal context (no page redirect), refresh active family-group session, and reload people/relationships/households + person attributes in-place.
+- `Type`: UI, Data loading
+- `Why`: Switching family groups from person Family section should not close the panel and interrupt edit context.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Change family group inside person Family card keeps modal open.
+  - Family section data (parents/spouse/in-law visibility) updates to selected group context.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
