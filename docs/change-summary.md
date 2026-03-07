@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (things-about chips + click-to-open attribute detail)
+
+- `Change`: Replaced static Things About placeholder/summary text with clickable chips derived from saved descriptor attributes (for example `Eyes: Blue`, `Allergy: Penicillin`) and wired chip clicks to open the existing attribute detail modal for that specific attribute.
+- `Type`: UI
+- `Why`: Root cause was the About panel rendering aggregated text only, so users could not open/edit/delete individual descriptor attributes directly from Things About.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Things About section no longer shows the old placeholder summary lines.
+  - Saved descriptor attributes render as chips.
+  - Clicking a chip opens attribute detail (not add mode) for that record.
+  - Detail view still supports media actions, edit/save, delete, and close.
+  - Add buttons still open add mode.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-06 (attributes modal row alignment + About section labels/data binding)
 
 - `Change`: Updated the Add Attribute modal layout so `Date Related` is on its own row and `Type` + `Type of ...` render on the same row; updated About tab section labels to `Life Events` / `Add Life Event` / `Add something about [name]`, and wired Things About summary values to live attribute data (including eye color and related physical/hobby descriptors).

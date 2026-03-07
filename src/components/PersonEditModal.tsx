@@ -156,6 +156,29 @@ function normalizeAttributeKey(value?: string) {
   return (value ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 }
 
+function toTitleWords(value?: string) {
+  return (value ?? "")
+    .replace(/_/g, " ")
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function getThingsChipLabel(item: AboutAttribute) {
+  const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
+  const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
+  const detail = (item.attributeDetail || item.valueText || "").trim();
+  const categoryLabel = toTitleWords(typeCategory);
+  if (typeKey === "physical_attribute") {
+    if (categoryLabel && detail) return `${categoryLabel}: ${detail}`;
+    if (detail) return `Physical Attribute: ${detail}`;
+    return "Physical Attribute";
+  }
+  if (typeKey === "hobbies_interests") return detail ? `Hobby: ${detail}` : "Hobby";
+  if (typeKey === "talent") return detail ? `Talent: ${detail}` : "Talent";
+  if (detail) return `${toTitleWords(typeKey) || "Attribute"}: ${detail}`;
+  return toTitleWords(typeCategory || typeKey) || "Attribute";
+}
+
 async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
   const result: { width?: number; height?: number; durationSec?: number } = {};
   if (file.type.startsWith("image/")) {
@@ -565,6 +588,7 @@ export function PersonEditModal({
   const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
+  const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
@@ -813,31 +837,13 @@ export function PersonEditModal({
       return !["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey);
     });
   }, [aboutAttributes]);
-  const thingsSummary = useMemo(() => {
-    const hobbies = aboutDescriptorAttributes
-      .filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "hobbies_interests")
-      .map((item) => (item.attributeDetail || item.valueText || "").trim())
-      .filter(Boolean);
-    const physical = new Map<string, string[]>();
-    aboutDescriptorAttributes
-      .filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "physical_attribute")
-      .forEach((item) => {
-        const key = normalizeAttributeKey(item.attributeTypeCategory);
-        const value = (item.attributeDetail || item.valueText || "").trim();
-        if (!key || !value) return;
-        const existing = physical.get(key) ?? [];
-        existing.push(value);
-        physical.set(key, existing);
-      });
-    const joinValues = (key: string) => (physical.get(key) ?? []).join(", ") || "-";
-    return {
-      hobbies: hobbies.join(", ") || "-",
-      hair: joinValues("hair_color"),
-      eyes: joinValues("eyes"),
-      height: joinValues("height"),
-      bloodType: joinValues("blood_type"),
-      allergies: joinValues("allergy"),
-    };
+  const thingsChips = useMemo(() => {
+    return aboutDescriptorAttributes
+      .map((item) => ({
+        attributeId: item.attributeId,
+        label: getThingsChipLabel(item),
+      }))
+      .filter((item) => item.label.trim().length > 0);
   }, [aboutDescriptorAttributes]);
   useEffect(() => {
     if (!spouseId) {
@@ -1673,6 +1679,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("main_events");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1682,9 +1689,26 @@ export function PersonEditModal({
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Things about {firstNameFromDisplayName(displayName || person.displayName)}</h4>
-                <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Hobbies and Interests:</strong> {thingsSummary.hobbies}</p>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Health:</strong> Hair Color: {thingsSummary.hair}, Eye Color: {thingsSummary.eyes}, Height: {thingsSummary.height}, Blood Type: {thingsSummary.bloodType}, Allergies: {thingsSummary.allergies}</p>
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: "0.6rem" }}>
+                  {thingsChips.length > 0 ? (
+                    thingsChips.map((chip) => (
+                      <button
+                        key={chip.attributeId}
+                        type="button"
+                        className="status-chip status-chip--neutral"
+                        style={{ textAlign: "left", width: "100%", cursor: "pointer" }}
+                        onClick={() => {
+                          setAttributeLaunchSource("things");
+                          setSelectedAboutAttributeId(chip.attributeId);
+                          setShowAttributeAddModal(true);
+                        }}
+                      >
+                        {chip.label}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="page-subtitle" style={{ margin: 0 }}>No attributes added yet.</p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1692,6 +1716,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("things");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1708,6 +1733,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("stories");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1734,6 +1760,7 @@ export function PersonEditModal({
                   style={{ marginTop: "auto" }}
                   onClick={() => {
                     setAttributeLaunchSource("timeline");
+                    setSelectedAboutAttributeId("");
                     setShowAttributeAddModal(true);
                   }}
                 >
@@ -1760,9 +1787,13 @@ export function PersonEditModal({
             entityLabel={displayName || person.displayName}
             modalSubtitle={aboutLabel}
             initialTypeKey={attributeLaunchMeta.initialTypeKey}
-            startInAddMode
+            initialSelectedAttributeId={selectedAboutAttributeId}
+            startInAddMode={!selectedAboutAttributeId}
             launchSourceLabel={attributeLaunchMeta.label}
-            onClose={() => setShowAttributeAddModal(false)}
+            onClose={() => {
+              setShowAttributeAddModal(false);
+              setSelectedAboutAttributeId("");
+            }}
             onSaved={() => {
               void loadAttributes(person.personId);
               void loadAboutAttributes(person.personId);

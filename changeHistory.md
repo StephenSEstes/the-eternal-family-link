@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-06: Replaced Things About placeholder text with clickable descriptor chips and enabled chip click to open attribute detail with existing media/edit/delete actions. See `docs/change-summary.md`.
 - 2026-03-06: Adjusted Add Attribute modal row layout (`Date Related` separate; `Type` + `Type of ...` together) and updated About tab labels/data binding so Things About reflects saved descriptor values. See `docs/change-summary.md`.
 - 2026-03-06: Reset Attributes schema/data to canonical event/descriptor fields, added dynamic type-category flow, and executed one-time attribute data wipe + legacy column cleanup. See `docs/change-summary.md`.
 - 2026-03-06: Removed `Attributes.media_metadata` usage from runtime attribute flows so media is managed via media tables, with no DB drop needed because the column was already absent. See `docs/change-summary.md`.
