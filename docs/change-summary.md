@@ -74,6 +74,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (household load performance + ORA-14411 save hardening)
+
+- `Change`: Deferred household photo-link lookup fetches (`people` + `households`) until the `Pictures` tab is opened, instead of fetching on every household modal open. Hardened OCI household compatibility DDL by retrying transient DDL-concurrency errors (`ORA-14411` / `ORA-00054`) during column-add checks.
+- `Type`: UI, API
+- `Why`: Root cause of slow load was eager non-critical lookup fetches during initial modal open. Root cause of intermittent save failure was concurrent runtime `ALTER TABLE` compatibility checks in OCI under serverless parallel requests.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None to data semantics; runtime compatibility checks remain additive-only.
+- `Verify`:
+  - Opening household Info tab is faster (no immediate link-option list fetches).
+  - First open of Pictures tab still loads link options correctly.
+  - Household save no longer fails with `ORA-14411` under normal concurrent access.
+  - `npm run build -- --no-lint` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (attribute definitions UX polish + Next themeColor warning fix)
 
 - `Change`: Reorganized Attribute Types admin screen into a cleaner two-pane editor (category list + selected category detail/types grid, sticky action bar, validation hints) and moved `themeColor` from `metadata` to `viewport` export in root layout for Next.js 15 compliance.

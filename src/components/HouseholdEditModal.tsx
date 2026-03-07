@@ -261,6 +261,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [childAddress, setChildAddress] = useState("");
   const [availablePeople, setAvailablePeople] = useState<PersonOption[]>([]);
   const [availableHouseholds, setAvailableHouseholds] = useState<HouseholdOption[]>([]);
+  const [linkOptionsLoaded, setLinkOptionsLoaded] = useState(false);
   const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
     people: Array<{ personId: string; displayName: string }>;
     households: Array<{ householdId: string; label: string }>;
@@ -568,10 +569,18 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setAddChildOpen(false);
     setGender("");
     setChildAddress("");
+    setLinkOptionsLoaded(false);
     setStatus("Loading household...");
     void refresh();
-    void loadLinkOptions();
   }, [open, householdId, tenantKey]);
+
+  useEffect(() => {
+    if (!open || activeTab !== "pictures" || linkOptionsLoaded) return;
+    void (async () => {
+      await loadLinkOptions();
+      setLinkOptionsLoaded(true);
+    })();
+  }, [activeTab, linkOptionsLoaded, open, tenantKey]);
 
   useEffect(() => {
     if (!selectedPhoto || !showPhotoDetail) {

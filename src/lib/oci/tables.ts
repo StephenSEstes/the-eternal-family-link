@@ -34,6 +34,18 @@ let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
 
+function isColumnAlreadyCompatibleError(message: string) {
+  return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
+}
+
+function isTransientDdlConcurrencyError(message: string) {
+  return /ORA-14411|ORA-00054/i.test(message);
+}
+
+function waitMs(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 function readWalletJsonPayload() {
   const single = process.env.OCI_WALLET_FILES_JSON;
   if (single && single.trim()) {
@@ -390,7 +402,7 @@ async function ensurePeopleTableCompatibility(connection: OciConnection) {
     await connection.commit();
   } catch (error) {
     const message = (error as Error).message ?? "";
-    if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+    if (!isColumnAlreadyCompatibleError(message)) {
       throw error;
     }
   }
@@ -406,7 +418,7 @@ async function ensureFamilyConfigTableCompatibility(connection: OciConnection) {
     await connection.commit();
   } catch (error) {
     const message = (error as Error).message ?? "";
-    if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+    if (!isColumnAlreadyCompatibleError(message)) {
       throw error;
     }
   }
@@ -425,12 +437,24 @@ async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
     "zip VARCHAR2(40)",
   ];
   for (const columnSql of additiveColumns) {
-    try {
-      await connection.execute(`ALTER TABLE households ADD (${columnSql})`);
-      await connection.commit();
-    } catch (error) {
-      const message = (error as Error).message ?? "";
-      if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+    let applied = false;
+    let attempts = 0;
+    while (!applied && attempts < 3) {
+      try {
+        await connection.execute(`ALTER TABLE households ADD (${columnSql})`);
+        await connection.commit();
+        applied = true;
+      } catch (error) {
+        const message = (error as Error).message ?? "";
+        if (isColumnAlreadyCompatibleError(message)) {
+          applied = true;
+          continue;
+        }
+        if (isTransientDdlConcurrencyError(message) && attempts < 2) {
+          attempts += 1;
+          await waitMs(180);
+          continue;
+        }
         throw error;
       }
     }
