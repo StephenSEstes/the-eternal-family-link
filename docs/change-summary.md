@@ -2213,3 +2213,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Household modal header uses wife/husband headshot fallback if wedding photo not set.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (family-switch crash fix + household person return flow)
+
+- `Change`: Fixed person-modal family-switch crash by normalizing switched relationship payloads (`relationshipType` -> `label`) and hardening edge label reads; added return-to-household behavior when opening spouse/child person modals from household; added child-row avatars with click-to-open person edit.
+- `Type`: Bugfix, UI
+- `Why`: Changing family group produced client-side `trim` on undefined due to payload shape mismatch; household-driven person navigation should return users to household context.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Switching family group in person modal no longer throws `Cannot read properties of undefined (reading 'trim')`.
+  - Opening husband/wife/child person modal from household and closing returns to same household modal.
+  - Children tab shows gender/headshot avatars and opens person editor on selection.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

@@ -700,7 +700,43 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       <tbody>
                         {children.length > 0 ? children.map((child) => (
                           <tr key={child.personId}>
-                            <td>{child.displayName}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.45rem",
+                                  border: "none",
+                                  background: "transparent",
+                                  padding: 0,
+                                  minHeight: 0,
+                                }}
+                                onClick={() => openPersonDetail(child.personId)}
+                              >
+                                <img
+                                  src={
+                                    (() => {
+                                      const person = peopleById.get(child.personId);
+                                      if (person?.photoFileId) return getPhotoProxyPath(person.photoFileId, tenantKey);
+                                      return getGenderAvatarSrc(person?.gender ?? "unspecified");
+                                    })()
+                                  }
+                                  alt={child.displayName}
+                                  style={{
+                                    width: "26px",
+                                    height: "26px",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    objectFit: "cover",
+                                    background: "#f3f4f6",
+                                    flex: "0 0 auto",
+                                  }}
+                                />
+                                <span>{child.displayName}</span>
+                              </button>
+                            </td>
                             <td>{child.birthDate || "-"}</td>
                           </tr>
                         )) : (

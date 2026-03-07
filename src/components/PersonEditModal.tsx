@@ -681,7 +681,7 @@ export function PersonEditModal({
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
 
   const parentEdges = useMemo(
-    () => contextEdges.filter((edge) => edge.label.trim().toLowerCase() === "parent"),
+    () => contextEdges.filter((edge) => (edge.label ?? "").trim().toLowerCase() === "parent"),
     [contextEdges],
   );
   const childIds = useMemo(() => {
@@ -721,7 +721,7 @@ export function PersonEditModal({
   const spouseByRelationshipId = useMemo(() => {
     if (!person) return "";
     for (const edge of edges) {
-      const relType = edge.label.trim().toLowerCase();
+      const relType = (edge.label ?? "").trim().toLowerCase();
       if (relType !== "spouse" && relType !== "family") continue;
       if (edge.fromPersonId === person.personId && edge.toPersonId && edge.toPersonId !== person.personId) {
         return edge.toPersonId;
@@ -969,7 +969,7 @@ export function PersonEditModal({
     const inLegacyAttributes = attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
     const inUnifiedAttributes = aboutAttributes.some((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "in_law" && isTruthyFlag(getSafeAttributeText(item.attributeDetail || item.valueText)));
     const hasSpouseInFamily = edges.some((edge) => {
-      const relType = edge.label.trim().toLowerCase();
+      const relType = (edge.label ?? "").trim().toLowerCase();
       if (relType !== "spouse" && relType !== "family") return false;
       if (!person) return false;
       return edge.fromPersonId === person.personId || edge.toPersonId === person.personId;
@@ -1810,7 +1810,20 @@ export function PersonEditModal({
                           }
                           const nextPeople = Array.isArray(peopleBody?.items) ? (peopleBody.items as PersonItem[]) : [];
                           const nextRelationships = Array.isArray(treeBody?.relationships)
-                            ? (treeBody.relationships as GraphEdge[])
+                            ? (treeBody.relationships as Array<{
+                                id?: string;
+                                fromPersonId?: string;
+                                toPersonId?: string;
+                                relationshipType?: string;
+                                label?: string;
+                              }>)
+                                .map((item) => ({
+                                  id: String(item.id ?? ""),
+                                  fromPersonId: String(item.fromPersonId ?? ""),
+                                  toPersonId: String(item.toPersonId ?? ""),
+                                  label: String(item.label ?? item.relationshipType ?? ""),
+                                }))
+                                .filter((item) => item.fromPersonId && item.toPersonId && item.label)
                             : [];
                           const nextHouseholds = Array.isArray(treeBody?.households)
                             ? (treeBody.households as HouseholdLink[])

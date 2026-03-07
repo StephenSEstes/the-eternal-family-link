@@ -38,3 +38,4 @@ This file is a quick release-log entry point.
 - 2026-03-07: Added spouse tiles to Household Info and a family-group switcher row in Person modal header for direct context switching. See `docs/change-summary.md`.
 - 2026-03-07: Person modal family-group switch now updates in place without closing the panel. See `docs/change-summary.md`.
 - 2026-03-07: Fixed OCI relationship bind mismatch causing family-switch errors and added household header fallback to spouse headshots when wedding photo is missing. See `docs/change-summary.md`.
+- 2026-03-07: Fixed person family-switch trim crash and added household->person return flow with clickable child avatar rows. See `docs/change-summary.md`.

@@ -87,6 +87,7 @@ export function PeopleDirectory({
   const [mode, setMode] = useState<DirectoryMode>("people");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const [returnHouseholdId, setReturnHouseholdId] = useState("");
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
 
   const filtered = useMemo(() => {
@@ -172,10 +173,14 @@ export function PeopleDirectory({
                 className="person-card album-card"
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelectedPersonId(person.personId)}
+                onClick={() => {
+                  setReturnHouseholdId("");
+                  setSelectedPersonId(person.personId);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
+                    setReturnHouseholdId("");
                     setSelectedPersonId(person.personId);
                   }
                 }}
@@ -209,10 +214,14 @@ export function PeopleDirectory({
               className="person-card album-card"
               role="button"
               tabIndex={0}
-              onClick={() => setSelectedHouseholdId(household.id)}
+              onClick={() => {
+                setReturnHouseholdId("");
+                setSelectedHouseholdId(household.id);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
+                  setReturnHouseholdId("");
                   setSelectedHouseholdId(household.id);
                 }
               }}
@@ -242,7 +251,13 @@ export function PeopleDirectory({
         people={people}
         edges={edges}
         households={households}
-        onClose={() => setSelectedPersonId("")}
+        onClose={() => {
+          setSelectedPersonId("");
+          if (returnHouseholdId) {
+            setSelectedHouseholdId(returnHouseholdId);
+            setReturnHouseholdId("");
+          }
+        }}
         onSaved={() => router.refresh()}
         onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
       />
@@ -253,6 +268,7 @@ export function PeopleDirectory({
         onClose={() => setSelectedHouseholdId("")}
         onSaved={() => router.refresh()}
         onEditPerson={(personId) => {
+          setReturnHouseholdId(selectedHouseholdId);
           setSelectedHouseholdId("");
           setSelectedPersonId(personId);
         }}
