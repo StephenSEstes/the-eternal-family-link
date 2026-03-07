@@ -33,3 +33,4 @@ This file is a quick release-log entry point.
 - 2026-03-06: Fixed attribute edit/load binding to coerce object-like values into text, preventing `[object Object]` in Describe fields and chips. See `docs/change-summary.md`.
 - 2026-03-06: Added object-value primitive fallback for attribute display/edit binding so saved details no longer show blank when payload shape is non-standard. See `docs/change-summary.md`.
 - 2026-03-06: Added temporary raw JSON debug output under Attribute Save actions to diagnose payload-to-form mapping issues. See `docs/change-summary.md`.
+- 2026-03-06: Fixed OCI CLOB fetching to return strings (not Lob objects), addressing `[object Object]` in attribute payload fields. See `docs/change-summary.md`.

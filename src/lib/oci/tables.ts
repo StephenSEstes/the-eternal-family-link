@@ -6,6 +6,9 @@ import path from "node:path";
 import oracledb from "oracledb";
 import type { SheetRecord } from "@/lib/google/sheets";
 
+// Ensure CLOB columns are returned as text instead of Lob objects.
+oracledb.fetchAsString = [oracledb.CLOB];
+
 type TableConfig = {
   tableName: string;
   headers: string[];

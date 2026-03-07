@@ -2137,3 +2137,15 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Open Add/Edit Attribute modal and confirm raw object payload is visible below Save.
 - `Rollback Notes`: Remove debug panel once diagnosis is complete.
 - `Design Decision Change`: No design decision change.
+## 2026-03-06 (OCI CLOB fetch fix for attribute_detail)
+
+- `Change`: Configured Oracle driver to fetch CLOB values as strings.
+- `Type`: Data access
+- `Why`: Root cause of `[object Object]` payload values was CLOB/Lob conversion via `String(value)` in generic row mapping.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: No.
+- `Verify`:
+  - Attribute GET payload returns text for `attributeDetail/valueText` instead of `[object Object]` when source column is CLOB.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
