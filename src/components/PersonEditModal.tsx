@@ -1468,17 +1468,10 @@ export function PersonEditModal({
                     <label className="label">Last Name</label>
                     <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
                   </div>
-                  {gender === "female" && hasVisibleSpouseSelection ? (
-                    <div>
-                      <label className="label">Maiden Name</label>
-                      <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} disabled={showReadOnly} />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="label">Nick Name</label>
-                      <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
-                    </div>
-                  )}
+                  <div>
+                    <label className="label">Nick Name</label>
+                    <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                  </div>
                 </div>
               </div>
 
@@ -1554,6 +1547,12 @@ export function PersonEditModal({
                           ))}
                         </select>
                       </div>
+                      {gender === "female" && spouseId ? (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <label className="label">Maiden Name</label>
+                          <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} disabled={showReadOnly} />
+                        </div>
+                      ) : null}
                     </div>
                     {!hasVisibleSpouseSelection ? (
                       <div style={{ marginTop: "0.75rem" }}>

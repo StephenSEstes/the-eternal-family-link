@@ -178,6 +178,18 @@ function fieldCopyFor(category: AttributeCategory, typeKey: string): AttributeFi
   };
 }
 
+function getTypeCategoryLabel(typeKey: string) {
+  const normalized = normalizeTypeKey(typeKey);
+  if (normalized === "physical_attribute") return "Type of Physical Attribute";
+  return "Type Category";
+}
+
+function getDetailLabel(typeCategory: string) {
+  const normalized = typeCategory.trim();
+  if (!normalized) return "Attribute Detail";
+  return `Describe ${normalized.replace(/_/g, " ").toLowerCase()}`;
+}
+
 function getSafeAttributeValueText(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") {
@@ -516,7 +528,7 @@ export function AttributesModal({
       attributeTypeCategory,
       attributeDate: dateStart,
       dateIsEstimated,
-      estimatedTo,
+      ...(dateIsEstimated && estimatedTo ? { estimatedTo } : {}),
       attributeDetail: valueText,
       attributeNotes: notes,
       endDate: dateEnd,
@@ -1200,29 +1212,34 @@ export function AttributesModal({
             <div className="person-modal-body">
               <div className="card">
                 <div className="settings-chip-list">
-                  <div style={{ flex: 1, minWidth: "190px" }}>
-                    <label className="label">Date Related?</label>
-                    <select
-                      className="input"
-                      value={category === "event" ? "yes" : "no"}
-                      onChange={(e) => {
-                        const isDateRelated = e.target.value === "yes";
-                        const nextCategory: AttributeCategory = isDateRelated ? "event" : "descriptor";
-                        setCategory(nextCategory);
-                        const defaults = typeListForCategory(nextCategory);
-                        const normalizedCurrent = normalizeTypeKey(typeKey);
-                        if (!defaults.includes(normalizedCurrent)) {
-                          setTypeKey(defaults[0] || "");
-                          setAttributeTypeCategory("");
-                        }
-                      }}
-                    >
-                      <option value="no">No</option>
-                      <option value="yes">Yes</option>
-                    </select>
+                  <div style={{ minWidth: "150px", display: "flex", alignItems: "end", paddingBottom: "0.45rem" }}>
+                    <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={category === "event"}
+                        onChange={(e) => {
+                          const nextCategory: AttributeCategory = e.target.checked ? "event" : "descriptor";
+                          setCategory(nextCategory);
+                          const defaults = typeListForCategory(nextCategory);
+                          const normalizedCurrent = normalizeTypeKey(typeKey);
+                          if (!defaults.includes(normalizedCurrent)) {
+                            setTypeKey(defaults[0] || "");
+                            setAttributeTypeCategory("");
+                          }
+                          if (!e.target.checked) {
+                            setDateIsEstimated(false);
+                            setEstimatedTo("");
+                            setDateStart("");
+                            setDateEnd("");
+                          }
+                        }}
+                        style={{ width: "14px", height: "14px" }}
+                      />
+                      Date Related
+                    </label>
                   </div>
                   <div style={{ flex: 1, minWidth: "190px" }}>
-                    <label className="label">{category === "event" ? "Event Type" : "Descriptor Type"}</label>
+                    <label className="label">Type</label>
                     <select
                       className="input"
                       value={typeKey}
@@ -1236,33 +1253,34 @@ export function AttributesModal({
                       ))}
                     </select>
                   </div>
+                  {typeCategorySuggestions.length > 0 ? (
+                    <div style={{ flex: 1, minWidth: "220px" }}>
+                      <label className="label">{getTypeCategoryLabel(typeKey)}</label>
+                      <select
+                        className="input"
+                        value={attributeTypeCategory}
+                        onChange={(e) => setAttributeTypeCategory(e.target.value)}
+                      >
+                        <option value="">Select category</option>
+                        {typeCategorySuggestions.map((item) => (
+                          <option key={item} value={item}>
+                            {prettyLabel(item, "")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                 </div>
-                {typeCategorySuggestions.length > 0 ? (
-                  <div style={{ marginTop: "0.7rem" }}>
-                    <label className="label">Attribute Type Category</label>
-                    <select
-                      className="input"
-                      value={attributeTypeCategory}
-                      onChange={(e) => setAttributeTypeCategory(e.target.value)}
-                    >
-                      <option value="">Select category</option>
-                      {typeCategorySuggestions.map((item) => (
-                        <option key={item} value={item}>
-                          {prettyLabel(item, "")}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-                <label className="label">{addFormCopy.valueLabel}</label>
+                <label className="label">{getDetailLabel(attributeTypeCategory || typeKey)}</label>
                 <input
                   className="input"
                   value={valueText}
                   onChange={(e) => setValueText(e.target.value)}
-                  placeholder={addFormCopy.valuePlaceholder}
+                  placeholder={getDetailLabel(attributeTypeCategory || typeKey)}
                 />
 
-                <div style={{ marginTop: "0.75rem" }}>
+                {category === "event" ? (
+                  <div style={{ marginTop: "0.75rem" }}>
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
                         <label className="label">Date</label>
@@ -1274,8 +1292,8 @@ export function AttributesModal({
                       </div>
                     </div>
                     <div className="settings-chip-list">
-                      <div style={{ flex: 1, minWidth: "170px" }}>
-                        <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                      <div style={{ flex: 1, minWidth: "170px", display: "flex", alignItems: "end", paddingBottom: "0.35rem" }}>
+                        <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: 0 }}>
                           <input
                             type="checkbox"
                             checked={dateIsEstimated}
@@ -1302,7 +1320,14 @@ export function AttributesModal({
                     </div>
                     <label className="label">Attribute Notes</label>
                     <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                </div>
+                  </div>
+                ) : null}
+                {category !== "event" ? (
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <label className="label">Attribute Notes</label>
+                    <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  </div>
+                ) : null}
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)} disabled={busy}>
