@@ -2113,3 +2113,15 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Things/About chip labels can render `TypeCategory: Detail` when both fields exist.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-06 (attribute object fallback for display/detail binding)
+
+- `Change`: Extended safe attribute value extraction to fall back to first primitive object value when preferred keys are absent.
+- `Type`: UI, Logic
+- `Why`: Root cause was object-shaped runtime values with non-standard keys resolving to empty text, causing blank `Describe ...` fields even when DB `attribute_detail` was correct.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - DB rows remain unchanged; UI now shows text instead of blank for object-shaped values.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

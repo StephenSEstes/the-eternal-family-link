@@ -228,6 +228,10 @@ function getSafeAttributeValueText(value: unknown): string {
       const safe = getSafeAttributeValueText(candidate);
       if (safe) return safe;
     }
+    const primitiveValues = Object.values(record)
+      .map((entry) => getSafeAttributeValueText(entry))
+      .filter(Boolean);
+    if (primitiveValues.length > 0) return primitiveValues[0];
     return "";
   }
   return "";

@@ -31,3 +31,4 @@ This file is a quick release-log entry point.
 - 2026-03-06: Contact tab updated with Name section, conditional Maiden Name field, and dedicated full-width Notes section. See `docs/change-summary.md`.
 - 2026-03-06: Fixed spouse field initialization in Person Family section by falling back to relationship edges when household rows are missing; also included active Attributes modal regression fixes (chip text safety/delete visibility/tab return). See `docs/change-summary.md`.
 - 2026-03-06: Fixed attribute edit/load binding to coerce object-like values into text, preventing `[object Object]` in Describe fields and chips. See `docs/change-summary.md`.
+- 2026-03-06: Added object-value primitive fallback for attribute display/edit binding so saved details no longer show blank when payload shape is non-standard. See `docs/change-summary.md`.
