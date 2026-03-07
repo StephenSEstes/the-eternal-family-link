@@ -98,3 +98,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Continue dual-shape compatibility indefinitely with old fields (`type_key`, `value_text`, `date_start`, etc.).
 - `Impact`: Add/edit attribute UI and API now map to canonical fields; existing attribute test rows were deleted during migration.
 - `Follow-up`: If media file pointers must return as attribute rows in future, model that explicitly or through media links without reintroducing legacy attribute columns.
+
+## 2026-03-07
+
+- `Area`: Attribute event metadata management
+- `Decision`: Store family-group-specific event category/type UI definitions in `FamilyConfig.attribute_event_definitions_json` and drive Add Attribute event picklists from that metadata.
+- `Reason`: Event options and detail labels need admin control without code edits, while preserving existing attribute save contracts.
+- `Alternatives Considered`: Hardcoded frontend lists only; separate dedicated definitions tables.
+- `Impact`: Admin now has an Attribute Types tab for managing event categories/types (`type`, `type category`, detail label, date mode/end-date prompt). Add Attribute event form resolves options from this config with defaults fallback.
+- `Follow-up`: If definitions become large or need audit/version history, migrate from JSON-in-config to dedicated normalized tables.

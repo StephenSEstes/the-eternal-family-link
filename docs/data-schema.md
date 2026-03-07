@@ -171,8 +171,9 @@ This section is a quick reference for the three data areas that drive profile/me
   - `family_group_name`
   - `viewer_pin_hash`
   - `photos_folder_id`
+  - `attribute_event_definitions_json`
 - Purpose:
-  - Family-level config and media folder mapping.
+  - Family-level config, media folder mapping, and admin-managed event-definition metadata for the Attributes add flow.
 - Logical index/key:
   - Unique: `family_group_key`
 

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
 
 type AccessItem = {
   userEmail: string;
@@ -154,7 +155,7 @@ type CreateFamilyResponse = {
   };
 };
 
-type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import";
+type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import" | "attribute_definitions";
 type UserAdminSubTab = "directory" | "family_access" | "password_policy";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
@@ -1606,6 +1607,13 @@ export function SettingsClient({
         >
           Data &amp; System
         </button>
+        <button
+          type="button"
+          className={`settings-top-tab ${activeTab === "attribute_definitions" ? "active" : ""}`}
+          onClick={() => setActiveTab("attribute_definitions")}
+        >
+          Attribute Types
+        </button>
       </div>
       <div className="settings-chip-list" style={{ marginTop: "0.5rem" }}>
         <button
@@ -2146,6 +2154,14 @@ export function SettingsClient({
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
         </section>
+      ) : null}
+
+      {activeTab === "attribute_definitions" ? (
+        <AttributeDefinitionsAdmin
+          tenantOptions={tenantOptions}
+          selectedTenantKey={selectedTenantKey}
+          onTenantChange={setSelectedTenantKey}
+        />
       ) : null}
 
       {activeTab === "integrity" ? (

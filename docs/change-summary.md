@@ -13,6 +13,32 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (admin-managed attribute event definitions)
+
+- `Change`: Added family-group admin management for Attribute event definitions (categories + types + detail labels + date behavior), stored in `FamilyConfig.attribute_event_definitions_json`, and wired Add Attribute modal to use those definitions at runtime with safe defaults fallback.
+- `Type`: UI, API, Schema
+- `Why`: Event picklists and field labels needed to be configurable by admins without repeated code changes while keeping existing attribute save contracts.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/attribute-definitions/route.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/lib/attributes/event-definitions-types.ts`
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/lib/oci/tables.ts`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Adds `attribute_event_definitions_json` compatibility column to OCI `family_config`; Sheets `FamilyConfig/TenantConfig` header is extended on demand.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Admin > Attribute Types tab loads/saves definitions for selected family group.
+  - Add Attribute event form loads updated Type/Type Category options and detail label from definitions.
+  - End Date field visibility follows selected type configuration (`dateMode` / `askEndDate`).
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: Added 2026-03-07 decision for admin-managed event metadata.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.
