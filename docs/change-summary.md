@@ -86,6 +86,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-07 (category editor row compaction)
+
+- `Change`: Compacted selected category editor top row so `Category Label`, `Sort`, and `Description` display in one row with tighter field widths.
+- `Type`: UI
+- `Why`: Keep the category edit surface concise and reduce vertical wrapping.
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In selected category editor, `Category Label`, `Sort`, and `Description` render on a single row.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (suppress dependency DEP0169 url.parse warning)
 
 - `Change`: Added server instrumentation that filters only `DEP0169` deprecation warnings (`url.parse()` legacy warning) emitted by dependency code during runtime.

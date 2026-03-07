@@ -348,16 +348,19 @@ export function AttributeDefinitionsAdmin({
         <div className="card">
           {selectedCategory ? (
             <>
-              <div className="settings-chip-list">
-                <div style={{ flex: 1, minWidth: "160px" }}>
+              <div
+                className="settings-chip-list"
+                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 96px minmax(220px, 1.2fr)", gap: "0.6rem", alignItems: "end" }}
+              >
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Category Label</label>
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryLabel: e.target.value })} />
                 </div>
-                <div style={{ width: "120px" }}>
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Sort</label>
                   <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategory.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
                 </div>
-                <div style={{ flex: 1, minWidth: "220px" }}>
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Description</label>
                   <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategory.categoryKey, { description: e.target.value })} />
                 </div>
