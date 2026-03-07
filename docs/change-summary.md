@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-06 (attributes modal row alignment + About section labels/data binding)
+
+- `Change`: Updated the Add Attribute modal layout so `Date Related` is on its own row and `Type` + `Type of ...` render on the same row; updated About tab section labels to `Life Events` / `Add Life Event` / `Add something about [name]`, and wired Things About summary values to live attribute data (including eye color and related physical/hobby descriptors).
+- `Type`: UI
+- `Why`: Root cause was inherited global responsive grid behavior (`.settings-chip-list`) causing unintended field pairing in the add form, and About section placeholders not reading descriptor attribute rows for display.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In Add Attribute modal, `Date Related` appears alone on one row.
+  - `Type` and `Type of ...` appear on the same row.
+  - About tab shows `Life Events` heading and `Add Life Event` button.
+  - Things About section button reads `Add something about [name]`.
+  - Saved descriptor values (for example eye color) appear in Things About health summary.
+  - `npm run lint` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-05 (click-to-call and click-to-text links for phone fields)
 
 - `Change`: Added reusable phone link parsing/rendering and enabled `tel:` + `sms:` actions anywhere phone values are displayed in person/profile attribute views.

@@ -1211,8 +1211,8 @@ export function AttributesModal({
             </div>
             <div className="person-modal-body">
               <div className="card">
-                <div className="settings-chip-list">
-                  <div style={{ minWidth: "150px", display: "flex", alignItems: "end", paddingBottom: "0.45rem" }}>
+                <div className="settings-chip-list" style={{ gridTemplateColumns: "1fr" }}>
+                  <div style={{ minWidth: "190px", display: "flex", alignItems: "end", paddingBottom: "0.45rem" }}>
                     <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: 0 }}>
                       <input
                         type="checkbox"
@@ -1238,6 +1238,12 @@ export function AttributesModal({
                       Date Related
                     </label>
                   </div>
+                </div>
+
+                <div
+                  className="settings-chip-list"
+                  style={{ gridTemplateColumns: typeCategorySuggestions.length > 0 ? "repeat(2, minmax(0, 1fr))" : "1fr" }}
+                >
                   <div style={{ flex: 1, minWidth: "190px" }}>
                     <label className="label">Type</label>
                     <select

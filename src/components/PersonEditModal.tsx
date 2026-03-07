@@ -50,6 +50,19 @@ type PersonAttribute = {
   notes?: string;
 };
 
+type AboutAttribute = {
+  attributeId: string;
+  category?: "descriptor" | "event";
+  typeKey?: string;
+  attributeType?: string;
+  attributeTypeCategory?: string;
+  attributeDetail?: string;
+  attributeDate?: string;
+  endDate?: string;
+  label?: string;
+  valueText?: string;
+};
+
 type PhotoLibraryItem = {
   fileId: string;
   name: string;
@@ -137,6 +150,10 @@ function isAudioMediaByMetadata(raw?: string) {
   const mime = (parsed?.mimeType ?? "").toLowerCase();
   const fileName = (parsed?.fileName ?? "").toLowerCase();
   return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
+}
+
+function normalizeAttributeKey(value?: string) {
+  return (value ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 }
 
 async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
@@ -514,6 +531,7 @@ export function PersonEditModal({
   const [saving, setSaving] = useState(false);
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
+  const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
   const [newPhotoLabel, setNewPhotoLabel] = useState("portrait");
   const [newPhotoDescription, setNewPhotoDescription] = useState("");
   const [newPhotoDate, setNewPhotoDate] = useState("");
@@ -638,6 +656,19 @@ export function PersonEditModal({
     setAttributes(Array.isArray(body?.attributes) ? (body.attributes as PersonAttribute[]) : []);
   };
 
+  const loadAboutAttributes = async (personId: string) => {
+    const res = await fetch(
+      `/api/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStatus(`About attribute load failed: ${res.status}`);
+      return;
+    }
+    setAboutAttributes(Array.isArray(body?.attributes) ? (body.attributes as AboutAttribute[]) : []);
+  };
+
   useEffect(() => {
     if (!open || !person) {
       setShowAttributeAddModal(false);
@@ -703,6 +734,7 @@ export function PersonEditModal({
     pendingCreatedSpouseIdRef.current = "";
     setStatus("");
     void loadAttributes(person.personId);
+    void loadAboutAttributes(person.personId);
   }, [open, person, households, parentSelection, tenantKey]);
 
   useEffect(() => {
@@ -774,6 +806,39 @@ export function PersonEditModal({
       })
       .slice(0, 8);
   }, [attributes]);
+  const aboutDescriptorAttributes = useMemo(() => {
+    return aboutAttributes.filter((item) => {
+      if (item.category) return item.category === "descriptor";
+      const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
+      return !["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey);
+    });
+  }, [aboutAttributes]);
+  const thingsSummary = useMemo(() => {
+    const hobbies = aboutDescriptorAttributes
+      .filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "hobbies_interests")
+      .map((item) => (item.attributeDetail || item.valueText || "").trim())
+      .filter(Boolean);
+    const physical = new Map<string, string[]>();
+    aboutDescriptorAttributes
+      .filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "physical_attribute")
+      .forEach((item) => {
+        const key = normalizeAttributeKey(item.attributeTypeCategory);
+        const value = (item.attributeDetail || item.valueText || "").trim();
+        if (!key || !value) return;
+        const existing = physical.get(key) ?? [];
+        existing.push(value);
+        physical.set(key, existing);
+      });
+    const joinValues = (key: string) => (physical.get(key) ?? []).join(", ") || "-";
+    return {
+      hobbies: hobbies.join(", ") || "-",
+      hair: joinValues("hair_color"),
+      eyes: joinValues("eyes"),
+      height: joinValues("height"),
+      bloodType: joinValues("blood_type"),
+      allergies: joinValues("allergy"),
+    };
+  }, [aboutDescriptorAttributes]);
   useEffect(() => {
     if (!spouseId) {
       pendingCreatedSpouseIdRef.current = "";
@@ -1595,7 +1660,7 @@ export function PersonEditModal({
           <>
             <div className="person-section-grid">
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
-                <h4 className="ui-section-title">Main Events</h4>
+                <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Born:</strong> {formatDisplayDate(birthDate)}</p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> -</p>
@@ -1611,15 +1676,15 @@ export function PersonEditModal({
                     setShowAttributeAddModal(true);
                   }}
                 >
-                  + Add Attribute
+                  Add Life Event
                 </button>
               </div>
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Things about {firstNameFromDisplayName(displayName || person.displayName)}</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Hobbies and Interests:</strong> {hobbies.trim() || "-"}</p>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Health:</strong> Hair Color: -, Eye Color: -, Height: -, Blood Type: -, Allergies: -</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Hobbies and Interests:</strong> {thingsSummary.hobbies}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Health:</strong> Hair Color: {thingsSummary.hair}, Eye Color: {thingsSummary.eyes}, Height: {thingsSummary.height}, Blood Type: {thingsSummary.bloodType}, Allergies: {thingsSummary.allergies}</p>
                 </div>
                 <button
                   type="button"
@@ -1630,7 +1695,7 @@ export function PersonEditModal({
                     setShowAttributeAddModal(true);
                   }}
                 >
-                  + Add Attribute
+                  Add something about {firstNameFromDisplayName(displayName || person.displayName)}
                 </button>
               </div>
 
@@ -1700,6 +1765,7 @@ export function PersonEditModal({
             onClose={() => setShowAttributeAddModal(false)}
             onSaved={() => {
               void loadAttributes(person.personId);
+              void loadAboutAttributes(person.personId);
               onSaved();
             }}
           />
