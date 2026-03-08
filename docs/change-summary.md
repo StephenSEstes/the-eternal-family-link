@@ -2602,3 +2602,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Type-check now proceeds past this failure point.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-08 (wizard item-validation guardrails + TODO hygiene)
+
+- `Change`: Added per-item wizard validation guardrails (duplicate decision required when applicable, required person/household target, missing source detection), surfaced inline "Needs attention" messages in per-item/review steps, and blocked next/review/save transitions when current item is invalid; also updated `TODO.md` to mark multi-photo upload flow complete.
+- `Type`: UX, Validation
+- `Why`: Prevent late-stage save failures by moving required decisions/target checks earlier in the wizard flow and give users immediate corrective feedback.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `TODO.md`
+- `Data Changes`: No.
+- `Verify`:
+  - Attempting to proceed with unresolved duplicate decision or no link target now shows inline validation and prevents advancement.
+  - Review/save highlights first invalid item and routes back to fix.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

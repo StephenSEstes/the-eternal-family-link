@@ -38,6 +38,26 @@ function formatSummary(summary: MediaAttachExecutionSummary) {
   ].join(" | ");
 }
 
+function validateDraftItem(context: MediaAttachContext, item: MediaAttachDraftItem) {
+  const errors: string[] = [];
+  if (item.skipImport) return errors;
+  if (
+    context.source !== "attribute" &&
+    item.duplicateOfFileId &&
+    item.duplicateDecision !== "duplicate" &&
+    item.duplicateDecision !== "not_duplicate"
+  ) {
+    errors.push("Choose Duplicate or Not Duplicate.");
+  }
+  if (!item.fileId && !item.file) {
+    errors.push("Missing file source for this item.");
+  }
+  if (item.personIds.length === 0 && item.householdIds.length === 0) {
+    errors.push("Add at least one person or household.");
+  }
+  return errors;
+}
+
 export function MediaAttachWizard({
   open,
   context,
@@ -139,10 +159,11 @@ export function MediaAttachWizard({
 
   useEffect(() => {
     return () => {
-      for (const url of previewUrlsRef.current) {
+      const urls = previewUrlsRef.current;
+      for (const url of urls) {
         URL.revokeObjectURL(url);
       }
-      previewUrlsRef.current.clear();
+      urls.clear();
     };
   }, []);
 
@@ -363,24 +384,12 @@ export function MediaAttachWizard({
       setStatus("Select at least one image.");
       return;
     }
-    if (context.source !== "attribute") {
-      const undecidedDuplicateIndex = items.findIndex(
-        (item) => !item.skipImport && item.duplicateOfFileId && item.duplicateDecision !== "duplicate" && item.duplicateDecision !== "not_duplicate",
-      );
-      if (undecidedDuplicateIndex >= 0) {
-        setPerItemIndex(undecidedDuplicateIndex);
-        setStep("per_item");
-        setStatus("Choose Duplicate or Not Duplicate for each duplicate candidate before save.");
-        return;
-      }
-    }
-    const firstMissingTargetIndex = items.findIndex(
-      (item) => !item.skipImport && item.personIds.length === 0 && item.householdIds.length === 0,
-    );
-    if (firstMissingTargetIndex >= 0) {
-      setPerItemIndex(firstMissingTargetIndex);
+    const firstInvalidIndex = items.findIndex((item) => validateDraftItem(context, item).length > 0);
+    if (firstInvalidIndex >= 0) {
+      const errors = validateDraftItem(context, items[firstInvalidIndex]);
+      setPerItemIndex(firstInvalidIndex);
       setStep("per_item");
-      setStatus("Each image needs at least one person or household link before save.");
+      setStatus(errors[0] || "Fix item details before save.");
       return;
     }
     setBusy(true);
@@ -410,6 +419,7 @@ export function MediaAttachWizard({
   };
 
   const canGoToReview = items.length > 0 && perItemIndex >= items.length - 1;
+  const selectedItemErrors = selectedItem ? validateDraftItem(context, selectedItem) : [];
 
   const renderSource = (
     <div style={{ display: "grid", gap: "0.75rem" }}>
@@ -789,15 +799,47 @@ export function MediaAttachWizard({
           Back
         </button>
         {!canGoToReview ? (
-          <button type="button" className="button tap-button" onClick={() => setPerItemIndex((value) => Math.min(items.length - 1, value + 1))}>
+          <button
+            type="button"
+            className="button tap-button"
+            onClick={() => {
+              if (selectedItemErrors.length > 0) {
+                setStatus(selectedItemErrors[0] || "Fix item details before continuing.");
+                return;
+              }
+              setStatus("");
+              setPerItemIndex((value) => Math.min(items.length - 1, value + 1));
+            }}
+          >
             Next Item
           </button>
         ) : (
-          <button type="button" className="button tap-button" onClick={() => setStep("review")}>
+          <button
+            type="button"
+            className="button tap-button"
+            onClick={() => {
+              if (selectedItemErrors.length > 0) {
+                setStatus(selectedItemErrors[0] || "Fix item details before review.");
+                return;
+              }
+              setStatus("");
+              setStep("review");
+            }}
+          >
             Review
           </button>
         )}
       </div>
+      {selectedItemErrors.length > 0 ? (
+        <div className="card" style={{ padding: "0.5rem", border: "1px solid #fecaca", background: "#fff1f2" }}>
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>Needs attention</strong>
+          <ul style={{ margin: 0, paddingLeft: "1rem" }}>
+            {selectedItemErrors.map((message) => (
+              <li key={`${selectedItem.clientId}-${message}`} style={{ fontSize: "0.9rem" }}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   ) : null;
 
@@ -807,6 +849,9 @@ export function MediaAttachWizard({
       <p className="page-subtitle" style={{ margin: 0 }}>Confirm items and links before save.</p>
       <div style={{ display: "grid", gap: "0.45rem", maxHeight: "280px", overflow: "auto" }}>
         {items.map((item, index) => (
+          (() => {
+            const errors = validateDraftItem(context, item);
+            return (
           <div key={item.clientId} className="card" style={{ padding: "0.55rem" }}>
             <strong>Item {index + 1}: {item.title || item.file?.name || item.fileId || "Image"}</strong>
             <div style={{ fontSize: "0.85rem", marginTop: "0.2rem" }}>
@@ -816,7 +861,14 @@ export function MediaAttachWizard({
               {item.duplicateDecision === "duplicate" ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: yes (link-only)</span> : null}
               {item.skipImport ? <span style={{ marginLeft: "0.65rem" }}>Skipped: yes</span> : null}
             </div>
+            {errors.length > 0 ? (
+              <div style={{ marginTop: "0.35rem", color: "#991b1b", fontSize: "0.85rem" }}>
+                {errors[0]}
+              </div>
+            ) : null}
           </div>
+            );
+          })()
         ))}
       </div>
       <div style={{ display: "flex", gap: "0.5rem" }}>

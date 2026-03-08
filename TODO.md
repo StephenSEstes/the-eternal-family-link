@@ -8,10 +8,6 @@ I will update this list as we add, complete, or remove work.
   Priority: High
   Est date: 2026-03-07
   Desc: Implement `in_law` as family-group scoped (not global) so one person can be in-law in one family group but not another. On every relationship/household save, reconcile in-law status per affected person in the active family group: if person has spouse link in this family group and no parent edges in this family group, set/create `in_law=TRUE` with `share_scope=one_family` and `share_family_group_key=<familyGroupKey>`; if parent edges exist, clear/remove in-law marker for this family group only. Add integrity checker action to backfill/fix existing drift in bulk with before/after counts. Include migration/cleanup logic to prevent legacy global `in_law` markers from overriding family-scoped behavior.
-- [ ] Multi-photo uploads in photo flow
-  Priority: Med
-  Est date: 2026-03-03
-  Desc: Allow selecting and uploading multiple photos in one action, with per-file progress, validation, and error handling.
 - [ ] AI summary of person profile
   Priority: Med
   Est date: 2026-03-10
@@ -75,3 +71,4 @@ I will update this list as we add, complete, or remove work.
 - [x] Crash diagnosis runbook + requestId/errorCode instrumentation for core APIs
 - [x] Develop delete family workflow
 - [x] Develop delete household workflow (Untested)
+- [x] Multi-photo uploads in photo flow
