@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (person attribute insert fix for OCI NOT NULL + wizard target guard)
+
+- `Change`: Fixed person attribute create route to include canonical `entity_type` and `entity_id` fields on attribute insert, and added wizard pre-save validation to block saving items that have no person/household targets.
+- `Type`: API, UI
+- `Why`: Root cause of `ORA-01400` was person-attribute inserts missing `entity_type` for OCI `Attributes` rows. Root cause of repeated "No attachment target selected" failures was wizard save allowing items with zero targets.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/components/media/MediaAttachWizard.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Saving wizard attachments to people no longer throws `ORA-01400 ... ATTRIBUTES.ENTITY_TYPE`.
+  - Wizard save is blocked until every selected image has at least one person or household target.
+  - Wizard jumps to the first invalid item and shows target-required status message.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (wizard duplicate confirmation + stronger multi-item navigation)
 
 - `Change`: Added checksum-based duplicate detection for wizard image uploads, duplicate confirmation UI with side-by-side selected vs existing library image previews, and clearer multi-item per-image navigation in the wizard item-detail step.

@@ -322,6 +322,15 @@ export function MediaAttachWizard({
       setStatus("Select at least one image.");
       return;
     }
+    const firstMissingTargetIndex = items.findIndex(
+      (item) => item.personIds.length === 0 && item.householdIds.length === 0,
+    );
+    if (firstMissingTargetIndex >= 0) {
+      setPerItemIndex(firstMissingTargetIndex);
+      setStep("per_item");
+      setStatus("Each image needs at least one person or household link before save.");
+      return;
+    }
     setBusy(true);
     setStatus("");
     setProgressMessage("Saving...");

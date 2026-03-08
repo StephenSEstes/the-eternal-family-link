@@ -108,6 +108,8 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     PERSON_ATTRIBUTES_TAB,
     {
       attribute_id: attributeId,
+      entity_type: "person",
+      entity_id: personId,
       person_id: personId,
       attribute_type: parsed.data.attributeType.toLowerCase(),
       value_text: parsed.data.valueText,
