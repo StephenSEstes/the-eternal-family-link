@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (library item link-load speed + wizard step-state/preview stability)
+
+- `Change`: Optimized Media Library item editor open flow by instant local association prefill plus lightweight background refresh (`includeDrive=0`, lower limit), and fixed wizard step UX issues by clearing stale status on transitions, adding explicit Yes/No selection feedback, and preventing blob preview URLs from being revoked during normal item edits/navigation.
+- `Type`: UI
+- `Why`: Root cause of slow editor open was heavy link-refresh fetch using `includeDrive=1` on open. Root cause of confusing wizard behavior was stale status text leaking across steps and over-aggressive blob URL cleanup causing previews to disappear when revisiting items.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Opening an existing library item shows links quickly (prefilled) and then refreshes.
+  - Grouping step shows clear Yes/No selection state and no stale "Select Yes or No" text on shared metadata step.
+  - Multi-item per-image previews remain visible when navigating back and forth between items.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (person attribute insert fix for OCI NOT NULL + wizard target guard)
 
 - `Change`: Fixed person attribute create route to include canonical `entity_type` and `entity_id` fields on attribute insert, and added wizard pre-save validation to block saving items that have no person/household targets.

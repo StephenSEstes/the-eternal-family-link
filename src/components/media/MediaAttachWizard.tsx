@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type MediaAttachContext,
   type MediaAttachDraftItem,
@@ -69,6 +69,7 @@ export function MediaAttachWizard({
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [duplicateScanBusy, setDuplicateScanBusy] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
+  const previewUrlsRef = useRef<Set<string>>(new Set());
 
   const selectedItem = items[perItemIndex] ?? null;
   const tagSearchResults = useMemo(() => {
@@ -121,14 +122,21 @@ export function MediaAttachWizard({
   }, [context.defaultDate, context.defaultDescription, context.defaultLabel, open]);
 
   useEffect(() => {
-    return () => {
-      for (const item of items) {
-        if (item.previewUrl?.startsWith("blob:")) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
+    for (const item of items) {
+      if (item.previewUrl?.startsWith("blob:")) {
+        previewUrlsRef.current.add(item.previewUrl);
       }
-    };
+    }
   }, [items]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of previewUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      previewUrlsRef.current.clear();
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -280,6 +288,7 @@ export function MediaAttachWizard({
       setStatus("Select at least one image.");
       return;
     }
+    setStatus("");
     if (items.length === 1) {
       setSameMemorySet(false);
       setPerItemIndex(0);
@@ -476,28 +485,43 @@ export function MediaAttachWizard({
         <button
           type="button"
           className={`button tap-button ${sameMemorySet === true ? "active" : ""}`}
-          onClick={() => setSameMemorySet(true)}
+          aria-pressed={sameMemorySet === true}
+          onClick={() => {
+            setSameMemorySet(true);
+            setStatus("");
+          }}
         >
           Yes
         </button>
         <button
           type="button"
           className={`button secondary tap-button ${sameMemorySet === false ? "active" : ""}`}
-          onClick={() => setSameMemorySet(false)}
+          aria-pressed={sameMemorySet === false}
+          onClick={() => {
+            setSameMemorySet(false);
+            setStatus("");
+          }}
         >
           No
         </button>
       </div>
+      {sameMemorySet != null ? (
+        <span className="status-chip status-chip--neutral" style={{ width: "fit-content" }}>
+          Selected: {sameMemorySet ? "Yes" : "No"}
+        </span>
+      ) : null}
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button type="button" className="button secondary tap-button" onClick={() => setStep("select")}>Back</button>
+        <button type="button" className="button secondary tap-button" onClick={() => { setStatus(""); setStep("select"); }}>Back</button>
         <button
           type="button"
           className="button tap-button"
+          disabled={sameMemorySet == null}
           onClick={() => {
             if (sameMemorySet == null) {
               setStatus("Select Yes or No.");
               return;
             }
+            setStatus("");
             if (sameMemorySet) {
               setStep("shared");
             } else {
@@ -532,8 +556,8 @@ export function MediaAttachWizard({
         <textarea className="input" rows={3} value={sharedNotes} onChange={(event) => setSharedNotes(event.target.value)} />
       </label>
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button type="button" className="button secondary tap-button" onClick={() => setStep("grouping")}>Back</button>
-        <button type="button" className="button tap-button" onClick={() => { setPerItemIndex(0); setStep("per_item"); }}>Continue</button>
+        <button type="button" className="button secondary tap-button" onClick={() => { setStatus(""); setStep("grouping"); }}>Back</button>
+        <button type="button" className="button tap-button" onClick={() => { setStatus(""); setPerItemIndex(0); setStep("per_item"); }}>Continue</button>
       </div>
     </div>
   );

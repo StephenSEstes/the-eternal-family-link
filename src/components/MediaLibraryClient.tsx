@@ -250,10 +250,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     );
   };
 
-  const loadSelectedPhotoAssociations = async (fileId: string) => {
+  const loadSelectedPhotoAssociations = async (
+    fileId: string,
+    options?: { noStore?: boolean; includeDrive?: boolean },
+  ) => {
+    const includeDrive = options?.includeDrive ?? false;
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}&limit=200&includeDrive=1`,
-      { cache: "no-store" },
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}&limit=40&includeDrive=${includeDrive ? "1" : "0"}`,
+      { cache: options?.noStore ? "no-store" : "default" },
     );
     const body = await res.json().catch(() => null);
     if (!res.ok) {
@@ -275,10 +279,21 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const openPhotoEditor = async (fileId: string) => {
     setSelectedPhotoFileId(fileId);
     setPhotoTagQuery("");
-    setPhotoAssociationStatus("Loading links...");
+    const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
+    if (prefill) {
+      setSelectedPhotoAssociations({
+        people: Array.isArray(prefill.people) ? prefill.people : [],
+        households: Array.isArray(prefill.households) ? prefill.households : [],
+      });
+    } else {
+      setSelectedPhotoAssociations({ people: [], households: [] });
+    }
+    setPhotoAssociationStatus("Refreshing links...");
     setShowPhotoEditor(true);
-    await loadSelectedPhotoAssociations(fileId);
-    setPhotoAssociationStatus("");
+    void (async () => {
+      await loadSelectedPhotoAssociations(fileId, { noStore: true, includeDrive: false });
+      setPhotoAssociationStatus("");
+    })();
   };
 
   const linkPhotoToPerson = async (personId: string) => {
@@ -306,7 +321,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         }),
       });
       await assertOk(res, "Failed to link person");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId);
+      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
       await loadLibrary(search);
       setPhotoAssociationStatus("Person linked.");
     } catch (error) {
@@ -341,7 +356,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         );
         await assertOk(delRes, "Failed to remove person link");
       }
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId);
+      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
       await loadLibrary(search);
       setPhotoAssociationStatus("Person link removed.");
     } catch (error) {
@@ -372,7 +387,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         },
       );
       await assertOk(res, "Failed to link household");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId);
+      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
       await loadLibrary(search);
       setPhotoAssociationStatus("Household linked.");
     } catch (error) {
@@ -392,7 +407,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         { method: "DELETE" },
       );
       await assertOk(res, "Failed to remove household link");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId);
+      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
       await loadLibrary(search);
       setPhotoAssociationStatus("Household link removed.");
     } catch (error) {
