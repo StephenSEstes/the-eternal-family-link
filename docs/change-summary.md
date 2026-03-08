@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (wizard duplicate confirmation + stronger multi-item navigation)
+
+- `Change`: Added checksum-based duplicate detection for wizard image uploads, duplicate confirmation UI with side-by-side selected vs existing library image previews, and clearer multi-item per-image navigation in the wizard item-detail step.
+- `Type`: UI
+- `Why`: Root cause was loss of duplicate-check behavior during Media Library -> shared wizard migration, plus weak per-item navigation cues that made multi-image captioning/editing appear stuck on the first image.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Selecting duplicate images shows duplicate detection status in selection list.
+  - Per-item view shows side-by-side selected/existing duplicate previews when a duplicate is detected.
+  - Duplicate items are handled as link-only (no re-upload).
+  - Multi-item step shows explicit item navigation controls and supports moving between all selected images.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (shared media attach wizard MVP foundation + Media Library integration)
 
 - `Change`: Added a shared image-only media attach wizard and shared attach orchestrator/contract layer, then integrated Media Library upload flow to launch the wizard instead of maintaining duplicated upload/link UI logic.

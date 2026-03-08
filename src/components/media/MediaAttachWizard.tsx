@@ -67,6 +67,7 @@ export function MediaAttachWizard({
   const [libraryResults, setLibraryResults] = useState<MediaAttachLibraryItem[]>([]);
   const [librarySelectedFileIds, setLibrarySelectedFileIds] = useState<string[]>([]);
   const [libraryBusy, setLibraryBusy] = useState(false);
+  const [duplicateScanBusy, setDuplicateScanBusy] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
 
   const selectedItem = items[perItemIndex] ?? null;
@@ -115,6 +116,7 @@ export function MediaAttachWizard({
     setLibraryResults([]);
     setLibrarySelectedFileIds([]);
     setLibraryBusy(false);
+    setDuplicateScanBusy(false);
     setTagQuery("");
   }, [context.defaultDate, context.defaultDescription, context.defaultLabel, open]);
 
@@ -130,13 +132,64 @@ export function MediaAttachWizard({
 
   if (!open) return null;
 
-  const appendFiles = (files: FileList | null, source: SourceChoice) => {
+  const readChecksumFromMetadata = (raw?: string) => {
+    const text = (raw ?? "").trim();
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text) as { checksumSha256?: string };
+      return String(parsed.checksumSha256 ?? "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+
+  const computeFileSha256 = async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    const bytes = Array.from(new Uint8Array(hashBuffer));
+    return bytes.map((value) => value.toString(16).padStart(2, "0")).join("");
+  };
+
+  const scanForDuplicates = async (files: File[]) => {
+    if (files.length === 0) return new Map<string, MediaAttachLibraryItem>();
+    setDuplicateScanBusy(true);
+    try {
+      const catalog = await searchImageLibrary({
+        tenantKey: context.tenantKey,
+        query: "",
+        limit: 5000,
+      });
+      const byChecksum = new Map<string, MediaAttachLibraryItem>();
+      for (const item of catalog) {
+        const checksum = readChecksumFromMetadata(item.mediaMetadata);
+        if (!checksum || byChecksum.has(checksum)) continue;
+        byChecksum.set(checksum, item);
+      }
+      const matches = new Map<string, MediaAttachLibraryItem>();
+      for (const file of files) {
+        const checksum = await computeFileSha256(file);
+        const existing = byChecksum.get(checksum);
+        if (existing) {
+          matches.set(fileKey(file), existing);
+        }
+      }
+      return matches;
+    } catch {
+      return new Map<string, MediaAttachLibraryItem>();
+    } finally {
+      setDuplicateScanBusy(false);
+    }
+  };
+
+  const appendFiles = async (files: FileList | null, source: SourceChoice) => {
     if (!files || files.length === 0) return;
     const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (incoming.length === 0) {
       setStatus("Only image files are supported in this MVP.");
       return;
     }
+    setStatus("Checking for duplicates...");
+    const duplicateMatches = await scanForDuplicates(incoming);
     setItems((current) => {
       const seen = new Set(current.filter((item) => item.file).map((item) => fileKey(item.file!)));
       const next = [...current];
@@ -145,11 +198,16 @@ export function MediaAttachWizard({
         if (seen.has(key)) continue;
         seen.add(key);
         const previewUrl = URL.createObjectURL(file);
+        const duplicate = duplicateMatches.get(key);
         next.push({
           clientId: makeClientId(),
           source,
           file,
+          fileId: duplicate?.fileId || "",
           previewUrl,
+          existingMediaMetadata: duplicate?.mediaMetadata ?? "",
+          duplicateOfFileId: duplicate?.fileId ?? "",
+          duplicateExistingPreviewUrl: duplicate?.fileId ? toImagePreviewSrc(context.tenantKey, duplicate.fileId) : "",
           title: context.defaultLabel ?? "",
           description: context.defaultDescription ?? "",
           date: context.defaultDate ?? (file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : ""),
@@ -161,7 +219,8 @@ export function MediaAttachWizard({
       }
       return next;
     });
-    setStatus("");
+    const duplicateCount = duplicateMatches.size;
+    setStatus(duplicateCount > 0 ? `Duplicate check complete: ${duplicateCount} duplicate image(s) found and will be linked without re-upload.` : "");
   };
 
   const addLibrarySelection = () => {
@@ -313,7 +372,7 @@ export function MediaAttachWizard({
           multiple
           accept="image/*"
           onChange={(event) => {
-            appendFiles(event.target.files, "device_upload");
+            void appendFiles(event.target.files, "device_upload");
             event.currentTarget.value = "";
           }}
         />
@@ -326,7 +385,7 @@ export function MediaAttachWizard({
           accept="image/*"
           capture="environment"
           onChange={(event) => {
-            appendFiles(event.target.files, "camera_capture");
+            void appendFiles(event.target.files, "camera_capture");
             event.currentTarget.value = "";
           }}
         />
@@ -374,12 +433,20 @@ export function MediaAttachWizard({
       ) : null}
       <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.35rem" }}>
         <strong>{items.length} item(s) selected</strong>
+        {duplicateScanBusy ? <span style={{ fontSize: "0.85rem" }}>Checking selected files for duplicates...</span> : null}
         {items.length > 0 ? (
           <div style={{ display: "grid", gap: "0.25rem", maxHeight: "180px", overflow: "auto" }}>
             {items.map((item) => (
-              <div key={item.clientId} style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                {item.previewUrl ? <img src={item.previewUrl} alt="" style={{ width: "34px", height: "34px", objectFit: "cover", borderRadius: "6px" }} /> : null}
-                <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Image"}</span>
+              <div key={item.clientId} style={{ display: "grid", gap: "0.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                  {item.previewUrl ? <img src={item.previewUrl} alt="" style={{ width: "34px", height: "34px", objectFit: "cover", borderRadius: "6px" }} /> : null}
+                  <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Image"}</span>
+                </div>
+                {item.duplicateOfFileId ? (
+                  <span className="status-chip status-chip--neutral" style={{ width: "fit-content" }}>
+                    Duplicate found: {item.duplicateOfFileId} (will link, not re-upload)
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>
@@ -465,8 +532,41 @@ export function MediaAttachWizard({
   const renderPerItem = selectedItem ? (
     <div style={{ display: "grid", gap: "0.7rem" }}>
       <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Item {perItemIndex + 1} of {items.length}</h4>
+      {items.length > 1 ? (
+        <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+          {items.map((item, index) => (
+            <button
+              key={`jump-item-${item.clientId}`}
+              type="button"
+              className={`button ${index === perItemIndex ? "tap-button" : "secondary tap-button"}`}
+              onClick={() => setPerItemIndex(index)}
+            >
+              {index + 1}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {selectedItem.previewUrl ? (
         <img src={selectedItem.previewUrl} alt="Selected image" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "#f3f4f6", borderRadius: "10px" }} />
+      ) : null}
+      {selectedItem.duplicateOfFileId && selectedItem.duplicateExistingPreviewUrl ? (
+        <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
+          <strong>Duplicate confirmed</strong>
+          <span style={{ fontSize: "0.9rem" }}>
+            This selected image matches existing library file <code>{selectedItem.duplicateOfFileId}</code>. It will not upload again.
+          </span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+            <div style={{ display: "grid", gap: "0.25rem" }}>
+              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Selected Image</span>
+              <img src={selectedItem.previewUrl || ""} alt="Selected image preview" style={{ width: "100%", maxHeight: "170px", objectFit: "contain", background: "#f3f4f6", borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "grid", gap: "0.25rem" }}>
+              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Existing Library Image</span>
+              <img src={selectedItem.duplicateExistingPreviewUrl} alt="Existing library duplicate preview" style={{ width: "100%", maxHeight: "170px", objectFit: "contain", background: "#f3f4f6", borderRadius: "8px" }} />
+            </div>
+          </div>
+          <span style={{ fontSize: "0.85rem" }}>You can still edit metadata/links below; save will only create links/details.</span>
+        </div>
       ) : null}
       <label style={{ display: "grid", gap: "0.35rem" }}>
         <span style={{ fontWeight: 600 }}>Caption/Title</span>
@@ -583,6 +683,7 @@ export function MediaAttachWizard({
               <span>Date: {item.date || "-"}</span>
               <span style={{ marginLeft: "0.65rem" }}>People: {item.personIds.length}</span>
               <span style={{ marginLeft: "0.65rem" }}>Households: {item.householdIds.length}</span>
+              {item.duplicateOfFileId ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: yes (link-only)</span> : null}
             </div>
           </div>
         ))}

@@ -60,6 +60,8 @@ export type MediaAttachDraftItem = {
   fileId?: string;
   previewUrl?: string;
   existingMediaMetadata?: string;
+  duplicateOfFileId?: string;
+  duplicateExistingPreviewUrl?: string;
   title: string;
   description: string;
   date: string;
@@ -336,7 +338,6 @@ export async function searchImageLibrary(input: {
   limit?: number;
 }): Promise<MediaAttachLibraryItem[]> {
   const query = input.query.trim();
-  if (!query) return [];
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(5000, Math.trunc(input.limit ?? 100))) : 100;
   const res = await fetch(
     `/api/t/${encodeURIComponent(input.tenantKey)}/photos/search?q=${encodeURIComponent(query)}&limit=${limit}&includeDrive=1`,

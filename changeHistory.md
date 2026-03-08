@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Media Attach Wizard now performs checksum duplicate detection for image uploads, shows side-by-side duplicate confirmation (selected vs existing library image), and adds clearer per-item navigation across all selected images. See `docs/change-summary.md`.
 - 2026-03-07: Added shared image-only Media Attach Wizard + centralized attach orchestrator/contracts, and migrated Media Library upload flow to use the wizard with post-save summary (`createdLinks`, `createdAttributes`, `skipped`, `failures`). See `docs/change-summary.md`.
 - 2026-03-07: Person fixed panel Life Events text updated (`Schools Attended`/`Major Accomplishments and Events` => `coming`) and Married summary now includes spouse name, date, and years married when available. See `docs/change-summary.md`.
 - 2026-03-07: Family views now prefer real headshots from primary photo attributes, and attribute event category colors are admin-defined and shown on attribute chips. See `docs/change-summary.md`.
