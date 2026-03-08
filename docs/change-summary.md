@@ -2569,3 +2569,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Attribute-context flow preserves person-link semantics and avoids unsupported existing-library attach path for MVP.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (wizard parity cleanup + attach performance optimization)
+
+- `Change`: Removed remaining legacy per-screen media attach/upload pickers from Person, Household, and Attributes modals so attach flows run through the shared wizard only; optimized duplicate detection by caching library checksum catalog per wizard session and caching file hashes; reduced unnecessary association lookups during orchestrator save when no extra links are pending.
+- `Type`: UI, Performance, Orchestration
+- `Why`: Eliminate duplicated attach UI paths and improve wizard responsiveness for multi-image selections and existing-item save operations while preserving existing backend contracts.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: No.
+- `Verify`:
+  - Person/Household/Attribute attach entry points now route through shared `MediaAttachWizard` only.
+  - Re-selecting/adding image batches in the same wizard session no longer rebuilds duplicate checksum catalog each time.
+  - Save path avoids `/photos/search` association fetch when an item has no additional links beyond its upload target.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

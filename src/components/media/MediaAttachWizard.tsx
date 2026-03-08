@@ -70,6 +70,8 @@ export function MediaAttachWizard({
   const [duplicateScanBusy, setDuplicateScanBusy] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
   const previewUrlsRef = useRef<Set<string>>(new Set());
+  const duplicateCatalogRef = useRef<Map<string, MediaAttachLibraryItem> | null>(null);
+  const fileHashCacheRef = useRef<Map<string, string>>(new Map());
 
   const selectedItem = items[perItemIndex] ?? null;
   const availableSources: SourceChoice[] =
@@ -123,6 +125,8 @@ export function MediaAttachWizard({
     setLibraryBusy(false);
     setDuplicateScanBusy(false);
     setTagQuery("");
+    duplicateCatalogRef.current = null;
+    fileHashCacheRef.current.clear();
   }, [context.defaultDate, context.defaultDescription, context.defaultLabel, open]);
 
   useEffect(() => {
@@ -156,33 +160,52 @@ export function MediaAttachWizard({
   };
 
   const computeFileSha256 = async (file: File) => {
+    if (!crypto?.subtle) return "";
     const buffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
     const bytes = Array.from(new Uint8Array(hashBuffer));
     return bytes.map((value) => value.toString(16).padStart(2, "0")).join("");
   };
 
+  const loadDuplicateCatalog = async () => {
+    if (duplicateCatalogRef.current) return duplicateCatalogRef.current;
+    const catalog = await searchImageLibrary({
+      tenantKey: context.tenantKey,
+      query: "",
+      limit: 5000,
+    });
+    const byChecksum = new Map<string, MediaAttachLibraryItem>();
+    for (const item of catalog) {
+      const checksum = readChecksumFromMetadata(item.mediaMetadata);
+      if (!checksum || byChecksum.has(checksum)) continue;
+      byChecksum.set(checksum, item);
+    }
+    duplicateCatalogRef.current = byChecksum;
+    return byChecksum;
+  };
+
   const scanForDuplicates = async (files: File[]) => {
     if (files.length === 0) return new Map<string, MediaAttachLibraryItem>();
+    if (!crypto?.subtle) return new Map<string, MediaAttachLibraryItem>();
     setDuplicateScanBusy(true);
     try {
-      const catalog = await searchImageLibrary({
-        tenantKey: context.tenantKey,
-        query: "",
-        limit: 5000,
-      });
-      const byChecksum = new Map<string, MediaAttachLibraryItem>();
-      for (const item of catalog) {
-        const checksum = readChecksumFromMetadata(item.mediaMetadata);
-        if (!checksum || byChecksum.has(checksum)) continue;
-        byChecksum.set(checksum, item);
-      }
+      const byChecksum = await loadDuplicateCatalog();
       const matches = new Map<string, MediaAttachLibraryItem>();
-      for (const file of files) {
-        const checksum = await computeFileSha256(file);
+      const checksums = await Promise.all(
+        files.map(async (file) => {
+          const key = fileKey(file);
+          const cached = fileHashCacheRef.current.get(key);
+          if (cached) return { key, checksum: cached };
+          const checksum = await computeFileSha256(file);
+          if (checksum) fileHashCacheRef.current.set(key, checksum);
+          return { key, checksum };
+        }),
+      );
+      for (const { key, checksum } of checksums) {
+        if (!checksum) continue;
         const existing = byChecksum.get(checksum);
         if (existing) {
-          matches.set(fileKey(file), existing);
+          matches.set(key, existing);
         }
       }
       return matches;

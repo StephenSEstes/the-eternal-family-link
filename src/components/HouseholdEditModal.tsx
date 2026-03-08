@@ -173,51 +173,6 @@ function toSortTimestamp(item: HouseholdAttribute) {
   return Number.NaN;
 }
 
-async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
-  const result: { width?: number; height?: number; durationSec?: number } = {};
-  if (file.type.startsWith("image/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        result.width = img.naturalWidth;
-        result.height = img.naturalHeight;
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.src = url;
-    });
-    return result;
-  }
-  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
-      media.preload = "metadata";
-      media.onloadedmetadata = () => {
-        if (Number.isFinite(media.duration)) result.durationSec = Math.max(0, media.duration);
-        if (file.type.startsWith("video/")) {
-          const video = media as HTMLVideoElement;
-          result.width = video.videoWidth || undefined;
-          result.height = video.videoHeight || undefined;
-        }
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.src = url;
-    });
-  }
-  return result;
-}
-
 export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved, onEditPerson }: Props) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -241,15 +196,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
-  const [newPhotoName, setNewPhotoName] = useState("");
-  const [newPhotoDescription, setNewPhotoDescription] = useState("");
-  const [newPhotoDate, setNewPhotoDate] = useState("");
-  const [newPhotoPrimary, setNewPhotoPrimary] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
-  const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
-  const [pendingUploadCaptureSource, setPendingUploadCaptureSource] = useState("library");
-  const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
@@ -370,73 +316,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         : [];
       setAvailableHouseholds(items.map((item) => ({ householdId: item.householdId, label: item.label || item.householdId })));
     }
-  };
-
-  const clearPendingUploadPhoto = () => {
-    if (pendingUploadPhotoPreviewUrl) {
-      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-    }
-    setPendingUploadPhotoFile(null);
-    setPendingUploadPhotoPreviewUrl("");
-    setPendingUploadCaptureSource("library");
-  };
-
-  const setPendingUploadFromInput = (file: File | null, source = "library") => {
-    if (!file) return;
-    if (pendingUploadPhotoPreviewUrl) {
-      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-    }
-    const previewUrl = URL.createObjectURL(file);
-    setPendingUploadPhotoFile(file);
-    setPendingUploadPhotoPreviewUrl(previewUrl);
-    setPendingUploadCaptureSource(source);
-    if (!newPhotoDate && file.lastModified) {
-      setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
-    }
-  };
-
-  const submitPendingUploadPhoto = async () => {
-    if (!pendingUploadPhotoFile) {
-      setStatus("Choose a photo first.");
-      return;
-    }
-    setUploadingPhoto(true);
-    setStatus("Adding photo...");
-    const form = new FormData();
-    form.append("file", pendingUploadPhotoFile);
-    form.append("name", newPhotoName.trim() || pendingUploadPhotoFile.name || "photo");
-    form.append("description", newPhotoDescription.trim());
-    form.append("photoDate", newPhotoDate.trim());
-    form.append("isPrimary", String(newPhotoPrimary));
-    form.append("captureSource", pendingUploadCaptureSource);
-    const mediaMeta = await readClientMediaMetadata(pendingUploadPhotoFile);
-    if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
-    if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
-    if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
-    if (pendingUploadPhotoFile.lastModified) {
-      form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
-    }
-    const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/upload`,
-      { method: "POST", body: form },
-    );
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      const message = body?.message || body?.error || "";
-      setStatus(`Add photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-      setUploadingPhoto(false);
-      return;
-    }
-    clearPendingUploadPhoto();
-    setShowPhotoUploadPicker(false);
-    setNewPhotoName("");
-    setNewPhotoDescription("");
-    setNewPhotoDate("");
-    setNewPhotoPrimary(false);
-    setStatus("Photo linked.");
-    setUploadingPhoto(false);
-    await refresh();
-    onSaved();
   };
 
   const handleWizardComplete = async (summary: {
@@ -626,14 +505,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     }
     void refreshSelectedPhotoAssociations(selectedPhoto.fileId);
   }, [selectedPhoto, showPhotoDetail, tenantKey]);
-
-  useEffect(() => {
-    return () => {
-      if (pendingUploadPhotoPreviewUrl) {
-        URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-      }
-    };
-  }, [pendingUploadPhotoPreviewUrl]);
 
   if (!open) {
     return null;
@@ -1319,132 +1190,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           </div>
                         ) : null}
                         {associationStatus ? <p className="page-subtitle" style={{ marginTop: "0.7rem" }}>{associationStatus}</p> : null}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {showPhotoUploadPicker ? (
-                  <div className="person-photo-picker-shell">
-                    <div className="person-photo-picker-card">
-                      <div className="person-photo-picker-head">
-                        <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Upload Photo</h4>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          onClick={() => {
-                            clearPendingUploadPhoto();
-                            setShowPhotoUploadPicker(false);
-                          }}
-                        >
-                          Close
-                        </button>
-                      </div>
-                      <label className="label">Name</label>
-                      <input className="input" value={newPhotoName} onChange={(e) => setNewPhotoName(e.target.value)} placeholder="Photo name" />
-                      <label className="label">Description</label>
-                      <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
-                      <label className="label">Date</label>
-                      <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
-                      <label className="label" style={{ marginTop: "0.5rem" }}>
-                        <input type="checkbox" checked={newPhotoPrimary} onChange={(e) => setNewPhotoPrimary(e.target.checked)} /> Set as primary
-                      </label>
-                      {pendingUploadPhotoPreviewUrl ? (
-                        <div className="person-upload-preview-card">
-                          {pendingUploadPhotoFile?.type?.startsWith("video/") ? (
-                            <video src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls playsInline />
-                          ) : pendingUploadPhotoFile?.type?.startsWith("audio/") ? (
-                            <audio src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls />
-                          ) : (
-                            <img src={pendingUploadPhotoPreviewUrl} alt="Selected upload preview" className="person-upload-preview-image" />
-                          )}
-                          <div className="person-upload-preview-meta">
-                            <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
-                            <span>This photo will be uploaded with the metadata above.</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>No photo selected yet.</p>
-                      )}
-                      <input
-                        id={`household-photo-upload-${householdId}`}
-                        type="file"
-                        accept="image/*,video/*,audio/*"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null;
-                          e.currentTarget.value = "";
-                          setPendingUploadFromInput(file, "library");
-                        }}
-                      />
-                      <input
-                        id={`household-photo-upload-camera-${householdId}`}
-                        type="file"
-                        accept="image/*,video/*"
-                        capture="environment"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null;
-                          e.currentTarget.value = "";
-                          setPendingUploadFromInput(file, "camera");
-                        }}
-                      />
-                      <input
-                        id={`household-photo-upload-audio-${householdId}`}
-                        type="file"
-                        accept="audio/*"
-                        capture="user"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null;
-                          e.currentTarget.value = "";
-                          setPendingUploadFromInput(file, "audio-capture");
-                        }}
-                      />
-                      <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          disabled={uploadingPhoto}
-                          onClick={() => document.getElementById(`household-photo-upload-${householdId}`)?.click()}
-                        >
-                          {pendingUploadPhotoFile ? "Choose From Library" : "Choose From Library"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          disabled={uploadingPhoto}
-                          onClick={() => document.getElementById(`household-photo-upload-camera-${householdId}`)?.click()}
-                        >
-                          Camera
-                        </button>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          disabled={uploadingPhoto}
-                          onClick={() => document.getElementById(`household-photo-upload-audio-${householdId}`)?.click()}
-                        >
-                          Audio
-                        </button>
-                        <button
-                          type="button"
-                          className="button tap-button"
-                          disabled={!pendingUploadPhotoFile || uploadingPhoto}
-                          onClick={() => void submitPendingUploadPhoto()}
-                        >
-                          {uploadingPhoto ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          disabled={uploadingPhoto}
-                          onClick={() => {
-                            clearPendingUploadPhoto();
-                            setShowPhotoUploadPicker(false);
-                          }}
-                        >
-                          Cancel
-                        </button>
                       </div>
                     </div>
                   </div>

@@ -44,13 +44,6 @@ type AttributeItem = {
 };
 
 type AttributeTab = "all" | "descriptor" | "event";
-type LibraryMediaItem = {
-  fileId: string;
-  name: string;
-  description: string;
-  date: string;
-};
-
 const DESCRIPTOR_TYPES = ["physical_attribute", "hobbies_interests", "talent", "other"];
 const EVENT_TYPES = [
   "birth",
@@ -293,51 +286,6 @@ function getAttributeDisplayTitle(item: AttributeItem) {
   return categoryLabel || "Attribute";
 }
 
-async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
-  const result: { width?: number; height?: number; durationSec?: number } = {};
-  if (file.type.startsWith("image/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        result.width = img.naturalWidth;
-        result.height = img.naturalHeight;
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.src = url;
-    });
-    return result;
-  }
-  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
-      media.preload = "metadata";
-      media.onloadedmetadata = () => {
-        if (Number.isFinite(media.duration)) result.durationSec = Math.max(0, media.duration);
-        if (file.type.startsWith("video/")) {
-          const video = media as HTMLVideoElement;
-          result.width = video.videoWidth || undefined;
-          result.height = video.videoHeight || undefined;
-        }
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.src = url;
-    });
-  }
-  return result;
-}
-
 export function AttributesModal({
   open,
   tenantKey,
@@ -384,7 +332,6 @@ export function AttributesModal({
   const [selectedAttributeId, setSelectedAttributeId] = useState("");
   const [drawerEditMode, setDrawerEditMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [pendingUploadIntent, setPendingUploadIntent] = useState<"" | "photo" | "video" | "library">("");
 
   const [editingId, setEditingId] = useState("");
   const [category, setCategory] = useState<AttributeCategory>("descriptor");
@@ -398,16 +345,7 @@ export function AttributesModal({
   const [dateEnd, setDateEnd] = useState("");
   const [notes, setNotes] = useState("");
 
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [pendingPreview, setPendingPreview] = useState("");
-  const [captureSource, setCaptureSource] = useState("library");
-  const [showAddMediaMenu, setShowAddMediaMenu] = useState(false);
-  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
-  const [libraryQuery, setLibraryQuery] = useState("");
-  const [libraryBusy, setLibraryBusy] = useState(false);
-  const [libraryResults, setLibraryResults] = useState<LibraryMediaItem[]>([]);
-  const [isLikelyMobile, setIsLikelyMobile] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultEventDefinitions());
   const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
@@ -542,16 +480,6 @@ export function AttributesModal({
   }, [initialEditAttributeId, items, open, startInAddMode]);
 
   useEffect(() => {
-    if (!pendingPreview) return;
-    return () => URL.revokeObjectURL(pendingPreview);
-  }, [pendingPreview]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setIsLikelyMobile(window.matchMedia("(pointer: coarse)").matches || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
-  }, []);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const readDebugMode = () => {
       const value = window.localStorage.getItem("efl_debug_mode");
@@ -566,15 +494,6 @@ export function AttributesModal({
       window.removeEventListener("efl-debug-mode-changed", onStorage as EventListener);
     };
   }, []);
-
-  useEffect(() => {
-    if (!selectedAttributeId) {
-      setShowAddMediaMenu(false);
-      setShowLibraryPicker(false);
-      setLibraryQuery("");
-      setLibraryResults([]);
-    }
-  }, [selectedAttributeId]);
 
   useEffect(() => {
     if (category !== "event") return;
@@ -619,25 +538,6 @@ export function AttributesModal({
     return rawItems.find((item) => item.attributeId === currentId) ?? null;
   }, [editingId, initialEditAttributeId, rawItems, selectedAttributeId]);
 
-  useEffect(() => {
-    if (!selectedItem || !pendingUploadIntent) return;
-    if (pendingUploadIntent === "library") {
-      setShowLibraryPicker(true);
-      setPendingUploadIntent("");
-      return;
-    }
-    const id =
-      pendingUploadIntent === "video"
-        ? `attribute-upload-camera-${selectedItem.attributeId}`
-        : `attribute-upload-${selectedItem.attributeId}`;
-    setEditingId(selectedItem.attributeId);
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.click();
-      setPendingUploadIntent("");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [selectedItem, pendingUploadIntent]);
-
   const resetEditor = () => {
     setEditingId("");
     setCategory("descriptor");
@@ -650,14 +550,6 @@ export function AttributesModal({
     setDateStart("");
     setDateEnd("");
     setNotes("");
-    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-    setPendingPreview("");
-    setPendingFile(null);
-    setCaptureSource("library");
-    setShowAddMediaMenu(false);
-    setShowLibraryPicker(false);
-    setLibraryQuery("");
-    setLibraryResults([]);
   };
 
   const loadEditorFromItem = (item: AttributeItem) => {
@@ -687,7 +579,6 @@ export function AttributesModal({
     const validationError = validateEditor();
     if (validationError) {
       setStatus(validationError);
-      setPendingUploadIntent("");
       return;
     }
     setBusy(true);
@@ -721,7 +612,6 @@ export function AttributesModal({
     if (!res.ok) {
       setStatus(`Save failed: ${res.status} ${String(body?.message ?? body?.error ?? "").slice(0, 160)}`);
       setBusy(false);
-      setPendingUploadIntent("");
       return;
     }
     const savedId = String(body?.attribute?.attributeId || editingId || "");
@@ -795,95 +685,6 @@ export function AttributesModal({
     onSaved();
   };
 
-  const uploadAttachment = async () => {
-    if (!editingId || !pendingFile) {
-      setStatus("Save attribute first, then select a file.");
-      return;
-    }
-    setBusy(true);
-    setStatus("Uploading...");
-    const form = new FormData();
-    form.append("file", pendingFile);
-    form.append("name", pendingFile.name || "media");
-    form.append("description", notes.trim());
-    form.append("photoDate", dateStart.trim());
-    form.append("attributeId", editingId);
-    form.append("captureSource", captureSource);
-    form.append("attributeType", "media");
-    const mediaMeta = await readClientMediaMetadata(pendingFile);
-    if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
-    if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
-    if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
-    if (pendingFile.lastModified) form.append("fileCreatedAt", new Date(pendingFile.lastModified).toISOString());
-    const url =
-      entityType === "person"
-        ? `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(entityId)}/photos/upload`
-        : `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(entityId)}/photos/upload`;
-    const res = await fetch(url, { method: "POST", body: form });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      setStatus(`Upload failed: ${res.status} ${String(body?.message ?? body?.error ?? "").slice(0, 160)}`);
-      setBusy(false);
-      return;
-    }
-    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-    setPendingPreview("");
-    setPendingFile(null);
-    setCaptureSource("library");
-    setStatus("Attachment uploaded.");
-    setBusy(false);
-    await refresh();
-    onSaved();
-  };
-
-  const searchLibraryMedia = async () => {
-    const q = libraryQuery.trim();
-    if (!q) {
-      setLibraryResults([]);
-      return;
-    }
-    setLibraryBusy(true);
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(q)}&limit=40`,
-        { cache: "no-store" },
-      );
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        setStatus(`Media library search failed: ${res.status}`);
-        setLibraryResults([]);
-        return;
-      }
-      const items = Array.isArray(body?.items) ? (body.items as LibraryMediaItem[]) : [];
-      setLibraryResults(items);
-    } finally {
-      setLibraryBusy(false);
-    }
-  };
-
-  const selectLibraryMedia = async (item: LibraryMediaItem) => {
-    try {
-      const response = await fetch(getPhotoProxyPath(item.fileId, tenantKey), { cache: "no-store" });
-      if (!response.ok) {
-        setStatus(`Failed to fetch selected media: ${response.status}`);
-        return;
-      }
-      const blob = await response.blob();
-      const contentType = blob.type || "application/octet-stream";
-      const fallbackName = item.name?.trim() || `${item.fileId}.bin`;
-      const file = new File([blob], fallbackName, { type: contentType });
-      if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-      setPendingFile(file);
-      setPendingPreview(URL.createObjectURL(file));
-      setCaptureSource("library");
-      setShowLibraryPicker(false);
-      setShowAddMediaMenu(false);
-      setStatus("Selected media from library. Click Attach Media to link it.");
-    } catch {
-      setStatus("Failed to load selected media from library.");
-    }
-  };
-
   const handleWizardComplete = async (summary: {
     createdLinks: number;
     createdAttributes: number;
@@ -913,11 +714,6 @@ export function AttributesModal({
     if (startInAddMode) {
       onClose();
     }
-  };
-
-  const startAddAndAttach = (intent: "photo" | "video" | "library") => {
-    setPendingUploadIntent(intent);
-    void saveAttribute();
   };
 
   const openAttributeDrawer = (item: AttributeItem) => {
@@ -1233,147 +1029,11 @@ export function AttributesModal({
                     <p className="page-subtitle" style={{ margin: 0 }}>No media linked yet.</p>
                   )}
                 </div>
-                {pendingPreview ? (
-                  <div className="person-upload-preview-card" style={{ marginTop: "0.75rem" }}>
-                    {pendingFile?.type?.startsWith("video/") ? (
-                      <video src={pendingPreview} className="person-upload-preview-image" controls playsInline />
-                    ) : pendingFile?.type?.startsWith("audio/") ? (
-                      <audio src={pendingPreview} className="person-upload-preview-image" controls />
-                    ) : (
-                      <img src={pendingPreview} alt="Pending upload preview" className="person-upload-preview-image" />
-                    )}
-                    <div className="person-upload-preview-meta">
-                      <strong>{pendingFile?.name || "Selected media"}</strong>
-                      <span>Will attach to this attribute.</span>
-                    </div>
-                  </div>
-                ) : null}
-                <input
-                  id={`attribute-upload-${selectedItem.attributeId}`}
-                  type="file"
-                  accept="image/*,video/*,audio/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-                    setPendingFile(file);
-                    setPendingPreview(URL.createObjectURL(file));
-                    setCaptureSource("library");
-                  }}
-                />
-                <input
-                  id={`attribute-upload-camera-${selectedItem.attributeId}`}
-                  type="file"
-                  accept="image/*,video/*"
-                  capture="environment"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-                    setPendingFile(file);
-                    setPendingPreview(URL.createObjectURL(file));
-                    setCaptureSource("camera");
-                  }}
-                />
-                <input
-                  id={`attribute-upload-audio-${selectedItem.attributeId}`}
-                  type="file"
-                  accept="audio/*"
-                  capture="user"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
-                    setPendingFile(file);
-                    setPendingPreview(URL.createObjectURL(file));
-                    setCaptureSource("microphone");
-                  }}
-                />
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
                   <button type="button" className="button secondary tap-button" onClick={() => setShowMediaAttachWizard(true)}>
                     Add Media
                   </button>
-                  <button type="button" className="button tap-button" disabled={!pendingFile || busy} onClick={() => void uploadAttachment()}>
-                    {busy ? "Uploading..." : "Attach Media"}
-                  </button>
                 </div>
-                {showAddMediaMenu ? (
-                  <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => {
-                        setEditingId(selectedItem.attributeId);
-                        setShowAddMediaMenu(false);
-                        document.getElementById(`attribute-upload-${selectedItem.attributeId}`)?.click();
-                      }}
-                    >
-                      File From Device
-                    </button>
-                    {isLikelyMobile ? (
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        onClick={() => {
-                          setEditingId(selectedItem.attributeId);
-                          setShowAddMediaMenu(false);
-                          document.getElementById(`attribute-upload-camera-${selectedItem.attributeId}`)?.click();
-                        }}
-                      >
-                        Camera
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => {
-                        setShowLibraryPicker(true);
-                        setShowAddMediaMenu(false);
-                      }}
-                    >
-                      Media Library
-                    </button>
-                  </div>
-                ) : null}
-                {showLibraryPicker ? (
-                  <div className="card" style={{ marginTop: "0.75rem", border: "1px solid #E7EAF0", borderRadius: "0.9rem", padding: "0.7rem" }}>
-                    <label className="label">Choose from Media Library</label>
-                    <div className="settings-chip-list">
-                      <input
-                        className="input"
-                        placeholder="Search library by file name or ID"
-                        value={libraryQuery}
-                        onChange={(e) => setLibraryQuery(e.target.value)}
-                      />
-                      <button type="button" className="button secondary tap-button" onClick={() => void searchLibraryMedia()} disabled={libraryBusy}>
-                        {libraryBusy ? "Searching..." : "Search"}
-                      </button>
-                      <button type="button" className="button secondary tap-button" onClick={() => setShowLibraryPicker(false)}>
-                        Close
-                      </button>
-                    </div>
-                    <div className="person-association-list" style={{ marginTop: "0.55rem" }}>
-                      {libraryResults.length > 0 ? libraryResults.map((item) => (
-                        <button
-                          key={item.fileId}
-                          type="button"
-                          className="person-linked-row"
-                          style={{ width: "100%", textAlign: "left", background: "#fff" }}
-                          onClick={() => void selectLibraryMedia(item)}
-                        >
-                          <span>{item.name || item.fileId}</span>
-                          <span className="page-subtitle">{item.date || item.fileId}</span>
-                        </button>
-                      )) : <p className="page-subtitle" style={{ margin: 0 }}>No results yet.</p>}
-                    </div>
-                  </div>
-                ) : null}
                 <MediaAttachWizard
                   open={showMediaAttachWizard}
                   context={{
@@ -1572,21 +1232,9 @@ export function AttributesModal({
                   </div>
                 ) : null}
 
-                <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)} disabled={busy}>
-                    Add Media
-                  </button>
-                </div>
-                {showAddMediaMenu ? (
-                  <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
-                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("photo")} disabled={busy}>File From Device</button>
-                    {isLikelyMobile ? (
-                      <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("video")} disabled={busy}>Camera</button>
-                    ) : null}
-                    <button type="button" className="button secondary tap-button" onClick={() => startAddAndAttach("library")} disabled={busy}>Media Library</button>
-                  </div>
-                ) : null}
-                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>Selecting a media option saves first, then opens the chooser.</p>
+                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                  Save first, then use Add Media on the attribute detail screen to open the shared attach wizard.
+                </p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
                   {editingId ? (

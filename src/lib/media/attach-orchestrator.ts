@@ -406,6 +406,8 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
       let mediaMetadata = item.existingMediaMetadata?.trim() ?? "";
       let uploadedViaPersonId = "";
       let uploadedViaHouseholdId = "";
+      let uploadedViaPerson = false;
+      let uploadedViaHousehold = false;
 
       if (item.duplicateOfFileId && item.duplicateDecision === "duplicate") {
         fileId = item.duplicateOfFileId.trim();
@@ -424,6 +426,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
         }
         if (personIds.length > 0) {
           uploadedViaPersonId = personIds[0];
+          uploadedViaPerson = true;
           const uploaded = await uploadToPerson({
             context: input.context,
             personId: uploadedViaPersonId,
@@ -438,6 +441,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
           summary.createdAttributes += 1;
         } else if (householdIds.length > 0 && input.context.allowHouseholdLinks) {
           uploadedViaHouseholdId = householdIds[0];
+          uploadedViaHousehold = true;
           const uploaded = await uploadToHousehold({
             context: input.context,
             householdId: uploadedViaHouseholdId,
@@ -459,12 +463,20 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
         }
       }
 
-      if (!associationCache.has(fileId)) {
-        associationCache.set(fileId, await loadAssociationsByFileId(input.context.tenantKey, fileId));
-      }
-      const associations = associationCache.get(fileId)!;
+      const pendingPersonLinks = personIds.filter((personId) => personId && (!uploadedViaPerson || personId !== uploadedViaPersonId));
+      const pendingHouseholdLinks = input.context.allowHouseholdLinks
+        ? householdIds.filter((householdId) => householdId && (!uploadedViaHousehold || householdId !== uploadedViaHouseholdId))
+        : [];
 
-      for (const personId of personIds) {
+      let associations: AssociationSnapshot = { personIds: new Set<string>(), householdIds: new Set<string>() };
+      if (pendingPersonLinks.length > 0 || pendingHouseholdLinks.length > 0) {
+        if (!associationCache.has(fileId)) {
+          associationCache.set(fileId, await loadAssociationsByFileId(input.context.tenantKey, fileId));
+        }
+        associations = associationCache.get(fileId)!;
+      }
+
+      for (const personId of pendingPersonLinks) {
         if (personId === uploadedViaPersonId) continue;
         if (associations.personIds.has(personId)) {
           summary.skipped += 1;
@@ -494,7 +506,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
       }
 
       if (input.context.allowHouseholdLinks) {
-        for (const householdId of householdIds) {
+        for (const householdId of pendingHouseholdLinks) {
           if (householdId === uploadedViaHouseholdId) continue;
           if (associations.householdIds.has(householdId)) {
             summary.skipped += 1;

@@ -260,53 +260,6 @@ function getTimelineChipLabel(item: AboutAttribute) {
   return primary;
 }
 
-async function readClientMediaMetadata(file: File): Promise<{ width?: number; height?: number; durationSec?: number }> {
-  const result: { width?: number; height?: number; durationSec?: number } = {};
-  if (file.type.startsWith("image/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        result.width = img.naturalWidth;
-        result.height = img.naturalHeight;
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      img.src = url;
-    });
-    return result;
-  }
-  if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-    await new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(file);
-      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
-      media.preload = "metadata";
-      media.onloadedmetadata = () => {
-        if (Number.isFinite(media.duration)) {
-          result.durationSec = Math.max(0, media.duration);
-        }
-        if (file.type.startsWith("video/")) {
-          const video = media as HTMLVideoElement;
-          result.width = video.videoWidth || undefined;
-          result.height = video.videoHeight || undefined;
-        }
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      media.src = url;
-    });
-  }
-  return result;
-}
-
 function isEligibleParentAge(parentBirthDate: string | undefined, childBirthDate: string | undefined, minYears = 15) {
   const parent = parseDate(parentBirthDate);
   const child = parseDate(childBirthDate);
@@ -646,13 +599,6 @@ export function PersonEditModal({
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
   const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
-  const [newPhotoLabel, setNewPhotoLabel] = useState("portrait");
-  const [newPhotoDescription, setNewPhotoDescription] = useState("");
-  const [newPhotoDate, setNewPhotoDate] = useState("");
-  const [newPhotoHeadshot, setNewPhotoHeadshot] = useState(false);
-  const [pendingUploadPhotoFile, setPendingUploadPhotoFile] = useState<File | null>(null);
-  const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
-  const [pendingUploadCaptureSource, setPendingUploadCaptureSource] = useState("library");
   const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
   const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
   const [tagQuery, setTagQuery] = useState("");
@@ -663,10 +609,6 @@ export function PersonEditModal({
   const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [personPhotoQuery, setPersonPhotoQuery] = useState("");
-  const [photoSearchQuery, setPhotoSearchQuery] = useState("");
-  const [photoSearchResults, setPhotoSearchResults] = useState<PhotoLibraryItem[]>([]);
-  const [selectedLibraryFileIds, setSelectedLibraryFileIds] = useState<string[]>([]);
-  const [photoSearchBusy, setPhotoSearchBusy] = useState(false);
   const [selectedPhotoAssociationsBusy, setSelectedPhotoAssociationsBusy] = useState(false);
   const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
     people: Array<{ personId: string; displayName: string }>;
@@ -674,10 +616,7 @@ export function PersonEditModal({
   }>({ people: [], households: [] });
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
-  const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
-  const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
-  const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
   const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
@@ -883,13 +822,6 @@ export function PersonEditModal({
       spouseId: normalizeId(initialSpouseId),
     };
     setFamilyTouched(false);
-    setNewPhotoLabel("portrait");
-    setNewPhotoDescription("");
-    setNewPhotoDate("");
-    setNewPhotoHeadshot(false);
-    setPendingUploadPhotoFile(null);
-    setPendingUploadPhotoPreviewUrl("");
-    setPendingUploadCaptureSource("library");
     setSelectedPhotoAttributeId("");
     setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
     setTagQuery("");
@@ -900,15 +832,8 @@ export function PersonEditModal({
     setLargePhotoIsAudio(false);
     setPhotoBusy(false);
     setPersonPhotoQuery("");
-    setPhotoSearchQuery("");
-    setPhotoSearchResults([]);
-    setSelectedLibraryFileIds([]);
-    setPhotoSearchBusy(false);
     setPhotoAssociationStatus("");
     setShowPhotoDetail(false);
-    setShowPhotoLibraryPicker(false);
-    setShowPhotoUploadPicker(false);
-    setUploadTarget("photo");
     setShowAddSpouse(false);
     setSelectedAboutAttributeId("");
     setNewSpouseFirstName("");
@@ -937,14 +862,6 @@ export function PersonEditModal({
       setFamilyGroupOptions(list.filter((item) => item.key && item.name));
     })();
   }, [open]);
-
-  useEffect(() => {
-    return () => {
-      if (pendingUploadPhotoPreviewUrl) {
-        URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-      }
-    };
-  }, [pendingUploadPhotoPreviewUrl]);
 
   const personOptions = localPeople.filter((item) => item.personId !== person?.personId);
   const childBirthDate = birthDate || person?.birthDate;
@@ -1215,23 +1132,6 @@ export function PersonEditModal({
     void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
   }, [selectedPhoto, showPhotoDetail, tenantKey]);
 
-  const searchPhotoLibrary = async () => {
-    setPhotoSearchBusy(true);
-    const res = await fetch(
-      `/api/t/${encodeURIComponent(activeTenantKey)}/photos/search?q=${encodeURIComponent(photoSearchQuery.trim())}`,
-      { cache: "no-store" },
-    );
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      const message = body?.message || body?.error || "";
-      setStatus(`Photo search failed: ${res.status} ${String(message).slice(0, 160)}`);
-      setPhotoSearchBusy(false);
-      return;
-    }
-    setPhotoSearchResults(Array.isArray(body?.items) ? (body.items as PhotoLibraryItem[]) : []);
-    setPhotoSearchBusy(false);
-  };
-
   const openPhotoDetail = (attributeId: string) => {
     setSelectedPhotoAttributeId(attributeId);
     setShowPhotoDetail(true);
@@ -1460,114 +1360,6 @@ export function PersonEditModal({
         next.delete(key);
         return next;
       });
-    }
-  };
-
-  const linkSelectedLibraryPhotos = async () => {
-    if (selectedLibraryFileIds.length === 0 || !person) return;
-    setPhotoBusy(true);
-    setStatus("Linking selected search photo...");
-    for (const fileId of selectedLibraryFileIds) {
-      const item = photoSearchResults.find((result) => result.fileId === fileId);
-      if (!item) continue;
-      const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          attributeType: "photo",
-          valueText: item.fileId,
-          label: item.name || "photo",
-          notes: item.description || "",
-          startDate: item.date || "",
-          visibility: "family",
-          shareScope: "both_families",
-          shareFamilyGroupKey: "",
-          sortOrder: 0,
-          isPrimary: photoAttributes.length === 0,
-        }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        const message = body?.message || body?.error || "";
-        setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-        setPhotoBusy(false);
-        return;
-      }
-    }
-    setSelectedLibraryFileIds([]);
-    setStatus("Photo linked.");
-    setPhotoBusy(false);
-    await loadAttributes(person.personId);
-    onSaved();
-  };
-
-  const clearPendingUploadPhoto = () => {
-    if (pendingUploadPhotoPreviewUrl) {
-      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-    }
-    setPendingUploadPhotoFile(null);
-    setPendingUploadPhotoPreviewUrl("");
-    setPendingUploadCaptureSource("library");
-  };
-
-  const setPendingUploadFromInput = (file: File | null, source = "library") => {
-    if (!file) return;
-    if (pendingUploadPhotoPreviewUrl) {
-      URL.revokeObjectURL(pendingUploadPhotoPreviewUrl);
-    }
-    const previewUrl = URL.createObjectURL(file);
-    setPendingUploadPhotoFile(file);
-    setPendingUploadPhotoPreviewUrl(previewUrl);
-    setPendingUploadCaptureSource(source);
-    if (!newPhotoDate && file.lastModified) {
-      setNewPhotoDate(new Date(file.lastModified).toISOString().slice(0, 10));
-    }
-  };
-
-  const submitPendingUploadPhoto = async () => {
-    if (!pendingUploadPhotoFile || !person) {
-      setStatus("Choose a photo first.");
-      return;
-    }
-    setPhotoBusy(true);
-    setStatus("Saving photo...");
-    try {
-      const form = new FormData();
-      form.append("file", pendingUploadPhotoFile);
-      form.append("label", newPhotoLabel.trim() || "gallery");
-      form.append("isHeadshot", String(newPhotoHeadshot));
-      form.append("description", newPhotoDescription.trim());
-      form.append("photoDate", newPhotoDate.trim());
-      form.append("captureSource", pendingUploadCaptureSource);
-      form.append("attributeType", uploadTarget === "attribute-media" ? "media" : "photo");
-      const mediaMeta = await readClientMediaMetadata(pendingUploadPhotoFile);
-      if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
-      if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
-      if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
-      if (pendingUploadPhotoFile.lastModified) {
-        form.append("fileCreatedAt", new Date(pendingUploadPhotoFile.lastModified).toISOString());
-      }
-      const res = await fetch(`/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/photos/upload`, {
-        method: "POST",
-        body: form,
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        const message = body?.message || body?.error || "";
-        setStatus(`Upload photo failed: ${res.status} ${String(message).slice(0, 160)}`);
-        return;
-      }
-      setStatus("Photo uploaded.");
-      clearPendingUploadPhoto();
-      setShowPhotoUploadPicker(false);
-      setUploadTarget("photo");
-      setNewPhotoHeadshot(false);
-      setNewPhotoDescription("");
-      setNewPhotoDate("");
-      await loadAttributes(person.personId);
-      onSaved();
-    } finally {
-      setPhotoBusy(false);
     }
   };
 
@@ -2275,9 +2067,6 @@ export function PersonEditModal({
                       + Add Photo
                     </button>
                   ) : null}
-                  <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoLibraryPicker(true)}>
-                    Browse Library
-                  </button>
                 </div>
               </div>
               <label className="label">Search this person&apos;s photos</label>
@@ -2430,228 +2219,6 @@ export function PersonEditModal({
               />
             ) : null}
 
-            {showPhotoLibraryPicker ? (
-              <div className="person-photo-picker-shell">
-                <div className="person-photo-picker-card">
-                  <div className="person-photo-picker-head">
-                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Browse/Search Library</h4>
-                    <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoLibraryPicker(false)}>
-                      Close
-                    </button>
-                  </div>
-                  <label className="label">Search by name, description, date, person, household, or file ID</label>
-                  <input
-                    className="input"
-                    value={photoSearchQuery}
-                    onChange={(e) => setPhotoSearchQuery(e.target.value)}
-                    placeholder="e.g. wedding 1998 Ruth Clark"
-                  />
-                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={photoSearchBusy}
-                      onClick={() => void searchPhotoLibrary()}
-                    >
-                      {photoSearchBusy ? "Searching..." : "Search Photos"}
-                    </button>
-                    {canManage ? (
-                    <button
-                      type="button"
-                      className="button tap-button"
-                      disabled={selectedLibraryFileIds.length === 0 || photoBusy}
-                      onClick={() => void linkSelectedLibraryPhotos()}
-                    >
-                      {photoBusy ? "Saving..." : `Link To ${person.displayName}`}
-                    </button>
-                  ) : null}
-                </div>
-                  {photoSearchResults.length > 0 ? (
-                    <div className="person-library-grid">
-                      {photoSearchResults.map((item) => {
-                        const alreadyLinked = linkedPhotoFileIds.has(item.fileId);
-                        const checked = selectedLibraryFileIds.includes(item.fileId);
-                        return (
-                          <label key={`search-${item.fileId}`} className="person-library-tile">
-                            <img
-                              src={getPhotoProxyPath(item.fileId, activeTenantKey)}
-                              alt={item.name || "media"}
-                              className="person-library-image"
-                            />
-                            <div className="person-library-meta">
-                              <strong>{item.name || "-"}</strong>
-                              <span>{item.date || "-"}</span>
-                            </div>
-                            <div className="settings-chip-list">
-                              {alreadyLinked ? <span className="status-chip status-chip--neutral">Already linked</span> : null}
-                              {canManage ? (
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  disabled={alreadyLinked}
-                                  onChange={(e) => {
-                                    setSelectedLibraryFileIds((current) =>
-                                      e.target.checked
-                                        ? [...current, item.fileId]
-                                        : current.filter((id) => id !== item.fileId),
-                                    );
-                                  }}
-                                />
-                              ) : null}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-                      No search results yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
-            {showPhotoUploadPicker && canManage ? (
-              <div className="person-photo-picker-shell">
-                <div className="person-photo-picker-card">
-                  <div className="person-photo-picker-head">
-                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>
-                      {uploadTarget === "attribute-media" ? "Upload Media Attribute" : "Upload Photo"}
-                    </h4>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={() => {
-                        clearPendingUploadPhoto();
-                        setShowPhotoUploadPicker(false);
-                        setUploadTarget("photo");
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-                  <label className="label">Label</label>
-                  <input className="input" value={newPhotoLabel} onChange={(e) => setNewPhotoLabel(e.target.value)} placeholder="portrait" />
-                  <label className="label">Description</label>
-                  <input className="input" value={newPhotoDescription} onChange={(e) => setNewPhotoDescription(e.target.value)} placeholder="Photo description" />
-                  <label className="label">Date</label>
-                  <input className="input" type="date" value={newPhotoDate} onChange={(e) => setNewPhotoDate(e.target.value)} />
-                  <label className="label" style={{ marginTop: "0.5rem" }}>
-                    <input type="checkbox" checked={newPhotoHeadshot} onChange={(e) => setNewPhotoHeadshot(e.target.checked)} disabled={uploadTarget === "attribute-media"} /> Set as primary headshot
-                  </label>
-                  {pendingUploadPhotoPreviewUrl ? (
-                    <div className="person-upload-preview-card">
-                      {pendingUploadPhotoFile?.type?.startsWith("video/") ? (
-                        <video
-                          src={pendingUploadPhotoPreviewUrl}
-                          className="person-upload-preview-image"
-                          controls
-                          playsInline
-                        />
-                      ) : pendingUploadPhotoFile?.type?.startsWith("audio/") ? (
-                        <audio src={pendingUploadPhotoPreviewUrl} className="person-upload-preview-image" controls />
-                      ) : (
-                        <img
-                          src={pendingUploadPhotoPreviewUrl}
-                          alt="Selected upload preview"
-                          className="person-upload-preview-image"
-                        />
-                      )}
-                      <div className="person-upload-preview-meta">
-                        <strong>{pendingUploadPhotoFile?.name || "Selected photo"}</strong>
-                        <span>This photo will be uploaded with the metadata above.</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-                      No photo selected yet.
-                    </p>
-                  )}
-                  <input
-                    id={`person-photo-upload-${person.personId}`}
-                    type="file"
-                    accept="image/*,video/*,audio/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      e.currentTarget.value = "";
-                      setPendingUploadFromInput(file, "library");
-                    }}
-                  />
-                  <input
-                    id={`person-photo-upload-camera-${person.personId}`}
-                    type="file"
-                    accept="image/*,video/*"
-                    capture="environment"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      e.currentTarget.value = "";
-                      setPendingUploadFromInput(file, "camera");
-                    }}
-                  />
-                  <input
-                    id={`person-photo-upload-audio-${person.personId}`}
-                    type="file"
-                    accept="audio/*"
-                    capture="user"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      e.currentTarget.value = "";
-                      setPendingUploadFromInput(file, "audio-capture");
-                    }}
-                  />
-                  <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={photoBusy}
-                      onClick={() => document.getElementById(`person-photo-upload-${person.personId}`)?.click()}
-                    >
-                      {pendingUploadPhotoFile ? "Choose From Library" : "Choose From Library"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={photoBusy}
-                      onClick={() => document.getElementById(`person-photo-upload-camera-${person.personId}`)?.click()}
-                    >
-                      Camera
-                    </button>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={photoBusy}
-                      onClick={() => document.getElementById(`person-photo-upload-audio-${person.personId}`)?.click()}
-                    >
-                      Audio
-                    </button>
-                    <button
-                      type="button"
-                      className="button tap-button"
-                      disabled={!pendingUploadPhotoFile || photoBusy}
-                      onClick={() => void submitPendingUploadPhoto()}
-                    >
-                      {photoBusy ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={photoBusy}
-                      onClick={() => {
-                        clearPendingUploadPhoto();
-                        setShowPhotoUploadPicker(false);
-                        setUploadTarget("photo");
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
             {largePhotoFileId ? (
               <div
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
