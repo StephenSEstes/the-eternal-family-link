@@ -316,7 +316,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           startDate: selectedPhotoItem.date || "",
           endDate: "",
           visibility: "family",
-          shareScope: "both_families",
+          shareScope: "one_family",
+          shareFamilyGroupKey: tenantKey,
           notes: selectedPhotoItem.description || "",
         }),
       });

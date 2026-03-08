@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Media tab uploads now default person links to active family-group scope (`one_family`), and Media Attach Wizard now supports skip-import plus explicit duplicate decisions with side-by-side comparison and improved per-item layout/labels. See `docs/change-summary.md`.
 - 2026-03-07: Improved Media Library existing-item open speed (instant prefill + lighter background link refresh) and fixed Media Attach Wizard step-state/preview issues (Yes/No selection clarity, stale status clearing, stable item previews). See `docs/change-summary.md`.
 - 2026-03-07: Fixed Media Wizard save failures by setting `entity_type/entity_id` on person attribute inserts (resolving OCI `ORA-01400`) and blocking save when any selected image has no person/household target. See `docs/change-summary.md`.
 - 2026-03-07: Media Attach Wizard now performs checksum duplicate detection for image uploads, shows side-by-side duplicate confirmation (selected vs existing library image), and adds clearer per-item navigation across all selected images. See `docs/change-summary.md`.

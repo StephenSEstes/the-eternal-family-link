@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-07 (media-tab one-family default + wizard skip/duplicate decision UX)
+
+- `Change`: Defaulted Media tab person upload/link operations to family-group scope (`one_family`) and current family-group key, added per-image skip (`Do Not Import`), enlarged selection thumbnails, moved `Caption/Title` and `Date` onto one row, renamed `Notes` to `Story/Notes`, and added explicit duplicate decision workflow (`Duplicate` vs `Not Duplicate`) with side-by-side image comparison.
+- `Type`: UI, API
+- `Why`: Root cause was Media tab person links defaulting to broad share scope and lacking explicit import controls for duplicate candidates. Users needed clear per-item decisions (skip/import/duplicate) with better visual context.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-contracts.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Media-tab person link/create requests persist with `share_scope=one_family` and `share_family_group_key=<active family group>`.
+  - Wizard allows skipping an image and skipped items are not imported.
+  - Duplicate candidates require an explicit decision before save.
+  - Choosing `Duplicate` does not upload a new file and links/details are applied against existing media.
+  - Per-item editor shows larger thumbnails, `Caption/Title + Date` on one row, and `Story/Notes` label.
+- `Rollback Notes`: Revert this commit and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (library item link-load speed + wizard step-state/preview stability)
 
 - `Change`: Optimized Media Library item editor open flow by instant local association prefill plus lightweight background refresh (`includeDrive=0`, lower limit), and fixed wizard step UX issues by clearing stale status on transitions, adding explicit Yes/No selection feedback, and preventing blob preview URLs from being revoked during normal item edits/navigation.

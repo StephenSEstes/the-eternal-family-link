@@ -20,6 +20,8 @@ export type PersonAttributeLinkInput = {
   label: string;
   notes: string;
   startDate: string;
+  shareScope?: "one_family" | "both_families";
+  shareFamilyGroupKey?: string;
 };
 
 export type HouseholdLinkInput = {
@@ -50,6 +52,8 @@ export function buildHouseholdUploadContractFields(input: HouseholdUploadContrac
 }
 
 export function buildPersonAttributeLinkPayload(input: PersonAttributeLinkInput) {
+  const shareScope = input.shareScope === "one_family" ? "one_family" : "both_families";
+  const shareFamilyGroupKey = shareScope === "one_family" ? (input.shareFamilyGroupKey ?? "").trim().toLowerCase() : "";
   return {
     attributeType: input.attributeType,
     valueText: input.valueText,
@@ -60,8 +64,8 @@ export function buildPersonAttributeLinkPayload(input: PersonAttributeLinkInput)
     startDate: input.startDate,
     endDate: "",
     visibility: "family",
-    shareScope: "both_families",
-    shareFamilyGroupKey: "",
+    shareScope,
+    shareFamilyGroupKey,
     notes: input.notes,
   } as const;
 }

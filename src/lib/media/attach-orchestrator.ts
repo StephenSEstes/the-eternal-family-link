@@ -62,6 +62,8 @@ export type MediaAttachDraftItem = {
   existingMediaMetadata?: string;
   duplicateOfFileId?: string;
   duplicateExistingPreviewUrl?: string;
+  duplicateDecision?: "undecided" | "duplicate" | "not_duplicate";
+  skipImport?: boolean;
   title: string;
   description: string;
   date: string;
@@ -107,6 +109,19 @@ type RunPlanInput = {
 
 function norm(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function mediaTabShareDefaults(context: MediaAttachContext) {
+  if (context.source === "library") {
+    return {
+      shareScope: "one_family" as const,
+      shareFamilyGroupKey: context.tenantKey,
+    };
+  }
+  return {
+    shareScope: "both_families" as const,
+    shareFamilyGroupKey: "",
+  };
 }
 
 function inferImageByMetadataOrFileId(fileId: string, mediaMetadata?: string) {
@@ -192,6 +207,9 @@ async function uploadToPerson(input: {
   form.append("photoDate", contract.photoDate);
   form.append("isHeadshot", contract.isHeadshot);
   form.append("attributeType", contract.attributeType);
+  const shareDefaults = mediaTabShareDefaults(input.context);
+  form.append("shareScope", shareDefaults.shareScope);
+  form.append("shareFamilyGroupKey", shareDefaults.shareFamilyGroupKey);
   if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
   if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
   if (input.file.lastModified) form.append("fileCreatedAt", new Date(input.file.lastModified).toISOString());
@@ -262,6 +280,7 @@ async function linkToPerson(input: {
     label: input.title,
     notes: input.description,
     startDate: input.date,
+    ...mediaTabShareDefaults(input.context),
   });
   const res = await fetch(
     `/api/t/${encodeURIComponent(input.context.tenantKey)}/people/${encodeURIComponent(input.personId)}/attributes`,
@@ -365,6 +384,10 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
 
   for (let idx = 0; idx < input.items.length; idx += 1) {
     const item = input.items[idx];
+    if (item.skipImport) {
+      summary.skipped += 1;
+      continue;
+    }
     const { title, description, date } = applySharedAndContextDefaults(input.context, item, input.shared);
     const personIds = Array.from(new Set(item.personIds.map((value) => value.trim()).filter(Boolean)));
     const householdIds = Array.from(new Set(item.householdIds.map((value) => value.trim()).filter(Boolean)));
@@ -377,6 +400,12 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
       let mediaMetadata = item.existingMediaMetadata?.trim() ?? "";
       let uploadedViaPersonId = "";
       let uploadedViaHouseholdId = "";
+
+      if (item.duplicateOfFileId && item.duplicateDecision === "duplicate") {
+        fileId = item.duplicateOfFileId.trim();
+      } else if (item.duplicateOfFileId && item.duplicateDecision === "not_duplicate") {
+        fileId = "";
+      }
 
       if (!fileId) {
         if (!item.file) {

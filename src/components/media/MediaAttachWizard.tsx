@@ -216,6 +216,7 @@ export function MediaAttachWizard({
           existingMediaMetadata: duplicate?.mediaMetadata ?? "",
           duplicateOfFileId: duplicate?.fileId ?? "",
           duplicateExistingPreviewUrl: duplicate?.fileId ? toImagePreviewSrc(context.tenantKey, duplicate.fileId) : "",
+          duplicateDecision: duplicate?.fileId ? "undecided" : undefined,
           title: context.defaultLabel ?? "",
           description: context.defaultDescription ?? "",
           date: context.defaultDate ?? (file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : ""),
@@ -256,6 +257,7 @@ export function MediaAttachWizard({
           personIds: Array.from(new Set([...(context.preselectedPersonIds ?? []), ...match.people.map((person) => person.personId)])),
           householdIds: Array.from(new Set([...(context.preselectedHouseholdIds ?? []), ...match.households.map((household) => household.householdId)])),
           attributeType: "photo",
+          duplicateDecision: undefined,
         });
       }
       return next;
@@ -331,8 +333,17 @@ export function MediaAttachWizard({
       setStatus("Select at least one image.");
       return;
     }
+    const undecidedDuplicateIndex = items.findIndex(
+      (item) => !item.skipImport && item.duplicateOfFileId && item.duplicateDecision !== "duplicate" && item.duplicateDecision !== "not_duplicate",
+    );
+    if (undecidedDuplicateIndex >= 0) {
+      setPerItemIndex(undecidedDuplicateIndex);
+      setStep("per_item");
+      setStatus("Choose Duplicate or Not Duplicate for each duplicate candidate before save.");
+      return;
+    }
     const firstMissingTargetIndex = items.findIndex(
-      (item) => item.personIds.length === 0 && item.householdIds.length === 0,
+      (item) => !item.skipImport && item.personIds.length === 0 && item.householdIds.length === 0,
     );
     if (firstMissingTargetIndex >= 0) {
       setPerItemIndex(firstMissingTargetIndex);
@@ -457,7 +468,7 @@ export function MediaAttachWizard({
             {items.map((item) => (
               <div key={item.clientId} style={{ display: "grid", gap: "0.25rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  {item.previewUrl ? <img src={item.previewUrl} alt="" style={{ width: "34px", height: "34px", objectFit: "cover", borderRadius: "6px" }} /> : null}
+                  {item.previewUrl ? <img src={item.previewUrl} alt="" style={{ width: "72px", height: "72px", objectFit: "cover", borderRadius: "8px" }} /> : null}
                   <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Image"}</span>
                 </div>
                 {item.duplicateOfFileId ? (
@@ -582,11 +593,24 @@ export function MediaAttachWizard({
       {selectedItem.previewUrl ? (
         <img src={selectedItem.previewUrl} alt="Selected image" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "#f3f4f6", borderRadius: "10px" }} />
       ) : null}
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className={`button ${selectedItem.skipImport ? "secondary" : "tap-button"}`}
+          onClick={() =>
+            setItems((current) =>
+              current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, skipImport: !item.skipImport } : item)),
+            )
+          }
+        >
+          {selectedItem.skipImport ? "Unskip Image" : "Skip Image (Do Not Import)"}
+        </button>
+      </div>
       {selectedItem.duplicateOfFileId && selectedItem.duplicateExistingPreviewUrl ? (
         <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
           <strong>Duplicate confirmed</strong>
           <span style={{ fontSize: "0.9rem" }}>
-            This selected image matches existing library file <code>{selectedItem.duplicateOfFileId}</code>. It will not upload again.
+            This selected image may match existing library file <code>{selectedItem.duplicateOfFileId}</code>.
           </span>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
             <div style={{ display: "grid", gap: "0.25rem" }}>
@@ -598,19 +622,65 @@ export function MediaAttachWizard({
               <img src={selectedItem.duplicateExistingPreviewUrl} alt="Existing library duplicate preview" style={{ width: "100%", maxHeight: "170px", objectFit: "contain", background: "#f3f4f6", borderRadius: "8px" }} />
             </div>
           </div>
-          <span style={{ fontSize: "0.85rem" }}>You can still edit metadata/links below; save will only create links/details.</span>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className={`button tap-button ${selectedItem.duplicateDecision === "duplicate" ? "active" : ""}`}
+              onClick={() =>
+                setItems((current) =>
+                  current.map((item) =>
+                    item.clientId === selectedItem.clientId ? { ...item, duplicateDecision: "duplicate", skipImport: false } : item,
+                  ),
+                )
+              }
+            >
+              Duplicate (Do Not Import)
+            </button>
+            <button
+              type="button"
+              className={`button secondary tap-button ${selectedItem.duplicateDecision === "not_duplicate" ? "active" : ""}`}
+              onClick={() =>
+                setItems((current) =>
+                  current.map((item) =>
+                    item.clientId === selectedItem.clientId ? { ...item, duplicateDecision: "not_duplicate" } : item,
+                  ),
+                )
+              }
+            >
+              Not Duplicate (Import)
+            </button>
+          </div>
+          {selectedItem.duplicateDecision ? (
+            <span className="status-chip status-chip--neutral" style={{ width: "fit-content" }}>
+              Decision: {selectedItem.duplicateDecision === "duplicate" ? "Do Not Import Duplicate" : "Import as New"}
+            </span>
+          ) : null}
+          <span style={{ fontSize: "0.85rem" }}>You can still edit metadata/links below.</span>
         </div>
       ) : null}
-      <label style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={{ fontWeight: 600 }}>Caption/Title</span>
-        <input
-          className="input"
-          value={selectedItem.title}
-          onChange={(event) =>
-            setItems((current) => current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, title: event.target.value } : item)))
-          }
-        />
-      </label>
+      <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "minmax(0, 1.8fr) minmax(0, 1fr)" }}>
+        <label style={{ display: "grid", gap: "0.35rem" }}>
+          <span style={{ fontWeight: 600 }}>Caption/Title</span>
+          <input
+            className="input"
+            value={selectedItem.title}
+            onChange={(event) =>
+              setItems((current) => current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, title: event.target.value } : item)))
+            }
+          />
+        </label>
+        <label style={{ display: "grid", gap: "0.35rem" }}>
+          <span style={{ fontWeight: 600 }}>Date</span>
+          <input
+            className="input"
+            type="date"
+            value={selectedItem.date}
+            onChange={(event) =>
+              setItems((current) => current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, date: event.target.value } : item)))
+            }
+          />
+        </label>
+      </div>
       <label style={{ display: "grid", gap: "0.35rem" }}>
         <span style={{ fontWeight: 600 }}>Description</span>
         <input
@@ -622,18 +692,7 @@ export function MediaAttachWizard({
         />
       </label>
       <label style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={{ fontWeight: 600 }}>Date</span>
-        <input
-          className="input"
-          type="date"
-          value={selectedItem.date}
-          onChange={(event) =>
-            setItems((current) => current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, date: event.target.value } : item)))
-          }
-        />
-      </label>
-      <label style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={{ fontWeight: 600 }}>Notes</span>
+        <span style={{ fontWeight: 600 }}>Story/Notes</span>
         <textarea
           className="input"
           rows={2}
@@ -716,7 +775,8 @@ export function MediaAttachWizard({
               <span>Date: {item.date || "-"}</span>
               <span style={{ marginLeft: "0.65rem" }}>People: {item.personIds.length}</span>
               <span style={{ marginLeft: "0.65rem" }}>Households: {item.householdIds.length}</span>
-              {item.duplicateOfFileId ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: yes (link-only)</span> : null}
+              {item.duplicateDecision === "duplicate" ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: yes (link-only)</span> : null}
+              {item.skipImport ? <span style={{ marginLeft: "0.65rem" }}>Skipped: yes</span> : null}
             </div>
           </div>
         ))}

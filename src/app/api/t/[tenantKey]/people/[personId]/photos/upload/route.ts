@@ -37,6 +37,11 @@ function isOciDataSource() {
   return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
+function normalizeShareScope(raw: string) {
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "one_family" || normalized === "single_family" ? "one_family" : "both_families";
+}
+
 export async function POST(request: Request, { params }: UploadRouteProps) {
   try {
     const { tenantKey, personId } = await params;
@@ -76,6 +81,13 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
     const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
+    const requestedShareScope = normalizeShareScope(String(formData?.get("shareScope") ?? ""));
+    const requestedShareFamilyGroupKey = String(formData?.get("shareFamilyGroupKey") ?? "").trim().toLowerCase();
+    const shareScope = requestedShareScope;
+    const shareFamilyGroupKey =
+      shareScope === "one_family"
+        ? (requestedShareFamilyGroupKey || resolved.tenant.tenantKey)
+        : "";
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
     const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
@@ -154,8 +166,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
           start_date: effectivePhotoDate,
           end_date: "",
           visibility: "family",
-          share_scope: "both_families",
-          share_family_group_key: "",
+          share_scope: shareScope,
+          share_family_group_key: shareFamilyGroupKey,
           notes: description,
         },
         resolved.tenant.tenantKey,
