@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
+import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 
 type HouseholdSummary = {
@@ -249,6 +250,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [pendingUploadPhotoPreviewUrl, setPendingUploadPhotoPreviewUrl] = useState("");
   const [pendingUploadCaptureSource, setPendingUploadCaptureSource] = useState("library");
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
+  const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
   const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
@@ -433,6 +435,17 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setNewPhotoPrimary(false);
     setStatus("Photo linked.");
     setUploadingPhoto(false);
+    await refresh();
+    onSaved();
+  };
+
+  const handleWizardComplete = async (summary: {
+    createdLinks: number;
+    createdAttributes: number;
+    skipped: number;
+    failures: Array<{ message: string }>;
+  }) => {
+    setStatus(formatMediaAttachUserSummary(summary));
     await refresh();
     onSaved();
   };
@@ -1086,7 +1099,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                   <div className="person-photo-gallery-toolbar">
                     <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Gallery</h4>
                     <div className="person-photo-gallery-actions">
-                      <button type="button" className="button tap-button" onClick={() => setShowPhotoUploadPicker(true)}>
+                      <button type="button" className="button tap-button" onClick={() => setShowMediaAttachWizard(true)}>
                         + Add Photo
                       </button>
                     </div>
@@ -1436,6 +1449,34 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     </div>
                   </div>
                 ) : null}
+
+                <MediaAttachWizard
+                  open={showMediaAttachWizard}
+                  context={{
+                    tenantKey,
+                    source: "household",
+                    canManage: true,
+                    allowHouseholdLinks: true,
+                    householdId,
+                    entityType: "household",
+                    defaultAttributeType: "photo",
+                    defaultLabel: "photo",
+                    preselectedHouseholdIds: [householdId],
+                    peopleOptions: availablePeople.map((item) => ({
+                      personId: item.personId,
+                      displayName: item.displayName,
+                      gender: item.gender ?? "unspecified",
+                    })),
+                    householdOptions: availableHouseholds.map((item) => ({
+                      householdId: item.householdId,
+                      label: item.label,
+                    })),
+                  }}
+                  onClose={() => setShowMediaAttachWizard(false)}
+                  onComplete={(summary) => {
+                    void handleWizardComplete(summary);
+                  }}
+                />
                 {largePhotoFileId ? (
                   <div
                     style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}

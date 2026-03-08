@@ -72,6 +72,10 @@ export function MediaAttachWizard({
   const previewUrlsRef = useRef<Set<string>>(new Set());
 
   const selectedItem = items[perItemIndex] ?? null;
+  const availableSources: SourceChoice[] =
+    context.source === "attribute"
+      ? ["device_upload", "camera_capture"]
+      : ["device_upload", "camera_capture", "library_existing"];
   const tagSearchResults = useMemo(() => {
     const query = tagQuery.trim().toLowerCase();
     if (!query || !selectedItem) return [] as LinkedSearchResult[];
@@ -196,8 +200,11 @@ export function MediaAttachWizard({
       setStatus("Only image files are supported in this MVP.");
       return;
     }
-    setStatus("Checking for duplicates...");
-    const duplicateMatches = await scanForDuplicates(incoming);
+    const shouldScanDuplicates = context.source !== "attribute";
+    if (shouldScanDuplicates) {
+      setStatus("Checking for duplicates...");
+    }
+    const duplicateMatches = shouldScanDuplicates ? await scanForDuplicates(incoming) : new Map<string, MediaAttachLibraryItem>();
     setItems((current) => {
       const seen = new Set(current.filter((item) => item.file).map((item) => fileKey(item.file!)));
       const next = [...current];
@@ -333,14 +340,16 @@ export function MediaAttachWizard({
       setStatus("Select at least one image.");
       return;
     }
-    const undecidedDuplicateIndex = items.findIndex(
-      (item) => !item.skipImport && item.duplicateOfFileId && item.duplicateDecision !== "duplicate" && item.duplicateDecision !== "not_duplicate",
-    );
-    if (undecidedDuplicateIndex >= 0) {
-      setPerItemIndex(undecidedDuplicateIndex);
-      setStep("per_item");
-      setStatus("Choose Duplicate or Not Duplicate for each duplicate candidate before save.");
-      return;
+    if (context.source !== "attribute") {
+      const undecidedDuplicateIndex = items.findIndex(
+        (item) => !item.skipImport && item.duplicateOfFileId && item.duplicateDecision !== "duplicate" && item.duplicateDecision !== "not_duplicate",
+      );
+      if (undecidedDuplicateIndex >= 0) {
+        setPerItemIndex(undecidedDuplicateIndex);
+        setStep("per_item");
+        setStatus("Choose Duplicate or Not Duplicate for each duplicate candidate before save.");
+        return;
+      }
     }
     const firstMissingTargetIndex = items.findIndex(
       (item) => !item.skipImport && item.personIds.length === 0 && item.householdIds.length === 0,
@@ -383,9 +392,15 @@ export function MediaAttachWizard({
     <div style={{ display: "grid", gap: "0.75rem" }}>
       <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Choose Source</h4>
       <div className="settings-chip-list">
-        <button type="button" className={`tab-pill ${sourceChoice === "device_upload" ? "active" : ""}`} onClick={() => setSourceChoice("device_upload")}>Device Upload</button>
-        <button type="button" className={`tab-pill ${sourceChoice === "camera_capture" ? "active" : ""}`} onClick={() => setSourceChoice("camera_capture")}>Camera Capture</button>
-        <button type="button" className={`tab-pill ${sourceChoice === "library_existing" ? "active" : ""}`} onClick={() => setSourceChoice("library_existing")}>Media Library</button>
+        {availableSources.includes("device_upload") ? (
+          <button type="button" className={`tab-pill ${sourceChoice === "device_upload" ? "active" : ""}`} onClick={() => setSourceChoice("device_upload")}>Device Upload</button>
+        ) : null}
+        {availableSources.includes("camera_capture") ? (
+          <button type="button" className={`tab-pill ${sourceChoice === "camera_capture" ? "active" : ""}`} onClick={() => setSourceChoice("camera_capture")}>Camera Capture</button>
+        ) : null}
+        {availableSources.includes("library_existing") ? (
+          <button type="button" className={`tab-pill ${sourceChoice === "library_existing" ? "active" : ""}`} onClick={() => setSourceChoice("library_existing")}>Media Library</button>
+        ) : null}
       </div>
       <button type="button" className="button tap-button" onClick={() => setStep("select")}>Continue</button>
     </div>

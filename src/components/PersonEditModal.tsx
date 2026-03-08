@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
+import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 
@@ -674,6 +675,7 @@ export function PersonEditModal({
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
   const [showPhotoLibraryPicker, setShowPhotoLibraryPicker] = useState(false);
+  const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [showPhotoUploadPicker, setShowPhotoUploadPicker] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<"photo" | "attribute-media">("photo");
   const [showAddSpouse, setShowAddSpouse] = useState(false);
@@ -1569,6 +1571,18 @@ export function PersonEditModal({
     }
   };
 
+  const handleWizardComplete = async (summary: {
+    createdLinks: number;
+    createdAttributes: number;
+    skipped: number;
+    failures: Array<{ message: string }>;
+  }) => {
+    if (!person) return;
+    setStatus(formatMediaAttachUserSummary(summary));
+    await loadAttributes(person.personId);
+    onSaved();
+  };
+
   if (!open || !person) {
     return null;
   }
@@ -2255,8 +2269,7 @@ export function PersonEditModal({
                       type="button"
                       className="button tap-button"
                       onClick={() => {
-                        setUploadTarget("photo");
-                        setShowPhotoUploadPicker(true);
+                        setShowMediaAttachWizard(true);
                       }}
                     >
                       + Add Photo
@@ -2385,6 +2398,36 @@ export function PersonEditModal({
                   />
                 </div>
               </div>
+            ) : null}
+
+            {person ? (
+              <MediaAttachWizard
+                open={showMediaAttachWizard}
+                context={{
+                  tenantKey: activeTenantKey,
+                  source: "person",
+                  canManage,
+                  allowHouseholdLinks: canManage,
+                  personId: person.personId,
+                  entityType: "person",
+                  defaultAttributeType: "photo",
+                  defaultLabel: "photo",
+                  preselectedPersonIds: [person.personId],
+                  peopleOptions: personOptions.map((item) => ({
+                    personId: item.personId,
+                    displayName: item.displayName,
+                    gender: item.gender ?? "unspecified",
+                  })),
+                  householdOptions: availableHouseholdLinks.map((item) => ({
+                    householdId: item.householdId,
+                    label: item.label,
+                  })),
+                }}
+                onClose={() => setShowMediaAttachWizard(false)}
+                onComplete={(summary) => {
+                  void handleWizardComplete(summary);
+                }}
+              />
             ) : null}
 
             {showPhotoLibraryPicker ? (

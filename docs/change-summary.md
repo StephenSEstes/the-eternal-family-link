@@ -2551,3 +2551,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Children tab shows gender/headshot avatars and opens person editor on selection.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (shared media wizard rollout to person/household/attribute launch points)
+
+- `Change`: Rolled out the shared image-only `MediaAttachWizard` beyond Media Library into `PersonEditModal`, `HouseholdEditModal`, and `AttributesModal`, all using one shared launch-context contract via orchestrator wiring.
+- `Type`: UI, Orchestration
+- `Why`: Remove duplicated attach UX across screens while preserving existing backend contracts and centralizing attach/link behavior in the shared orchestrator.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: No.
+- `Verify`:
+  - Person, Household, and Attributes launch points now open the shared wizard shell.
+  - Wizard context defaults are prefilled from launch source while continuing to use existing media endpoints/contracts.
+  - Attribute-context flow preserves person-link semantics and avoids unsupported existing-library attach path for MVP.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

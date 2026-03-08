@@ -210,6 +210,9 @@ async function uploadToPerson(input: {
   const shareDefaults = mediaTabShareDefaults(input.context);
   form.append("shareScope", shareDefaults.shareScope);
   form.append("shareFamilyGroupKey", shareDefaults.shareFamilyGroupKey);
+  if (input.context.attributeId?.trim()) {
+    form.append("attributeId", input.context.attributeId.trim());
+  }
   if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
   if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
   if (input.file.lastModified) form.append("fileCreatedAt", new Date(input.file.lastModified).toISOString());
@@ -247,6 +250,9 @@ async function uploadToHousehold(input: {
   form.append("description", contract.description);
   form.append("photoDate", contract.photoDate);
   form.append("isPrimary", contract.isPrimary);
+  if (input.context.attributeId?.trim()) {
+    form.append("attributeId", input.context.attributeId.trim());
+  }
   if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
   if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
   if (input.file.lastModified) form.append("fileCreatedAt", new Date(input.file.lastModified).toISOString());

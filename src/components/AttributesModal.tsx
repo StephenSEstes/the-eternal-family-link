@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { AttributeCategory, AttributeEntityType } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
+import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 
 type AttributeMedia = {
   linkId: string;
@@ -402,6 +403,7 @@ export function AttributesModal({
   const [captureSource, setCaptureSource] = useState("library");
   const [showAddMediaMenu, setShowAddMediaMenu] = useState(false);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryResults, setLibraryResults] = useState<LibraryMediaItem[]>([]);
@@ -882,6 +884,17 @@ export function AttributesModal({
     }
   };
 
+  const handleWizardComplete = async (summary: {
+    createdLinks: number;
+    createdAttributes: number;
+    skipped: number;
+    failures: Array<{ message: string }>;
+  }) => {
+    setStatus(formatMediaAttachUserSummary(summary));
+    await refresh();
+    onSaved();
+  };
+
   const openAddModal = () => {
     resetEditor();
     const normalizedInitialType = initialTypeKey ? normalizeTypeKey(initialTypeKey) : "";
@@ -1283,7 +1296,7 @@ export function AttributesModal({
                   }}
                 />
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem", alignItems: "center" }}>
-                  <button type="button" className="button secondary tap-button" onClick={() => setShowAddMediaMenu((prev) => !prev)}>
+                  <button type="button" className="button secondary tap-button" onClick={() => setShowMediaAttachWizard(true)}>
                     Add Media
                   </button>
                   <button type="button" className="button tap-button" disabled={!pendingFile || busy} onClick={() => void uploadAttachment()}>
@@ -1361,6 +1374,29 @@ export function AttributesModal({
                     </div>
                   </div>
                 ) : null}
+                <MediaAttachWizard
+                  open={showMediaAttachWizard}
+                  context={{
+                    tenantKey,
+                    source: "attribute",
+                    canManage: true,
+                    allowHouseholdLinks: entityType === "household",
+                    attributeId: selectedItem.attributeId,
+                    entityType: "attribute",
+                    personId: entityType === "person" ? entityId : "",
+                    householdId: entityType === "household" ? entityId : "",
+                    defaultAttributeType: "media",
+                    defaultLabel: selectedItem.label || "media",
+                    defaultDescription: selectedItem.attributeNotes || selectedItem.notes || "",
+                    defaultDate: selectedItem.attributeDate || selectedItem.dateStart || "",
+                    preselectedPersonIds: entityType === "person" ? [entityId] : [],
+                    preselectedHouseholdIds: entityType === "household" ? [entityId] : [],
+                  }}
+                  onClose={() => setShowMediaAttachWizard(false)}
+                  onComplete={(summary) => {
+                    void handleWizardComplete(summary);
+                  }}
+                />
               </div>
               {!drawerEditMode ? (
                 <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.45rem" }}>
