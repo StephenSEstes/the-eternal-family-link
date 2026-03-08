@@ -6,6 +6,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { AttributeCategory, AttributeEntityType } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
 type AttributeMedia = {
   linkId: string;
@@ -685,12 +686,7 @@ export function AttributesModal({
     onSaved();
   };
 
-  const handleWizardComplete = async (summary: {
-    createdLinks: number;
-    createdAttributes: number;
-    skipped: number;
-    failures: Array<{ message: string }>;
-  }) => {
+  const handleWizardComplete = async (summary: MediaAttachExecutionSummary) => {
     setStatus(formatMediaAttachUserSummary(summary));
     await refresh();
     onSaved();

@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
+import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
 type HouseholdSummary = {
   householdId: string;
@@ -318,12 +319,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     }
   };
 
-  const handleWizardComplete = async (summary: {
-    createdLinks: number;
-    createdAttributes: number;
-    skipped: number;
-    failures: Array<{ message: string }>;
-  }) => {
+  const handleWizardComplete = async (summary: MediaAttachExecutionSummary) => {
     setStatus(formatMediaAttachUserSummary(summary));
     await refresh();
     onSaved();

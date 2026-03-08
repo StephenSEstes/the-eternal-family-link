@@ -2587,3 +2587,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Save path avoids `/photos/search` association fetch when an item has no additional links beyond its upload target.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-07 (build fix: wizard summary callback typing)
+
+- `Change`: Updated modal wizard completion handlers to use shared `MediaAttachExecutionSummary` type instead of local narrowed `{ message }` failure shape.
+- `Type`: Build fix, Typing
+- `Why`: Vercel type-check failed because `formatMediaAttachUserSummary` requires failure entries with `clientId` via `MediaAttachExecutionSummary`.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Prior compile error at `AttributesModal.tsx` summary formatting call is resolved.
+  - Type-check now proceeds past this failure point.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-07: Fixed deploy-blocking wizard summary callback typing by standardizing on `MediaAttachExecutionSummary` in Person/Household/Attributes modal handlers. See `docs/change-summary.md`.
 - 2026-03-07: Completed wizard parity cleanup (Person/Household/Attributes now shared wizard-only) and optimized media attach performance with cached duplicate checksum catalog/file hashes plus reduced unnecessary association lookups on save. See `docs/change-summary.md`.
 - 2026-03-07: Rolled out the shared image-only Media Attach Wizard into Person, Household, and Attributes launch points using the central attach orchestrator/context contract while preserving existing backend/media-link contracts. See `docs/change-summary.md`.
 - 2026-03-07: Media tab uploads now default person links to active family-group scope (`one_family`), and Media Attach Wizard now supports skip-import plus explicit duplicate decisions with side-by-side comparison and improved per-item layout/labels. See `docs/change-summary.md`.
