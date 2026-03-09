@@ -62,7 +62,7 @@ export type MediaAttachDraftItem = {
   existingMediaMetadata?: string;
   duplicateOfFileId?: string;
   duplicateExistingPreviewUrl?: string;
-  duplicateDecision?: "undecided" | "duplicate" | "not_duplicate";
+  duplicateDecision?: "undecided" | "duplicate" | "not_duplicate" | "replace_existing";
   skipImport?: boolean;
   title: string;
   description: string;
@@ -345,6 +345,36 @@ async function loadAssociationsByFileId(tenantKey: string, fileId: string): Prom
   };
 }
 
+async function unlinkDuplicateFromPerson(tenantKey: string, personId: string, duplicateFileId: string) {
+  const attrsRes = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`, {
+    cache: "no-store",
+  });
+  await assertOk(attrsRes, `Failed to load person attributes for duplicate replace (${personId})`);
+  const attrsBody = await attrsRes.json().catch(() => null);
+  const attrs = Array.isArray(attrsBody?.attributes)
+    ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
+    : [];
+  const matches = attrs.filter((item) => {
+    const type = item.attributeType.trim().toLowerCase();
+    return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === duplicateFileId;
+  });
+  for (const match of matches) {
+    const delRes = await fetch(
+      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
+      { method: "DELETE" },
+    );
+    await assertOk(delRes, `Failed to remove duplicate person link (${personId})`);
+  }
+}
+
+async function unlinkDuplicateFromHousehold(tenantKey: string, householdId: string, duplicateFileId: string) {
+  const res = await fetch(
+    `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(duplicateFileId)}`,
+    { method: "DELETE" },
+  );
+  await assertOk(res, `Failed to remove duplicate household link (${householdId})`);
+}
+
 function applySharedAndContextDefaults(
   context: MediaAttachContext,
   item: MediaAttachDraftItem,
@@ -411,7 +441,10 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
 
       if (item.duplicateOfFileId && item.duplicateDecision === "duplicate") {
         fileId = item.duplicateOfFileId.trim();
-      } else if (item.duplicateOfFileId && item.duplicateDecision === "not_duplicate") {
+      } else if (
+        item.duplicateOfFileId &&
+        (item.duplicateDecision === "not_duplicate" || item.duplicateDecision === "replace_existing")
+      ) {
         fileId = "";
       }
 
@@ -460,6 +493,38 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
             targetType: "upload",
           });
           continue;
+        }
+      }
+
+      if (item.duplicateOfFileId && item.duplicateDecision === "replace_existing") {
+        const duplicateFileId = item.duplicateOfFileId.trim();
+        if (duplicateFileId && duplicateFileId !== fileId) {
+          for (const personId of personIds) {
+            try {
+              await unlinkDuplicateFromPerson(input.context.tenantKey, personId, duplicateFileId);
+            } catch (error) {
+              summary.failures.push({
+                clientId: item.clientId,
+                message: error instanceof Error ? error.message : "Failed to replace duplicate person link.",
+                targetType: "person",
+                targetId: personId,
+              });
+            }
+          }
+          if (input.context.allowHouseholdLinks) {
+            for (const householdId of householdIds) {
+              try {
+                await unlinkDuplicateFromHousehold(input.context.tenantKey, householdId, duplicateFileId);
+              } catch (error) {
+                summary.failures.push({
+                  clientId: item.clientId,
+                  message: error instanceof Error ? error.message : "Failed to replace duplicate household link.",
+                  targetType: "household",
+                  targetId: householdId,
+                });
+              }
+            }
+          }
         }
       }
 

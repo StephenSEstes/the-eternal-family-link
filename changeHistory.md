@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-09: Expanded duplicate wizard decisions (skip/import/overwrite existing), removed redundant duplicate preview, and added shared metadata link targeting that applies people/households to all selected items. See `docs/change-summary.md`.
 - 2026-03-09: Cleaned duplicate wizard UX by removing redundant Skip action for duplicate-flagged items and adding direct Save on final per-item step. See `docs/change-summary.md`.
 - 2026-03-09: Fixed Media Attach duplicate detection gaps by adding legacy metadata fingerprint fallback and writing checksum SHA-256 for new person/household uploads, restoring side-by-side duplicate decision prompts. See `docs/change-summary.md`.
 - 2026-03-09: Fixed media wizard ORA-01400 person-upload failures by adding required `entity_type/entity_id` on person photo attribute inserts, and defaulted Media tab wizard link targets from current linked-filter selection. See `docs/change-summary.md`.

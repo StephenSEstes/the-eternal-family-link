@@ -45,7 +45,8 @@ function validateDraftItem(context: MediaAttachContext, item: MediaAttachDraftIt
     context.source !== "attribute" &&
     item.duplicateOfFileId &&
     item.duplicateDecision !== "duplicate" &&
-    item.duplicateDecision !== "not_duplicate"
+    item.duplicateDecision !== "not_duplicate" &&
+    item.duplicateDecision !== "replace_existing"
   ) {
     errors.push("Choose Duplicate or Not Duplicate.");
   }
@@ -79,6 +80,9 @@ export function MediaAttachWizard({
   const [sharedDescription, setSharedDescription] = useState(context.defaultDescription ?? "");
   const [sharedDate, setSharedDate] = useState(context.defaultDate ?? "");
   const [sharedNotes, setSharedNotes] = useState("");
+  const [sharedPersonIds, setSharedPersonIds] = useState<string[]>(context.preselectedPersonIds ?? []);
+  const [sharedHouseholdIds, setSharedHouseholdIds] = useState<string[]>(context.preselectedHouseholdIds ?? []);
+  const [sharedTagQuery, setSharedTagQuery] = useState("");
   const [perItemIndex, setPerItemIndex] = useState(0);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -124,6 +128,32 @@ export function MediaAttachWizard({
       : [];
     return [...personResults, ...householdResults].slice(0, 15);
   }, [context.allowHouseholdLinks, householdOptions, peopleOptions, selectedItem, tagQuery]);
+  const sharedTagSearchResults = useMemo(() => {
+    const query = sharedTagQuery.trim().toLowerCase();
+    if (!query) return [] as LinkedSearchResult[];
+    const selectedPeopleSet = new Set(sharedPersonIds);
+    const selectedHouseholdsSet = new Set(sharedHouseholdIds);
+    const personResults: LinkedSearchResult[] = peopleOptions
+      .filter((item) => item.displayName.toLowerCase().includes(query) && !selectedPeopleSet.has(item.personId))
+      .map((item) => ({
+        kind: "person",
+        key: `shared-person-${item.personId}`,
+        displayName: item.displayName,
+        personId: item.personId,
+        gender: item.gender ?? "unspecified",
+      }));
+    const householdResults: LinkedSearchResult[] = context.allowHouseholdLinks
+      ? householdOptions
+          .filter((item) => item.label.toLowerCase().includes(query) && !selectedHouseholdsSet.has(item.householdId))
+          .map((item) => ({
+            kind: "household",
+            key: `shared-household-${item.householdId}`,
+            displayName: item.label,
+            householdId: item.householdId,
+          }))
+      : [];
+    return [...personResults, ...householdResults].slice(0, 15);
+  }, [context.allowHouseholdLinks, householdOptions, peopleOptions, sharedHouseholdIds, sharedPersonIds, sharedTagQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +165,9 @@ export function MediaAttachWizard({
     setSharedDescription(context.defaultDescription ?? "");
     setSharedDate(context.defaultDate ?? "");
     setSharedNotes("");
+    setSharedPersonIds(context.preselectedPersonIds ?? []);
+    setSharedHouseholdIds(context.preselectedHouseholdIds ?? []);
+    setSharedTagQuery("");
     setPerItemIndex(0);
     setStatus("");
     setBusy(false);
@@ -428,6 +461,17 @@ export function MediaAttachWizard({
     );
   };
 
+  const applySharedTagCandidate = (candidate: LinkedSearchResult) => {
+    setSharedTagQuery("");
+    if (candidate.kind === "person") {
+      setSharedPersonIds((current) => (current.includes(candidate.personId) ? current : [...current, candidate.personId]));
+      return;
+    }
+    setSharedHouseholdIds((current) =>
+      current.includes(candidate.householdId) ? current : [...current, candidate.householdId],
+    );
+  };
+
   const saveAll = async () => {
     if (items.length === 0) {
       setStatus("Select at least one image.");
@@ -663,9 +707,66 @@ export function MediaAttachWizard({
         <span style={{ fontWeight: 600 }}>Notes</span>
         <textarea className="input" rows={3} value={sharedNotes} onChange={(event) => setSharedNotes(event.target.value)} />
       </label>
+      <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
+        <strong>Apply Link Targets To All Items</strong>
+        <label style={{ display: "grid", gap: "0.35rem" }}>
+          <span style={{ fontWeight: 600 }}>Search People/Households</span>
+          <input className="input" value={sharedTagQuery} onChange={(event) => setSharedTagQuery(event.target.value)} placeholder="Search links for all items" />
+        </label>
+        {sharedTagQuery.trim() ? (
+          <div className="person-typeahead-list">
+            {sharedTagSearchResults.length > 0 ? (
+              sharedTagSearchResults.map((entry) => (
+                <button key={entry.key} type="button" className="person-typeahead-item" onClick={() => applySharedTagCandidate(entry)}>
+                  {entry.displayName}
+                </button>
+              ))
+            ) : (
+              <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
+            )}
+          </div>
+        ) : null}
+        <div className="person-chip-row">
+          {sharedPersonIds.map((personId) => {
+            const person = peopleOptions.find((option) => option.personId === personId);
+            return (
+              <span key={`shared-person-${personId}`} className="person-linked-row">
+                <span className="person-linked-main">{person?.displayName || personId}</span>
+                <button type="button" className="person-chip-remove" onClick={() => setSharedPersonIds((current) => current.filter((id) => id !== personId))}>x</button>
+              </span>
+            );
+          })}
+          {sharedHouseholdIds.map((householdId) => {
+            const household = householdOptions.find((option) => option.householdId === householdId);
+            return (
+              <span key={`shared-household-${householdId}`} className="person-linked-row">
+                <span className="person-linked-main">{household?.label || householdId}</span>
+                <button type="button" className="person-chip-remove" onClick={() => setSharedHouseholdIds((current) => current.filter((id) => id !== householdId))}>x</button>
+              </span>
+            );
+          })}
+        </div>
+      </div>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <button type="button" className="button secondary tap-button" onClick={() => { setStatus(""); setStep("grouping"); }}>Back</button>
-        <button type="button" className="button tap-button" onClick={() => { setStatus(""); setPerItemIndex(0); setStep("per_item"); }}>Continue</button>
+        <button
+          type="button"
+          className="button tap-button"
+          onClick={() => {
+            setStatus("");
+            setItems((current) =>
+              current.map((item) => ({
+                ...item,
+                personIds: Array.from(new Set([...item.personIds, ...sharedPersonIds])),
+                householdIds: Array.from(new Set([...item.householdIds, ...sharedHouseholdIds])),
+              })),
+            );
+            setPerItemIndex(0);
+            setStep("per_item");
+          }}
+        >
+          Continue
+        </button>
       </div>
     </div>
   );
@@ -687,7 +788,7 @@ export function MediaAttachWizard({
           ))}
         </div>
       ) : null}
-      {selectedItem.previewUrl ? (
+      {selectedItem.previewUrl && !selectedItem.duplicateOfFileId ? (
         <img src={selectedItem.previewUrl} alt="Selected image" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "#f3f4f6", borderRadius: "10px" }} />
       ) : null}
       {!selectedItem.duplicateOfFileId ? (
@@ -733,7 +834,7 @@ export function MediaAttachWizard({
                 )
               }
             >
-              Duplicate (Do Not Import)
+              Duplicate (Skip Import)
             </button>
             <button
               type="button"
@@ -746,12 +847,29 @@ export function MediaAttachWizard({
                 )
               }
             >
-              Not Duplicate (Import)
+              Not A Duplicate (Import)
+            </button>
+            <button
+              type="button"
+              className={`button secondary tap-button ${selectedItem.duplicateDecision === "replace_existing" ? "active" : ""}`}
+              onClick={() =>
+                setItems((current) =>
+                  current.map((item) =>
+                    item.clientId === selectedItem.clientId ? { ...item, duplicateDecision: "replace_existing" } : item,
+                  ),
+                )
+              }
+            >
+              New Image Is Better (Overwrite Existing)
             </button>
           </div>
           {selectedItem.duplicateDecision ? (
             <span className="status-chip status-chip--neutral" style={{ width: "fit-content" }}>
-              Decision: {selectedItem.duplicateDecision === "duplicate" ? "Do Not Import Duplicate" : "Import as New"}
+              Decision: {selectedItem.duplicateDecision === "duplicate"
+                ? "Skip Import (Use Existing)"
+                : selectedItem.duplicateDecision === "replace_existing"
+                  ? "Overwrite Existing"
+                  : "Import As New"}
             </span>
           ) : null}
           <span style={{ fontSize: "0.85rem" }}>You can still edit metadata/links below.</span>
@@ -920,6 +1038,7 @@ export function MediaAttachWizard({
               <span style={{ marginLeft: "0.65rem" }}>People: {item.personIds.length}</span>
               <span style={{ marginLeft: "0.65rem" }}>Households: {item.householdIds.length}</span>
               {item.duplicateDecision === "duplicate" ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: yes (link-only)</span> : null}
+              {item.duplicateDecision === "replace_existing" ? <span style={{ marginLeft: "0.65rem" }}>Duplicate: overwrite existing</span> : null}
               {item.skipImport ? <span style={{ marginLeft: "0.65rem" }}>Skipped: yes</span> : null}
             </div>
             {errors.length > 0 ? (

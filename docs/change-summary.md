@@ -2658,3 +2658,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Final per-item screen provides both Review and Save actions.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (duplicate decision expansion + shared-link targets for bulk metadata)
+
+- `Change`: Extended duplicate actions to include `Duplicate (Skip Import)`, `Not A Duplicate (Import)`, and `New Image Is Better (Overwrite Existing)`; removed redundant top duplicate preview image; added shared people/household link targeting in Shared Metadata step and apply-to-all behavior.
+- `Type`: UX, Orchestration
+- `Why`: Duplicate flow needed clearer non-redundant decision options and bulk metadata step needed one-pass link assignment across selected items.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - Duplicate item now presents exactly three decision buttons, with no extra redundant preview.
+  - Shared Metadata allows selecting link targets and applies them to all selected items.
+  - `Overwrite Existing` removes selected-target links to old duplicate file and links new upload.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
