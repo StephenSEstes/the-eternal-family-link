@@ -2689,3 +2689,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Saving with household targets now pre-checks permissions and shows a clear message instead of late `Failed to upload image to household | unauthorized`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (media library selected-link refresh cache bypass)
+
+- `Change`: Added explicit `noCache` support to media search API and updated Media Library selected-photo association refresh calls to request uncached results.
+- `Type`: Bugfix, Reliability
+- `Why`: Linking from selected image in Media Library could appear to fail because post-link association refresh read a 20s cached `photos/search` response and showed stale links.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Link a person/household from selected-image editor and confirm `Linked To` updates immediately without waiting for cache expiry.
+  - General media library browsing/search cache behavior remains unchanged.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

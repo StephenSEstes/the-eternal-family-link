@@ -96,6 +96,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   const rawLimit = Number(url.searchParams.get("limit") ?? "200");
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(5000, Math.trunc(rawLimit))) : 200;
   const includeDrive = ["1", "true", "yes"].includes(norm(url.searchParams.get("includeDrive") ?? ""));
+  const bypassCache = ["1", "true", "yes"].includes(norm(url.searchParams.get("noCache") ?? ""));
   const oci = isOciDataSource();
   const cacheKey = makeMediaSearchCacheKey({
     tenantKey: resolved.tenant.tenantKey,
@@ -104,9 +105,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     includeDrive,
     oci,
   });
-  const cached = readCachedMediaSearch(cacheKey);
-  if (cached) {
-    return NextResponse.json(cached);
+  if (!bypassCache) {
+    const cached = readCachedMediaSearch(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
   }
 
   const [people, attributes, householdRows, householdPhotoRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
@@ -292,6 +295,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     count: matches.length,
     items: matches,
   };
-  writeCachedMediaSearch(cacheKey, payload);
+  if (!bypassCache) {
+    writeCachedMediaSearch(cacheKey, payload);
+  }
   return NextResponse.json(payload);
 }

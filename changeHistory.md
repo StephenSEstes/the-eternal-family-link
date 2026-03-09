@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-09: Fixed Media Library selected-image link refresh to bypass stale media-search cache after add/remove link actions, so `Linked To` updates immediately. See `docs/change-summary.md`.
 - 2026-03-09: Added selected-photo delete in Media Library editor, per-file wizard save progress bars/statuses, and household-target permission pre-check to prevent late unauthorized upload failures. See `docs/change-summary.md`.
 - 2026-03-09: Expanded duplicate wizard decisions (skip/import/overwrite existing), removed redundant duplicate preview, and added shared metadata link targeting that applies people/households to all selected items. See `docs/change-summary.md`.
 - 2026-03-09: Cleaned duplicate wizard UX by removing redundant Skip action for duplicate-flagged items and adding direct Save on final per-item step. See `docs/change-summary.md`.

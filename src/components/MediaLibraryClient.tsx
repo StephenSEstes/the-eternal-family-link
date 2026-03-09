@@ -255,8 +255,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     options?: { noStore?: boolean; includeDrive?: boolean },
   ) => {
     const includeDrive = options?.includeDrive ?? false;
+    const noCache = options?.noStore ? "&noCache=1" : "";
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}&limit=40&includeDrive=${includeDrive ? "1" : "0"}`,
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}&limit=40&includeDrive=${includeDrive ? "1" : "0"}${noCache}`,
       { cache: options?.noStore ? "no-store" : "default" },
     );
     const body = await res.json().catch(() => null);
