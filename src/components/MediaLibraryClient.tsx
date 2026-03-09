@@ -418,6 +418,58 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     }
   };
 
+  const deleteSelectedPhoto = async () => {
+    if (!selectedPhotoItem) return;
+    const confirmed = window.confirm(
+      "Delete this selected media from all current person/household links? This does not remove the Drive file itself.",
+    );
+    if (!confirmed) return;
+    setPhotoAssociationBusy(true);
+    setPhotoAssociationStatus("Deleting selected media links...");
+    try {
+      for (const person of selectedPhotoAssociations.people) {
+        const attrsRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`,
+          { cache: "no-store" },
+        );
+        const attrsBody = await attrsRes.json().catch(() => null);
+        await assertOk(attrsRes, "Failed to load person attributes");
+        const attrs = Array.isArray(attrsBody?.attributes)
+          ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
+          : [];
+        const matches = attrs.filter((item) => {
+          const type = item.attributeType.toLowerCase();
+          return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === selectedPhotoItem.fileId;
+        });
+        for (const match of matches) {
+          const delRes = await fetch(
+            `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
+            { method: "DELETE" },
+          );
+          await assertOk(delRes, "Failed to remove person media link");
+        }
+      }
+
+      for (const household of selectedPhotoAssociations.households) {
+        const delRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(household.householdId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+          { method: "DELETE" },
+        );
+        await assertOk(delRes, "Failed to remove household media link");
+      }
+
+      await loadLibrary(search.trim());
+      setSelectedPhotoAssociations({ people: [], households: [] });
+      setShowPhotoEditor(false);
+      setPhotoAssociationStatus("Selected media links deleted.");
+      setStatus("Selected media links deleted.");
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setPhotoAssociationBusy(false);
+    }
+  };
+
   const applyPhotoTagCandidate = async (candidate: LinkedSearchResult) => {
     setPhotoTagQuery("");
     if (candidate.kind === "person") {
@@ -615,9 +667,22 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
               <div className="person-photo-detail-card">
                 <div className="person-photo-detail-head">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Photo</h4>
-                  <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoEditor(false)}>
-                    Close
-                  </button>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => void deleteSelectedPhoto()}
+                        disabled={photoAssociationBusy}
+                        style={{ color: "#991b1b", borderColor: "#fecaca", background: "#fff1f2" }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                    <button type="button" className="button secondary tap-button" onClick={() => setShowPhotoEditor(false)}>
+                      Close
+                    </button>
+                  </div>
                 </div>
                 <div style={{ marginTop: "0.75rem" }}>
                   {inferMediaKind(selectedPhotoItem.fileId, selectedPhotoItem.mediaMetadata) === "video" ? (

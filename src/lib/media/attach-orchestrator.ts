@@ -105,6 +105,11 @@ type RunPlanInput = {
   items: MediaAttachDraftItem[];
   shared: MediaAttachSharedMetadata;
   onProgress?: (message: string, completed: number, total: number) => void;
+  onItemStatus?: (
+    clientId: string,
+    status: "pending" | "working" | "uploaded" | "linked" | "skipped" | "failed",
+    message?: string,
+  ) => void;
 };
 
 function norm(value: string | undefined) {
@@ -417,11 +422,13 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
   };
   const total = input.items.length;
   const associationCache = new Map<string, AssociationSnapshot>();
+  input.items.forEach((item) => input.onItemStatus?.(item.clientId, "pending"));
 
   for (let idx = 0; idx < input.items.length; idx += 1) {
     const item = input.items[idx];
     if (item.skipImport) {
       summary.skipped += 1;
+      input.onItemStatus?.(item.clientId, "skipped", "Skipped by user.");
       continue;
     }
     const { title, description, date } = applySharedAndContextDefaults(input.context, item, input.shared);
@@ -430,6 +437,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
     const attributeType = item.attributeType ?? input.context.defaultAttributeType ?? "media";
 
     input.onProgress?.(`Saving ${idx + 1} of ${total}`, idx, total);
+    input.onItemStatus?.(item.clientId, "working", `Saving item ${idx + 1} of ${total}`);
 
     try {
       let fileId = item.fileId?.trim() ?? "";
@@ -451,10 +459,12 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
       if (!fileId) {
         if (!item.file) {
           summary.failures.push({ clientId: item.clientId, message: "No file selected for upload.", targetType: "upload" });
+          input.onItemStatus?.(item.clientId, "failed", "No file selected for upload.");
           continue;
         }
         if (!item.file.type.startsWith("image/")) {
           summary.failures.push({ clientId: item.clientId, message: "Only image uploads are supported in MVP.", targetType: "upload" });
+          input.onItemStatus?.(item.clientId, "failed", "Only image uploads are supported in MVP.");
           continue;
         }
         if (personIds.length > 0) {
@@ -472,6 +482,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
           fileId = uploaded.fileId;
           mediaMetadata = uploaded.mediaMetadata;
           summary.createdAttributes += 1;
+          input.onItemStatus?.(item.clientId, "uploaded", "Uploaded via person target.");
         } else if (householdIds.length > 0 && input.context.allowHouseholdLinks) {
           uploadedViaHouseholdId = householdIds[0];
           uploadedViaHousehold = true;
@@ -486,12 +497,14 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
           fileId = uploaded.fileId;
           mediaMetadata = uploaded.mediaMetadata;
           summary.createdLinks += 1;
+          input.onItemStatus?.(item.clientId, "uploaded", "Uploaded via household target.");
         } else {
           summary.failures.push({
             clientId: item.clientId,
             message: "No attachment target selected. Add at least one person or household.",
             targetType: "upload",
           });
+          input.onItemStatus?.(item.clientId, "failed", "No attachment target selected.");
           continue;
         }
       }
@@ -603,12 +616,18 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
           }
         }
       }
+      input.onItemStatus?.(item.clientId, "linked", "Completed.");
     } catch (error) {
       summary.failures.push({
         clientId: item.clientId,
         message: error instanceof Error ? error.message : "Unexpected media attach failure.",
         targetType: "upload",
       });
+      input.onItemStatus?.(
+        item.clientId,
+        "failed",
+        error instanceof Error ? error.message : "Unexpected media attach failure.",
+      );
     }
   }
 

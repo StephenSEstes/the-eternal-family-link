@@ -87,6 +87,9 @@ export function MediaAttachWizard({
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
+  const [itemProgress, setItemProgress] = useState<
+    Record<string, { status: "pending" | "working" | "uploaded" | "linked" | "skipped" | "failed"; message: string }>
+  >({});
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryResults, setLibraryResults] = useState<MediaAttachLibraryItem[]>([]);
   const [librarySelectedFileIds, setLibrarySelectedFileIds] = useState<string[]>([]);
@@ -178,6 +181,7 @@ export function MediaAttachWizard({
     setLibraryBusy(false);
     setDuplicateScanBusy(false);
     setTagQuery("");
+    setItemProgress({});
     duplicateCatalogRef.current = null;
     fileHashCacheRef.current.clear();
   }, [context.defaultDate, context.defaultDescription, context.defaultLabel, open]);
@@ -485,6 +489,14 @@ export function MediaAttachWizard({
       setStatus(errors[0] || "Fix item details before save.");
       return;
     }
+    const hasHouseholdTargets = items.some((item) => !item.skipImport && item.householdIds.length > 0);
+    if (hasHouseholdTargets) {
+      const permissionProbe = await fetch(`/api/t/${encodeURIComponent(context.tenantKey)}/households`, { cache: "no-store" });
+      if (!permissionProbe.ok) {
+        setStatus("Household links require Admin permission. Remove household targets or use a person target.");
+        return;
+      }
+    }
     setBusy(true);
     setStatus("");
     setProgressMessage("Saving...");
@@ -500,6 +512,11 @@ export function MediaAttachWizard({
           notes: sharedNotes,
         },
         onProgress: (message) => setProgressMessage(message),
+        onItemStatus: (clientId, statusValue, message) =>
+          setItemProgress((current) => ({
+            ...current,
+            [clientId]: { status: statusValue, message: message ?? "" },
+          })),
       });
       onComplete(summary);
       onClose();
@@ -1051,6 +1068,37 @@ export function MediaAttachWizard({
           })()
         ))}
       </div>
+      {items.length > 0 ? (
+        <div className="card" style={{ padding: "0.55rem", display: "grid", gap: "0.35rem" }}>
+          <strong>Upload Progress</strong>
+          {items.map((item, index) => {
+            const progress = itemProgress[item.clientId] ?? { status: "pending" as const, message: "" };
+            const width =
+              progress.status === "failed" ? 100 :
+              progress.status === "linked" || progress.status === "skipped" ? 100 :
+              progress.status === "uploaded" ? 70 :
+              progress.status === "working" ? 40 : 10;
+            const color =
+              progress.status === "failed" ? "#dc2626" :
+              progress.status === "linked" ? "#16a34a" :
+              progress.status === "skipped" ? "#6b7280" :
+              progress.status === "uploaded" ? "#0284c7" :
+              progress.status === "working" ? "#2563eb" : "#cbd5e1";
+            return (
+              <div key={`progress-${item.clientId}`} style={{ display: "grid", gap: "0.2rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+                  <span>{index + 1}. {item.title || item.file?.name || item.fileId || "Image"}</span>
+                  <span>{progress.status}</span>
+                </div>
+                <div style={{ height: "7px", background: "#e5e7eb", borderRadius: "6px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${width}%`, background: color, transition: "width 180ms ease" }} />
+                </div>
+                {progress.message ? <span style={{ fontSize: "0.78rem", color: "#4b5563" }}>{progress.message}</span> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <button type="button" className="button secondary tap-button" onClick={() => setStep("per_item")} disabled={busy}>Back</button>
         <button type="button" className="button tap-button" onClick={() => void saveAll()} disabled={busy}>

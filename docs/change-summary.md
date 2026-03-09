@@ -2673,3 +2673,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `Overwrite Existing` removes selected-target links to old duplicate file and links new upload.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (selected-photo delete + per-file progress + household permission guard)
+
+- `Change`: Added delete action in Media Library selected-photo editor (removes current person/household links for selected file), added per-file wizard save progress statuses/bars, and added pre-save household permission probe to block unauthorized household-target saves before upload attempts.
+- `Type`: UX, Reliability
+- `Why`: Users needed direct selected-photo deletion outside the add wizard, clearer visibility into long-running save operations, and earlier handling of household admin permission limits that previously surfaced as late `unauthorized` upload failures.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: No.
+- `Verify`:
+  - Selected photo editor includes a `Delete` action that unlinks selected file from linked people/households.
+  - Wizard review/save shows per-item progress states (`pending/working/uploaded/linked/skipped/failed`) with progress bars and status text.
+  - Saving with household targets now pre-checks permissions and shows a clear message instead of late `Failed to upload image to household | unauthorized`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
