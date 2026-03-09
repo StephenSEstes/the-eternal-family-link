@@ -2616,3 +2616,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Review/save highlights first invalid item and routes back to fix.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (media attach OCI null entity_type fix + media-tab preselected link targets)
+
+- `Change`: Fixed person photo upload attribute insert payload to include required `entity_type` and `entity_id` fields for OCI-backed `Attributes` writes, and updated Media tab wizard launch context to preselect current linked-filter people/households as default attach targets.
+- `Type`: Bugfix, Orchestration
+- `Why`: Media wizard saves were failing with ORA-01400 (`ATTRIBUTES.ENTITY_TYPE` null) during person-upload path; Media tab uploads also needed stronger default link targeting based on current user-selected context.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Person upload path now sends `entity_type=person` and `entity_id=<personId>` when creating attribute rows.
+  - Media tab launches wizard with preselected people/households from active linked filters.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

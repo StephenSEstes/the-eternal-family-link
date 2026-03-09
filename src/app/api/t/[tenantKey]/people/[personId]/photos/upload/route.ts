@@ -156,6 +156,8 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         PERSON_ATTRIBUTES_TAB,
         {
           attribute_id: attributeId,
+          entity_type: "person",
+          entity_id: personId,
           person_id: personId,
           attribute_type: attributeType,
           value_text: uploaded.fileId,

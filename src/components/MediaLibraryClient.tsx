@@ -454,6 +454,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           canManage,
           allowHouseholdLinks: canManage,
           defaultAttributeType: "media",
+          preselectedPersonIds: linkedFilterPersonIds,
+          preselectedHouseholdIds: linkedFilterHouseholdIds,
           peopleOptions,
           householdOptions,
         }}

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-09: Fixed media wizard ORA-01400 person-upload failures by adding required `entity_type/entity_id` on person photo attribute inserts, and defaulted Media tab wizard link targets from current linked-filter selection. See `docs/change-summary.md`.
 - 2026-03-08: Added Media Attach Wizard per-item validation guardrails (duplicate decision + required link target checks before next/review/save) and marked TODO multi-photo upload item complete. See `docs/change-summary.md`.
 - 2026-03-07: Fixed deploy-blocking wizard summary callback typing by standardizing on `MediaAttachExecutionSummary` in Person/Household/Attributes modal handlers. See `docs/change-summary.md`.
 - 2026-03-07: Completed wizard parity cleanup (Person/Household/Attributes now shared wizard-only) and optimized media attach performance with cached duplicate checksum catalog/file hashes plus reduced unnecessary association lookups on save. See `docs/change-summary.md`.
