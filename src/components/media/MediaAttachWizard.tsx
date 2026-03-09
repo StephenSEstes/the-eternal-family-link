@@ -169,15 +169,30 @@ export function MediaAttachWizard({
 
   if (!open) return null;
 
-  const readChecksumFromMetadata = (raw?: string) => {
+  const parseMediaMetadata = (raw?: string) => {
     const text = (raw ?? "").trim();
-    if (!text) return "";
+    if (!text) return null;
     try {
-      const parsed = JSON.parse(text) as { checksumSha256?: string };
-      return String(parsed.checksumSha256 ?? "").trim().toLowerCase();
+      return JSON.parse(text) as {
+        checksumSha256?: string;
+        sizeBytes?: number;
+        width?: number;
+        height?: number;
+        mimeType?: string;
+      };
     } catch {
-      return "";
+      return null;
     }
+  };
+
+  const toLegacyFingerprint = (meta: { sizeBytes?: number; width?: number; height?: number; mimeType?: string } | null) => {
+    if (!meta) return "";
+    const sizeBytes = Number.isFinite(meta.sizeBytes) ? Number(meta.sizeBytes) : 0;
+    const width = Number.isFinite(meta.width) ? Number(meta.width) : 0;
+    const height = Number.isFinite(meta.height) ? Number(meta.height) : 0;
+    const mimeType = String(meta.mimeType ?? "").trim().toLowerCase();
+    if (!sizeBytes || !mimeType) return "";
+    return `${sizeBytes}|${width}|${height}|${mimeType}`;
   };
 
   const computeFileSha256 = async (file: File) => {
@@ -188,6 +203,27 @@ export function MediaAttachWizard({
     return bytes.map((value) => value.toString(16).padStart(2, "0")).join("");
   };
 
+  const computeFileFingerprint = async (file: File) => {
+    const mimeType = (file.type || "application/octet-stream").trim().toLowerCase();
+    if (!mimeType.startsWith("image/")) return "";
+    const dims = await new Promise<{ width: number; height: number }>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        const width = Number.isFinite(image.naturalWidth) ? image.naturalWidth : 0;
+        const height = Number.isFinite(image.naturalHeight) ? image.naturalHeight : 0;
+        URL.revokeObjectURL(url);
+        resolve({ width, height });
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: 0, height: 0 });
+      };
+      image.src = url;
+    });
+    return `${file.size}|${dims.width}|${dims.height}|${mimeType}`;
+  };
+
   const loadDuplicateCatalog = async () => {
     if (duplicateCatalogRef.current) return duplicateCatalogRef.current;
     const catalog = await searchImageLibrary({
@@ -196,10 +232,21 @@ export function MediaAttachWizard({
       limit: 5000,
     });
     const byChecksum = new Map<string, MediaAttachLibraryItem>();
+    const byLegacyFingerprint = new Map<string, MediaAttachLibraryItem>();
     for (const item of catalog) {
-      const checksum = readChecksumFromMetadata(item.mediaMetadata);
-      if (!checksum || byChecksum.has(checksum)) continue;
-      byChecksum.set(checksum, item);
+      const parsed = parseMediaMetadata(item.mediaMetadata);
+      const checksum = String(parsed?.checksumSha256 ?? "").trim().toLowerCase();
+      if (checksum && !byChecksum.has(checksum)) {
+        byChecksum.set(checksum, item);
+      }
+      const fingerprint = toLegacyFingerprint(parsed);
+      if (fingerprint && !byLegacyFingerprint.has(fingerprint)) {
+        byLegacyFingerprint.set(fingerprint, item);
+      }
+    }
+    // Keep legacy fingerprints in the same cache map under prefixed keys for lightweight lookup.
+    for (const [fingerprint, item] of byLegacyFingerprint) {
+      byChecksum.set(`legacy:${fingerprint}`, item);
     }
     duplicateCatalogRef.current = byChecksum;
     return byChecksum;
@@ -216,15 +263,17 @@ export function MediaAttachWizard({
         files.map(async (file) => {
           const key = fileKey(file);
           const cached = fileHashCacheRef.current.get(key);
-          if (cached) return { key, checksum: cached };
+          if (cached) return { key, checksum: cached, fingerprint: "" };
           const checksum = await computeFileSha256(file);
           if (checksum) fileHashCacheRef.current.set(key, checksum);
-          return { key, checksum };
+          const fingerprint = await computeFileFingerprint(file);
+          return { key, checksum, fingerprint };
         }),
       );
-      for (const { key, checksum } of checksums) {
-        if (!checksum) continue;
-        const existing = byChecksum.get(checksum);
+      for (const { key, checksum, fingerprint } of checksums) {
+        const existing =
+          (checksum ? byChecksum.get(checksum) : undefined) ??
+          (fingerprint ? byChecksum.get(`legacy:${fingerprint}`) : undefined);
         if (existing) {
           matches.set(key, existing);
         }

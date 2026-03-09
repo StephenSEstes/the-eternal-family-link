@@ -2630,3 +2630,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Media tab launches wizard with preselected people/households from active linked filters.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (duplicate detection compatibility: legacy metadata fallback + checksum writes)
+
+- `Change`: Updated wizard duplicate detection to support legacy media metadata without `checksumSha256` using a compatibility fingerprint fallback (`sizeBytes|width|height|mimeType`), and added SHA-256 checksum persistence on new person/household uploads.
+- `Type`: Bugfix, Compatibility
+- `Why`: Duplicate side-by-side confirm did not appear for older library assets because duplicate scan only matched checksum and many historical records lacked checksum fields.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+- `Data Changes`: No schema change. New uploads now store `checksumSha256` in `media_metadata`.
+- `Verify`:
+  - Uploading an existing image now flags duplicate candidates even when existing record metadata predates checksum support.
+  - New uploads include checksum in metadata for stronger future duplicate matching.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

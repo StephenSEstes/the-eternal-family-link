@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { buildEntityId } from "@/lib/entity-id";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
@@ -92,6 +93,9 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       height: mediaHeight,
       durationSec: mediaDurationSec,
       captureSource,
+      extra: {
+        checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      },
     });
 
     const config = await getTenantConfig(resolved.tenant.tenantKey);

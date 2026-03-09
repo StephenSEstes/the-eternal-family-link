@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { buildEntityId } from "@/lib/entity-id";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
@@ -121,6 +122,9 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       height: mediaHeight,
       durationSec: mediaDurationSec,
       captureSource,
+      extra: {
+        checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      },
     });
 
     const existingPhotos = attributeType === "photo"
