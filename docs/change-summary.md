@@ -2645,3 +2645,16 @@ Concise release notes for what changed, why it changed, and what to verify.
   - New uploads include checksum in metadata for stronger future duplicate matching.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (duplicate UX cleanup: remove redundant skip + add direct save)
+
+- `Change`: Refined duplicate decision UX by hiding generic "Skip Image" for duplicate-flagged items and adding direct "Save" action on the final per-item screen (alongside Review).
+- `Type`: UX
+- `Why`: Duplicate flow had redundant controls ("skip/do not import duplicate") and required extra navigation to save.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Duplicate-flagged item shows only Duplicate/Not Duplicate decision controls.
+  - Final per-item screen provides both Review and Save actions.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

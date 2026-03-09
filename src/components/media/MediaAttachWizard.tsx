@@ -690,19 +690,21 @@ export function MediaAttachWizard({
       {selectedItem.previewUrl ? (
         <img src={selectedItem.previewUrl} alt="Selected image" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "#f3f4f6", borderRadius: "10px" }} />
       ) : null}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className={`button ${selectedItem.skipImport ? "secondary" : "tap-button"}`}
-          onClick={() =>
-            setItems((current) =>
-              current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, skipImport: !item.skipImport } : item)),
-            )
-          }
-        >
-          {selectedItem.skipImport ? "Unskip Image" : "Skip Image (Do Not Import)"}
-        </button>
-      </div>
+      {!selectedItem.duplicateOfFileId ? (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className={`button ${selectedItem.skipImport ? "secondary" : "tap-button"}`}
+            onClick={() =>
+              setItems((current) =>
+                current.map((item) => (item.clientId === selectedItem.clientId ? { ...item, skipImport: !item.skipImport } : item)),
+              )
+            }
+          >
+            {selectedItem.skipImport ? "Unskip Image" : "Skip Image (Do Not Import)"}
+          </button>
+        </div>
+      ) : null}
       {selectedItem.duplicateOfFileId && selectedItem.duplicateExistingPreviewUrl ? (
         <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
           <strong>Duplicate confirmed</strong>
@@ -863,20 +865,30 @@ export function MediaAttachWizard({
             Next Item
           </button>
         ) : (
-          <button
-            type="button"
-            className="button tap-button"
-            onClick={() => {
-              if (selectedItemErrors.length > 0) {
-                setStatus(selectedItemErrors[0] || "Fix item details before review.");
-                return;
-              }
-              setStatus("");
-              setStep("review");
-            }}
-          >
-            Review
-          </button>
+          <>
+            <button
+              type="button"
+              className="button secondary tap-button"
+              onClick={() => {
+                if (selectedItemErrors.length > 0) {
+                  setStatus(selectedItemErrors[0] || "Fix item details before review.");
+                  return;
+                }
+                setStatus("");
+                setStep("review");
+              }}
+            >
+              Review
+            </button>
+            <button
+              type="button"
+              className="button tap-button"
+              disabled={busy}
+              onClick={() => void saveAll()}
+            >
+              {busy ? "Saving..." : "Save"}
+            </button>
+          </>
         )}
       </div>
       {selectedItemErrors.length > 0 ? (
