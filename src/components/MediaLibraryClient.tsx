@@ -113,11 +113,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
 
-  const loadLibrary = async (query = "") => {
+  const loadLibrary = async (query = "", options?: { noCache?: boolean }) => {
     const normalizedQuery = query.trim();
     const limit = normalizedQuery ? SEARCH_MEDIA_LIBRARY_LIMIT : INITIAL_MEDIA_LIBRARY_LIMIT;
+    const noCache = options?.noCache ? "&noCache=1" : "";
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(normalizedQuery)}&limit=${limit}&includeDrive=${includeDrive ? "1" : "0"}`,
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(normalizedQuery)}&limit=${limit}&includeDrive=${includeDrive ? "1" : "0"}${noCache}`,
+      { cache: options?.noCache ? "no-store" : "default" },
     );
     await assertOk(res, "Failed to load media library");
     const body = (await res.json()) as { items?: MediaItem[] };
@@ -324,7 +326,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       });
       await assertOk(res, "Failed to link person");
       await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search);
+      await loadLibrary(search, { noCache: true });
       setPhotoAssociationStatus("Person linked.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Link failed");
@@ -358,8 +360,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         );
         await assertOk(delRes, "Failed to remove person link");
       }
+      const unlinkRes = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+        { method: "DELETE" },
+      );
+      await assertOk(unlinkRes, "Failed to remove person photo link");
       await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search);
+      await loadLibrary(search, { noCache: true });
       setPhotoAssociationStatus("Person link removed.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Remove failed");
@@ -390,7 +397,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       );
       await assertOk(res, "Failed to link household");
       await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search);
+      await loadLibrary(search, { noCache: true });
       setPhotoAssociationStatus("Household linked.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Link failed");
@@ -410,7 +417,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       );
       await assertOk(res, "Failed to remove household link");
       await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search);
+      await loadLibrary(search, { noCache: true });
       setPhotoAssociationStatus("Household link removed.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Remove failed");
@@ -449,6 +456,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           );
           await assertOk(delRes, "Failed to remove person media link");
         }
+        const unlinkRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+          { method: "DELETE" },
+        );
+        await assertOk(unlinkRes, "Failed to remove person photo link");
       }
 
       for (const household of selectedPhotoAssociations.households) {
@@ -459,7 +471,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         await assertOk(delRes, "Failed to remove household media link");
       }
 
-      await loadLibrary(search.trim());
+      await loadLibrary(search.trim(), { noCache: true });
       setSelectedPhotoAssociations({ people: [], households: [] });
       setShowPhotoEditor(false);
       setPhotoAssociationStatus("Selected media links deleted.");
@@ -482,7 +494,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const handleAttachWizardComplete = async (summary: MediaAttachExecutionSummary) => {
     setStatus(formatMediaAttachUserSummary(summary));
-    await loadLibrary(search.trim());
+    await loadLibrary(search.trim(), { noCache: true });
   };
 
   return (

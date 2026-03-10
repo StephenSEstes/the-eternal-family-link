@@ -2703,3 +2703,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - General media library browsing/search cache behavior remains unchanged.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-09 (media library add-link persistence + delete parity hardening)
+
+- `Change`: Fixed Media Library selected-image add-link persistence by creating direct OCI person media links when linking from person attribute API, added dedicated person-photo unlink API, and updated Media Library mutation refreshes to force uncached library reads after add/remove/delete actions.
+- `Type`: Bugfix, Reliability
+- `Why`: Root cause was add-link writes only creating `entity_type=attribute` media links while Media Library chip/list behavior depended on direct person linkage; delete/unlink also missed person-level media links and could leave stale results due to cache.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/[photoId]/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - From Media Library selected-image editor, add person link and confirm chip appears immediately and persists after close/reopen.
+  - Delete selected media links and confirm the item no longer appears in linked library results for that family/person context.
+  - Person unlink from selected-image editor removes chip immediately and remains removed after refresh.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

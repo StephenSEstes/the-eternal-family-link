@@ -134,6 +134,19 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
       const mediaId = buildMediaId(fileId);
       const usageType = mediaAttributeType === "photo" ? "photo" : "media";
       const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, fileId, usageType);
+      const personUsageType =
+        mediaAttributeType === "photo"
+          ? parsed.data.isPrimary
+            ? "profile"
+            : "gallery"
+          : "media";
+      const personLinkId = buildMediaLinkId(
+        resolved.tenant.tenantKey,
+        "person",
+        personId,
+        fileId,
+        personUsageType,
+      );
       const createdAt = new Date().toISOString();
       await upsertOciMediaAsset({
         mediaId,
@@ -149,6 +162,21 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
         entityType: "attribute",
         entityId: attributeId,
         usageType,
+        label: parsed.data.label,
+        description: parsed.data.notes,
+        photoDate: parsed.data.startDate,
+        isPrimary: parsed.data.isPrimary,
+        sortOrder: parsed.data.sortOrder,
+        mediaMetadata: parsed.data.valueJson,
+        createdAt,
+      });
+      await upsertOciMediaLink({
+        familyGroupKey: resolved.tenant.tenantKey,
+        linkId: personLinkId,
+        mediaId,
+        entityType: "person",
+        entityId: personId,
+        usageType: personUsageType,
         label: parsed.data.label,
         description: parsed.data.notes,
         photoDate: parsed.data.startDate,
