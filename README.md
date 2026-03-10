@@ -49,6 +49,8 @@ VIEWER_PIN=1234
 Notes:
 - `GOOGLE_SERVICE_ACCOUNT_JSON` must be a single-line stringified JSON object.
 - Share the target Photos Drive folder with the service account email.
+- `OPENAI_API_KEY` is optional. Set it to enable the in-app Help assistant.
+- `OPENAI_HELP_MODEL` is optional. Default is `gpt-5-mini`.
 
 ## Google OAuth setup
 

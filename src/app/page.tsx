@@ -9,6 +9,7 @@ const tiles = [
   { href: "/today", title: "Today", subtitle: "Simple daily snapshot" },
   { href: "/games", title: "Games", subtitle: "Memory activities" },
   { href: "/media", title: "Media", subtitle: "Shared family photo and video library" },
+  { href: "/help", title: "Help", subtitle: "Ask how to use the app" },
 ];
 
 export default async function HomePage() {

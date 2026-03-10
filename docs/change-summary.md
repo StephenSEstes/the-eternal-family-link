@@ -13,6 +13,39 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (grounded AI help assistant)
+
+- `Change`: Added a tenant-scoped AI Help assistant backed by the OpenAI API, grounded on a curated local product guide, exposed it on new Help pages and header/home navigation, and documented the optional OpenAI environment configuration.
+- `Type`: UI | API | Infra
+- `Why`: Root cause was that the app had no user-facing help path and no server-side AI integration, so there was no way to answer "how do I use this app?" questions inside the product. The first implementation also needed to avoid inventing features, keep the API key off the client, and stay within current app behavior only.
+- `Files`:
+  - `src/lib/ai/openai.ts`
+  - `src/lib/ai/help-guide.ts`
+  - `src/lib/ai/help.ts`
+  - `src/app/api/t/[tenantKey]/ai/help/route.ts`
+  - `src/components/help/HelpAssistantClient.tsx`
+  - `src/components/HeaderNav.tsx`
+  - `src/app/help/page.tsx`
+  - `src/app/t/[tenantKey]/help/page.tsx`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/globals.css`
+  - `src/app/api/health/route.ts`
+  - `README.md`
+  - `docs/deploy-runbook.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Signed-in users can open `Help` from the header or home tiles.
+  - `POST /api/t/[tenantKey]/ai/help` returns a grounded answer when `OPENAI_API_KEY` is configured, and returns `503 ai_help_unavailable` when it is not.
+  - The Help client no longer sends its static intro text to the model and keeps only the most recent request history within the route limit.
+  - `GET /api/health` reports `OPENAI_API_KEY` boolean for deploy verification.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: Added 2026-03-10 decision for grounded server-side AI Help.
+
 ## 2026-03-10 (tenant audit capability + login/change coverage)
 
 - `Change`: Added a tenant-scoped audit API and Settings audit viewer, expanded audit coverage across local-user admin actions plus active attribute/media writes, and started persisting `last_login_at` on user-access records so admins can see recent login activity per user.

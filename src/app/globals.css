@@ -2223,7 +2223,67 @@ main,
   border-color: #e5e7eb;
 }
 
+.help-layout {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.help-panel {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.help-suggestions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.help-thread {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 320px;
+  align-content: start;
+}
+
+.help-bubble {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0.85rem 0.95rem;
+}
+
+.help-bubble strong {
+  font-size: 0.82rem;
+}
+
+.help-bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.help-bubble-assistant {
+  background: color-mix(in oklab, #ffffff 84%, #eef6ff 16%);
+}
+
+.help-bubble-user {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
 @media (min-width: 900px) {
+  .help-layout {
+    grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.05fr);
+  }
+
+  .help-suggestions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .settings-toolbar-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }

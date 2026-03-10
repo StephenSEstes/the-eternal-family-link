@@ -8,6 +8,7 @@ export async function GET() {
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
       GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+      OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
     },
   });
 }

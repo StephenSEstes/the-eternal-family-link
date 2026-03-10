@@ -16,3 +16,4 @@ Latest alignment note:
 - 2026-03-07: Event category/type definitions for Add Attribute are admin-managed per family group via `FamilyConfig.attribute_event_definitions_json` (with defaults fallback).
 - 2026-03-10: OCI is the only supported persistence backend; legacy backend runtime/tooling paths have been removed from the repo.
 - 2026-03-10: User onboarding uses person-bound invite records with one invite URL, snapshot family-group access, Google pre-provisioning only when allowed, and local credential setup on the invite page.
+- 2026-03-10: AI Help is a server-side OpenAI-backed assistant grounded on a curated local product guide; it answers usage questions only and does not write data or send messages.

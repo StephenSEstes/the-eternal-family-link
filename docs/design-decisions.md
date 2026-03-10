@@ -116,3 +116,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Email-only invites not bound to `person_id`; fully manual user provisioning without invite records; custom magic-link authentication.
 - `Impact`: Added an `Invites` table, admin invite generation in Settings, a public `/invite/[token]` acceptance path, and invite-time access snapshots for consistent acceptance behavior.
 - `Follow-up`: If outbound email is added later, send the existing invite URL/message from the same invite records instead of creating a parallel mail-only workflow.
+
+- `Area`: AI product help
+- `Decision`: Use a server-side OpenAI-backed Help assistant that is grounded on a curated local product guide, exposed through a tenant-scoped API/page, and limited to answering how to use the current app. It does not write data or send outbound messages.
+- `Reason`: The app needs practical user guidance, but ungrounded model answers would invent screens or features and create support noise. A server-side grounded help flow keeps the API key off the client, constrains answers to current product behavior, and fits the existing tenant/session model.
+- `Alternatives Considered`: Static help pages only; client-side OpenAI calls; a broader AI agent that can modify data.
+- `Impact`: Added server-only OpenAI helpers, `/api/t/[tenantKey]/ai/help`, Help pages in root and tenant routes, Help navigation/home entry points, and optional OpenAI environment variables.
+- `Follow-up`: If interview-based data entry or AI email drafting is added later, keep those as separate reviewed workflows instead of expanding Help into a write-capable agent.

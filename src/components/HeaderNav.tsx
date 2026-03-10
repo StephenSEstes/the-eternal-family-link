@@ -76,6 +76,16 @@ function MediaIcon() {
   );
 }
 
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 1 1 4.4 1.6c-.9 1-1.9 1.6-1.9 3" />
+      <circle cx="12" cy="17.2" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -135,6 +145,12 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       href: `${basePath}/media`,
       match: (path) => path.startsWith(`${basePath}/media`),
       icon: <MediaIcon />,
+    },
+    {
+      label: "Help",
+      href: `${basePath}/help`,
+      match: (path) => path.startsWith(`${basePath}/help`),
+      icon: <HelpIcon />,
     },
   ];
 
