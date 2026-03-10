@@ -14,6 +14,39 @@ type AnswerHelpQuestionInput = {
   messages: HelpChatMessage[];
 };
 
+type HelpRule = {
+  keywords: string[];
+  answer: string;
+};
+
+const ADMIN_ONLY_HELP_RULES: HelpRule[] = [
+  {
+    keywords: ["invite", "invitation", "invite link", "invite user", "invite someone"],
+    answer:
+      "Inviting someone is an admin-only task. Ask your family-group admin to open Admin -> Users & Access -> User Directory -> Manage User -> Invite for that person.",
+  },
+  {
+    keywords: ["audit", "audit log", "login history", "change history", "who changed"],
+    answer:
+      "The audit log is an admin-only tool. Ask your family-group admin to open Admin -> Users & Access -> Audit if you need login or change history.",
+  },
+  {
+    keywords: ["family access", "user access", "manage users", "password policy", "local user"],
+    answer:
+      "That is an admin-only access-management task. Ask your family-group admin to use the Admin area for user access, family access, or password policy changes.",
+  },
+  {
+    keywords: ["integrity", "orphan media", "merge duplicate", "duplicate merge", "import csv", "attribute definitions"],
+    answer:
+      "That tool is available only in the Admin area. Ask your family-group admin to handle that task from Admin.",
+  },
+  {
+    keywords: ["create family", "add family", "delete family", "family group settings"],
+    answer:
+      "Family-group creation, delete, and settings changes are admin-only tasks. Ask your family-group admin to handle that in Admin.",
+  },
+];
+
 function buildInstructions(input: { tenantName: string; role: "ADMIN" | "USER" }) {
   return [
     "You are The Eternal Family Link help assistant.",
@@ -28,9 +61,40 @@ function buildInstructions(input: { tenantName: string; role: "ADMIN" | "USER" }
   ].join("\n");
 }
 
+function normalizeQuestion(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getRoleGuardAnswer(input: AnswerHelpQuestionInput) {
+  if (input.role !== "USER") {
+    return null;
+  }
+
+  const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const normalized = normalizeQuestion(lastUserMessage);
+  if (!normalized) {
+    return null;
+  }
+
+  for (const rule of ADMIN_ONLY_HELP_RULES) {
+    if (rule.keywords.some((keyword) => normalized.includes(keyword))) {
+      return rule.answer;
+    }
+  }
+  return null;
+}
+
 export async function answerHelpQuestion(input: AnswerHelpQuestionInput) {
   if (!isOpenAiConfigured()) {
     throw new Error("AI help is not configured.");
+  }
+
+  const guardedAnswer = getRoleGuardAnswer(input);
+  if (guardedAnswer) {
+    return {
+      answer: guardedAnswer,
+      model: "role-policy",
+    };
   }
 
   const client = getOpenAiClient();

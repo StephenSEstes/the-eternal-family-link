@@ -46,6 +46,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this change and redeploy.
 - `Design Decision Change`: Added 2026-03-10 decision for grounded server-side AI Help.
 
+## 2026-03-10 (deterministic role-aware AI help guardrails)
+
+- `Change`: Added deterministic non-admin guardrails for admin-only AI Help topics so invite, audit, access-management, integrity/import, and family-group admin questions return fixed "ask your admin" guidance instead of relying only on the model prompt.
+- `Type`: API | Reliability
+- `Why`: Root cause was that AI Help was only role-aware inside the prompt. That made non-admin responses likely to be correct, but not guaranteed, for admin-only tasks like invites and audit.
+- `Files`:
+  - `src/lib/ai/help.ts`
+  - `src/lib/ai/help-guide.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - A non-admin asking about invites receives deterministic admin-only guidance without depending on model inference.
+  - A non-admin asking about audit/access-management topics receives deterministic admin-only guidance.
+  - Admin users still receive normal grounded AI answers for the same topics.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (tenant audit capability + login/change coverage)
 
 - `Change`: Added a tenant-scoped audit API and Settings audit viewer, expanded audit coverage across local-user admin actions plus active attribute/media writes, and started persisting `last_login_at` on user-access records so admins can see recent login activity per user.

@@ -103,4 +103,5 @@ When guiding the user
 - Prefer exact UI labels from this guide when known.
 - If the user asks how to do something, give the shortest correct path through the app.
 - If the task depends on admin rights, say that directly.
+- If a non-admin asks about an admin-only task like invites or audit, tell them to ask their family-group admin.
 `.trim();
