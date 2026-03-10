@@ -643,6 +643,19 @@ export function PersonEditModal({
   const previousPersonIdRef = useRef("");
   const wasOpenRef = useRef(false);
   const peopleById = useMemo(() => new Map(localPeople.map((item) => [item.personId, item])), [localPeople]);
+  const peopleNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of localPeople) {
+      const personId = item.personId.trim();
+      if (!personId) continue;
+      const displayName = item.displayName.trim() || personId;
+      map.set(personId, displayName);
+    }
+    if (person?.personId?.trim()) {
+      map.set(person.personId.trim(), person.displayName?.trim() || person.personId.trim());
+    }
+    return map;
+  }, [localPeople, person]);
 
   const parentEdges = useMemo(
     () => contextEdges.filter((edge) => (edge.label ?? "").trim().toLowerCase() === "parent"),
@@ -1098,7 +1111,10 @@ export function PersonEditModal({
       (entry) => entry.fileId === fileId,
     );
     setSelectedPhotoAssociations({
-      people: item?.people ?? [],
+      people: (item?.people ?? []).map((entry) => ({
+        personId: entry.personId,
+        displayName: peopleNameById.get(entry.personId.trim()) || entry.displayName || entry.personId,
+      })),
       households: item?.households ?? [],
     });
     setSelectedPhotoAssociationsBusy(false);
@@ -1110,7 +1126,7 @@ export function PersonEditModal({
       return;
     }
     void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
-  }, [selectedPhoto, showPhotoDetail, tenantKey]);
+  }, [peopleNameById, selectedPhoto, showPhotoDetail, tenantKey]);
 
   const openPhotoDetail = (attributeId: string) => {
     setSelectedPhotoAttributeId(attributeId);

@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (person photo links show names, not IDs)
+
+- `Change`: Updated the person photo detail panel so linked people display the local person name instead of falling back to the raw `personId` when refreshing photo associations.
+- `Type`: UI
+- `Why`: Root cause was that the person modal trusted `/photos/search` display text directly, while that API intentionally falls back to `personId` if its tenant-scoped name lookup misses. The modal already had the local person list with the correct names but was not using it to normalize the display.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - In the person photo detail `Linked To` list, the current person now shows their display name instead of their ID after upload/link refresh.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (remove obsolete household media and legacy-local integrity paths)
 
 - `Change`: Removed the obsolete household-gallery compatibility model from active runtime/search/delete/integrity handling, dropped its repo schema/table mapping, removed integrity/UI reporting for retired legacy-local cleanup rows, and cleaned several confirmed unused locals/imports.
