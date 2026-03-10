@@ -25,6 +25,7 @@ export {
   listTables,
   PEOPLE_TABLE,
   PERSON_ATTRIBUTES_TABLE,
+  setPersonFamilyGroupRelationshipType,
   updatePerson,
   updateTableRecordById,
   upsertTenantAccess,

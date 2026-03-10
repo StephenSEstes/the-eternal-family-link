@@ -13,6 +13,49 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (family-group relationship types)
+
+- `Change`: Replaced the intermediate membership-scoped `in_law` flag with canonical `PersonFamilyGroups.family_group_relationship_type` values: `founder`, `direct`, `in_law`, and `undeclared`. Relationship saves and integrity repair now reconcile family-group relationship type centrally, founder assignment is admin-managed, undeclared people show in a `Needs Placement` flow instead of the main tree, and legacy `Attributes.in_law` rows are cleaned up instead of remaining canonical.
+- `Type`: API | Data | Schema | UX
+- `Why`: Root cause was model mismatch. A boolean `in_law` flag could not represent founders or unplaced family members, and it still relied on a weak heuristic. The product needed an explicit family-group relationship model rather than a single derived spouse flag.
+- `Files`:
+  - `oci-schema.sql`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/data/store.ts`
+  - `src/lib/family-group/relationship-type.ts`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/family-relationship-type/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/family-groups/provision/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/attributes/route.ts`
+  - `src/app/api/attributes/[attributeId]/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/PersonProfileRouteClient.tsx`
+  - `src/components/TreeGraph.tsx`
+  - `src/app/people/page.tsx`
+  - `src/app/people/[personId]/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
+  - `src/app/tree/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Schema change: replaced the runtime membership classification field with `family_group_relationship_type` on `person_family_groups`. Integrity repair now normalizes family-group relationship types and deletes stale legacy `in_law` attribute rows.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Adding/removing family relationships recalculates `direct`, `in_law`, and `undeclared` from founder + parent/spouse structure.
+  - Founder assignment/removal is admin-only and founder deletion is blocked except for Steve.
+  - Integrity audit now reports family-group relationship type drift, missing founders, founder overflow, and legacy `in_law` attribute rows; integrity repair fixes the repairable parts.
+  - Direct `POST`/`PATCH`/`DELETE` attempts against `in_law` attributes return `system_managed_attribute`.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: Replaced the membership-scoped `in_law` flag decision with the broader `family_group_relationship_type` model.
+
 ## 2026-03-10 (person photo links show names, not IDs)
 
 - `Change`: Updated the person photo detail panel so linked people display the local person name instead of falling back to the raw `personId` when refreshing photo associations.
@@ -30,7 +73,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-10 (family-data editing for USER role)
 
-- `Change`: Broadened regular `USER` permissions from self-edit/admin-mixed behavior to full family-data editing within accessible family groups. `USER` can now add people, edit people and households, manage relationships/children/spouse-family creation, and manage person/household media from People, Tree, and Media flows. Admin-only areas remain limited to invites, access/security, audit, integrity, and family-group administration. Also removed the relationship builder's dead dependency on the removed `PersonAttributes` table by moving its in-law sync marker writes onto canonical `Attributes` rows.
+- `Change`: Broadened regular `USER` permissions from self-edit/admin-mixed behavior to full family-data editing within accessible family groups. `USER` can now add people, edit people and households, manage relationships/children/spouse-family creation, and manage person/household media from People, Tree, and Media flows. Admin-only areas remain limited to invites, access/security, audit, integrity, and family-group administration. Also removed the relationship builder's dead dependency on the removed `PersonAttributes` table.
 - `Type`: Access Control, UX, Bugfix
 - `Why`: Root cause was a split access model: APIs allowed only self-edit in some person routes, while most shared family creation/edit flows stayed admin-only in both UI and route guards. That blocked the intended collaborative family-building workflow. A second root cause was the relationship builder still trying to write in-law markers through a removed legacy attribute table, which would break spouse/family flows once those routes were opened to regular users.
 - `Files`:
@@ -61,7 +104,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/app/api/attributes/[attributeId]/route.ts`
   - `src/app/api/people/[personId]/route.ts`
   - `src/lib/ai/help-guide.ts`
-- `Data Changes`: No schema change. Relationship builder now writes synced `in_law` markers as canonical `Attributes` rows with a system note marker instead of using the removed legacy attribute table.
+- `Data Changes`: No schema change in this release entry.
 - `Verify`:
   - `npm run lint` passes.
   - `npx tsc --noEmit` passes.

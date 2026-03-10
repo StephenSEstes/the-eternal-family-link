@@ -56,6 +56,7 @@ export type PersonRecord = {
   notes: string;
   photoFileId: string;
   isPinned: boolean;
+  familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
   relationships: string[];
 };
 

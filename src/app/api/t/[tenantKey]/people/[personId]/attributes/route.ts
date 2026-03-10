@@ -13,6 +13,7 @@ import {
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { isLegacyInLawAttributeType } from "@/lib/family-group/relationship-type";
 import { attributeCreateSchema } from "@/lib/validation/attributes";
 import { personAttributeCreateSchema } from "@/lib/validation/person-attributes";
 
@@ -28,6 +29,9 @@ function toCompatibilityAttribute(
 ) {
   const media = toPersonMediaAttribute(item);
   const attributeType = String(item.attributeType || item.typeKey || "").trim().toLowerCase();
+  if (isLegacyInLawAttributeType(attributeType)) {
+    return null;
+  }
   const attributeDate = String(item.attributeDate || item.dateStart || "").trim();
   const endDate = String(item.endDate || item.dateEnd || "").trim();
   const attributeDetail = String(item.attributeDetail || item.valueText || "").trim();
@@ -88,6 +92,15 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
   const parsed = personAttributeCreateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
+  }
+  if (isLegacyInLawAttributeType(parsed.data.attributeType)) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
   }
 
   const canonical = attributeCreateSchema.safeParse({

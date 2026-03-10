@@ -19,3 +19,4 @@ Latest alignment note:
 - 2026-03-10: AI Help is a server-side OpenAI-backed assistant grounded on a curated local product guide; it answers usage questions only and does not write data or send messages.
 - 2026-03-10: Household gallery media uses only `MediaAssets` + `MediaLinks`; `Households.wedding_photo_file_id` remains the direct household avatar pointer.
 - 2026-03-10: Any signed-in family-group user can edit shared family data (people, households, relationships, attributes, media); admin remains limited to invites, access/security/audit/integrity, and family-group administration.
+- 2026-03-10: `PersonFamilyGroups.family_group_relationship_type` is the canonical family-group classification field with `founder`, `direct`, `in_law`, and `undeclared`; `founder` is admin-managed and other values are system-reconciled from membership + relationship state.

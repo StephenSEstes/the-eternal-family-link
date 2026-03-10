@@ -4,6 +4,7 @@ import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import { getPersonById } from "@/lib/data/runtime";
 import { createAttribute, getAttributeMediaLinks, getAttributesForEntity } from "@/lib/attributes/store";
+import { isLegacyInLawAttributeType } from "@/lib/family-group/relationship-type";
 import { attributeCreateSchema } from "@/lib/validation/attributes";
 
 function normalize(value: string | undefined) {
@@ -24,8 +25,11 @@ export async function GET(request: Request) {
   }
 
   const attributes = await getAttributesForEntity(tenant.tenantKey, entityType, entityId);
+  const visibleAttributes = attributes.filter(
+    (item) => !isLegacyInLawAttributeType(item.attributeType || item.typeKey),
+  );
   const withMedia = await Promise.all(
-    attributes.map(async (item) => ({
+    visibleAttributes.map(async (item) => ({
       ...item,
       media: await getAttributeMediaLinks(tenant.tenantKey, item.attributeId),
     })),
@@ -47,6 +51,15 @@ export async function POST(request: Request) {
   const parsed = attributeCreateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
+  }
+  if (isLegacyInLawAttributeType(parsed.data.attributeType || parsed.data.typeKey)) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
   }
 
   if (parsed.data.entityType === "person") {

@@ -160,6 +160,10 @@ function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   };
 }
 
+function isSystemManagedAttribute(item: AttributeItem) {
+  return normalizeTypeKey(item.attributeType || item.typeKey || "") === "in_law";
+}
+
 function summarizeSingle(item: AttributeItem) {
   const value = item.valueText.trim();
   const datePart = item.dateStart
@@ -427,8 +431,9 @@ export function AttributesModal({
       return;
     }
     const nextRawItems = Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : [];
-    setRawItems(nextRawItems);
-    setItems(nextRawItems.map((item) => normalizeAttributeItem(item)));
+    const visibleItems = nextRawItems.filter((item) => !isSystemManagedAttribute(item));
+    setRawItems(visibleItems);
+    setItems(visibleItems.map((item) => normalizeAttributeItem(item)));
   };
 
   useEffect(() => {
@@ -1312,7 +1317,8 @@ export function AttributeSummarySection({
       setStatus(`Attributes load failed: ${res.status}`);
       return;
     }
-    setItems(Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : []);
+    const nextItems = Array.isArray(body?.attributes) ? (body.attributes as AttributeItem[]) : [];
+    setItems(nextItems.filter((item) => !isSystemManagedAttribute(item)));
     setStatus("");
   };
 

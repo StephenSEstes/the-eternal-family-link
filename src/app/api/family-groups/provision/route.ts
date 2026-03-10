@@ -9,6 +9,7 @@ import {
   ensureTenantScaffold,
   getPeople,
   getTableRecords,
+  setPersonFamilyGroupRelationshipType,
   updateTableRecordById,
   upsertTenantAccess,
 } from "@/lib/data/runtime";
@@ -458,6 +459,7 @@ export async function POST(request: Request) {
     existingInTarget.add(patriarchPersonId);
   }
   await ensureMembership(patriarchPersonId);
+  await setPersonFamilyGroupRelationshipType(patriarchPersonId, familyGroupKey, "founder");
 
   const existingMatriarchPersonId = (parsed.data.existingMatriarchPersonId ?? "").trim();
   const matriarchPersonId = existingMatriarchPersonId ||
@@ -521,6 +523,7 @@ export async function POST(request: Request) {
     existingInTarget.add(matriarchPersonId);
   }
   await ensureMembership(matriarchPersonId);
+  await setPersonFamilyGroupRelationshipType(matriarchPersonId, familyGroupKey, "founder");
 
   const requestedMemberIds = Array.from(
     new Set([parsed.data.initialAdminPersonId, ...parsed.data.memberPersonIds.map((value) => value.trim()).filter(Boolean)]),

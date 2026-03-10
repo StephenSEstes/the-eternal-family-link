@@ -613,6 +613,17 @@ main {
   box-shadow: 0 16px 34px rgba(20, 47, 64, 0.09);
 }
 
+.person-card--needs-placement {
+  border-color: #d98c7a;
+  background: linear-gradient(180deg, #fff7f4 0%, #ffe7df 100%);
+  box-shadow: 0 18px 36px rgba(168, 73, 39, 0.12);
+}
+
+.person-needs-placement {
+  border-color: #e1b0a1;
+  background: linear-gradient(180deg, #fffaf8 0%, #fff1eb 100%);
+}
+
 .person-photo-wrap {
   background: linear-gradient(180deg, #f4fbfd 0%, #e8f4f8 100%);
 }
@@ -640,6 +651,20 @@ main {
   margin: 0;
   font-size: 1.08rem;
   font-weight: 700;
+}
+
+.person-card-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0.45rem;
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  background: #c95e42;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .person-meta-row {

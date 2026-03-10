@@ -18,6 +18,7 @@ import {
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { isLegacyInLawAttributeType } from "@/lib/family-group/relationship-type";
 import { attributeUpdateSchema } from "@/lib/validation/attributes";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
@@ -50,6 +51,15 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
 
   const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
   const nextType = parsed.data.attributeType?.toLowerCase() ?? existingAttributeType;
+  if (isLegacyInLawAttributeType(existingAttributeType) || isLegacyInLawAttributeType(nextType)) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
+  }
   const canonical = attributeUpdateSchema.safeParse({
     typeKey: parsed.data.attributeType,
     attributeType: parsed.data.attributeType,
@@ -176,13 +186,22 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const existingMedia = toPersonMediaAttribute(existing);
+  const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
+  if (isLegacyInLawAttributeType(existingAttributeType)) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
+  }
 
   const deleted = await deleteAttribute(resolved.tenant.tenantKey, attributeId);
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
   if (normalizePersonMediaAttributeType(existingAttributeType)) {
     await removePersonMediaAssociations({
       tenantKey: resolved.tenant.tenantKey,

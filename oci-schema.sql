@@ -37,6 +37,7 @@ BEGIN
       person_id VARCHAR2(128 CHAR) NOT NULL,
       family_group_key VARCHAR2(128 CHAR) NOT NULL,
       is_enabled VARCHAR2(8 CHAR),
+      family_group_relationship_type VARCHAR2(32 CHAR),
       CONSTRAINT pk_person_family_groups PRIMARY KEY (person_id, family_group_key)
     )
   ';

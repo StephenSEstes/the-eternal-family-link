@@ -35,6 +35,7 @@ let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
 let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
+let personFamilyGroupsTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -131,7 +132,7 @@ const TABLES: Record<string, TableConfig> = {
   },
   PersonFamilyGroups: {
     tableName: "person_family_groups",
-    headers: ["person_id", "family_group_key", "is_enabled"],
+    headers: ["person_id", "family_group_key", "is_enabled", "family_group_relationship_type"],
   },
   Relationships: {
     tableName: "relationships",
@@ -446,6 +447,22 @@ async function ensureFamilyConfigTableCompatibility(connection: OciConnection) {
   familyConfigCompatEnsured = true;
 }
 
+async function ensurePersonFamilyGroupsTableCompatibility(connection: OciConnection) {
+  if (personFamilyGroupsTableCompatEnsured) {
+    return;
+  }
+  try {
+    await connection.execute(`ALTER TABLE person_family_groups ADD (family_group_relationship_type VARCHAR2(32))`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!isColumnAlreadyCompatibleError(message)) {
+      throw error;
+    }
+  }
+  personFamilyGroupsTableCompatEnsured = true;
+}
+
 async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
   if (householdsTableCompatEnsured) {
     return;
@@ -588,6 +605,10 @@ async function ensureUserAccessTableCompatibility(connection: OciConnection) {
 async function ensureTableCompatibility(connection: OciConnection, tableName: string) {
   if (tableName === "people") {
     await ensurePeopleTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "person_family_groups") {
+    await ensurePersonFamilyGroupsTableCompatibility(connection);
     return;
   }
   if (tableName === "family_config") {
@@ -1304,8 +1325,10 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<TableRecord[
   const normalized = tenantKey.trim().toLowerCase();
   return withConnection(async (connection) => {
     await ensurePeopleTableCompatibility(connection);
+    await ensurePersonFamilyGroupsTableCompatibility(connection);
     const result = await connection.execute(
-      `SELECT ${TABLES.People.headers.map((h) => `p.${h}`).join(", ")}
+      `SELECT ${TABLES.People.headers.map((h) => `p.${h}`).join(", ")},
+              NVL(m.family_group_relationship_type, '') AS family_membership_relationship_type
        FROM people p
        INNER JOIN person_family_groups m
          ON TRIM(m.person_id) = TRIM(p.person_id)
@@ -1318,7 +1341,10 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<TableRecord[
     const rows = (result.rows ?? []) as Record<string, unknown>[];
     return rows.map((row, idx) => ({
       rowNumber: idx + 2,
-      data: Object.fromEntries(TABLES.People.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])])),
+      data: {
+        ...Object.fromEntries(TABLES.People.headers.map((header) => [header, fromDbValue(row[header.toUpperCase()])])),
+        family_membership_relationship_type: fromDbValue(row.FAMILY_MEMBERSHIP_RELATIONSHIP_TYPE),
+      },
     }));
   });
 }
@@ -1412,6 +1438,7 @@ export async function upsertOciPersonFamilyGroupMembership(
   }
   const enabledValue = isEnabled ? "TRUE" : "FALSE";
   return withConnection(async (connection) => {
+    await ensurePersonFamilyGroupsTableCompatibility(connection);
     const update = await connection.execute(
       `UPDATE person_family_groups
        SET is_enabled = :isEnabled
@@ -1429,14 +1456,77 @@ export async function upsertOciPersonFamilyGroupMembership(
       return "updated";
     }
     await connection.execute(
-      `INSERT INTO person_family_groups (person_id, family_group_key, is_enabled)
-       VALUES (:personId, :familyGroupKey, :isEnabled)`,
+      `INSERT INTO person_family_groups (person_id, family_group_key, is_enabled, family_group_relationship_type)
+       VALUES (:personId, :familyGroupKey, :isEnabled, 'undeclared')`,
       {
         personId: normalizedPersonId,
         familyGroupKey: normalizedFamilyGroupKey,
         isEnabled: enabledValue,
       },
       { autoCommit: false }
+    );
+    await connection.commit();
+    return "created";
+  });
+}
+
+export async function setOciPersonFamilyGroupRelationshipType(
+  personId: string,
+  familyGroupKey: string,
+  familyGroupRelationshipType: "founder" | "direct" | "in_law" | "undeclared",
+): Promise<"created" | "updated" | "unchanged"> {
+  const normalizedPersonId = personId.trim();
+  const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
+  if (!normalizedPersonId || !normalizedFamilyGroupKey) {
+    throw new Error("person_id and family_group_key are required");
+  }
+  const nextRelationshipType = familyGroupRelationshipType.trim().toLowerCase();
+  return withConnection(async (connection) => {
+    await ensurePersonFamilyGroupsTableCompatibility(connection);
+    const existing = await connection.execute(
+      `SELECT
+         NVL(TRIM(is_enabled), '') AS is_enabled,
+         NVL(TRIM(family_group_relationship_type), '') AS family_group_relationship_type
+       FROM person_family_groups
+       WHERE TRIM(person_id) = :personId
+         AND LOWER(TRIM(family_group_key)) = :familyGroupKey
+       FETCH FIRST 1 ROWS ONLY`,
+      {
+        personId: normalizedPersonId,
+        familyGroupKey: normalizedFamilyGroupKey,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const current = (existing.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    if (current) {
+      const currentRelationshipType = fromDbValue(current.FAMILY_GROUP_RELATIONSHIP_TYPE).trim().toLowerCase();
+      if (currentRelationshipType === nextRelationshipType) {
+        return "unchanged";
+      }
+      await connection.execute(
+        `UPDATE person_family_groups
+         SET family_group_relationship_type = :familyGroupRelationshipType
+         WHERE TRIM(person_id) = :personId
+           AND LOWER(TRIM(family_group_key)) = :familyGroupKey`,
+        {
+          familyGroupRelationshipType: nextRelationshipType,
+          personId: normalizedPersonId,
+          familyGroupKey: normalizedFamilyGroupKey,
+        },
+        { autoCommit: false },
+      );
+      await connection.commit();
+      return "updated";
+    }
+    await connection.execute(
+      `INSERT INTO person_family_groups (person_id, family_group_key, is_enabled, family_group_relationship_type)
+       VALUES (:personId, :familyGroupKey, 'TRUE', :familyGroupRelationshipType)`,
+      {
+        personId: normalizedPersonId,
+        familyGroupKey: normalizedFamilyGroupKey,
+        familyGroupRelationshipType: nextRelationshipType,
+      },
+      { autoCommit: false },
     );
     await connection.commit();
     return "created";

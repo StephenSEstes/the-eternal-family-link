@@ -16,6 +16,8 @@ import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
+type FamilyGroupRelationshipType = "founder" | "direct" | "in_law" | "undeclared";
+
 type PersonItem = {
   personId: string;
   displayName: string;
@@ -32,6 +34,7 @@ type PersonItem = {
   address?: string;
   hobbies?: string;
   notes?: string;
+  familyGroupRelationshipType?: FamilyGroupRelationshipType;
 };
 
 type GraphEdge = {
@@ -79,6 +82,7 @@ type Props = {
   open: boolean;
   tenantKey: string;
   canManage: boolean;
+  canManageRelationshipType?: boolean;
   person: PersonItem | null;
   people: PersonItem[];
   edges: GraphEdge[];
@@ -184,6 +188,26 @@ function normalizeAttributeKey(value?: string) {
   return (value ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 }
 
+function normalizeFamilyGroupRelationshipType(value?: string): FamilyGroupRelationshipType {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "founder" || normalized === "direct" || normalized === "in_law" || normalized === "undeclared") {
+    return normalized;
+  }
+  return "undeclared";
+}
+
+function isAnchorFamilyGroupRelationshipType(value?: string) {
+  const normalized = normalizeFamilyGroupRelationshipType(value);
+  return normalized === "founder" || normalized === "direct";
+}
+
+function formatFamilyGroupRelationshipTypeLabel(value?: string) {
+  const normalized = normalizeFamilyGroupRelationshipType(value);
+  if (normalized === "in_law") return "In-law";
+  if (normalized === "undeclared") return "Needs Placement";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function toTitleWords(value?: string) {
   return (value ?? "")
     .replace(/_/g, " ")
@@ -279,11 +303,6 @@ function oppositeGender(value: "male" | "female" | "unspecified") {
 
 function normalizeId(value?: string) {
   return (value ?? "").trim();
-}
-
-function isTruthyFlag(value?: string) {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
 function assignParentSlots(parentIds: string[], peopleById: Map<string, PersonItem>) {
@@ -565,6 +584,7 @@ export function PersonEditModal({
   open,
   tenantKey,
   canManage,
+  canManageRelationshipType = false,
   person,
   people,
   edges,
@@ -593,6 +613,8 @@ export function PersonEditModal({
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [familyTouched, setFamilyTouched] = useState(false);
+  const [storedFamilyGroupRelationshipType, setStoredFamilyGroupRelationshipType] = useState<FamilyGroupRelationshipType>("undeclared");
+  const [familyRelationshipTypeBusy, setFamilyRelationshipTypeBusy] = useState(false);
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
   const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
@@ -632,7 +654,6 @@ export function PersonEditModal({
   const [newSpouseDisplayName, setNewSpouseDisplayName] = useState("");
   const [newSpouseBirthDate, setNewSpouseBirthDate] = useState("");
   const [newSpouseGender, setNewSpouseGender] = useState<"male" | "female" | "unspecified">("unspecified");
-  const [newSpouseInLaw, setNewSpouseInLaw] = useState(true);
   const [creatingSpouse, setCreatingSpouse] = useState(false);
   const pendingCreatedSpouseIdRef = useRef("");
   const initialFamilyRef = useRef<{ parent1Id: string; parent2Id: string; spouseId: string }>({
@@ -841,11 +862,15 @@ export function PersonEditModal({
     setNewSpouseDisplayName("");
     setNewSpouseBirthDate("");
     setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
-    setNewSpouseInLaw(true);
     pendingCreatedSpouseIdRef.current = "";
     setStatus("");
+    setStoredFamilyGroupRelationshipType(
+      normalizeFamilyGroupRelationshipType(
+        peopleById.get(person.personId)?.familyGroupRelationshipType ?? person.familyGroupRelationshipType,
+      ),
+    );
     void loadPersonAttributeState(person.personId);
-  }, [open, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
+  }, [open, peopleById, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -865,6 +890,7 @@ export function PersonEditModal({
   const motherOptions = useMemo(() => {
     const base = personOptions.filter(
       (item) =>
+        isAnchorFamilyGroupRelationshipType(item.familyGroupRelationshipType) &&
         (item.gender ?? "unspecified") === "female" &&
         isEligibleParentAge(item.birthDate, childBirthDate) &&
         item.personId !== parent2Id,
@@ -880,6 +906,7 @@ export function PersonEditModal({
   const fatherOptions = useMemo(() => {
     const base = personOptions.filter(
       (item) =>
+        isAnchorFamilyGroupRelationshipType(item.familyGroupRelationshipType) &&
         (item.gender ?? "unspecified") === "male" &&
         isEligibleParentAge(item.birthDate, childBirthDate) &&
         item.personId !== parent1Id,
@@ -893,31 +920,6 @@ export function PersonEditModal({
     return base;
   }, [childBirthDate, parent1Id, parent2Id, personOptions]);
 
-  const spouseOptions = useMemo(
-    () => {
-      const base = personOptions.filter((option) => {
-        const marriedTo = spouseByPersonId.get(option.personId);
-        return !marriedTo || marriedTo === person?.personId;
-      });
-      if (spouseId && !base.some((option) => option.personId === spouseId)) {
-        const selected = personOptions.find((option) => option.personId === spouseId) ?? localPeople.find((option) => option.personId === spouseId);
-        if (selected && selected.personId !== person?.personId) {
-          return [selected, ...base];
-        }
-      }
-      return base;
-    },
-    [localPeople, person?.personId, personOptions, spouseByPersonId, spouseId],
-  );
-  const hasVisibleSpouseSelection = useMemo(
-    () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
-    [spouseId, spouseOptions],
-  );
-  const selectedSpouseName = useMemo(() => {
-    if (!spouseId) return "-";
-    const spouse = localPeople.find((item) => item.personId === spouseId);
-    return spouse?.displayName || "-";
-  }, [localPeople, spouseId]);
   const marriedAttribute = useMemo(() => {
     const rows = aboutAttributes.filter((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "family_relationship");
     return rows.find((item) => normalizeAttributeKey(item.attributeTypeCategory) === "married") ?? null;
@@ -929,13 +931,6 @@ export function PersonEditModal({
     return formatted === "-" ? "" : formatted;
   }, [marriedAttribute]);
   const yearsMarriedText = useMemo(() => computeYearsSince(marriedAttribute?.attributeDate || ""), [marriedAttribute]);
-  const marriedSummaryText = useMemo(() => {
-    if (!spouseId || selectedSpouseName === "-") return "coming";
-    const parts = [selectedSpouseName];
-    if (marriedDateText) parts.push(marriedDateText);
-    if (yearsMarriedText) parts.push(`${yearsMarriedText} years married`);
-    return parts.join(", ");
-  }, [marriedDateText, selectedSpouseName, spouseId, yearsMarriedText]);
   const chipColorStyle = (rawTypeKey: string) => {
     const color = eventCategoryColorByKey[normalizeAttributeKey(rawTypeKey)] || "#d9e2ec";
     return {
@@ -967,21 +962,102 @@ export function PersonEditModal({
       return getTimelineChipLabel(a).localeCompare(getTimelineChipLabel(b));
     });
   }, [aboutAttributes, timelineSortOrder]);
-  const isInLawPerson = useMemo(() => {
-    const inLegacyAttributes = attributes.some((item) => normalizeAttributeKey(item.attributeType) === "in_law" && isTruthyFlag(item.valueText));
-    const inUnifiedAttributes = aboutAttributes.some((item) => normalizeAttributeKey(item.attributeType || item.typeKey) === "in_law" && isTruthyFlag(getSafeAttributeText(item.attributeDetail || item.valueText)));
-    const hasSpouseInFamily = edges.some((edge) => {
-      const relType = (edge.label ?? "").trim().toLowerCase();
-      if (relType !== "spouse" && relType !== "family") return false;
-      if (!person) return false;
-      return edge.fromPersonId === person.personId || edge.toPersonId === person.personId;
-    });
-    const hasParentsInFamily = parentIds.length > 0;
-    const hasGraphSignals = hasSpouseInFamily || hasParentsInFamily;
-    const inferredInLawByGraph = hasSpouseInFamily && !hasParentsInFamily;
-    if (hasGraphSignals) return inferredInLawByGraph;
-    return inLegacyAttributes || inUnifiedAttributes;
-  }, [aboutAttributes, attributes, edges, parentIds.length, person]);
+  const displayedFamilyGroupRelationshipType = useMemo<FamilyGroupRelationshipType>(() => {
+    if (storedFamilyGroupRelationshipType === "founder") {
+      return "founder";
+    }
+    if (!familyTouched) {
+      return storedFamilyGroupRelationshipType;
+    }
+    if (parentIds.length > 0) {
+      return "direct";
+    }
+    const spouseRelationshipType = normalizeFamilyGroupRelationshipType(
+      localPeople.find((item) => item.personId === spouseId)?.familyGroupRelationshipType,
+    );
+    if (spouseId && isAnchorFamilyGroupRelationshipType(spouseRelationshipType)) {
+      return "in_law";
+    }
+    return "undeclared";
+  }, [familyTouched, localPeople, parentIds.length, spouseId, storedFamilyGroupRelationshipType]);
+  const isFounderPerson = displayedFamilyGroupRelationshipType === "founder";
+  const isInLawPerson = displayedFamilyGroupRelationshipType === "in_law";
+  const isUndeclaredPerson = displayedFamilyGroupRelationshipType === "undeclared";
+  const currentPersonCanAnchorMarriage = isFounderPerson || parentIds.length > 0;
+  const spouseOptions = useMemo(
+    () => {
+      const base = personOptions.filter((option) => {
+        const marriedTo = spouseByPersonId.get(option.personId);
+        const validAnchorMatch =
+          currentPersonCanAnchorMarriage || isAnchorFamilyGroupRelationshipType(option.familyGroupRelationshipType);
+        return (!marriedTo || marriedTo === person?.personId) && validAnchorMatch;
+      });
+      if (spouseId && !base.some((option) => option.personId === spouseId)) {
+        const selected =
+          personOptions.find((option) => option.personId === spouseId) ?? localPeople.find((option) => option.personId === spouseId);
+        if (selected && selected.personId !== person?.personId) {
+          return [selected, ...base];
+        }
+      }
+      return base;
+    },
+    [currentPersonCanAnchorMarriage, localPeople, person?.personId, personOptions, spouseByPersonId, spouseId],
+  );
+  const hasVisibleSpouseSelection = useMemo(
+    () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
+    [spouseId, spouseOptions],
+  );
+  const selectedSpouseName = useMemo(() => {
+    if (!spouseId) return "-";
+    const spouse = localPeople.find((item) => item.personId === spouseId);
+    return spouse?.displayName || "-";
+  }, [localPeople, spouseId]);
+  const marriedSummaryText = useMemo(() => {
+    if (!spouseId || selectedSpouseName === "-") return "coming";
+    const parts = [selectedSpouseName];
+    if (marriedDateText) parts.push(marriedDateText);
+    if (yearsMarriedText) parts.push(`${yearsMarriedText} years married`);
+    return parts.join(", ");
+  }, [marriedDateText, selectedSpouseName, spouseId, yearsMarriedText]);
+  const founderCount = useMemo(
+    () => localPeople.filter((item) => normalizeFamilyGroupRelationshipType(item.familyGroupRelationshipType) === "founder").length,
+    [localPeople],
+  );
+  const applyLocalFamilyGroupRelationshipType = (personId: string, nextType: FamilyGroupRelationshipType) => {
+    setLocalPeople((current) =>
+      current.map((item) =>
+        item.personId === personId ? { ...item, familyGroupRelationshipType: nextType } : item,
+      ),
+    );
+    if (person?.personId === personId) {
+      setStoredFamilyGroupRelationshipType(nextType);
+      setFamilyTouched(false);
+    }
+  };
+  const saveFounderDesignation = async (nextFounderValue: boolean) => {
+    if (!person) return;
+    setFamilyRelationshipTypeBusy(true);
+    setStatus("");
+    const response = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/family-relationship-type`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ founder: nextFounderValue }),
+      },
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      setFamilyRelationshipTypeBusy(false);
+      setStatus(String(body?.message ?? body?.error ?? "Family relationship type update failed."));
+      return;
+    }
+    const nextType = normalizeFamilyGroupRelationshipType(body?.familyGroupRelationshipType);
+    applyLocalFamilyGroupRelationshipType(person.personId, nextType);
+    setFamilyRelationshipTypeBusy(false);
+    setStatus(nextFounderValue ? "Founder designation saved." : "Founder designation removed.");
+    onSaved();
+  };
   const aboutDescriptorAttributes = useMemo(() => {
     return aboutAttributes.filter((item) => {
       if (item.category) return item.category === "descriptor";
@@ -1423,24 +1499,6 @@ export function PersonEditModal({
         return;
       }
 
-      if (newSpouseInLaw) {
-        await fetch(
-          `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(createdPersonId)}/attributes`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              attributeType: "in_law",
-              valueText: "TRUE",
-              label: "in-law",
-              visibility: "family",
-              sortOrder: 0,
-              isPrimary: false,
-            }),
-          },
-        ).catch(() => undefined);
-      }
-
       let relationSaved = false;
       if (canManage) {
         const relationshipRes = await fetch(
@@ -1471,7 +1529,15 @@ export function PersonEditModal({
         if (current.some((entry) => entry.personId === createdPersonId)) {
           return current;
         }
-        return [...current, { personId: createdPersonId, displayName: createdDisplayName, gender: newSpouseGender }];
+        return [
+          ...current,
+          {
+            personId: createdPersonId,
+            displayName: createdDisplayName,
+            gender: newSpouseGender,
+            familyGroupRelationshipType: "undeclared",
+          },
+        ];
       });
       pendingCreatedSpouseIdRef.current = createdPersonId;
       setSpouseId(createdPersonId);
@@ -1706,10 +1772,16 @@ export function PersonEditModal({
                           const nextHouseholds = Array.isArray(treeBody?.households)
                             ? (treeBody.households as HouseholdLink[])
                             : [];
+                          const nextPersonRecord = nextPeople.find((item) => item.personId === person?.personId);
                           setActiveTenantKey(nextKey);
                           setLocalPeople(nextPeople);
                           setContextEdges(nextRelationships);
                           setContextHouseholds(nextHouseholds);
+                          setStoredFamilyGroupRelationshipType(
+                            normalizeFamilyGroupRelationshipType(
+                              nextPersonRecord?.familyGroupRelationshipType ?? person?.familyGroupRelationshipType,
+                            ),
+                          );
                           if (person?.personId) {
                             await Promise.all([
                               loadPersonAttributeState(person.personId, nextKey),
@@ -1728,10 +1800,59 @@ export function PersonEditModal({
                     </select>
                   </div>
                 ) : null}
+                <div
+                  style={{
+                    marginBottom: "0.85rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: 16,
+                    border: `1px solid ${
+                      isUndeclaredPerson ? "#d98c7a" : isFounderPerson ? "#b29a59" : isInLawPerson ? "#7b8db8" : "#8aa8a0"
+                    }`,
+                    background: isUndeclaredPerson
+                      ? "linear-gradient(180deg, #fff3ef 0%, #ffe4db 100%)"
+                      : isFounderPerson
+                        ? "linear-gradient(180deg, #fff7df 0%, #f5ebc1 100%)"
+                        : isInLawPerson
+                          ? "linear-gradient(180deg, #eef2fb 0%, #dfe7fb 100%)"
+                          : "linear-gradient(180deg, #edf8f3 0%, #deefe8 100%)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <div>
+                      <div className="label" style={{ marginBottom: "0.2rem" }}>Family Relationship Type</div>
+                      <strong>{formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}</strong>
+                    </div>
+                    {canManageRelationshipType ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
+                        onClick={() => void saveFounderDesignation(!isFounderPerson)}
+                      >
+                        {isFounderPerson ? "Remove Founder" : "Set as Founder"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {isUndeclaredPerson ? (
+                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                      This person belongs to the family group but is not yet placed in the tree. Add a direct parent or marry into a direct/founder line to place them.
+                    </p>
+                  ) : null}
+                  {isFounderPerson ? (
+                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                      Founders anchor this family group. Founders cannot have parents assigned in this family.
+                    </p>
+                  ) : null}
+                  {isInLawPerson ? (
+                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                      In-laws can be spouses and parents in this family, but their own parents are not shown in this family view.
+                    </p>
+                  ) : null}
+                </div>
                 {canManage ? (
                   <>
                     <div className="settings-chip-list">
-                      {!isInLawPerson ? (
+                      {!isInLawPerson && !isFounderPerson ? (
                         <>
                           <div style={{ flex: 1, minWidth: 180 }}>
                             <label className="label">Mother</label>
@@ -1782,9 +1903,13 @@ export function PersonEditModal({
                             </select>
                           </div>
                         </>
+                      ) : isFounderPerson ? (
+                        <p className="page-subtitle field-span-2" style={{ marginBottom: 0 }}>
+                          Founders cannot have parents assigned in this family group.
+                        </p>
                       ) : (
                         <p className="page-subtitle field-span-2" style={{ marginBottom: 0 }}>
-                          As an in-law your parents are not visible in this view. To see/Select your parents, change the family group.
+                          As an in-law your parents are not visible in this family view. To see or select your parents, change to the family group where you are direct.
                         </p>
                       )}
                       <div style={{ flex: 1, minWidth: 180 }}>
@@ -1811,15 +1936,23 @@ export function PersonEditModal({
                         <button
                           type="button"
                           className="button secondary tap-button"
+                          disabled={!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)}
                           onClick={() => {
+                            if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
+                              return;
+                            }
                             setShowAddSpouse(true);
-                            setNewSpouseInLaw(true);
                             setNewSpouseGender(oppositeGender(gender));
                             setStatus("");
                           }}
                         >
                           Add New Person as Spouse
                         </button>
+                        {!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
+                          <p className="page-subtitle" style={{ margin: "0.45rem 0 0" }}>
+                            Add or connect this person to a direct parent first, or choose an existing direct/founder spouse.
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
                     {householdId ? (
@@ -2273,9 +2406,6 @@ export function PersonEditModal({
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
-              <label className="label" style={{ marginTop: "0.5rem" }}>
-                <input type="checkbox" checked={newSpouseInLaw} onChange={(e) => setNewSpouseInLaw(e.target.checked)} /> In-law mode
-              </label>
               <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
                 <button
                   type="button"
@@ -2367,6 +2497,7 @@ export function PersonEditModal({
                     setSaving(false);
                     return;
                   }
+                  applyLocalFamilyGroupRelationshipType(person.personId, displayedFamilyGroupRelationshipType);
                   }
                 }
                 setStatus("Saved.");

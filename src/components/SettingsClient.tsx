@@ -1094,7 +1094,7 @@ export function SettingsClient({
 
   const repairIntegrityIssues = async () => {
     const confirmed = window.confirm(
-      "Run automatic repair for duplicate access rows, missing links, and legacy local-users rows?",
+      "Run automatic repair for duplicate access rows, missing links, spouse household drift, and family relationship type drift?",
     );
     if (!confirmed) {
       return;
@@ -1111,7 +1111,7 @@ export function SettingsClient({
     }
     const repaired = body?.repaired ?? {};
     setIntegrityRepairStatus(
-      `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}.`,
+      `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}, relationship types created: ${Number(repaired.repairedRelationshipTypeCreatedRows ?? 0)}, normalized: ${Number(repaired.repairedRelationshipTypeUpdatedRows ?? 0)}, legacy attribute rows deleted: ${Number(repaired.repairedRelationshipTypeDeletedRows ?? 0)}.`,
     );
     await runIntegrityCheck();
   };

@@ -119,6 +119,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
       <PeopleDirectory
         tenantKey={tenant.tenantKey}
         canManage={canManageFamilyData(session, tenant)}
+        canManageRelationshipType={tenant.role === "ADMIN"}
         people={people.map((person) => ({
           personId: person.personId,
           displayName: person.displayName,
@@ -135,6 +136,7 @@ export default async function TenantPeoplePage({ params }: TenantPeoplePageProps
           address: person.address,
           hobbies: person.hobbies,
           notes: person.notes,
+          familyGroupRelationshipType: person.familyGroupRelationshipType,
         }))}
         edges={filteredRelationships.map((edge) => ({
           id: edge.id,

@@ -113,6 +113,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
             <TreeGraph
               tenantKey={tenant.tenantKey}
               canManage={canManageFamilyData(session, tenant)}
+              canManageRelationshipType={tenant.role === "ADMIN"}
               nodes={people.map((person) => ({
                 personId: person.personId,
                 displayName: person.displayName,
@@ -128,6 +129,7 @@ export default async function TenantTreePage({ params }: TenantTreePageProps) {
                 address: person.address,
                 hobbies: person.hobbies,
                 notes: person.notes,
+                familyGroupRelationshipType: person.familyGroupRelationshipType,
               }))}
               edges={edges}
               households={households.map((unit) => ({

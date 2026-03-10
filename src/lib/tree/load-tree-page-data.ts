@@ -2,6 +2,7 @@ import "server-only";
 
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/data/runtime";
+import { isTreePlacedFamilyGroupRelationshipType } from "@/lib/family-group/relationship-type";
 
 export type TreePageData = {
   people: Awaited<ReturnType<typeof getPeople>>;
@@ -32,11 +33,16 @@ export async function loadTreePageData(tenantKey: string): Promise<TreePageData>
   }
 
   const next = (async () => {
-    const people = await getPeople(tenantKey);
+    const people = (await getPeople(tenantKey)).filter((person) =>
+      isTreePlacedFamilyGroupRelationshipType(person.familyGroupRelationshipType),
+    );
     const peopleInFamily = new Set(people.map((person) => person.personId));
-    const [allRelationships, households] = await Promise.all([getRelationships(tenantKey), getHouseholds(tenantKey)]);
+    const [allRelationships, allHouseholds] = await Promise.all([getRelationships(tenantKey), getHouseholds(tenantKey)]);
     const relationships = allRelationships.filter(
       (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
+    );
+    const households = allHouseholds.filter(
+      (unit) => peopleInFamily.has(unit.partner1PersonId) && peopleInFamily.has(unit.partner2PersonId),
     );
     const data = { people, relationships, households };
     treePageDataCache.set(cacheKey, { data, expiresAt: Date.now() + TREE_PAGE_CACHE_TTL_MS });

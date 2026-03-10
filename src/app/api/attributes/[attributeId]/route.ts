@@ -9,6 +9,7 @@ import {
   removeAttributeMediaLink,
   updateAttribute,
 } from "@/lib/attributes/store";
+import { isLegacyInLawAttributeType } from "@/lib/family-group/relationship-type";
 import { attributeMediaPatchSchema, attributeUpdateSchema } from "@/lib/validation/attributes";
 
 type RouteProps = {
@@ -53,6 +54,18 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   const parsed = attributeUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
+  }
+  if (
+    isLegacyInLawAttributeType(existing.attributeType || existing.typeKey) ||
+    isLegacyInLawAttributeType(parsed.data.attributeType || parsed.data.typeKey)
+  ) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
   }
 
   const updated = await updateAttribute(tenant.tenantKey, attributeId, {
@@ -101,6 +114,15 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   const existing = await getAttributeById(tenant.tenantKey, attributeId);
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (isLegacyInLawAttributeType(existing.attributeType || existing.typeKey)) {
+    return NextResponse.json(
+      {
+        error: "system_managed_attribute",
+        message: "Legacy in_law attributes are not supported. Family-group relationship type is system-managed.",
+      },
+      { status: 403 },
+    );
   }
   const ok = await deleteAttribute(tenant.tenantKey, attributeId);
   if (!ok) {

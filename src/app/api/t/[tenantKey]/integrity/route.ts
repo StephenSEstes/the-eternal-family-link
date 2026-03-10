@@ -13,6 +13,7 @@ import {
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { auditOrRepairFamilyGroupRelationshipTypes } from "@/lib/family-group/relationship-type";
 
 type IntegritySeverity = "error" | "warn";
 
@@ -373,6 +374,7 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
 async function runIntegrityAudit(tenantKey: string) {
   const familyGroupKey = normalize(tenantKey);
   const [
+    familyGroupRelationshipAudit,
     people,
     peopleRowsGlobal,
     personFamilyRows,
@@ -385,6 +387,7 @@ async function runIntegrityAudit(tenantKey: string) {
     personAttributeRows,
     importantDateRows,
   ] = await Promise.all([
+    auditOrRepairFamilyGroupRelationshipTypes(familyGroupKey, false),
     getPeople(tenantKey).catch(() => []),
     getTableRecords("People").catch(() => []),
     getTableRecords("PersonFamilyGroups").catch(() => []),
@@ -654,6 +657,48 @@ async function runIntegrityAudit(tenantKey: string) {
     scopedPeopleTables,
   );
 
+  pushFinding(
+    findings,
+    "warn",
+    "family_group_relationship_type_mismatch",
+    "People whose stored family-group relationship type does not match the current founder/direct/in-law/undeclared classification.",
+    familyGroupRelationshipAudit.samplePeople.mismatched,
+  );
+  pushFinding(
+    findings,
+    "warn",
+    "family_group_relationship_type_legacy_in_law_attributes",
+    "Legacy in_law attribute rows still exist and should be cleaned up because PersonFamilyGroups.family_group_relationship_type is now canonical.",
+    familyGroupRelationshipAudit.samplePeople.legacyAttributes,
+  );
+  if (familyGroupRelationshipAudit.counts.invalidMembershipRows > 0) {
+    findings.push({
+      severity: "warn",
+      code: "family_group_relationship_type_invalid_membership_rows",
+      message: "PersonFamilyGroups family_group_relationship_type values contain invalid or noncanonical state and should be normalized.",
+      count: familyGroupRelationshipAudit.counts.invalidMembershipRows,
+      sample: familyGroupRelationshipAudit.samplePeople.invalidMembership.slice(0, 10),
+    });
+  }
+  if (familyGroupRelationshipAudit.counts.founderCount === 0) {
+    findings.push({
+      severity: "warn",
+      code: "family_group_relationship_type_missing_founder",
+      message: "This family group has no founder assigned, so direct/in-law placement cannot be derived reliably.",
+      count: 1,
+      sample: [],
+    });
+  }
+  if (familyGroupRelationshipAudit.counts.founderOverflowPeople > 0) {
+    findings.push({
+      severity: "warn",
+      code: "family_group_relationship_type_founder_overflow",
+      message: "This family group has more than two founders assigned.",
+      count: familyGroupRelationshipAudit.counts.founderOverflowPeople,
+      sample: familyGroupRelationshipAudit.samplePeople.founderOverflow.slice(0, 10),
+    });
+  }
+
   const errorCount = findings.filter((item) => item.severity === "error").length;
   const warnCount = findings.filter((item) => item.severity === "warn").length;
   const summary = {
@@ -721,6 +766,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     if (!result.ok) {
       return NextResponse.json(result, { status: 400 });
     }
+    return NextResponse.json(result);
+  }
+  if (
+    action === "audit_family_group_relationship_types" ||
+    action === "repair_family_group_relationship_types"
+  ) {
+    const result = await auditOrRepairFamilyGroupRelationshipTypes(
+      familyGroupKey,
+      action === "repair_family_group_relationship_types",
+    );
     return NextResponse.json(result);
   }
 
@@ -1221,6 +1276,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     }
   }
 
+  const familyGroupRelationshipRepair = await auditOrRepairFamilyGroupRelationshipTypes(familyGroupKey, true);
+
   let deletedDuplicatePeopleRows = 0;
   let deletedDuplicatePeopleMembershipRows = 0;
   for (const group of before.duplicatePeopleGroups) {
@@ -1262,6 +1319,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       createdMissingLinks,
       repairedSpouseFamilyMembershipRows,
       repairedSpouseHouseholdRows,
+      repairedRelationshipTypeCreatedRows: familyGroupRelationshipRepair.counts.createdRows,
+      repairedRelationshipTypeUpdatedRows: familyGroupRelationshipRepair.counts.updatedRows,
+      repairedRelationshipTypeDeletedRows: familyGroupRelationshipRepair.counts.deletedRows,
+      repairedRelationshipTypeCheckedPeople: familyGroupRelationshipRepair.counts.checkedPeople,
       skippedSpouseHouseholdConflicts,
       deletedDuplicatePeopleRows,
       deletedDuplicatePeopleMembershipRows,

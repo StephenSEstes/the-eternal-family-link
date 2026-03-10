@@ -18,7 +18,7 @@ This section is a quick reference for the three data areas that drive profile/me
 
 - Core record: `People`
 - Key: `person_id`
-- Family visibility: `PersonFamilyGroups (person_id, family_group_key, is_enabled)`
+- Family visibility and family-group relationship typing: `PersonFamilyGroups (person_id, family_group_key, is_enabled, family_group_relationship_type)`
 - Primary headshot pointer: `People.photo_file_id`
 
 ### 2) Attributes
@@ -97,8 +97,9 @@ This section is a quick reference for the three data areas that drive profile/me
   - `person_id`
   - `family_group_key`
   - `is_enabled`
+  - `family_group_relationship_type` (`founder` | `direct` | `in_law` | `undeclared`)
 - Purpose:
-  - Join table for person membership in one or more family groups.
+  - Join table for person membership in one or more family groups, including the person’s family-specific placement/classification.
 - Logical index/key:
   - Unique composite: (`person_id`, `family_group_key`)
 

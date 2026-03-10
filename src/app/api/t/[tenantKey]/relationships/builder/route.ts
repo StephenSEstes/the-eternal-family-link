@@ -2,7 +2,6 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { buildEntityId } from "@/lib/entity-id";
-import { createAttribute, deleteAttribute, getAttributesForEntity, updateAttribute } from "@/lib/attributes/store";
 import {
   createTableRecord,
   createTableRecords,
@@ -10,9 +9,16 @@ import {
   deleteTableRows,
   ensurePersonFamilyGroupMembership,
   getTableRecords,
-  updateTableRecordById,
 } from "@/lib/data/runtime";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
+import {
+  deriveExpectedFamilyGroupRelationshipTypes,
+  isAnchorFamilyGroupRelationshipType,
+  isFounderFamilyGroupRelationshipType,
+  normalizeFamilyGroupRelationshipType,
+  reconcileFamilyGroupRelationshipTypes,
+  toRelationshipLike,
+} from "@/lib/family-group/relationship-type";
+import { hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({
   personId: z.string().trim().min(1),
@@ -99,86 +105,27 @@ function parseEnabledMembership(value: string) {
   return normalized === "true" || normalized === "yes" || normalized === "1";
 }
 
-const IN_LAW_SYNC_NOTE_PREFIX = "[system] in_law_sync:";
-
-function inLawMarkerForFamily(familyGroupKey: string) {
-  return `${IN_LAW_SYNC_NOTE_PREFIX}${familyGroupKey}`;
+function toMembershipLike(record: Record<string, string>) {
+  return {
+    personId: readField(record, "person_id"),
+    familyGroupKey: readField(record, "family_group_key"),
+    isEnabled: readField(record, "is_enabled"),
+    familyGroupRelationshipType: readField(record, "family_group_relationship_type"),
+  };
 }
 
-function isInLawAttributeForFamily(
-  attribute: {
-    attributeType?: string;
-    typeKey?: string;
-    attributeNotes?: string;
-    notes?: string;
-  },
+function addEnabledGroup(
+  enabledGroupsByPerson: Map<string, Set<string>>,
+  personId: string,
   familyGroupKey: string,
 ) {
-  const attributeType = (attribute.attributeType ?? attribute.typeKey ?? "").trim().toLowerCase();
-  if (attributeType !== "in_law") return false;
-  const marker = inLawMarkerForFamily(familyGroupKey);
-  const notes = `${attribute.attributeNotes ?? ""} ${attribute.notes ?? ""}`.toLowerCase();
-  return notes.includes(marker.toLowerCase());
-}
-
-async function reconcileInLawMarkerForFamily(
-  tenantKey: string,
-  personId: string,
-  shouldBeInLaw: boolean,
-) {
-  const marker = inLawMarkerForFamily(tenantKey);
-  const attributes = await getAttributesForEntity(tenantKey, "person", personId);
-  const scopedAttributes = attributes.filter((attribute) => isInLawAttributeForFamily(attribute, tenantKey));
-  if (shouldBeInLaw) {
-    if (scopedAttributes.length > 0) {
-      const [first, ...duplicates] = scopedAttributes;
-      await updateAttribute(tenantKey, first.attributeId, {
-        category: "descriptor",
-        attributeType: "in_law",
-        attributeTypeCategory: "",
-        attributeDate: "",
-        dateIsEstimated: false,
-        estimatedTo: "",
-        attributeDetail: "TRUE",
-        attributeNotes: marker,
-        endDate: "",
-        typeKey: "in_law",
-        label: "in-law",
-        valueText: "TRUE",
-        dateStart: "",
-        dateEnd: "",
-        location: "",
-        notes: marker,
-      });
-      await Promise.all(
-        duplicates.map((attribute) => deleteAttribute(tenantKey, attribute.attributeId)),
-      );
-      return;
-    }
-    await createAttribute(tenantKey, {
-      entityType: "person",
-      entityId: personId,
-      category: "descriptor",
-      attributeType: "in_law",
-      attributeTypeCategory: "",
-      attributeDate: "",
-      dateIsEstimated: false,
-      estimatedTo: "",
-      attributeDetail: "TRUE",
-      attributeNotes: marker,
-      endDate: "",
-      typeKey: "in_law",
-      label: "in-law",
-      valueText: "TRUE",
-      dateStart: "",
-      dateEnd: "",
-      location: "",
-      notes: marker,
-    });
+  if (!personId.trim() || !familyGroupKey.trim()) {
     return;
   }
-  if (scopedAttributes.length === 0) return;
-  await Promise.all(scopedAttributes.map((attribute) => deleteAttribute(tenantKey, attribute.attributeId)));
+  const key = familyGroupKey.trim().toLowerCase();
+  const groups = enabledGroupsByPerson.get(personId) ?? new Set<string>();
+  groups.add(key);
+  enabledGroupsByPerson.set(personId, groups);
 }
 
 async function createFamilyUnit(
@@ -232,8 +179,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const tenant = getTenantContext(session, normalizedTenantKey);
-
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
@@ -281,11 +226,59 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (!personId || !familyGroupKey || !isEnabled) {
         continue;
       }
-      const key = familyGroupKey.trim().toLowerCase();
-      if (!key) continue;
-      const groups = enabledGroupsByPerson.get(personId) ?? new Set<string>();
-      groups.add(key);
-      enabledGroupsByPerson.set(personId, groups);
+      addEnabledGroup(enabledGroupsByPerson, personId, familyGroupKey);
+    }
+    const currentRelationshipTypes = deriveExpectedFamilyGroupRelationshipTypes({
+      familyGroupKey: normalizedTenantKey,
+      relationships: existing.map((row) => toRelationshipLike(row.data)),
+      memberships: personFamilyRows.map((row) => toMembershipLike(row.data)),
+    });
+    const currentPersonRelationshipType =
+      currentRelationshipTypes.get(parsed.data.personId) ??
+      normalizeFamilyGroupRelationshipType(
+        personFamilyRows.find(
+          (row) =>
+            readField(row.data, "person_id") === parsed.data.personId &&
+            readField(row.data, "family_group_key").trim().toLowerCase() === normalizedTenantKey,
+        )?.data.family_group_relationship_type,
+      );
+    if (isFounderFamilyGroupRelationshipType(currentPersonRelationshipType) && parentIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "founder_cannot_have_parents",
+          message: "Founders anchor the family and cannot have parents assigned in this family group.",
+        },
+        { status: 409 },
+      );
+    }
+    const invalidParentIds = parentIds.filter(
+      (parentId) => !isAnchorFamilyGroupRelationshipType(currentRelationshipTypes.get(parentId)),
+    );
+    if (invalidParentIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "invalid_parent_placement",
+          message: "Parents in this family must already be founders or direct members.",
+          invalidParentIds,
+        },
+        { status: 409 },
+      );
+    }
+    const nextPersonWillBeAnchor =
+      isFounderFamilyGroupRelationshipType(currentPersonRelationshipType) || (invalidParentIds.length === 0 && parentIds.length > 0);
+    if (
+      spouseId &&
+      !nextPersonWillBeAnchor &&
+      !isAnchorFamilyGroupRelationshipType(currentRelationshipTypes.get(spouseId))
+    ) {
+      return NextResponse.json(
+        {
+          error: "invalid_spouse_placement",
+          message: "A spouse link in this family group must connect to a founder or direct member.",
+          spouseId,
+        },
+        { status: 409 },
+      );
     }
     const desiredParentEdgeKeys = new Set<string>();
     parentIds.forEach((parentId) =>
@@ -478,6 +471,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       for (const familyGroupKey of propagationFamilyGroups) {
         await ensurePersonFamilyGroupMembership(parsed.data.personId, familyGroupKey, true);
         await ensurePersonFamilyGroupMembership(spouseId, familyGroupKey, true);
+        addEnabledGroup(enabledGroupsByPerson, parsed.data.personId, familyGroupKey);
+        addEnabledGroup(enabledGroupsByPerson, spouseId, familyGroupKey);
       }
     }
     if (spouseId) {
@@ -543,29 +538,52 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       }
     }
 
-    debugContext.phase = "reconcile_in_law";
+    debugContext.phase = "reconcile_relationship_types";
     const finalRelationships = await getTableRecords("Relationships", normalizedTenantKey);
-    const affectedPersonIds = new Set<string>([parsed.data.personId]);
-    if (spouseId) affectedPersonIds.add(spouseId);
+    const affectedPersonIds = new Set<string>([
+      parsed.data.personId,
+      ...parentIds,
+      ...childIds,
+    ]);
+    if (spouseId) {
+      affectedPersonIds.add(spouseId);
+    }
+    for (const row of existing) {
+      const relType = readField(row.data, "rel_type").toLowerCase();
+      if (relType !== "parent" && relType !== "spouse" && relType !== "family") {
+        continue;
+      }
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      if (fromPersonId === parsed.data.personId && toPersonId) {
+        affectedPersonIds.add(toPersonId);
+      }
+      if (toPersonId === parsed.data.personId && fromPersonId) {
+        affectedPersonIds.add(fromPersonId);
+      }
+    }
+    for (const row of finalRelationships) {
+      const relType = readField(row.data, "rel_type").toLowerCase();
+      if (relType !== "parent" && relType !== "spouse" && relType !== "family") {
+        continue;
+      }
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      if (fromPersonId === parsed.data.personId && toPersonId) {
+        affectedPersonIds.add(toPersonId);
+      }
+      if (toPersonId === parsed.data.personId && fromPersonId) {
+        affectedPersonIds.add(fromPersonId);
+      }
+    }
+    const affectedFamilyGroups = new Set<string>([normalizedTenantKey]);
     for (const affectedPersonId of affectedPersonIds) {
-      const hasParentInFamily = finalRelationships.some((row) => {
-        const relType = readField(row.data, "rel_type").toLowerCase();
-        if (relType !== "parent") return false;
-        return readField(row.data, "to_person_id") === affectedPersonId;
-      });
-      const hasSpouseInFamily = finalRelationships.some((row) => {
-        const relType = readField(row.data, "rel_type").toLowerCase();
-        if (relType !== "spouse" && relType !== "family") return false;
-        const fromPersonId = readField(row.data, "from_person_id");
-        const toPersonId = readField(row.data, "to_person_id");
-        return fromPersonId === affectedPersonId || toPersonId === affectedPersonId;
-      });
-      const shouldBeInLaw = hasSpouseInFamily && !hasParentInFamily;
-      await reconcileInLawMarkerForFamily(
-        normalizedTenantKey,
-        affectedPersonId,
-        shouldBeInLaw,
-      );
+      const groups = enabledGroupsByPerson.get(affectedPersonId);
+      if (!groups) continue;
+      groups.forEach((groupKey) => affectedFamilyGroups.add(groupKey));
+    }
+    for (const familyGroupKey of affectedFamilyGroups) {
+      await reconcileFamilyGroupRelationshipTypes(familyGroupKey);
     }
 
     debugContext.phase = "done";

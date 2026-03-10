@@ -21,6 +21,7 @@ type PersonItem = {
   address?: string;
   hobbies?: string;
   notes?: string;
+  familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
 };
 
 type GraphEdge = {
@@ -40,6 +41,7 @@ type HouseholdLink = {
 type Props = {
   tenantKey: string;
   canManage: boolean;
+  canManageRelationshipType?: boolean;
   person: PersonItem;
   people: PersonItem[];
   edges: GraphEdge[];
@@ -50,6 +52,7 @@ type Props = {
 export function PersonProfileRouteClient({
   tenantKey,
   canManage,
+  canManageRelationshipType = false,
   person,
   people,
   edges,
@@ -65,6 +68,7 @@ export function PersonProfileRouteClient({
         open
         tenantKey={tenantKey}
         canManage={canManage}
+        canManageRelationshipType={canManageRelationshipType}
         person={person}
         people={people}
         edges={edges}

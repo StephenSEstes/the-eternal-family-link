@@ -109,6 +109,7 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
       <PersonProfileRouteClient
         tenantKey={tenant.tenantKey}
         canManage={canEdit}
+        canManageRelationshipType={tenant.role === "ADMIN"}
         person={{
           personId: person.personId,
           displayName: person.displayName,
@@ -125,6 +126,7 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
           address: person.address,
           hobbies: person.hobbies,
           notes: person.notes,
+          familyGroupRelationshipType: person.familyGroupRelationshipType,
         }}
         people={people.map((item) => ({
           personId: item.personId,
@@ -142,6 +144,7 @@ export default async function TenantPersonPage({ params }: TenantPersonPageProps
           address: item.address,
           hobbies: item.hobbies,
           notes: item.notes,
+          familyGroupRelationshipType: item.familyGroupRelationshipType,
         }))}
         edges={relationships.map((edge) => ({
           id: edge.id,

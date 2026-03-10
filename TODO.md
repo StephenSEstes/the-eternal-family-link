@@ -4,10 +4,10 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
-- [ ] Enforce family-group-scoped in-law indicator (save-time + integrity repair)
+- [ ] Replace in-law flag with family-group relationship types
   Priority: High
   Est date: 2026-03-07
-  Desc: Implement `in_law` as family-group scoped (not global) so one person can be in-law in one family group but not another. On every relationship/household save, reconcile in-law status per affected person in the active family group: if person has spouse link in this family group and no parent edges in this family group, set/create `in_law=TRUE` with `share_scope=one_family` and `share_family_group_key=<familyGroupKey>`; if parent edges exist, clear/remove in-law marker for this family group only. Add integrity checker action to backfill/fix existing drift in bulk with before/after counts. Include migration/cleanup logic to prevent legacy global `in_law` markers from overriding family-scoped behavior.
+  Desc: Use `PersonFamilyGroups.family_group_relationship_type` (`founder`, `direct`, `in_law`, `undeclared`) as the canonical family-group classification. Relationship save and integrity repair should reconcile direct/in-law/undeclared from founders plus parent/spouse structure, keep `founder` admin-managed with max two per family group, hide `undeclared` from the main tree, and keep legacy `Attributes.in_law` rows deleted.
 - [ ] AI summary of person profile
   Priority: Med
   Est date: 2026-03-10
@@ -52,6 +52,10 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-04-12
   Desc: Make story/event attributes first-class for people and households, including attaching photos, video, and audio to a story/memory without turning media assets into standalone attribute-owning entities.
+- [ ] Expand AI Help guide coverage and permission accuracy
+  Priority: Med
+  Est date: 2026-04-14
+  Desc: Broaden `src/lib/ai/help-guide.ts` with more screen-specific workflows, role-aware permission details, and sharper guidance for edge cases so Help answers match the current app behavior more exactly.
 
 ## Backlog
 - [ ] Define current top 3 development priorities

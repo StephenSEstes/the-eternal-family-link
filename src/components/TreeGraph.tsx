@@ -22,6 +22,7 @@ type PersonNode = {
   address?: string;
   hobbies?: string;
   notes?: string;
+  familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
 };
 
 type GraphEdge = {
@@ -42,12 +43,20 @@ type HouseholdLink = {
 type TreeGraphProps = {
   tenantKey: string;
   canManage: boolean;
+  canManageRelationshipType?: boolean;
   nodes: PersonNode[];
   edges: GraphEdge[];
   households?: HouseholdLink[];
 };
 
-export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] }: TreeGraphProps) {
+export function TreeGraph({
+  tenantKey,
+  canManage,
+  canManageRelationshipType = false,
+  nodes,
+  edges,
+  households = [],
+}: TreeGraphProps) {
   const router = useRouter();
   const NODE_CARD_WIDTH = 116;
   const NODE_HALF_WIDTH = NODE_CARD_WIDTH / 2;
@@ -924,6 +933,7 @@ export function TreeGraph({ tenantKey, canManage, nodes, edges, households = [] 
         open={Boolean(editPerson)}
         tenantKey={tenantKey}
         canManage={canManage}
+        canManageRelationshipType={canManageRelationshipType}
         person={editPerson}
         people={nodes}
         edges={edges}

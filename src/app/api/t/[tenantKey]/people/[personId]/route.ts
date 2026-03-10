@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/runtime";
 import { requireTenantAccess, requireTenantAdmin } from "@/lib/family-group/guard";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
+import { isFounderFamilyGroupRelationshipType } from "@/lib/family-group/relationship-type";
 import { personUpdateSchema } from "@/lib/validation/person";
 
 type TenantPersonRouteProps = {
@@ -29,9 +30,12 @@ type DeletePersonPreview = {
     attributeRowsToDelete: number;
     importantDateRowsToDelete: number;
     enabledMembershipsInOtherFamilies: number;
+    founderMembershipRowsToDelete: number;
   };
   householdIds: string[];
 };
+
+const STEVE_ACCESS_EMAIL = "stephensestes@gmail.com";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
@@ -89,6 +93,9 @@ async function buildDeletePersonPreview(tenantKey: string, personId: string): Pr
   const enabledMembershipsInOtherFamilies = personFamilyMatches.filter(
     (row) => normalize(row.data.family_group_key) !== targetTenantKey && isEnabledLike(row.data.is_enabled),
   ).length;
+  const founderMembershipRowsToDelete = personFamilyMatches.filter((row) =>
+    isFounderFamilyGroupRelationshipType(row.data.family_group_relationship_type),
+  ).length;
 
   const userFamilyMatches = userFamilyRows.filter((row) => (row.data.person_id ?? "").trim() === targetPersonId);
   const userAccessMatches = userAccessRows.filter((row) => (row.data.person_id ?? "").trim() === targetPersonId);
@@ -119,6 +126,7 @@ async function buildDeletePersonPreview(tenantKey: string, personId: string): Pr
         attributeRowsToDelete: attributeMatches.length,
         importantDateRowsToDelete: importantDateMatches.length,
         enabledMembershipsInOtherFamilies,
+        founderMembershipRowsToDelete,
       },
       householdIds: householdMatches
         .map((row) => (row.data.household_id ?? "").trim())
@@ -201,6 +209,17 @@ export async function DELETE(request: Request, { params }: TenantPersonRouteProp
     }
     if (!built.isMemberOfTenant) {
       return NextResponse.json({ error: "forbidden_person_scope" }, { status: 403 });
+    }
+    const isSteve = (resolved.session.user?.email ?? "").trim().toLowerCase() === STEVE_ACCESS_EMAIL;
+    if (built.preview.counts.founderMembershipRowsToDelete > 0 && !isSteve) {
+      return NextResponse.json(
+        {
+          error: "founder_delete_forbidden",
+          message: "Founders cannot be deleted except by Steve.",
+          preview: built.preview,
+        },
+        { status: 409 },
+      );
     }
     if (previewOnly) {
       return NextResponse.json({ ok: true, preview: built.preview });

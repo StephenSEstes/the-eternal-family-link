@@ -26,6 +26,7 @@ import {
   getOciTableRecords,
   getOciTenantUserAccessRows,
   listOciTables,
+  setOciPersonFamilyGroupRelationshipType,
   updateOciTableRecordById,
   upsertOciPersonFamilyGroupMembership,
   upsertOciTenantAccess,
@@ -88,26 +89,6 @@ export type AuditLogQuery = {
   toTimestamp?: string;
   limit?: number;
 };
-
-const PEOPLE_HEADERS = [
-  "person_id",
-  "display_name",
-  "first_name",
-  "middle_name",
-  "last_name",
-  "maiden_name",
-  "nick_name",
-  "birth_date",
-  "gender",
-  "phones",
-  "email",
-  "address",
-  "hobbies",
-  "notes",
-  "photo_file_id",
-  "is_pinned",
-  "relationships",
-];
 
 function toRole(value: string | undefined): AppRole {
   return value?.trim().toUpperCase() === "ADMIN" ? "ADMIN" : "USER";
@@ -173,6 +154,16 @@ function rowToPerson(data: Record<string, string>): PersonRecord {
   const maidenName = (data.maiden_name ?? "").trim();
   const nickName = (data.nick_name ?? "").trim();
   const fallbackDisplayName = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
+  const rawFamilyGroupRelationshipType = (data.family_membership_relationship_type ?? data.family_group_relationship_type ?? "")
+    .trim()
+    .toLowerCase();
+  const familyGroupRelationshipType =
+    rawFamilyGroupRelationshipType === "founder" ||
+    rawFamilyGroupRelationshipType === "direct" ||
+    rawFamilyGroupRelationshipType === "in_law" ||
+    rawFamilyGroupRelationshipType === "undeclared"
+      ? rawFamilyGroupRelationshipType
+      : "undeclared";
   return {
     personId: data.person_id ?? "",
     displayName: (data.display_name ?? "").trim() || fallbackDisplayName,
@@ -196,6 +187,7 @@ function rowToPerson(data: Record<string, string>): PersonRecord {
     notes: data.notes ?? "",
     photoFileId: (data.photo_file_id ?? "").trim() || (data.primary_photo_file_id ?? "").trim(),
     isPinned: parseBool(data.is_pinned) || parseBool(data.is_pinned_viewer),
+    familyGroupRelationshipType,
     relationships: toList(data.relationships),
   };
 }
@@ -447,6 +439,23 @@ export async function ensurePersonFamilyGroupMembership(
   return upsertOciPersonFamilyGroupMembership(normalizedPersonId, normalizedTenantKey, isEnabled);
 }
 
+export async function setPersonFamilyGroupRelationshipType(
+  personId: string,
+  tenantKey: string,
+  familyGroupRelationshipType: "founder" | "direct" | "in_law" | "undeclared",
+): Promise<"created" | "updated" | "unchanged"> {
+  const normalizedPersonId = personId.trim();
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+  if (!normalizedPersonId) {
+    throw new Error("person_id is required");
+  }
+  return setOciPersonFamilyGroupRelationshipType(
+    normalizedPersonId,
+    normalizedTenantKey,
+    familyGroupRelationshipType,
+  );
+}
+
 export async function getTenantLocalAccessList(tenantKey: string): Promise<LocalUserRecord[]> {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
   const rows = await getOciLocalUsersForTenant(normalizedTenantKey);
@@ -466,12 +475,7 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
 
 export async function getPeople(tenantKey?: string): Promise<PersonRecord[]> {
   const rows = await getOciPeopleRows(tenantKey).catch(() => []);
-  return peopleFromRows(
-    rows.map((record) => ({
-      rowNumber: record.rowNumber,
-      data: Object.fromEntries(PEOPLE_HEADERS.map((header) => [header, record.data[header] ?? ""])),
-    })),
-  );
+  return peopleFromRows(rows);
 }
 
 export async function getTenantConfig(tenantKey?: string): Promise<TenantConfig> {

@@ -23,11 +23,13 @@ type PersonItem = {
   address?: string;
   hobbies?: string;
   notes?: string;
+  familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
 };
 
 type PeopleDirectoryProps = {
   tenantKey: string;
   canManage: boolean;
+  canManageRelationshipType?: boolean;
   people: PersonItem[];
   edges: { id: string; fromPersonId: string; toPersonId: string; label: string }[];
   households: { id: string; partner1PersonId: string; partner2PersonId: string; label?: string }[];
@@ -73,9 +75,18 @@ function normalizeDateLabel(value: string) {
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+function normalizeFamilyGroupRelationshipType(value?: string) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "founder" || normalized === "direct" || normalized === "in_law" || normalized === "undeclared") {
+    return normalized;
+  }
+  return "undeclared";
+}
+
 export function PeopleDirectory({
   tenantKey,
   canManage,
+  canManageRelationshipType = false,
   people,
   edges,
   households,
@@ -95,6 +106,14 @@ export function PeopleDirectory({
     }
     return people.filter((person) => person.displayName.toLowerCase().includes(normalized));
   }, [people, query]);
+  const undeclaredPeople = useMemo(
+    () => filtered.filter((person) => normalizeFamilyGroupRelationshipType(person.familyGroupRelationshipType) === "undeclared"),
+    [filtered],
+  );
+  const placedPeople = useMemo(
+    () => filtered.filter((person) => normalizeFamilyGroupRelationshipType(person.familyGroupRelationshipType) !== "undeclared"),
+    [filtered],
+  );
   const householdCards = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return households
@@ -160,8 +179,63 @@ export function PeopleDirectory({
       </div>
 
       {mode === "people" ? (
-        <section className="people-grid album-grid">
-          {filtered.map((person) => {
+        <>
+          {undeclaredPeople.length > 0 ? (
+            <section style={{ marginBottom: "1rem" }}>
+              <div className="card person-needs-placement">
+                <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Needs Placement</h2>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  These people belong to the family group but are not yet placed in the family tree.
+                </p>
+                <div className="people-grid album-grid">
+                  {undeclaredPeople.map((person) => {
+                    const photoFileId = person.photoFileId;
+                    const fallbackAvatar =
+                      person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
+                    return (
+                      <article
+                        key={`undeclared-${person.personId}`}
+                        className="person-card album-card person-card--needs-placement"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setReturnHouseholdId("");
+                          setSelectedPersonId(person.personId);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setReturnHouseholdId("");
+                            setSelectedPersonId(person.personId);
+                          }
+                        }}
+                      >
+                        <div className="person-photo-wrap">
+                          <img
+                            src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
+                            alt={person.displayName}
+                            className="person-photo"
+                          />
+                        </div>
+                        <div className="person-card-content">
+                          <div className="person-card-tag">Needs Placement</div>
+                          <h3>{person.displayName}</h3>
+                          <p className="person-meta-row">
+                            <span className="person-meta-icon">
+                              <BirthdayIcon />
+                            </span>
+                            <span>{normalizeDateLabel(person.birthDate)}</span>
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          ) : null}
+          <section className="people-grid album-grid">
+          {placedPeople.map((person) => {
             const photoFileId = person.photoFileId;
             const fallbackAvatar =
               person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
@@ -203,7 +277,8 @@ export function PeopleDirectory({
               </article>
             );
           })}
-        </section>
+          </section>
+        </>
       ) : (
         <section className="people-grid album-grid">
           {householdCards.map((household) => (
@@ -245,6 +320,7 @@ export function PeopleDirectory({
         open={Boolean(selectedPerson)}
         tenantKey={tenantKey}
         canManage={canManage}
+        canManageRelationshipType={canManageRelationshipType}
         person={selectedPerson}
         people={people}
         edges={edges}
