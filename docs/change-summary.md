@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (invite text includes local credentials)
+
+- `Change`: Local-capable invites now generate a local username and temporary password at invite creation time and include those credentials in the copied invite message. The local invite-accept flow still works for older pending invites, but new invites pre-provision the local credential before the recipient opens the link.
+- `Type`: API | UX | Access
+- `Why`: Root cause was a model mismatch in the invite flow. The copied invite text could not include a real temporary password because local credentials were only created later on invite acceptance. That made the message incomplete and misleading for local/either invites.
+- `Files`:
+  - `src/lib/invite/store.ts`
+  - `src/components/InviteAcceptClient.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: No schema change. New local/either invites now create local-user and family-access rows at invite creation time instead of waiting until invite acceptance.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Creating a `local` or `either` invite returns a suggested message that includes `Username:` and `Temporary password:`.
+  - The generated local credential works on the invite page and can still be replaced during invite activation.
+  - Existing pending invites created before this change can still be accepted from the invite page.
+- `Rollback Notes`: Revert this change and redeploy. New local credentials created from invites may need manual cleanup if a rollback occurs after invite creation.
+- `Design Decision Change`: Updated the person-bound invite onboarding decision to pre-provision local credentials when local sign-in is allowed.
+
 ## 2026-03-10 (family-group relationship types)
 
 - `Change`: Replaced the intermediate membership-scoped `in_law` flag with canonical `PersonFamilyGroups.family_group_relationship_type` values: `founder`, `direct`, `in_law`, and `undeclared`. Relationship saves and integrity repair now reconcile family-group relationship type centrally, founder assignment is admin-managed, undeclared people show in a `Needs Placement` flow instead of the main tree, and legacy `Attributes.in_law` rows are cleaned up instead of remaining canonical.

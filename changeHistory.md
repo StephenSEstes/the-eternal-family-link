@@ -8,6 +8,7 @@ This file is a quick release-log entry point.
 ## Latest
 
 - 2026-03-10: Replaced the old in-law flag with canonical `PersonFamilyGroups.family_group_relationship_type` values (`founder`, `direct`, `in_law`, `undeclared`), added admin founder controls and integrity repair, and moved undeclared people into a `Needs Placement` flow outside the main tree. See `docs/change-summary.md`.
+- 2026-03-10: Local/either invites now generate a real local username and temporary password at invite creation time and include those credentials in the copied invite message, while keeping the invite accept flow backward-compatible for older pending invites. See `docs/change-summary.md`.
 - 2026-03-10: Broadened `USER` role behavior so signed-in family-group users can edit shared family data (people, households, relationships, attributes, media), while admin remains limited to invites, access/security, audit, integrity, and family-group administration. See `docs/change-summary.md`.
 - 2026-03-10: Fixed person photo detail association labels so linked people show display names from the local person list instead of falling back to raw person IDs. See `docs/change-summary.md`.
 - 2026-03-10: Removed the obsolete household-gallery compatibility path and retired legacy-local cleanup reporting so household media now aligns cleanly to `MediaLinks` + `wedding_photo_file_id`. See `docs/change-summary.md`.

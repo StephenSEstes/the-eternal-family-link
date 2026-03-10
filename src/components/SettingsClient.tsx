@@ -2386,8 +2386,13 @@ export function SettingsClient({
                     ) : (
                       <>
                         <p className="page-subtitle" style={{ marginTop: 0 }}>
-                          Create one shareable invite for {selectedDirectoryPerson.displayName}. The link can handle Google sign-in, local setup, or both, depending on the mode you choose.
+                          Create one shareable invite for {selectedDirectoryPerson.displayName}. The link can handle Google sign-in, local sign-in, or both, depending on the mode you choose.
                         </p>
+                        {inviteAuthMode !== "google" ? (
+                          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                            Local-capable invites now generate a username and temporary password and include them in the suggested message below.
+                          </p>
+                        ) : null}
                         <label className="label">Invite Email</label>
                         <input
                           className="input"
@@ -2442,6 +2447,11 @@ export function SettingsClient({
                             <p className="page-subtitle" style={{ marginTop: 0 }}>
                               Share the link directly, or copy the full message block for email or text.
                             </p>
+                            {inviteResult.invite.authMode !== "google" ? (
+                              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                                The suggested message includes the generated local username and temporary password. That password is only shown in the copied message for this invite creation.
+                              </p>
+                            ) : null}
                             <label className="label">Invite URL</label>
                             <textarea className="input" rows={3} readOnly value={inviteResult.inviteUrl} />
                             <div className="settings-chip-list">

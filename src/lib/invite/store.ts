@@ -1,13 +1,13 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { getLocalUsers, getTenantSecurityPolicy, patchLocalUser, upsertLocalUser } from "@/lib/auth/local-users";
+import { getLocalUserByUsername, getLocalUsers, getTenantSecurityPolicy, patchLocalUser, upsertLocalUser } from "@/lib/auth/local-users";
 import type { TableRecord } from "@/lib/data/types";
 import { createTableRecord, getPeople, getTableRecords, updateTableRecordById, upsertTenantAccess } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/family-group/context";
 import type { AppRole, PersonRecord } from "@/lib/google/types";
 import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
-import { validatePasswordComplexity } from "@/lib/security/password";
+import { validatePasswordComplexity, verifyPassword } from "@/lib/security/password";
 import type { CreatedInvitePayload, InviteAuthMode, InviteFamilyGroupGrant, InvitePresentation, InviteStatus } from "@/lib/invite/types";
 
 type InviteRecord = {
@@ -106,14 +106,64 @@ function safeJsonParse<T>(value: string, fallback: T): T {
   }
 }
 
-function buildInviteMessage(invite: InvitePresentation, inviteUrl: string) {
+function randomCharFrom(pool: string) {
+  if (!pool) {
+    return "";
+  }
+  return pool[randomBytes(1)[0] % pool.length] ?? "";
+}
+
+function shuffleString(value: string) {
+  const chars = value.split("");
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const next = randomBytes(1)[0] % (index + 1);
+    const current = chars[index];
+    chars[index] = chars[next] ?? current;
+    chars[next] = current ?? chars[next] ?? "";
+  }
+  return chars.join("");
+}
+
+async function buildTemporaryInvitePassword(tenantKey: string) {
+  const policy = await getTenantSecurityPolicy(tenantKey);
+  const lowercase = "abcdefghjkmnpqrstuvwxyz";
+  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const symbols = "!@$%*+-_";
+  const pool = `${lowercase}${uppercase}${digits}${symbols}`;
+  const required: string[] = [];
+  if (policy.requireLowercase) required.push(randomCharFrom(lowercase));
+  if (policy.requireUppercase) required.push(randomCharFrom(uppercase));
+  if (policy.requireNumber) required.push(randomCharFrom(digits));
+  const targetLength = Math.max(policy.minLength, 12);
+
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    let candidate = required.join("");
+    while (candidate.length < targetLength) {
+      candidate += randomCharFrom(pool);
+    }
+    candidate = shuffleString(candidate);
+    const complexityError = validatePasswordComplexity(candidate, policy);
+    if (!complexityError) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Unable to generate a temporary password that satisfies the tenant policy.");
+}
+
+function buildInviteMessage(
+  invite: InvitePresentation,
+  inviteUrl: string,
+  localCredentials?: { username: string; temporaryPassword: string } | null,
+) {
   const authLine =
     invite.authMode === "google"
       ? "Continue with Google to activate your access."
       : invite.authMode === "local"
-        ? "Open the link to set your username and password."
-        : "Open the link to continue with Google or set your username and password.";
-  return [
+        ? "Open the link to activate your access and install the app."
+        : "Open the link to continue with Google, or use the local username and temporary password below.";
+  const lines = [
     `Hi ${invite.personDisplayName},`,
     "",
     `You have been invited to join The Eternal Family Link for ${invite.familyGroupName}.`,
@@ -122,7 +172,20 @@ function buildInviteMessage(invite: InvitePresentation, inviteUrl: string) {
     inviteUrl,
     "",
     "For the easiest setup on your phone, open the link on the device where you want to install the app.",
-  ].join("\n");
+  ];
+
+  if (localCredentials && invite.authMode !== "google") {
+    lines.push(
+      "",
+      "Local sign-in credentials:",
+      `Username: ${localCredentials.username}`,
+      `Temporary password: ${localCredentials.temporaryPassword}`,
+      "",
+      "You can use the temporary password as-is, or replace it on the invite page when you activate local sign-in.",
+    );
+  }
+
+  return lines.join("\n");
 }
 
 function suggestLocalUsername(person: PersonRecord) {
@@ -291,6 +354,10 @@ async function ensureLocalUsernameAvailable(invite: InviteRecord, username: stri
     if (conflict) {
       throw new Error(`Username "${username}" is already used in ${family.tenantName}.`);
     }
+    const existing = localUsers.find((user) => user.username === username && user.personId === invite.personId);
+    if (existing) {
+      throw new Error(`This person already has local sign-in as "${username}". Use Manage User to reset the password instead of creating a new local invite.`);
+    }
   }
 }
 
@@ -372,6 +439,8 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + Math.max(1, input.expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
   const localUsername = normalizeUsername(input.localUsername ?? "") || suggestLocalUsername(person);
+  const localTemporaryPassword =
+    input.authMode !== "google" ? await buildTemporaryInvitePassword(familyGroups[0]?.tenantKey ?? input.sourceTenantKey) : "";
 
   const record: InviteRecord = {
     inviteId,
@@ -392,6 +461,10 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
     createdByEmail: normalizeEmail(input.createdByEmail),
     createdByPersonId: input.createdByPersonId.trim(),
   };
+
+  if (record.authMode !== "google") {
+    await ensureLocalUsernameAvailable(record, record.localUsername);
+  }
 
   await createTableRecord("Invites", {
     invite_id: record.inviteId,
@@ -416,13 +489,30 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
   if (record.authMode !== "local") {
     await provisionGoogleAccess(record);
   }
+  if (record.authMode !== "google") {
+    await provisionLocalMemberships(record, `${record.localUsername}@local`);
+    await upsertLocalUser({
+      tenantKey: record.familyGroups[0]!.tenantKey,
+      username: record.localUsername,
+      password: localTemporaryPassword,
+      role: record.role,
+      personId: record.personId,
+      isEnabled: true,
+    });
+  }
 
   const inviteUrl = `${input.appBaseUrl.replace(/\/$/, "")}/invite/${encodeURIComponent(token)}`;
   const invitePresentation = await buildInvitePresentation(record);
   return {
     invite: invitePresentation,
     inviteUrl,
-    inviteMessage: buildInviteMessage(invitePresentation, inviteUrl),
+    inviteMessage: buildInviteMessage(
+      invitePresentation,
+      inviteUrl,
+      record.authMode !== "google"
+        ? { username: record.localUsername, temporaryPassword: localTemporaryPassword }
+        : null,
+    ),
   };
 }
 
@@ -506,25 +596,42 @@ export async function acceptInviteWithLocal(token: string, username: string, pas
     throw new Error(complexityError);
   }
 
-  await ensureLocalUsernameAvailable(invite, normalizedUsername);
-
-  if (invite.authMode === "local") {
-    await provisionLocalMemberships(invite, `${normalizedUsername}@local`);
+  const existingLocalUser = await getLocalUserByUsername(primaryFamily.tenantKey, normalizedUsername);
+  if (existingLocalUser && existingLocalUser.personId !== invite.personId) {
+    throw new Error(`Username "${normalizedUsername}" is already used in ${primaryFamily.tenantName}.`);
   }
 
-  await upsertLocalUser({
-    tenantKey: primaryFamily.tenantKey,
-    username: normalizedUsername,
-    password,
-    role: invite.role,
-    personId: invite.personId,
-    isEnabled: true,
-  });
-  await patchLocalUser(primaryFamily.tenantKey, normalizedUsername, {
-    mustChangePassword: false,
-    failedAttempts: 0,
-    lockedUntil: "",
-  });
+  await provisionLocalMemberships(invite, `${normalizedUsername}@local`);
+
+  if (!existingLocalUser) {
+    await upsertLocalUser({
+      tenantKey: primaryFamily.tenantKey,
+      username: normalizedUsername,
+      password,
+      role: invite.role,
+      personId: invite.personId,
+      isEnabled: true,
+    });
+  } else if (!verifyPassword(password, existingLocalUser.passwordHash)) {
+    await patchLocalUser(primaryFamily.tenantKey, normalizedUsername, {
+      password,
+      role: invite.role,
+      personId: invite.personId,
+      isEnabled: true,
+      mustChangePassword: false,
+      failedAttempts: 0,
+      lockedUntil: "",
+    });
+  } else {
+    await patchLocalUser(primaryFamily.tenantKey, normalizedUsername, {
+      role: invite.role,
+      personId: invite.personId,
+      isEnabled: true,
+      mustChangePassword: false,
+      failedAttempts: 0,
+      lockedUntil: "",
+    });
+  }
 
   const acceptedAt = new Date().toISOString();
   await updateInviteRecord(invite.inviteId, {

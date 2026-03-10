@@ -112,7 +112,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     }
 
     setBusy(true);
-    setStatus("Creating your local sign-in...");
+    setStatus("Activating your local sign-in...");
     const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -202,6 +202,9 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
       {invite.canUseLocal ? (
         <form onSubmit={onLocalAccept} style={{ marginTop: invite.canUseGoogle ? "1.25rem" : "0.75rem" }}>
           <h2 style={{ marginBottom: "0.5rem" }}>Use Username And Password</h2>
+          <p className="page-subtitle" style={{ marginTop: 0 }}>
+            If your invite message included a temporary password, you can use it here or enter a new password to replace it during activation.
+          </p>
           <label className="label">Username</label>
           <input
             className="input"
@@ -226,7 +229,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
             onChange={(event) => setConfirmPassword(event.target.value)}
           />
           <button type="submit" className="button tap-button" disabled={busy}>
-            Set Up Local Sign-In
+            Activate Local Sign-In
           </button>
         </form>
       ) : null}

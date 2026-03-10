@@ -27,6 +27,7 @@ Navigation
 Sign in and install
 - Users can sign in with Google or local username/password.
 - Invite onboarding uses a single invite link and can allow Google, local, or either path.
+- If an invite allows local sign-in, the generated invite message includes the local username and a temporary password.
 - The account modal behind the user-avatar icon includes Install App for supported browsers.
 - On iPhone or iPad, installation uses Safari Share -> Add to Home Screen guidance.
 
@@ -86,6 +87,7 @@ Invites
 - Admin path: Admin -> Users & Access -> User Directory -> Manage User -> Invite.
 - Invite creation is person-bound. The invited person should already exist in the database.
 - The invite snapshots that person's family-group access at invite time.
+- If local sign-in is allowed, invite creation pre-provisions the local username/password and includes the temporary password in the generated share message.
 - Admin currently copies the generated invite link or message and sends it manually.
 - The app does not yet send outbound invite email directly.
 
