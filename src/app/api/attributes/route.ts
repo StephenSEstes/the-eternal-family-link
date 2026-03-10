@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
@@ -86,6 +87,15 @@ export async function POST(request: Request) {
     dateEnd: parsed.data.dateEnd,
     location: parsed.data.location,
     notes: parsed.data.notes,
+  });
+
+  await appendSessionAuditLog(session, {
+    action: "CREATE",
+    entityType: "ATTRIBUTE",
+    entityId: created.attributeId,
+    familyGroupKey: tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Created ${parsed.data.entityType} attribute type=${created.attributeType || parsed.data.attributeType || parsed.data.typeKey} for entity=${parsed.data.entityId}.`,
   });
 
   return NextResponse.json({ tenantKey: tenant.tenantKey, attribute: created }, { status: 201 });

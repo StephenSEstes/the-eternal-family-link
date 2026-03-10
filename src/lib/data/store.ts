@@ -17,6 +17,7 @@ import {
   createOciTableRecords,
   deleteOciTableRecordById,
   deleteOciTableRows,
+  getOciAuditLogRows,
   getOciEnabledUserAccessesByEmail,
   getOciEnabledUserAccessesByPersonId,
   getOciLocalUsersForTenant,
@@ -61,6 +62,31 @@ export type AuditLogInput = {
   familyGroupKey?: string;
   status?: "SUCCESS" | "FAILURE";
   details?: string;
+};
+
+export type AuditLogRecord = {
+  eventId: string;
+  timestamp: string;
+  actorEmail: string;
+  actorPersonId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  familyGroupKey: string;
+  status: string;
+  details: string;
+};
+
+export type AuditLogQuery = {
+  familyGroupKey?: string;
+  actorEmail?: string;
+  actorPersonId?: string;
+  action?: string;
+  entityType?: string;
+  status?: string;
+  fromTimestamp?: string;
+  toTimestamp?: string;
+  limit?: number;
 };
 
 const PEOPLE_HEADERS = [
@@ -232,11 +258,27 @@ export async function appendAuditLog(input: AuditLogInput) {
       action: input.action.trim(),
       entity_type: input.entityType.trim(),
       entity_id: (input.entityId ?? "").trim(),
-      family_group_key: normalizeTenantKey(input.familyGroupKey),
+      family_group_key: input.familyGroupKey ? normalizeTenantKey(input.familyGroupKey) : "",
       status: (input.status ?? "SUCCESS").trim().toUpperCase(),
       details: (input.details ?? "").slice(0, 2000),
     },
   ]).catch(() => undefined);
+}
+
+export async function getAuditLogEntries(query: AuditLogQuery = {}): Promise<AuditLogRecord[]> {
+  const rows = await getOciAuditLogRows(query);
+  return rows.map((row) => ({
+    eventId: row.eventId,
+    timestamp: row.timestamp,
+    actorEmail: row.actorEmail,
+    actorPersonId: row.actorPersonId,
+    action: row.action,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    familyGroupKey: row.familyGroupKey,
+    status: row.status,
+    details: row.details,
+  }));
 }
 
 export async function getTableRecords(tableName: string | string[], _tenantKey?: string): Promise<TableRecord[]> {
@@ -309,6 +351,7 @@ export async function getEnabledUserAccess(email: string): Promise<UserAccessRec
     personId: primary.personId,
     tenantKey: primary.tenantKey,
     tenantName: primary.tenantName,
+    lastLoginAt: "",
   };
 }
 
@@ -382,6 +425,7 @@ export async function getTenantUserAccessList(tenantKey: string): Promise<UserAc
     personId: row.personId,
     tenantKey: row.tenantKey || normalizedTenantKey,
     tenantName: row.tenantName || DEFAULT_TENANT_NAME,
+    lastLoginAt: row.lastLoginAt,
   }));
 }
 
@@ -423,6 +467,7 @@ export async function getTenantLocalAccessList(tenantKey: string): Promise<Local
     failedAttempts: row.failedAttempts,
     lockedUntil: row.lockedUntil,
     mustChangePassword: row.mustChangePassword,
+    lastLoginAt: row.lastLoginAt,
   }));
 }
 

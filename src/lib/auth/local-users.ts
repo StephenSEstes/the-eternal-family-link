@@ -68,6 +68,7 @@ async function upsertDirectoryLocalRecord(input: {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+  lastLoginAt: string;
 }) {
   const username = normalizeUsername(input.username);
   const payload: Record<string, string> = {
@@ -80,6 +81,7 @@ async function upsertDirectoryLocalRecord(input: {
     failed_attempts: String(input.failedAttempts),
     locked_until: input.lockedUntil,
     must_change_password: input.mustChangePassword ? "TRUE" : "FALSE",
+    last_login_at: input.lastLoginAt,
   };
 
   const updated = await updateTableRecordById(USERS_TABLE, input.personId, payload, "person_id");
@@ -156,6 +158,7 @@ export async function upsertLocalUser(input: UpsertLocalUserInput) {
     failedAttempts: 0,
     lockedUntil: "",
     mustChangePassword: true,
+    lastLoginAt: "",
   });
 }
 
@@ -170,6 +173,7 @@ export async function patchLocalUser(
     failedAttempts: number;
     lockedUntil: string;
     mustChangePassword: boolean;
+    lastLoginAt: string;
   }>,
 ) {
   const current = await getLocalUserByUsername(tenantKey, username);
@@ -185,6 +189,7 @@ export async function patchLocalUser(
   if (patch.failedAttempts !== undefined) payload.failed_attempts = String(patch.failedAttempts);
   if (patch.lockedUntil !== undefined) payload.locked_until = patch.lockedUntil;
   if (patch.mustChangePassword !== undefined) payload.must_change_password = patch.mustChangePassword ? "TRUE" : "FALSE";
+  if (patch.lastLoginAt !== undefined) payload.last_login_at = patch.lastLoginAt;
 
   return updateTableRecordById(USERS_TABLE, current.personId, payload, "person_id");
 }
@@ -232,6 +237,7 @@ export async function deleteLocalUser(tenantKey: string, username: string) {
     failed_attempts: "0",
     locked_until: "",
     must_change_password: "FALSE",
+    last_login_at: "",
   };
 
   return updateTableRecordById(USERS_TABLE, existing.personId, payload, "person_id");

@@ -48,6 +48,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             role: item.role,
             personId: item.personId,
             isEnabled: item.isEnabled,
+            lastLoginAt: item.lastLoginAt,
           }))}
           people={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
           allPeople={allPeople.map((person) => ({

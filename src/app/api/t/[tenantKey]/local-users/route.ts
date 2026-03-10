@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getLocalUsers, getTenantSecurityPolicy, upsertLocalUser } from "@/lib/auth/local-users";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { validatePasswordComplexity } from "@/lib/security/password";
@@ -30,6 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       failedAttempts: user.failedAttempts,
       lockedUntil: user.lockedUntil,
       mustChangePassword: user.mustChangePassword,
+      lastLoginAt: user.lastLoginAt,
     })),
   });
 }
@@ -59,6 +61,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     role: parsed.data.role,
     personId: parsed.data.personId,
     isEnabled: parsed.data.isEnabled ?? true,
+  });
+
+  await appendSessionAuditLog(resolved.session, {
+    action: "CREATE",
+    entityType: "LOCAL_USER",
+    entityId: parsed.data.personId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Created local access username=${parsed.data.username.trim().toLowerCase()}, enabled=${String(parsed.data.isEnabled ?? true)}, role=${parsed.data.role}.`,
   });
 
   return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey });

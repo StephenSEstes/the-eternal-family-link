@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
@@ -40,6 +41,14 @@ export async function PATCH(request: Request, { params }: RouteProps) {
     if (!ok) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    await appendSessionAuditLog(session, {
+      action: "DELETE",
+      entityType: "ATTRIBUTE_MEDIA",
+      entityId: attributeId,
+      familyGroupKey: tenant.tenantKey,
+      status: "SUCCESS",
+      details: `Removed media link ${mediaPatch.data.removeMediaLinkId} from attribute=${attributeId}.`,
+    });
     const refreshed = await getAttributeById(tenant.tenantKey, attributeId);
     return NextResponse.json({
       tenantKey: tenant.tenantKey,
@@ -74,6 +83,14 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   if (!updated) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  await appendSessionAuditLog(session, {
+    action: "UPDATE",
+    entityType: "ATTRIBUTE",
+    entityId: attributeId,
+    familyGroupKey: tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Updated ${existing.entityType} attribute type=${updated.attributeType || parsed.data.attributeType || parsed.data.typeKey || ""} for entity=${existing.entityId}.`,
+  });
   return NextResponse.json({
     tenantKey: tenant.tenantKey,
     attribute: updated,
@@ -102,5 +119,13 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   if (!ok) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  await appendSessionAuditLog(session, {
+    action: "DELETE",
+    entityType: "ATTRIBUTE",
+    entityId: attributeId,
+    familyGroupKey: tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Deleted ${existing.entityType} attribute type=${existing.attributeType || existing.typeKey || ""} for entity=${existing.entityId}.`,
+  });
   return NextResponse.json({ ok: true, tenantKey: tenant.tenantKey, attributeId });
 }

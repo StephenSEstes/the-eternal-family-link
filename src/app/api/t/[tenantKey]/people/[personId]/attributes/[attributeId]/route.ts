@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { toPersonMediaAttribute } from "@/lib/attributes/media-response";
 import {
@@ -156,6 +157,15 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     );
   }
 
+  await appendSessionAuditLog(resolved.session, {
+    action: "UPDATE",
+    entityType: "ATTRIBUTE",
+    entityId: attributeId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Updated person attribute type=${updated.attributeType || nextType} for person=${personId}.`,
+  });
+
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: updated });
 }
 
@@ -201,6 +211,15 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
       resolved.tenant.tenantKey,
     );
   }
+
+  await appendSessionAuditLog(resolved.session, {
+    action: "DELETE",
+    entityType: "ATTRIBUTE",
+    entityId: attributeId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Deleted person attribute type=${existing.attributeType || existing.typeKey || ""} for person=${personId}.`,
+  });
 
   return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey, personId, attributeId });
 }

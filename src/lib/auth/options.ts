@@ -13,6 +13,7 @@ import {
   getEnabledUserAccess,
   getEnabledUserAccessList,
   getEnabledUserAccessListByPersonId,
+  updateTableRecordById,
 } from "@/lib/data/runtime";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 import { verifyPassword } from "@/lib/security/password";
@@ -51,17 +52,46 @@ export const authOptions: NextAuthOptions = {
         const username = (credentials?.username ?? "").trim().toLowerCase();
         const password = credentials?.password ?? "";
         if (!username || !password) {
+          await appendAuditLog({
+            actorEmail: username ? `${username}@local` : "",
+            action: "LOGIN",
+            entityType: "AUTH",
+            entityId: "credentials",
+            familyGroupKey: tenantKey,
+            status: "FAILURE",
+            details: "Credentials sign-in rejected: username and password are required.",
+          }).catch(() => undefined);
           return null;
         }
 
         const user = await getLocalUserByUsername(tenantKey, username);
         if (!user || !user.isEnabled) {
+          await appendAuditLog({
+            actorEmail: `${username}@local`,
+            actorPersonId: user?.personId ?? "",
+            action: "LOGIN",
+            entityType: "AUTH",
+            entityId: "credentials",
+            familyGroupKey: tenantKey,
+            status: "FAILURE",
+            details: "Credentials sign-in rejected: local access not found or disabled.",
+          }).catch(() => undefined);
           return null;
         }
 
         const now = Date.now();
         const lockedUntilMs = user.lockedUntil ? new Date(user.lockedUntil).getTime() : 0;
         if (lockedUntilMs && lockedUntilMs > now) {
+          await appendAuditLog({
+            actorEmail: `${username}@local`,
+            actorPersonId: user.personId,
+            action: "LOGIN",
+            entityType: "AUTH",
+            entityId: "credentials",
+            familyGroupKey: tenantKey,
+            status: "FAILURE",
+            details: `Credentials sign-in rejected: account locked until ${user.lockedUntil}.`,
+          }).catch(() => undefined);
           return null;
         }
 
@@ -74,12 +104,25 @@ export const authOptions: NextAuthOptions = {
             failedAttempts,
             lockedUntil: shouldLock ? new Date(now + 30 * 60 * 1000).toISOString() : "",
           });
+          await appendAuditLog({
+            actorEmail: `${username}@local`,
+            actorPersonId: user.personId,
+            action: "LOGIN",
+            entityType: "AUTH",
+            entityId: "credentials",
+            familyGroupKey: tenantKey,
+            status: "FAILURE",
+            details: shouldLock
+              ? `Credentials sign-in rejected: invalid password; account locked after attempt ${failedAttempts}.`
+              : `Credentials sign-in rejected: invalid password (attempt ${failedAttempts}).`,
+          }).catch(() => undefined);
           return null;
         }
 
         await patchLocalUser(tenantKey, username, {
           failedAttempts: 0,
           lockedUntil: "",
+          lastLoginAt: new Date(now).toISOString(),
         });
 
         return {
@@ -112,13 +155,14 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "credentials") {
-        const localUser = user as { person_id?: string } | undefined;
+        const localUser = user as { person_id?: string; tenantKey?: string } | undefined;
         await appendAuditLog({
           actorEmail: user.email ?? "",
           actorPersonId: typeof localUser?.person_id === "string" ? localUser.person_id : "",
           action: "LOGIN",
           entityType: "AUTH",
           entityId: "credentials",
+          familyGroupKey: typeof localUser?.tenantKey === "string" ? localUser.tenantKey : "",
           status: "SUCCESS",
           details: "Credentials sign-in accepted.",
         }).catch(() => undefined);
@@ -136,11 +180,23 @@ export const authOptions: NextAuthOptions = {
         return false;
       }
       if (hasSteveAccess(user.email)) {
+        const steveAccesses = await getEnabledUserAccessList(user.email).catch(() => []);
+        const primarySteveAccess = steveAccesses[0];
+        if (primarySteveAccess?.personId) {
+          await updateTableRecordById(
+            "UserAccess",
+            primarySteveAccess.personId,
+            { last_login_at: new Date().toISOString() },
+            "person_id",
+          ).catch(() => undefined);
+        }
         await appendAuditLog({
           actorEmail: user.email,
+          actorPersonId: primarySteveAccess?.personId ?? "",
           action: "LOGIN",
           entityType: "AUTH",
           entityId: "oauth",
+          familyGroupKey: primarySteveAccess?.tenantKey ?? "",
           status: "SUCCESS",
           details: "Steve super-access sign-in accepted.",
         }).catch(() => undefined);
@@ -149,12 +205,21 @@ export const authOptions: NextAuthOptions = {
 
       const access = await getEnabledUserAccess(user.email);
       const ok = !!access;
+      if (access?.personId) {
+        await updateTableRecordById(
+          "UserAccess",
+          access.personId,
+          { last_login_at: new Date().toISOString() },
+          "person_id",
+        ).catch(() => undefined);
+      }
       await appendAuditLog({
         actorEmail: user.email,
         actorPersonId: access?.personId ?? "",
         action: "LOGIN",
         entityType: "AUTH",
         entityId: "oauth",
+        familyGroupKey: access?.tenantKey ?? "",
         status: ok ? "SUCCESS" : "FAILURE",
         details: ok ? "OAuth sign-in accepted via enabled access." : "OAuth sign-in rejected: no enabled family-group access.",
       }).catch(() => undefined);
@@ -278,13 +343,14 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signOut(message) {
-      const token = message.token as { email?: string; person_id?: string } | undefined;
+      const token = message.token as { email?: string; person_id?: string; tenantKey?: string } | undefined;
       await appendAuditLog({
         actorEmail: token?.email ?? "",
         actorPersonId: token?.person_id ?? "",
         action: "LOGOUT",
         entityType: "AUTH",
         entityId: "session",
+        familyGroupKey: token?.tenantKey ?? "",
         status: "SUCCESS",
         details: "User signed out.",
       }).catch(() => undefined);

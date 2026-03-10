@@ -13,6 +13,64 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (tenant audit capability + login/change coverage)
+
+- `Change`: Added a tenant-scoped audit API and Settings audit viewer, expanded audit coverage across local-user admin actions plus active attribute/media writes, and started persisting `last_login_at` on user-access records so admins can see recent login activity per user.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was incomplete audit architecture. The app already wrote some audit rows, but coverage was uneven, there was no read API or audit UI, failed local logins were not recorded, and there was no persistent last-login field for quick operational visibility.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/audit/route.ts`
+  - `src/app/api/t/[tenantKey]/admin-snapshot/route.ts`
+  - `src/app/api/t/[tenantKey]/local-users/route.ts`
+  - `src/app/api/t/[tenantKey]/local-users/[username]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/attributes/route.ts`
+  - `src/app/api/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/audit/log.ts`
+  - `src/lib/auth/local-users.ts`
+  - `src/lib/auth/options.ts`
+  - `src/lib/data/store.ts`
+  - `src/lib/data/runtime.ts`
+  - `src/lib/google/types.ts`
+  - `src/lib/oci/tables.ts`
+  - `oci-schema.sql`
+  - `docs/data-schema.md`
+- `Data Changes`: Adds `user_access.last_login_at` compatibility/bootstrap support and begins writing new values on successful logins. Existing historical audit rows remain unchanged.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Settings -> Users & Access -> Audit loads recent tenant-scoped events and supports user/date/action filters.
+  - Successful Google and local logins write audit rows; failed local logins also write failure rows.
+  - Attribute/media create/update/delete flows write audit rows.
+  - Manage User modal shows `Last Successful Login` when present.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-10 (account modal install app action)
+
+- `Change`: Added an `Install App` action to the account modal opened from the user-avatar icon, reusing PWA install prompt behavior and showing iPhone/iPad Add-to-Home-Screen guidance when native prompt support is unavailable.
+- `Type`: UI
+- `Why`: Root cause was install-flow discoverability. Install support existed on the invite page only, so signed-in users who skipped install during onboarding had no persistent in-app place to install the PWA later.
+- `Files`:
+  - `src/components/UserMenu.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Opening the user-avatar modal shows `Install App` when the app is not already installed and the device/browser can use the prompt or needs iOS install guidance.
+  - Clicking `Install App` opens the browser install prompt when available, or shows iOS Add-to-Home-Screen instructions.
+  - Once installed in supported browsers, the modal no longer shows the install action and instead indicates the app is installed on this device.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (media wizard UX refinement + video/audio support)
 
 - `Change`: Refined the shared media attach wizard so source selection uses direct icon cards, replaced the ambiguous raw file input with explicit picker actions, and extended the shared attach flow from image-only to support video and audio alongside photos.

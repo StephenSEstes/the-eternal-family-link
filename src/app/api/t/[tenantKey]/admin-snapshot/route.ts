@@ -9,6 +9,7 @@ type AccessItem = {
   role: AppRole;
   personId: string;
   isEnabled: boolean;
+  lastLoginAt: string;
 };
 
 type LocalUserItem = {
@@ -19,6 +20,7 @@ type LocalUserItem = {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+  lastLoginAt: string;
 };
 
 type PersonItem = {
@@ -115,6 +117,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       "failed_attempts",
       "locked_until",
       "must_change_password",
+      "last_login_at",
     ]);
     const userFamilyGroupsMatrix = rowsToMatrix(userFamilyGroupsRows, [
       "user_email",
@@ -233,6 +236,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
         role: userRow ? toRole(readCell(userRow, userAccessIdx, "role")) : toRole(readCell(row, userFamilyIdx, "role")),
         personId,
         isEnabled: googleEnabled,
+        lastLoginAt: userRow ? readCell(userRow, userAccessIdx, "last_login_at") : "",
       });
     }
     accessItems.sort((a, b) => {
@@ -265,6 +269,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
         failedAttempts: parseIntSafe(readCell(row, userAccessIdx, "failed_attempts"), 0),
         lockedUntil: readCell(row, userAccessIdx, "locked_until"),
         mustChangePassword: parseBool(readCell(row, userAccessIdx, "must_change_password")),
+        lastLoginAt: readCell(row, userAccessIdx, "last_login_at"),
       });
     }
     localUsers.sort((a, b) => a.username.localeCompare(b.username));

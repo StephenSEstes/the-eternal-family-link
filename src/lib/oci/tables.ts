@@ -33,6 +33,7 @@ let poolPromise: Promise<OciPool> | null = null;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
+let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
@@ -215,6 +216,7 @@ const TABLES: Record<string, TableConfig> = {
       "failed_attempts",
       "locked_until",
       "must_change_password",
+      "last_login_at",
     ],
   },
   UserFamilyGroups: {
@@ -571,22 +573,49 @@ async function ensureInvitesTableCompatibility(connection: OciConnection) {
   invitesTableCompatEnsured = true;
 }
 
+async function ensureUserAccessTableCompatibility(connection: OciConnection) {
+  if (userAccessTableCompatEnsured) {
+    return;
+  }
+  try {
+    await connection.execute(`ALTER TABLE user_access ADD (last_login_at VARCHAR2(64))`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!isColumnAlreadyCompatibleError(message)) {
+      throw error;
+    }
+  }
+  userAccessTableCompatEnsured = true;
+}
+
+async function ensureTableCompatibility(connection: OciConnection, tableName: string) {
+  if (tableName === "people") {
+    await ensurePeopleTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "family_config") {
+    await ensureFamilyConfigTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "households") {
+    await ensureHouseholdsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "user_access") {
+    await ensureUserAccessTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "invites") {
+    await ensureInvitesTableCompatibility(connection);
+  }
+}
+
 export async function getOciTableRecords(tableName: string | string[]): Promise<TableRecord[]> {
   const { config } = resolveTable(tableName);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   return withConnection(async (connection) => {
-    if (config.tableName === "people") {
-      await ensurePeopleTableCompatibility(connection);
-    }
-    if (config.tableName === "family_config") {
-      await ensureFamilyConfigTableCompatibility(connection);
-    }
-    if (config.tableName === "households") {
-      await ensureHouseholdsTableCompatibility(connection);
-    }
-    if (config.tableName === "invites") {
-      await ensureInvitesTableCompatibility(connection);
-    }
+    await ensureTableCompatibility(connection, config.tableName);
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} ORDER BY ROWID`,
       [],
@@ -613,18 +642,7 @@ export async function getOciTableRecordById(
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   const whereColumn = effectiveIdColumn === "date" ? "date_value" : effectiveIdColumn;
   return withConnection(async (connection) => {
-    if (config.tableName === "people") {
-      await ensurePeopleTableCompatibility(connection);
-    }
-    if (config.tableName === "family_config") {
-      await ensureFamilyConfigTableCompatibility(connection);
-    }
-    if (config.tableName === "households") {
-      await ensureHouseholdsTableCompatibility(connection);
-    }
-    if (config.tableName === "invites") {
-      await ensureInvitesTableCompatibility(connection);
-    }
+    await ensureTableCompatibility(connection, config.tableName);
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} WHERE ${whereColumn} = :id FETCH FIRST 1 ROWS ONLY`,
       [recordId],
@@ -651,18 +669,7 @@ export async function createOciTableRecords(
   const sql = `INSERT INTO ${config.tableName} (${insertCols.join(", ")}) VALUES (${bindSlots})`;
 
   return withConnection(async (connection) => {
-    if (config.tableName === "people") {
-      await ensurePeopleTableCompatibility(connection);
-    }
-    if (config.tableName === "family_config") {
-      await ensureFamilyConfigTableCompatibility(connection);
-    }
-    if (config.tableName === "households") {
-      await ensureHouseholdsTableCompatibility(connection);
-    }
-    if (config.tableName === "invites") {
-      await ensureInvitesTableCompatibility(connection);
-    }
+    await ensureTableCompatibility(connection, config.tableName);
     const normalizedRows = payloads.map((payload) => normalizePayload(payload, config.headers));
     const binds = normalizedRows.map((row) => config.headers.map((h) => row[h] ?? ""));
     await connection.executeMany(sql, binds, { autoCommit: true });
@@ -690,18 +697,7 @@ export async function updateOciTableRecordById(
   binds.push(recordId);
 
   return withConnection(async (connection) => {
-    if (config.tableName === "people") {
-      await ensurePeopleTableCompatibility(connection);
-    }
-    if (config.tableName === "family_config") {
-      await ensureFamilyConfigTableCompatibility(connection);
-    }
-    if (config.tableName === "households") {
-      await ensureHouseholdsTableCompatibility(connection);
-    }
-    if (config.tableName === "invites") {
-      await ensureInvitesTableCompatibility(connection);
-    }
+    await ensureTableCompatibility(connection, config.tableName);
     const update = await connection.execute(
       `UPDATE ${config.tableName} SET ${setClauses.join(", ")} WHERE ${whereColumn} = :id`,
       binds,
@@ -771,6 +767,7 @@ type OciTenantUserAccessRow = {
   personId: string;
   tenantKey: string;
   tenantName: string;
+  lastLoginAt: string;
 };
 
 type OciLocalUserRow = {
@@ -783,6 +780,20 @@ type OciLocalUserRow = {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+  lastLoginAt: string;
+};
+
+type OciAuditLogRow = {
+  eventId: string;
+  timestamp: string;
+  actorEmail: string;
+  actorPersonId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  familyGroupKey: string;
+  status: string;
+  details: string;
 };
 
 type OciMediaLinkRow = {
@@ -870,6 +881,7 @@ export async function getOciTenantUserAccessRows(tenantKey: string): Promise<Oci
     return [];
   }
   return withConnection(async (connection) => {
+    await ensureUserAccessTableCompatibility(connection);
     const result = await connection.execute(
       `SELECT
          NVL(LOWER(TRIM(u.user_email)), LOWER(TRIM(l.user_email))) AS user_email,
@@ -877,7 +889,8 @@ export async function getOciTenantUserAccessRows(tenantKey: string): Promise<Oci
          NVL(u.role, l.role) AS role,
          l.person_id AS person_id,
          l.family_group_key AS family_group_key,
-         NVL(l.family_group_name, '') AS family_group_name
+         NVL(l.family_group_name, '') AS family_group_name,
+         NVL(u.last_login_at, '') AS last_login_at
        FROM (
          SELECT
            user_email,
@@ -904,6 +917,7 @@ export async function getOciTenantUserAccessRows(tenantKey: string): Promise<Oci
       personId: fromDbValue(row.PERSON_ID),
       tenantKey: fromDbValue(row.FAMILY_GROUP_KEY),
       tenantName: fromDbValue(row.FAMILY_GROUP_NAME),
+      lastLoginAt: fromDbValue(row.LAST_LOGIN_AT),
     }));
   });
 }
@@ -1130,6 +1144,7 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
     return [];
   }
   return withConnection(async (connection) => {
+    await ensureUserAccessTableCompatibility(connection);
     const result = await connection.execute(
       `SELECT
          :tenantKey AS tenant_key,
@@ -1140,7 +1155,8 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
          CASE WHEN ${enabledExpr("u.is_enabled")} THEN 1 ELSE 0 END AS is_enabled,
          TO_NUMBER(NVL(NULLIF(TRIM(u.failed_attempts), ''), '0')) AS failed_attempts,
          NVL(u.locked_until, '') AS locked_until,
-         CASE WHEN ${enabledExpr("u.must_change_password")} THEN 1 ELSE 0 END AS must_change_password
+         CASE WHEN ${enabledExpr("u.must_change_password")} THEN 1 ELSE 0 END AS must_change_password,
+         NVL(u.last_login_at, '') AS last_login_at
        FROM user_access u
        INNER JOIN user_family_groups l
          ON TRIM(l.person_id) = TRIM(u.person_id)
@@ -1164,6 +1180,110 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
       failedAttempts: Number.parseInt(fromDbValue(row.FAILED_ATTEMPTS), 10) || 0,
       lockedUntil: fromDbValue(row.LOCKED_UNTIL),
       mustChangePassword: fromDbValue(row.MUST_CHANGE_PASSWORD) === "1",
+      lastLoginAt: fromDbValue(row.LAST_LOGIN_AT),
+    }));
+  });
+}
+
+export async function getOciAuditLogRows(input: {
+  familyGroupKey?: string;
+  actorEmail?: string;
+  actorPersonId?: string;
+  action?: string;
+  entityType?: string;
+  status?: string;
+  fromTimestamp?: string;
+  toTimestamp?: string;
+  limit?: number;
+}): Promise<OciAuditLogRow[]> {
+  const limit = Math.min(Math.max(Number(input.limit ?? 200) || 200, 1), 500);
+  const binds: Record<string, unknown> = { limit };
+  const whereClauses: string[] = [];
+
+  const familyGroupKey = input.familyGroupKey?.trim().toLowerCase() ?? "";
+  if (familyGroupKey) {
+    whereClauses.push(`LOWER(TRIM(family_group_key)) = :familyGroupKey`);
+    binds.familyGroupKey = familyGroupKey;
+  }
+
+  const actorEmail = input.actorEmail?.trim().toLowerCase() ?? "";
+  if (actorEmail) {
+    whereClauses.push(`LOWER(TRIM(actor_email)) = :actorEmail`);
+    binds.actorEmail = actorEmail;
+  }
+
+  const actorPersonId = input.actorPersonId?.trim() ?? "";
+  if (actorPersonId) {
+    whereClauses.push(`TRIM(actor_person_id) = :actorPersonId`);
+    binds.actorPersonId = actorPersonId;
+  }
+
+  const action = input.action?.trim().toUpperCase() ?? "";
+  if (action) {
+    whereClauses.push(`UPPER(TRIM(action)) = :action`);
+    binds.action = action;
+  }
+
+  const entityType = input.entityType?.trim().toUpperCase() ?? "";
+  if (entityType) {
+    whereClauses.push(`UPPER(TRIM(entity_type)) = :entityType`);
+    binds.entityType = entityType;
+  }
+
+  const status = input.status?.trim().toUpperCase() ?? "";
+  if (status) {
+    whereClauses.push(`UPPER(TRIM(status)) = :status`);
+    binds.status = status;
+  }
+
+  const fromTimestamp = input.fromTimestamp?.trim() ?? "";
+  if (fromTimestamp) {
+    whereClauses.push(`TRIM(timestamp) >= :fromTimestamp`);
+    binds.fromTimestamp = fromTimestamp;
+  }
+
+  const toTimestamp = input.toTimestamp?.trim() ?? "";
+  if (toTimestamp) {
+    whereClauses.push(`TRIM(timestamp) <= :toTimestamp`);
+    binds.toTimestamp = toTimestamp;
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT *
+       FROM (
+         SELECT
+           event_id,
+           timestamp,
+           actor_email,
+           actor_person_id,
+           action,
+           entity_type,
+           entity_id,
+           family_group_key,
+           status,
+           details
+         FROM audit_log
+         ${whereSql}
+         ORDER BY timestamp DESC, event_id DESC
+       )
+       WHERE ROWNUM <= :limit`,
+      binds,
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      eventId: fromDbValue(row.EVENT_ID),
+      timestamp: fromDbValue(row.TIMESTAMP),
+      actorEmail: fromDbValue(row.ACTOR_EMAIL),
+      actorPersonId: fromDbValue(row.ACTOR_PERSON_ID),
+      action: fromDbValue(row.ACTION),
+      entityType: fromDbValue(row.ENTITY_TYPE),
+      entityId: fromDbValue(row.ENTITY_ID),
+      familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+      status: fromDbValue(row.STATUS),
+      details: fromDbValue(row.DETAILS),
     }));
   });
 }

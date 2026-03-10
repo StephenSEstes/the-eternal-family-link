@@ -250,9 +250,43 @@ main {
   font-weight: 700;
 }
 
+.user-menu-actions {
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.user-menu-install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--accent) 26%, #fff 74%);
+  background: color-mix(in oklab, var(--accent) 14%, #fff 86%);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.user-menu-install:hover {
+  border-color: color-mix(in oklab, var(--accent) 38%, #fff 62%);
+  background: color-mix(in oklab, var(--accent) 20%, #fff 80%);
+}
+
 .user-menu-signout:hover {
   border-color: color-mix(in oklab, var(--accent) 26%, #fff 74%);
   background: color-mix(in oklab, var(--accent) 16%, #fff 84%);
+}
+
+.user-menu-help {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .icon-chip {

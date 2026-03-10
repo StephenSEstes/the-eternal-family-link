@@ -101,7 +101,8 @@ BEGIN
       password_hash VARCHAR2(512 CHAR),
       failed_attempts VARCHAR2(32 CHAR),
       locked_until VARCHAR2(64 CHAR),
-      must_change_password VARCHAR2(8 CHAR)
+      must_change_password VARCHAR2(8 CHAR),
+      last_login_at VARCHAR2(64 CHAR)
     )
   ';
 EXCEPTION

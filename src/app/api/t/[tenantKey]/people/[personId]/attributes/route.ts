@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { toPersonMediaAttribute, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import { normalizePersonMediaAttributeType, syncPersonMediaAssociations } from "@/lib/attributes/person-media";
@@ -163,6 +164,15 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
       );
     }
   }
+
+  await appendSessionAuditLog(resolved.session, {
+    action: "CREATE",
+    entityType: "ATTRIBUTE",
+    entityId: created.attributeId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Created person attribute type=${created.attributeType || parsed.data.attributeType} for person=${personId}.`,
+  });
 
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: created }, { status: 201 });
 }

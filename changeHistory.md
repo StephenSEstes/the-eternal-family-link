@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Added a full tenant audit surface with Settings audit viewer, expanded login/change audit coverage, and persisted `last_login_at` on user access records for quicker user-login visibility. See `docs/change-summary.md`.
+- 2026-03-10: Added an `Install App` action to the account modal behind the user-avatar icon so signed-in users can install the PWA later without going back through the invite flow. See `docs/change-summary.md`.
 - 2026-03-10: Refined the shared media attach wizard with direct icon-based source selection, explicit picker buttons, and shared photo/video/audio support instead of the old image-only flow. See `docs/change-summary.md`.
 - 2026-03-10: Moved invite creation into a person-level `Manage User` modal with `Manage User` and `Invite` tabs, replacing the inline directory expansion and removing the standalone invite subtab. See `docs/change-summary.md`.
 - 2026-03-10: Added a person-bound invite flow with admin-generated shareable links, a public `/invite/[token]` onboarding page, Google/local acceptance paths, and install guidance. See `docs/change-summary.md`.

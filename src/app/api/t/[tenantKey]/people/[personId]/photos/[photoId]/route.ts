@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getPersonById, PEOPLE_TABLE, updateTableRecordById } from "@/lib/data/runtime";
@@ -48,6 +49,17 @@ export async function DELETE(_: Request, { params }: RouteProps) {
       "person_id",
       resolved.tenant.tenantKey,
     );
+  }
+
+  if (deletedLinks > 0 || currentPhotoFileId === targetFileId) {
+    await appendSessionAuditLog(resolved.session, {
+      action: "DELETE",
+      entityType: "PERSON_MEDIA",
+      entityId: targetFileId,
+      familyGroupKey: resolved.tenant.tenantKey,
+      status: "SUCCESS",
+      details: `Deleted person media links=${deletedLinks} for person=${personId}.`,
+    });
   }
 
   return NextResponse.json({

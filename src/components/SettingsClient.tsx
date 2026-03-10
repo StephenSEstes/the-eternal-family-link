@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
 import type { InvitePresentation } from "@/lib/invite/types";
@@ -10,6 +10,7 @@ type AccessItem = {
   role: "ADMIN" | "USER";
   personId: string;
   isEnabled: boolean;
+  lastLoginAt: string;
 };
 
 type TenantOption = {
@@ -26,6 +27,20 @@ type LocalUserItem = {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+  lastLoginAt: string;
+};
+
+type AuditItem = {
+  eventId: string;
+  timestamp: string;
+  actorEmail: string;
+  actorPersonId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  familyGroupKey: string;
+  status: string;
+  details: string;
 };
 
 type SecurityPolicy = {
@@ -157,7 +172,7 @@ type CreateFamilyResponse = {
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import" | "attribute_definitions";
-type UserAdminSubTab = "directory" | "family_access" | "password_policy";
+type UserAdminSubTab = "directory" | "family_access" | "password_policy" | "audit";
 type ManageUserModalTab = "manage" | "invite";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
@@ -260,6 +275,18 @@ function suggestInviteUsername(displayName: string) {
   return normalized.length >= 3 ? normalized : "";
 }
 
+function formatAuditTimestamp(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return "-";
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return parsed.toLocaleString();
+}
+
 export function SettingsClient({
   tenantKey,
   tenantName,
@@ -347,6 +374,15 @@ export function SettingsClient({
   const [localEnabled, setLocalEnabled] = useState(true);
   const [selectedLocalUsername, setSelectedLocalUsername] = useState("");
   const [userAdminSubTab, setUserAdminSubTab] = useState<UserAdminSubTab>("directory");
+  const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
+  const [auditStatusMessage, setAuditStatusMessage] = useState("");
+  const [auditActorEmailFilter, setAuditActorEmailFilter] = useState("");
+  const [auditActorPersonIdFilter, setAuditActorPersonIdFilter] = useState("");
+  const [auditActionFilter, setAuditActionFilter] = useState("");
+  const [auditEntityTypeFilter, setAuditEntityTypeFilter] = useState("");
+  const [auditResultStatusFilter, setAuditResultStatusFilter] = useState("");
+  const [auditFromDate, setAuditFromDate] = useState("");
+  const [auditToDate, setAuditToDate] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("google");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "USER">("USER");
@@ -370,6 +406,15 @@ export function SettingsClient({
   const adminLoadSeq = useRef(0);
   const adminLoadAbortRef = useRef<AbortController | null>(null);
   const managedPersonSyncRef = useRef("");
+  const auditFiltersRef = useRef({
+    actorEmail: "",
+    actorPersonId: "",
+    action: "",
+    entityType: "",
+    status: "",
+    fromDate: "",
+    toDate: "",
+  });
   const [adminLoadStatus, setAdminLoadStatus] = useState("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
   const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string }[]>(people);
@@ -538,6 +583,53 @@ export function SettingsClient({
   };
 
   useEffect(() => {
+    auditFiltersRef.current = {
+      actorEmail: auditActorEmailFilter,
+      actorPersonId: auditActorPersonIdFilter,
+      action: auditActionFilter,
+      entityType: auditEntityTypeFilter,
+      status: auditResultStatusFilter,
+      fromDate: auditFromDate,
+      toDate: auditToDate,
+    };
+  }, [
+    auditActionFilter,
+    auditActorEmailFilter,
+    auditActorPersonIdFilter,
+    auditEntityTypeFilter,
+    auditFromDate,
+    auditResultStatusFilter,
+    auditToDate,
+  ]);
+
+  const loadAuditEntries = useCallback(async (tenantKeyToLoad: string) => {
+    const filters = auditFiltersRef.current;
+    setAuditStatusMessage("Loading audit log...");
+    const params = new URLSearchParams();
+    if (filters.actorEmail.trim()) params.set("actorEmail", filters.actorEmail.trim());
+    if (filters.actorPersonId.trim()) params.set("actorPersonId", filters.actorPersonId.trim());
+    if (filters.action.trim()) params.set("action", filters.action.trim());
+    if (filters.entityType.trim()) params.set("entityType", filters.entityType.trim());
+    if (filters.status.trim()) params.set("status", filters.status.trim());
+    if (filters.fromDate.trim()) params.set("from", filters.fromDate.trim());
+    if (filters.toDate.trim()) params.set("to", filters.toDate.trim());
+    params.set("limit", "200");
+
+    const query = params.toString();
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(tenantKeyToLoad)}/audit${query ? `?${query}` : ""}`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setAuditStatusMessage(`Audit load failed: ${res.status}`);
+      return;
+    }
+    setAuditItems(Array.isArray(body?.entries) ? (body.entries as AuditItem[]) : []);
+    setAuditStatusMessage("");
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const run = async () => {
       setSelectedDirectoryPersonId("");
@@ -563,6 +655,13 @@ export function SettingsClient({
       adminLoadAbortRef.current?.abort();
     };
   }, [selectedTenantKey]);
+
+  useEffect(() => {
+    if (userAdminSubTab !== "audit") {
+      return;
+    }
+    void loadAuditEntries(selectedTenantKey);
+  }, [loadAuditEntries, selectedTenantKey, userAdminSubTab]);
 
   useEffect(() => {
     const shouldLoadExistingPeople = activeTab === "family_groups" || showCreateFamilyModal;
@@ -1595,6 +1694,32 @@ export function SettingsClient({
     () => localUsers.find((item) => item.username === selectedLocalUsername && item.personId === selectedDirectoryPersonId) ?? null,
     [localUsers, selectedDirectoryPersonId, selectedLocalUsername],
   );
+  const selectedPersonLastLoginAt = useMemo(
+    () => selectedPersonGoogleAccess[0]?.lastLoginAt || selectedPersonLocalUser?.lastLoginAt || "",
+    [selectedPersonGoogleAccess, selectedPersonLocalUser],
+  );
+  const familyPeopleById = useMemo(
+    () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
+    [familyPeople],
+  );
+  const auditSummary = useMemo(() => {
+    return auditItems.reduce(
+      (summary, item) => {
+        summary.total += 1;
+        if (item.action === "LOGIN" && item.status === "SUCCESS") {
+          summary.loginSuccess += 1;
+        }
+        if (item.action === "LOGIN" && item.status === "FAILURE") {
+          summary.loginFailure += 1;
+        }
+        if (item.action !== "LOGIN" && item.action !== "LOGOUT") {
+          summary.changeEvents += 1;
+        }
+        return summary;
+      },
+      { total: 0, loginSuccess: 0, loginFailure: 0, changeEvents: 0 },
+    );
+  }, [auditItems]);
   useEffect(() => {
     const personId = selectedDirectoryPersonId.trim();
     if (!personId) {
@@ -1881,6 +2006,16 @@ export function SettingsClient({
             }}
           >
             Password Policy
+          </button>
+          <button
+            type="button"
+            className={`settings-subtab ${userAdminSubTab === "audit" ? "active" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("audit");
+              setShowAddUserForm(false);
+            }}
+          >
+            Audit
           </button>
         </div>
 
@@ -2213,12 +2348,29 @@ export function SettingsClient({
                           >
                             Update Password
                           </button>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => {
+                              setAuditActorPersonIdFilter(selectedDirectoryPerson.personId);
+                              setAuditActorEmailFilter(userEmail.trim());
+                              setAuditActionFilter("");
+                              setAuditEntityTypeFilter("");
+                              setAuditResultStatusFilter("");
+                              setAuditFromDate("");
+                              setAuditToDate("");
+                              closeManageUserModal();
+                              setUserAdminSubTab("audit");
+                            }}
+                          >
+                            Open Audit
+                          </button>
                         </div>
 
                         <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
                           <table className="settings-table">
                             <thead>
-                              <tr><th>Failed Attempts</th><th>Locked</th><th>Locked Until</th><th>Current Local Username</th></tr>
+                              <tr><th>Failed Attempts</th><th>Locked</th><th>Locked Until</th><th>Current Local Username</th><th>Last Successful Login</th></tr>
                             </thead>
                             <tbody>
                               <tr>
@@ -2226,6 +2378,7 @@ export function SettingsClient({
                                 <td>{selectedPersonLocalUser?.lockedUntil ? "TRUE" : "FALSE"}</td>
                                 <td>{selectedPersonLocalUser?.lockedUntil || "-"}</td>
                                 <td>{selectedPersonLocalUser?.username || "-"}</td>
+                                <td>{selectedPersonLastLoginAt ? formatAuditTimestamp(selectedPersonLastLoginAt) : "-"}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -2360,6 +2513,149 @@ export function SettingsClient({
           </>
         ) : null}
 
+        {userAdminSubTab === "audit" ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>Audit Log</h3>
+            <p className="page-subtitle">
+              Review logins and change history for the selected family group. Filters apply to the most recent 200 matching events.
+            </p>
+            <div className="card" style={{ marginTop: "0.75rem" }}>
+              <div className="settings-toolbar-row">
+                <div className="settings-toolbar-field">
+                  <label className="label">Actor Person</label>
+                  <select
+                    className="input"
+                    value={auditActorPersonIdFilter}
+                    onChange={(e) => setAuditActorPersonIdFilter(e.target.value)}
+                  >
+                    <option value="">All people</option>
+                    {familyPeople.map((person) => (
+                      <option key={`audit-person-${person.personId}`} value={person.personId}>
+                        {person.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-toolbar-field">
+                  <label className="label">Actor Email</label>
+                  <input
+                    className="input"
+                    value={auditActorEmailFilter}
+                    onChange={(e) => setAuditActorEmailFilter(e.target.value)}
+                    placeholder="name@example.com"
+                  />
+                </div>
+              </div>
+              <div className="settings-toolbar-row">
+                <div className="settings-toolbar-field">
+                  <label className="label">Action</label>
+                  <input
+                    className="input"
+                    value={auditActionFilter}
+                    onChange={(e) => setAuditActionFilter(e.target.value)}
+                    placeholder="LOGIN, UPDATE, DELETE..."
+                  />
+                </div>
+                <div className="settings-toolbar-field">
+                  <label className="label">Entity Type</label>
+                  <input
+                    className="input"
+                    value={auditEntityTypeFilter}
+                    onChange={(e) => setAuditEntityTypeFilter(e.target.value)}
+                    placeholder="AUTH, ATTRIBUTE, PERSON_MEDIA..."
+                  />
+                </div>
+                <div className="settings-toolbar-field">
+                  <label className="label">Result</label>
+                  <select
+                    className="input"
+                    value={auditResultStatusFilter}
+                    onChange={(e) => setAuditResultStatusFilter(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="SUCCESS">SUCCESS</option>
+                    <option value="FAILURE">FAILURE</option>
+                  </select>
+                </div>
+              </div>
+              <div className="settings-toolbar-row">
+                <div className="settings-toolbar-field">
+                  <label className="label">From</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={auditFromDate}
+                    onChange={(e) => setAuditFromDate(e.target.value)}
+                  />
+                </div>
+                <div className="settings-toolbar-field">
+                  <label className="label">To</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={auditToDate}
+                    onChange={(e) => setAuditToDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="settings-chip-list">
+                <button type="button" className="button tap-button" onClick={() => void loadAuditEntries(selectedTenantKey)}>
+                  Apply Filters
+                </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    setAuditActorEmailFilter("");
+                    setAuditActorPersonIdFilter("");
+                    setAuditActionFilter("");
+                    setAuditEntityTypeFilter("");
+                    setAuditResultStatusFilter("");
+                    setAuditFromDate("");
+                    setAuditToDate("");
+                    setAuditItems([]);
+                    setAuditStatusMessage("Filters cleared. Click Apply Filters to reload all events.");
+                  }}
+                >
+                  Clear Filters
+                </button>
+              </div>
+            </div>
+            <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+              <span className="settings-status-chip is-on">Events: {auditSummary.total}</span>
+              <span className="settings-status-chip is-on">Logins: {auditSummary.loginSuccess}</span>
+              <span className="settings-status-chip is-off">Failed Logins: {auditSummary.loginFailure}</span>
+              <span className="settings-status-chip is-on">Changes: {auditSummary.changeEvents}</span>
+            </div>
+            <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table className="settings-table">
+                <thead>
+                  <tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Status</th><th>Details</th></tr>
+                </thead>
+                <tbody>
+                  {auditItems.length > 0 ? auditItems.map((item) => {
+                    const actorName = item.actorPersonId ? familyPeopleById.get(item.actorPersonId) ?? item.actorPersonId : "";
+                    const actorLabel = [actorName, item.actorEmail].filter(Boolean).join(" | ") || "-";
+                    const entityLabel = `${item.entityType}${item.entityId ? `:${item.entityId}` : ""}`;
+                    return (
+                      <tr key={item.eventId}>
+                        <td>{formatAuditTimestamp(item.timestamp)}</td>
+                        <td>{actorLabel}</td>
+                        <td>{item.action}</td>
+                        <td>{entityLabel}</td>
+                        <td>{item.status}</td>
+                        <td>{item.details || "-"}</td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr><td colSpan={6}>No audit events match the current filter.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
         {userAdminSubTab === "password_policy" ? (
           <>
             <h3 style={{ marginTop: 0 }}>Local Password Policy</h3>
@@ -2389,6 +2685,7 @@ export function SettingsClient({
         ) : null}
         {accessStatus ? <p>{accessStatus}</p> : null}
         {adminLoadStatus ? <p className="status-warn">{adminLoadStatus}</p> : null}
+        {auditStatusMessage ? <p>{auditStatusMessage}</p> : null}
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
         {inviteStatus ? <p>{inviteStatus}</p> : null}

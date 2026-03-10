@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { buildEntityId } from "@/lib/entity-id";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
@@ -175,6 +176,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         createdAt: createdAtIso,
       });
     }
+
+    await appendSessionAuditLog(resolved.session, {
+      action: "UPLOAD",
+      entityType: targetAttributeId ? "ATTRIBUTE_MEDIA" : "HOUSEHOLD_MEDIA",
+      entityId: uploaded.fileId,
+      familyGroupKey: resolved.tenant.tenantKey,
+      status: "SUCCESS",
+      details: targetAttributeId
+        ? `Uploaded media for household attribute=${targetAttributeId}, household=${householdId}.`
+        : `Uploaded household media for household=${householdId}, primary=${String(shouldBePrimary)}.`,
+    });
 
     return NextResponse.json({
       ok: true,

@@ -9,6 +9,7 @@ export {
   deleteTableRows,
   ensurePersonFamilyGroupMembership,
   ensureTenantScaffold,
+  getAuditLogEntries,
   getAllFamilyGroupAccesses,
   getEnabledUserAccess,
   getEnabledUserAccessList,
@@ -28,4 +29,6 @@ export {
   updateTableRecordById,
   upsertTenantAccess,
 } from "@/lib/data/store";
+
+export type { AuditLogInput } from "@/lib/data/store";
 

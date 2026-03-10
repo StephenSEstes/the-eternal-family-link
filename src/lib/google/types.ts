@@ -14,6 +14,7 @@ export type UserAccessRecord = {
   personId: string;
   tenantKey: string;
   tenantName: string;
+  lastLoginAt: string;
 };
 
 export type TenantAccess = {
@@ -111,6 +112,7 @@ export type LocalUserRecord = {
   failedAttempts: number;
   lockedUntil: string;
   mustChangePassword: boolean;
+  lastLoginAt: string;
 };
 
 export type RelationshipRecord = {

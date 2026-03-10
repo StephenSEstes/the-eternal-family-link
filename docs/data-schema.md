@@ -144,6 +144,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `failed_attempts`
   - `locked_until`
   - `must_change_password`
+  - `last_login_at`
 - Purpose:
   - Credential/access flags and login state by person.
 - Logical index/key:
@@ -163,6 +164,25 @@ This section is a quick reference for the three data areas that drive profile/me
   - Family access assignments for authenticated users.
 - Logical index/key:
   - Unique composite: (`user_email`, `family_group_key`)
+
+## AuditLog
+
+- Columns:
+  - `event_id`
+  - `timestamp`
+  - `actor_email`
+  - `actor_person_id`
+  - `action`
+  - `entity_type`
+  - `entity_id`
+  - `family_group_key`
+  - `status`
+  - `details`
+- Purpose:
+  - Immutable audit trail for login outcomes and admin/user data changes, scoped to a family group when applicable.
+- Logical index/key:
+  - Unique: `event_id`
+  - Common lookup: (`family_group_key`, `timestamp`), (`actor_email`, `timestamp`), (`actor_person_id`, `timestamp`)
 
 ## Invites
 

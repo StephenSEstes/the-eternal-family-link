@@ -1,7 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+function isIosDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function isSafari() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /safari/i.test(navigator.userAgent) && !/chrome|crios|android/i.test(navigator.userAgent);
+}
+
+function isStandaloneMode() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone === true;
+}
 
 type UserMenuProps = {
   displayName: string;
@@ -14,6 +41,9 @@ type UserMenuProps = {
 
 export function UserMenu({ displayName, email, role, loginType, appVersion, avatarInitials }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installMessage, setInstallMessage] = useState("");
+  const [isInstalled, setIsInstalled] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -28,6 +58,60 @@ export function UserMenu({ displayName, email, role, loginType, appVersion, avat
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  useEffect(() => {
+    setIsInstalled(isStandaloneMode());
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const onAppInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+      setInstallMessage("App installed on this device.");
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setInstallMessage("");
+    }
+  }, [open]);
+
+  const installHint = useMemo(() => {
+    if (!isIosDevice()) {
+      return "Use your browser menu to install or add this app to your home screen if the install button does not open a prompt.";
+    }
+    if (isSafari()) {
+      return "In Safari, tap Share and choose Add to Home Screen.";
+    }
+    return "Open this app in Safari, then tap Share and choose Add to Home Screen.";
+  }, []);
+
+  const canShowInstallAction = !isInstalled && (Boolean(installPrompt) || isIosDevice());
+
+  const onInstall = async () => {
+    if (installPrompt) {
+      setInstallMessage("");
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") {
+        setInstallMessage("Install started on this device.");
+      } else if (choice?.outcome === "dismissed") {
+        setInstallMessage("Install prompt dismissed.");
+      }
+      setInstallPrompt(null);
+      return;
+    }
+    setInstallMessage(installHint);
+  };
 
   return (
     <div className="user-menu">
@@ -68,9 +152,21 @@ export function UserMenu({ displayName, email, role, loginType, appVersion, avat
             <p className="user-menu-meta">
               App: <strong>{appVersion}</strong>
             </p>
-            <Link href="/api/auth/signout" prefetch={false} className="user-menu-signout" role="menuitem">
-              Sign out
-            </Link>
+            {isInstalled ? (
+              <p className="user-menu-meta">Installed: <strong>This device</strong></p>
+            ) : null}
+            <div className="user-menu-actions">
+              {canShowInstallAction ? (
+                <button type="button" className="user-menu-install" onClick={() => void onInstall()}>
+                  Install App
+                </button>
+              ) : null}
+              <Link href="/api/auth/signout" prefetch={false} className="user-menu-signout" role="menuitem">
+                Sign out
+              </Link>
+            </div>
+            {installMessage ? <p className="user-menu-help">{installMessage}</p> : null}
+            {!isInstalled && !installMessage && canShowInstallAction ? <p className="user-menu-help">{installHint}</p> : null}
           </div>
         </div>
       ) : null}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { deleteTableRows, getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
@@ -60,6 +61,14 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   if (deletedLinks === 0 && deletedLegacyRows === 0 && !clearedWeddingPhoto) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  await appendSessionAuditLog(resolved.session, {
+    action: "DELETE",
+    entityType: "HOUSEHOLD_MEDIA",
+    entityId: targetFileId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Deleted household media links=${deletedLinks}, legacyRows=${deletedLegacyRows}, clearedWeddingPhoto=${String(clearedWeddingPhoto)} for household=${householdId}.`,
+  });
   return NextResponse.json({
     ok: true,
     deletedLinks,

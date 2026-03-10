@@ -44,6 +44,10 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-04-08
   Desc: Add Android PWA share-target support so images/videos shared from phone apps can open the app and route into the shared media attach flow. Keep iPhone on the in-app camera/upload path because iOS web apps do not support share-target onboarding the same way.
+- [ ] Develop story/memory workflow with attached media
+  Priority: Med
+  Est date: 2026-04-12
+  Desc: Make story/event attributes first-class for people and households, including attaching photos, video, and audio to a story/memory without turning media assets into standalone attribute-owning entities.
 
 ## Backlog
 - [ ] Define current top 3 development priorities

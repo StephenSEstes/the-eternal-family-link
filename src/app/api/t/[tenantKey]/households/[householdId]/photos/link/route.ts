@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
@@ -100,5 +101,13 @@ export async function POST(request: Request, { params }: RouteProps) {
       linkId,
     });
   }
+  await appendSessionAuditLog(resolved.session, {
+    action: "CREATE",
+    entityType: "HOUSEHOLD_MEDIA",
+    entityId: fileId,
+    familyGroupKey: resolved.tenant.tenantKey,
+    status: "SUCCESS",
+    details: `Linked existing media to household=${householdId}, primary=${String(shouldBePrimary)}.`,
+  });
   return NextResponse.json({ ok: true, linkId, fileId, householdId });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { appendSessionAuditLog } from "@/lib/audit/log";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { toPersonMediaAttributes } from "@/lib/attributes/media-response";
 import { syncPersonMediaAssociations, type PersonMediaAttributeType } from "@/lib/attributes/person-media";
@@ -177,6 +178,15 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         resolved.tenant.tenantKey,
       );
     }
+
+    await appendSessionAuditLog(resolved.session, {
+      action: "UPLOAD",
+      entityType: "PERSON_MEDIA",
+      entityId: uploaded.fileId,
+      familyGroupKey: resolved.tenant.tenantKey,
+      status: "SUCCESS",
+      details: `Uploaded ${attributeType} for person=${personId}, attribute=${attributeId}, primary=${String(shouldBePrimary)}.`,
+    });
 
     return NextResponse.json({
       ok: true,
