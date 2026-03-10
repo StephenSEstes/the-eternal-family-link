@@ -35,21 +35,14 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Reason`: Remove legacy label ambiguity and reduce compatibility complexity.
 - `Alternatives Considered`: Continuing dual support for `partner1_person_id` and `partner2_person_id`.
 - `Impact`: CSV import and runtime reads/writes now use only `husband_person_id` / `wife_person_id`.
-- `Follow-up`: Remove legacy partner columns from workbook when ready.
-
-- `Area`: Google Sheets tab model
-- `Decision`: Remove family-scoped tab resolution and use global tabs only.
-- `Reason`: Scoped fallback paths were adding complexity and inconsistent data behavior.
-- `Alternatives Considered`: Keep dual resolution (`<familyKey>__Tab` fallback to global tab).
-- `Impact`: Sheets resolver no longer searches scoped tab names; data must be in global tabs.
-- `Follow-up`: Audit and delete any leftover scoped tabs after confirming data migration.
+- `Follow-up`: Remove legacy partner-column references from remaining historical notes when ready.
 
 - `Area`: Data model documentation
 - `Decision`: Maintain `docs/data-schema.md` as the canonical schema reference for tables, columns, IDs, joins, logical indexes, and media link design.
 - `Reason`: Prevent drift and ambiguity between implemented schema and expected behavior.
 - `Alternatives Considered`: Keep schema details spread across code only.
 - `Impact`: Schema changes must be reflected in `docs/data-schema.md` within the same commit.
-- `Follow-up`: Keep this document aligned with `src/lib/google/sheets.ts` and access-layer behavior.
+- `Follow-up`: Keep this document aligned with `src/lib/data/store.ts` and the active access-layer behavior.
 
 ## 2026-02-28
 
@@ -72,7 +65,7 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Reason`: Remove human-name/date IDs while preserving quick type readability and reducing long, fragile key strings.
 - `Alternatives Considered`: Keep legacy readable IDs (`YYYYMMDD-name-slug`, composite relationship IDs, composite household IDs).
 - `Impact`: New writes use typed IDs; migration tooling remaps existing IDs and linked references across core tables.
-- `Follow-up`: Run migration in dry-run first, close workbook, then execute live migration with confirmation payload.
+- `Follow-up`: Run migration in dry-run first, then execute live migration with confirmation payload.
 
 ## 2026-03-04
 
@@ -89,7 +82,7 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Decision`: Consolidate person attribute persistence on the unified `Attributes` table and remove legacy `PersonAttributes` runtime/storage dependency.
 - `Reason`: Dual-write/dual-read behavior created inconsistent results across screens and made attribute/media behavior depend on which endpoint wrote the record.
 - `Alternatives Considered`: Keep dual-table compatibility indefinitely with runtime branching and parity tooling.
-- `Impact`: `PERSON_ATTRIBUTES_TAB` resolves to `Attributes`; legacy OCI `person_attributes` table is dropped and remaining legacy-only code references are removed.
+- `Impact`: `PERSON_ATTRIBUTES_TABLE` resolves to `Attributes`; legacy OCI `person_attributes` table is dropped and remaining legacy-only code references are removed.
 - `Follow-up`: Keep `docs/data-schema.md` aligned to single-table attribute model and remove stale legacy mentions.
 
 - `Area`: Attribute schema simplification
@@ -111,8 +104,8 @@ This file captures product and engineering choices that affect behavior, data sh
 ## 2026-03-10
 
 - `Area`: Runtime persistence backend
-- `Decision`: OCI is the only supported runtime persistence backend. Google Sheets remains available only for historical migration/admin tooling and must not be used by active app routes, pages, or shared runtime helpers.
-- `Reason`: Dual-backend runtime behavior was making production diagnosis harder, keeping dead mode-switching branches alive, and preserving runtime dependency on Sheets-only environment/config paths even after OCI became the source of truth.
-- `Alternatives Considered`: Continue supporting both runtime backends behind `EFL_DATA_SOURCE`; remove Sheets code entirely in one large rewrite.
-- `Impact`: Active app imports move to a neutral runtime data module, runtime env validation no longer requires `SHEET_ID`, and OCI media/attribute flows no longer branch on data source.
-- `Follow-up`: Continue retiring remaining legacy sheet-shaped field contracts and quarantine/delete obsolete Sheets admin tooling when historical migration support is no longer needed.
+- `Decision`: OCI is the only supported persistence backend, and the legacy backend runtime/tooling path is removed from the repo.
+- `Reason`: Keeping deleted-backend tooling and naming around was adding diagnosis noise, preserving dead operational paths, and weakening the OCI-only mental model.
+- `Alternatives Considered`: Keep legacy backend tooling for migration/debug only.
+- `Impact`: Active runtime now uses `src/lib/data/store.ts`, legacy backend env/config/routes/scripts are removed, and only Google Drive support remains under `src/lib/google/`.
+- `Follow-up`: Keep new code/docs free of legacy-backend naming and paths.

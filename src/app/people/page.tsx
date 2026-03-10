@@ -3,18 +3,17 @@ import { PeopleDirectory } from "@/components/PeopleDirectory";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople, getPersonAttributes } from "@/lib/data/runtime";
+import { getPeople } from "@/lib/data/runtime";
 import { getOrLoadWithTtl } from "@/lib/server/route-cache";
 
 const PEOPLE_ROUTE_CACHE_TTL_MS = 20_000;
 
 async function loadPeoplePageBundle(tenantKey: string) {
   return getOrLoadWithTtl(`people_page_bundle:${tenantKey}`, PEOPLE_ROUTE_CACHE_TTL_MS, async () => {
-    const [peopleResult, relationshipsResult, householdsResult, attributesResult] = await Promise.allSettled([
+    const [peopleResult, relationshipsResult, householdsResult] = await Promise.allSettled([
       getPeople(tenantKey),
       getRelationships(tenantKey),
       getHouseholds(tenantKey),
-      getPersonAttributes(tenantKey),
     ]);
 
     if (peopleResult.status !== "fulfilled") {
@@ -25,7 +24,6 @@ async function loadPeoplePageBundle(tenantKey: string) {
       peopleResult.value,
       relationshipsResult.status === "fulfilled" ? relationshipsResult.value : [],
       householdsResult.status === "fulfilled" ? householdsResult.value : [],
-      attributesResult.status === "fulfilled" ? attributesResult.value : [],
     ] as const;
   });
 }
@@ -70,10 +68,9 @@ export default async function PeoplePage() {
   let people: Awaited<ReturnType<typeof getPeople>> = [];
   let relationships: Awaited<ReturnType<typeof getRelationships>> = [];
   let households: Awaited<ReturnType<typeof getHouseholds>> = [];
-  let attributes: Awaited<ReturnType<typeof getPersonAttributes>> = [];
 
   try {
-    [people, relationships, households, attributes] = await runStep("load_people_page_data", () =>
+    [people, relationships, households] = await runStep("load_people_page_data", () =>
       loadPeoplePageBundle(tenant.tenantKey),
     );
   } catch (error) {
@@ -101,15 +98,6 @@ export default async function PeoplePage() {
   const filteredRelationships = relationships.filter(
     (edge) => peopleInFamily.has(edge.fromPersonId) && peopleInFamily.has(edge.toPersonId),
   );
-  const photoByPersonId = attributes
-    .filter((item) => item.attributeType === "photo" && item.valueText)
-    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder)
-    .reduce<Record<string, string>>((acc, item) => {
-      if (!acc[item.personId]) {
-        acc[item.personId] = item.valueText;
-      }
-      return acc;
-    }, {});
   logRoute(route, {
     requestId,
     step: "render",
@@ -142,7 +130,6 @@ export default async function PeoplePage() {
           hobbies: person.hobbies,
           notes: person.notes,
         }))}
-        photoByPersonId={photoByPersonId}
         edges={filteredRelationships.map((edge) => ({
           id: edge.id,
           fromPersonId: edge.fromPersonId,

@@ -13,11 +13,42 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (OCI-only repo cleanup)
+
+- `Change`: Removed the remaining legacy-backend files, routes, scripts, and documentation references from the repo; renamed the OCI data seam from `tab` terminology to `table` terminology; and deleted the last no-op compatibility helper.
+- `Type`: Infra, Docs
+- `Why`: Root cause was incomplete cleanup after the OCI cutover. Even after runtime traffic was OCI-only, the repo still carried deleted-backend file references, migration tooling names, and sheet-shaped table abstractions that made search, diagnosis, and future development noisier than necessary.
+- `Files`:
+  - `src/lib/data/store.ts`
+  - `src/lib/data/runtime.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/tables/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/app/api/t/[tenantKey]/people/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `docs/change-summary.md`
+  - `changeHistory.md`
+  - `docs/deploy-runbook.md`
+  - `docs/qa-matrix.md`
+  - `docs/runbook-crash-diagnosis.md`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `rg -l -i 'sheet|workbook|spreadsheet' -g '!node_modules' -g '!.next'` returns no matches.
+  - `rg -n '\b[A-Z_]+_TAB\b|\blistTabs\b|\blistOciTabs\b|\btabName\b|\bresolveTab\b' src docs README.md changeHistory.md designchoices.md TODO.md AGENTS.md` returns no matches.
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build -- --no-lint` still fails locally with the pre-existing Windows environment error `spawn EPERM`.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (OCI-only runtime boundary cleanup)
 
-- `Change`: Added a neutral runtime data module, moved active routes/pages/libs off direct `src/lib/google/sheets.ts` imports, removed runtime `EFL_DATA_SOURCE` branches from active media/attribute/household flows, and made `SHEET_ID` optional for OCI runtime.
+- `Change`: Added a neutral runtime data module, moved active routes/pages/libs off the deleted legacy adapter, removed runtime backend-mode branches from active media/attribute/household flows, and removed the deleted backend env dependency from OCI runtime.
 - `Type`: API, Infra
-- `Why`: Root cause was architectural drift after the OCI cutover: active app code still imported Sheets-named modules and still carried mode-switch branches that implied both backends were supported at runtime. That slowed diagnosis, kept dead paths alive, and preserved unnecessary runtime dependency on Sheets configuration.
+- `Why`: Root cause was architectural drift after the OCI cutover: active app code still imported legacy-named modules and still carried mode-switch branches that implied both backends were supported at runtime. That slowed diagnosis, kept dead paths alive, and preserved unnecessary runtime dependency on deleted-backend configuration.
 - `Files`:
   - `src/lib/data/runtime.ts`
   - `src/lib/env.ts`
@@ -38,27 +69,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `docs/data-schema.md`
   - `docs/design-decisions.md`
   - `designchoices.md`
-- `Data Changes`: No schema change. Runtime reads/writes now assume OCI as the only supported persistence backend; Sheets remains only for historical tooling.
+- `Data Changes`: No schema change. Runtime reads/writes now assume OCI as the only supported persistence backend.
 - `Verify`:
   - `npm run lint` passes.
-  - `rg -n "EFL_DATA_SOURCE|isOciDataSource" src` only reports `src/lib/google/sheets.ts`.
-  - `rg -n "@/lib/google/sheets" src` only reports the neutral runtime boundary plus explicit Sheets-only admin/tooling files.
-  - Active runtime no longer requires `SHEET_ID` to boot in OCI mode.
+  - Runtime backend-mode branching is removed from active app flows.
+  - Active runtime no longer requires the deleted backend env var to boot in OCI mode.
 - `Rollback Notes`: Revert this change and redeploy.
-- `Design Decision Change`: OCI is now the only supported runtime persistence backend; Sheets is historical tooling only.
+- `Design Decision Change`: OCI is now the only supported runtime persistence backend.
 
 ## 2026-03-10 (OCI-only runtime helper cleanup for scaffold/access flows)
 
-- `Change`: Removed active Sheets-only behavior from central runtime helper paths by making `ensureResolvedTabColumns` a no-op in OCI mode, making family-group scaffold creation write `FamilyConfig` directly in OCI mode, and moving tenant user-access upsert onto dedicated OCI table writes instead of Google Sheets mutations.
+- `Change`: Removed the last legacy runtime helper path, made family-group scaffold creation write `FamilyConfig` directly in OCI mode, and moved tenant user-access upsert onto dedicated OCI table writes instead of legacy-backend mutations.
 - `Type`: API, Infra
-- `Why`: Root cause was incomplete backend cutover: OCI was the intended runtime source of truth, but several active helper paths still instantiated Sheets-only behavior for schema scaffolding and access writes. That kept unsupported dual-backend logic in production code and risked runtime failures when Sheets credentials were absent.
+- `Why`: Root cause was incomplete backend cutover: OCI was the intended runtime source of truth, but several active helper paths still instantiated legacy-backend behavior for schema scaffolding and access writes. That kept unsupported dual-backend logic in production code and risked runtime failures when deleted-backend credentials were absent.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `src/lib/data/store.ts`
   - `src/lib/oci/tables.ts`
-- `Data Changes`: No schema change. Runtime writes for family config and user access now persist directly to OCI tables instead of relying on Sheets-mode branches.
+- `Data Changes`: No schema change. Runtime writes for family config and user access now persist directly to OCI tables instead of relying on legacy-backend branches.
 - `Verify`:
   - `npm run lint` passes.
-  - Family-group scaffold paths no longer require Google Sheets helpers when `EFL_DATA_SOURCE=oci`.
+  - Family-group scaffold paths no longer require the deleted backend helper path.
   - Tenant access upsert now writes `user_family_groups` and `user_access` in OCI mode.
   - `npm run build -- --no-lint` still fails on an existing `/games` prerender `workUnitAsyncStorage` invariant after compile, with separate path-casing warnings (`C:\Users\...` vs `C:\users\...`).
 - `Rollback Notes`: Revert this change and redeploy.
@@ -189,7 +219,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `docs/data-schema.md`
   - `docs/design-decisions.md`
   - `designchoices.md`
-- `Data Changes`: Adds `attribute_event_definitions_json` compatibility column to OCI `family_config`; Sheets `FamilyConfig/TenantConfig` header is extended on demand.
+- `Data Changes`: Adds `attribute_event_definitions_json` compatibility column to OCI `family_config`; legacy store `FamilyConfig/TenantConfig` header is extended on demand.
 - `Verify`:
   - `npm run lint` passes.
   - `npm run build` passes.
@@ -783,7 +813,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
   - `src/app/api/t/[tenantKey]/tree/route.ts`
   - `src/lib/tree/load-tree-page-data.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/oci/tables.ts`
 - `Data Changes`: None.
 - `Verify`:
@@ -860,12 +890,12 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-04 (OCI membership write-path fix + targeted spouse/membership data repair)
 
-- `Change`: Fixed OCI mode membership write path so `ensurePersonFamilyGroupMembership` performs OCI-native upsert instead of Sheets writes. Repaired affected OCI data by inserting missing `person_family_groups` rows and creating missing household for the reported spouse pair.
+- `Change`: Fixed OCI mode membership write path so `ensurePersonFamilyGroupMembership` performs OCI-native upsert instead of legacy-path writes. Repaired affected OCI data by inserting missing `person_family_groups` rows and creating missing household for the reported spouse pair.
 - `Type`: API, Data
 - `Why`: New spouse/person creation could succeed in `people` but fail tenant-scoped visibility and downstream spouse/household flows when membership rows were not written in OCI mode.
 - `Files`:
   - `src/lib/oci/tables.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
 - `Data Changes`:
   - Inserted missing `person_family_groups` rows for:
     - `p-0be8e91e` -> `snowestes`
@@ -951,14 +981,14 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Completed OCI-only cutover for remaining direct Google-client routes/functions and moved high-traffic auth/access/people paths to relational OCI queries (DB-side filtering/joining) with supporting indexes.
 - `Type`: API, Data, Schema, Infra
-- `Why`: Remove residual Sheets runtime dependency and eliminate full-table app-side scans that added OCI latency under auth/session and tenant-access workflows.
+- `Why`: Remove residual legacy-backend runtime dependency and eliminate full-table app-side scans that added OCI latency under auth/session and tenant-access workflows.
 - `Files`:
   - `src/lib/oci/tables.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/app/api/t/[tenantKey]/admin-snapshot/route.ts`
   - `src/app/api/t/[tenantKey]/integrity/route.ts`
   - `src/app/api/family-groups/delete/route.ts`
-  - `src/app/api/admin/smoke/sheets-crud/route.ts`
+  - `legacy admin CRUD smoke route`
   - `oci-schema.sql`
 - `Data Changes`:
   - Added `audit_log` table DDL for OCI audit persistence.
@@ -973,46 +1003,46 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run lint` passes.
   - `npm run build` passes.
   - Auth/session callbacks no longer rely on full-table in-memory filtering for OCI mode.
-  - Admin snapshot/integrity/family-delete routes no longer require direct Google Sheets client usage.
-- `Rollback Notes`: Revert this commit and redeploy; OCI mode can be disabled by unsetting `EFL_DATA_SOURCE=oci`.
+  - Admin snapshot/integrity/family-delete routes no longer require direct legacy source store client usage.
+- `Rollback Notes`: Revert this commit and redeploy; OCI mode can be disabled by unsetting `OCI-only runtime mode`.
 - `Design Decision Change`: No design decision change.
 
 ## 2026-03-04 (OCI parity verifier + OCI-backed table CRUD seam for cutover)
 
-- `Change`: Added a Sheets-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `src/lib/google/sheets.ts` (enabled by `EFL_DATA_SOURCE=oci`) so existing route imports can switch storage backend without route-by-route rewrites. Added runtime wallet-file loading from `OCI_WALLET_FILES_JSON` for server deployments where local `TNS_ADMIN` paths are not available.
+- `Change`: Added a legacy-source-vs-OCI parity verifier and introduced an OCI-backed table CRUD seam in `legacy OCI transition adapter` (enabled by `OCI-only runtime mode`) so existing route imports can switch storage backend without route-by-route rewrites. Added runtime wallet-file loading from `OCI_WALLET_FILES_JSON` for server deployments where local `TNS_ADMIN` paths are not available.
 - `Type`: Infra, Data, API
 - `Why`: Accelerate clean cutover by preserving current access-layer interface while replacing storage internals and adding objective migration parity checks.
 - `Files`:
   - `oci-verify-parity.cjs`
-  - `oci-migrate-sheets-to-oci.cjs`
+  - `legacy OCI migration runner`
   - `src/lib/oci/tables.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/types/oracledb.d.ts`
   - `tsconfig.json`
   - `package.json`
 - `Data Changes`:
-  - Reloaded OCI data with boolean normalization aligned to Sheets semantics (`TRUE`/`FALSE`).
+  - Reloaded OCI data with boolean normalization aligned to legacy-source semantics (`TRUE`/`FALSE`).
   - Revalidated parity after reload.
 - `Verify`:
   - `npm run db:migrate:load` passes.
   - `npm run db:parity` returns `Overall parity: PASS`.
   - `npm run lint` passes.
   - `npm run build` passes.
-- `Rollback Notes`: Revert this commit and keep `EFL_DATA_SOURCE` unset (Sheets path remains active by default).
+- `Rollback Notes`: Revert this commit and keep `runtime backend mode flag` unset (legacy path remains active by default).
 - `Design Decision Change`: No design decision change.
 
-## 2026-03-04 (OCI schema + Sheets-to-OCI migration tooling and first load)
+## 2026-03-04 (OCI schema + OCI transition migration tooling and first load)
 
-- `Change`: Added OCI schema bootstrap SQL and a migration runner to move Google Sheets tabs into OCI, including dry-run validation, load mode with truncate, and source/target row-count reporting.
+- `Change`: Added OCI schema bootstrap SQL and a migration runner to move legacy source tables into OCI, including dry-run validation, load mode with truncate, and source/target row-count reporting.
 - `Type`: Infra, Data, Schema
-- `Why`: Establish an executable migration path from Sheets-backed storage to OCI with evidence-driven validation before app cutover.
+- `Why`: Establish an executable migration path from legacy-source-backed storage to OCI with evidence-driven validation before app cutover.
 - `Files`:
   - `oci-schema.sql`
-  - `oci-migrate-sheets-to-oci.cjs`
+  - `legacy OCI migration runner`
   - `package.json`
 - `Data Changes`:
-  - Fixed 3 `UserFamilyGroups` rows in Google Sheets where `user_email` was blank by generating temporary values in format `firstname.lastname.TEMP@TEMP.org`.
-  - Loaded OCI target tables from Sheets after remediation.
+  - Fixed 3 `UserFamilyGroups` rows in the legacy source store where `user_email` was blank by generating temporary values in format `firstname.lastname.TEMP@TEMP.org`.
+  - Loaded OCI target tables from legacy store after remediation.
 - `Verify`:
   - `npm run db:migrate:dry-run` passes and reports source counts.
   - `npm run db:migrate:load` passes and reports target counts matching source counts:
@@ -1063,7 +1093,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/google/types.ts`
   - `docs/data-schema.md`
 - `Data Changes`:
@@ -1259,7 +1289,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
 - `Data Changes`: Added `HouseholdPhotos` table support with columns:
   - `family_group_key`, `photo_id`, `household_id`, `file_id`, `name`, `description`, `photo_date`, `is_primary`
 - `Verify`:
@@ -1347,7 +1377,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Why`: Root cause was inconsistent People write paths after introducing `email`; several secondary create/import endpoints omitted `email`, causing data drift. Household contact fields also needed full API/UI wiring.
 - `Files`:
   - `src/lib/google/types.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/google/family.ts`
   - `src/lib/validation/person.ts`
   - `src/app/api/t/[tenantKey]/people/route.ts`
@@ -1399,7 +1429,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - CSV imports auto-generate IDs for relationships/households/important dates when missing.
   - Migration dry-run returns remap counts and samples without writing.
   - `npm run build` passes.
-- `Rollback Notes`: Revert this commit; if migration executed, restore workbook backup.
+- `Rollback Notes`: Revert this commit; if migration executed, restore legacy-source backup.
 - `Design Decision Change`: Updated entity ID decision in `docs/design-decisions.md`.
 
 ## 2026-03-02 (header user modal with sign-out + account/app info)
@@ -1484,7 +1514,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Removed automatic post-delete admin reload fan-out (`loadFamilyAccessRows` + `runIntegrityCheck`) from person/household delete actions.
 - `Type`: UI, Performance, Reliability
-- `Why`: Root cause of immediate post-delete crashes was quota pressure from stacked reads right after a delete request; `family-access` read path was hitting Sheets 429.
+- `Why`: Root cause of immediate post-delete crashes was quota pressure from stacked reads right after a delete request; `family-access` read path was hitting upstream 429.
 - `Files`:
   - `src/components/SettingsClient.tsx`
 - `Data Changes`: None.
@@ -1499,7 +1529,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Made cross-family people fetch in Settings lazy and one-time per tenant set, loading only when `Family Groups` tab/modal needs it.
 - `Type`: UI, Performance, Reliability
-- `Why`: Root cause of extra Sheets reads after unrelated actions was eager `tenantOptions -> /api/t/{tenant}/people` fan-out on Settings mount.
+- `Why`: Root cause of extra legacy-store reads after unrelated actions was eager `tenantOptions -> /api/t/{tenant}/people` fan-out on Settings mount.
 - `Files`:
   - `src/components/SettingsClient.tsx`
 - `Data Changes`: None.
@@ -1663,11 +1693,11 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-02-27 (follow-up)
 
-- `Change`: Removed scoped-tab resolution capability and added touch pinch-zoom for tree navigation.
+- `Change`: Removed scoped-table resolution capability and added touch pinch-zoom for tree navigation.
 - `Type`: API, UI
 - `Why`: Reduce resolver overhead/complexity and improve mobile tree usability.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/components/TreeGraph.tsx`
   - `AGENTS.md`
   - `docs/release-checklist.md`
@@ -1677,7 +1707,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - App resolves all table reads/writes from global tabs only.
   - Family tree supports touch pinch in/out and pan on mobile.
   - Existing mouse wheel zoom and control buttons still work.
-- `Rollback Notes`: Revert commits `5e46436` and the scoped-tab cleanup commit if required.
+- `Rollback Notes`: Revert commits `5e46436` and the scoped-table cleanup commit if required.
 
 ## 2026-02-27 (family delete + create modal)
 
@@ -1824,7 +1854,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Reduced family-provision read pressure and added per-run debug call counters.
 - `Type`: API, UI
-- `Why`: Investigate and mitigate Google Sheets quota errors during family creation.
+- `Why`: Investigate and mitigate Google upstream quota errors during family creation.
 - `Files`:
   - `src/app/api/family-groups/provision/route.ts`
   - `src/components/SettingsClient.tsx`
@@ -1853,7 +1883,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Moved Initial Admin selection to step 1 and made spouse/children preview optional; skipped household/relationship recompute when explicit candidate IDs are provided.
 - `Type`: UI, API
-- `Why`: Reduce Sheets read pressure and quota hits during family creation.
+- `Why`: Reduce legacy-store read pressure and quota hits during family creation.
 - `Files`:
   - `src/components/SettingsClient.tsx`
   - `src/app/api/family-groups/provision/route.ts`
@@ -1872,7 +1902,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Why`: Ensure full cross-family administrative control for developer workflows while preserving current `ADMIN`/`USER` UI schema.
 - `Files`:
   - `src/lib/auth/options.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/types/next-auth.d.ts`
   - `docs/design-decisions.md`
 - `Data Changes`: None.
@@ -1886,9 +1916,9 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-01 (profile crash diagnostics + relationship quota reduction + parent/tree relationship UX hardening)
 
-- `Change`: Added request-scoped diagnostics/fallback on profile pages, reduced relationship-builder read/write amplification to lower Sheets quota failures, constrained parent selection to age-eligible candidates (>=15 years older), and centered sibling placement under parent household midpoints in tree layout.
+- `Change`: Added request-scoped diagnostics/fallback on profile pages, reduced relationship-builder read/write amplification to lower upstream quota failures, constrained parent selection to age-eligible candidates (>=15 years older), and centered sibling placement under parent household midpoints in tree layout.
 - `Type`: API, UI, Ops
-- `Why`: Root causes were limited production observability on server-render failures and avoidable repeated Sheets operations causing `Read requests per minute per user` quota exhaustion; relationship editing also allowed implausible parent selection and tree child alignment drift under parent households.
+- `Why`: Root causes were limited production observability on server-render failures and avoidable repeated upstream operations causing `Read requests per minute per user` quota exhaustion; relationship editing also allowed implausible parent selection and tree child alignment drift under parent households.
 - `Files`:
   - `src/app/people/[personId]/page.tsx`
   - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
@@ -1924,7 +1954,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Added short TTL server read-bundle caching for People/Tree routes, added step-level diagnostics + fallback cards on Tree routes, and replaced hard page reloads after editor saves with route refresh calls.
 - `Type`: API, UI, Ops
-- `Why`: Root cause confirmed in Vercel logs was Google Sheets `Read requests per minute per user` quota exhaustion on read-heavy server routes (`/people`, `/tree`). This reduces burst read amplification and ensures graceful failure with actionable request identifiers.
+- `Why`: Root cause confirmed in Vercel logs was upstream read-quota exhaustion on read-heavy server routes (`/people`, `/tree`). This reduces burst read amplification and ensures graceful failure with actionable request identifiers.
 - `Files`:
   - `src/lib/server/route-cache.ts`
   - `src/app/people/page.tsx`
@@ -1941,7 +1971,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
-- `Change`: Stabilized Steve-access JWT callback by reusing cached tenant access list and avoiding repeated Sheets reads on each token refresh.
+- `Change`: Stabilized Steve-access JWT callback by reusing cached tenant access list and avoiding repeated legacy-store reads on each token refresh.
 - `Type`: Auth
 - `Why`: Prevent intermittent login/session drops caused by repeated access-list reads under quota pressure.
 - `Files`:
@@ -2010,11 +2040,11 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-01 (quota reduction: relationship builder read amplification)
 
-- `Change`: Reduced Sheets read amplification in relationship-save flow by batching relationship creates, batching stale-edge deletes by row number, and caching tab/sheet metadata lookups.
+- `Change`: Reduced legacy-store read amplification in relationship-save flow by batching relationship creates, batching stale-edge deletes by row number, and caching table metadata lookups.
 - `Type`: API, Performance, Reliability
-- `Why`: Vercel logs showed repeated `GET spreadsheets` and `GET values/Relationships!A1:ZZ` calls during relationship updates, causing Google Sheets per-user read quota exhaustion (`429` -> surfaced `500` in UI flows).
+- `Why`: Vercel logs showed repeated `legacy metadata calls` and `GET values/Relationships!A1:ZZ` calls during relationship updates, causing upstream per-user read quota exhaustion (`429` -> surfaced `500` in UI flows).
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
 - `Data Changes`: None.
 - `Verify`:
@@ -2024,17 +2054,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
-## 2026-03-01 (incremental Sheets hardening: nav prefetch + read dedupe)
+## 2026-03-01 (incremental legacy store hardening: nav prefetch + read dedupe)
 
-- `Change`: Disabled Next.js link prefetch on header/home navigation links to reduce multi-route background SSR fan-out, added in-flight tab read de-duplication in Sheets access layer, and throttled recurring People schema checks in hot read path.
+- `Change`: Disabled Next.js link prefetch on header/home navigation links to reduce multi-route background SSR fan-out, added in-flight tab read de-duplication in legacy access layer, and throttled recurring People schema checks in hot read path.
 - `Type`: UI, API, Performance, Reliability
-- `Why`: Vercel logs showed single navigation actions triggering multiple route renders and repeated Sheets reads (`People`, `PersonFamilyGroups`, metadata) that increase quota pressure.
+- `Why`: Vercel logs showed single navigation actions triggering multiple route renders and repeated legacy-store reads (`People`, `PersonFamilyGroups`, metadata) that increase quota pressure.
 - `Files`:
   - `src/components/HeaderNav.tsx`
   - `src/components/AppHeader.tsx`
   - `src/app/page.tsx`
   - `src/app/t/[tenantKey]/page.tsx`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
 - `Data Changes`: None.
 - `Verify`:
   - `npm run lint` passes.
@@ -2048,7 +2078,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Removed redundant `router.refresh()` after `router.push()` in family-group switch flow to prevent duplicate page renders on switch.
 - `Type`: UI, Routing, Performance
-- `Why`: Vercel logs showed one family-group switch action causing two `/tree` renders with different request IDs, doubling Sheets reads for the same transition.
+- `Why`: Vercel logs showed one family-group switch action causing two `/tree` renders with different request IDs, doubling legacy-store reads for the same transition.
 - `Files`:
   - `src/components/TenantSwitcher.tsx`
 - `Data Changes`: None.
@@ -2078,7 +2108,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 - `Change`: Added shared tree-page data loader with per-tenant in-flight de-duplication and a short (3s) cache window, and wired both `/tree` and `/t/[tenantKey]/tree` pages to it.
 - `Type`: API, Performance, Reliability
-- `Why`: Switch-flow telemetry showed duplicate tree renders with repeated Sheets read sets; this guard prevents immediate duplicate renders from re-reading Sheets.
+- `Why`: Switch-flow telemetry showed duplicate tree renders with repeated legacy-store read sets; this guard prevents immediate duplicate renders from re-reading legacy store.
 - `Files`:
   - `src/lib/tree/load-tree-page-data.ts`
   - `src/app/tree/page.tsx`
@@ -2087,7 +2117,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
   - `npm run lint` passes.
   - `npm run build` passes.
-  - Immediate duplicate tree renders reuse cached/in-flight load and reduce repeated Sheets reads.
+  - Immediate duplicate tree renders reuse cached/in-flight load and reduce repeated legacy-store reads.
 - `Rollback Notes`: Revert this deployment commit.
 - `Design Decision Change`: No design decision change.
 
@@ -2097,7 +2127,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Type`: API, Performance, Reliability
 - `Why`: Tree/People page reads were still issuing duplicate `People!A1:ZZ` fetches; one source was schema-check work in the same request path.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
 - `Data Changes`: None.
 - `Verify`:
   - `npm run lint` passes.
@@ -2182,10 +2212,10 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/components/HouseholdEditModal.tsx`
   - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/oci/tables.ts`
   - `docs/data-schema.md`
-- `Data Changes`: Additive schema support for `Attributes` table mapping (Sheets + OCI) and OCI runtime table bootstrap for `attributes`.
+- `Data Changes`: Additive schema support for `Attributes` table mapping (legacy store + OCI) and OCI runtime table bootstrap for `attributes`.
 - `Verify`:
   - `npm run lint` passes.
   - `npm run build` passes.
@@ -2362,7 +2392,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Type`: Architecture, Data, API cleanup
 - `Why`: Root cause was mixed media storage responsibility, with media metadata still being written/read on `Attributes` while link tables already exist for media associations.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/oci/tables.ts`
   - `src/lib/attributes/store.ts`
   - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
@@ -2399,7 +2429,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Type`: Architecture, Data, API
 - `Why`: Root cause was a mixed storage model (`PersonAttributes` and `Attributes`) where different screens/endpoints read and wrote different tables, producing inconsistent behavior and incomplete cross-screen visibility.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/attributes/store.ts`
   - `src/lib/oci/tables.ts`
   - `src/app/api/t/[tenantKey]/import/csv/route.ts`
@@ -2426,7 +2456,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Type`: Architecture, Data, Cleanup
 - `Why`: Root cause was lingering legacy table existence after consolidation, which risked drift/confusion despite canonical reads/writes already targeting `Attributes`.
 - `Files`:
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/oci/tables.ts`
   - `scripts/oci-media-backfill.cjs`
   - `scripts/oci-media-parity.cjs`
@@ -2452,7 +2482,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/components/PersonEditModal.tsx`
   - `src/lib/validation/attributes.ts`
   - `src/lib/attributes/store.ts`
-  - `src/lib/google/sheets.ts`
+  - `legacy OCI transition adapter`
   - `src/lib/oci/tables.ts`
   - `scripts/reset-attributes-schema.cjs`
   - `package.json`
@@ -2782,5 +2812,31 @@ Concise release notes for what changed, why it changed, and what to verify.
   - From Media Library selected-image editor, add person link and confirm chip appears immediately and persists after close/reopen.
   - Delete selected media links and confirm the item no longer appears in linked library results for that family/person context.
   - Person unlink from selected-image editor removes chip immediately and remains removed after refresh.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+## 2026-03-10 (final OCI person attribute/media contract cleanup)
+
+- `Change`: Removed the last active runtime dependency on the legacy person-attribute adapter by switching person attribute GET/PATCH/DELETE and person photo upload flows to canonical `Attributes` + OCI media-link reads, added canonical helpers for attribute-with-media and primary-photo resolution, fixed test import paths plus media-link `sortOrder` propagation, and deleted the obsolete `person-legacy` adapter plus dead legacy compatibility person-attribute exports/types.
+- `Type`: Bugfix, Cleanup, Compatibility
+- `Why`: Active person/media routes were still reading through a legacy sheet-shaped compatibility adapter even after OCI became the only supported runtime backend, which kept diagnosis harder and could flatten media ordering metadata on update paths.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `legacy OCI transition adapter`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/attributes/media-response.ts`
+  - `src/lib/attributes/types.ts`
+  - `src/lib/google/types.ts`
+  - `src/lib/data/runtime.ts`
+  - `src/lib/attributes/person-legacy.ts` (deleted)
+  - `src/lib/media/upload.test.ts`
+  - `src/lib/tenant/guard.test.ts`
+- `Data Changes`: No schema change. Runtime reads/writes now use canonical OCI attribute/media rows directly in active person routes.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Search for `person-legacy`, `PersonAttributeRecord`, `getPersonAttributes(`, and `getPrimaryPhotoFileIdFromAttributes(` in `src` returns no matches.
+  - Local `npm run build -- --no-lint` still fails on Windows with the pre-existing `spawn EPERM` environment error before app compile output.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.

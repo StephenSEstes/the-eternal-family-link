@@ -7,7 +7,6 @@ import { createAttribute, deleteAttribute, getAttributesForEntity, updateAttribu
 import {
   appendAuditLog,
   deleteTableRows,
-  ensureResolvedTabColumns,
   getPeople,
   getTableRecords,
   updateTableRecordById,
@@ -324,7 +323,7 @@ export async function GET(_: Request, { params }: RouteProps) {
       {
         error: isQuota ? "household_load_quota_exceeded" : "household_load_failed",
         message: classified.message,
-        hint: isQuota ? "Close the workbook if open, wait 60-90 seconds, and retry." : undefined,
+        hint: isQuota ? "Wait 60-90 seconds and retry." : undefined,
       },
       { status: isQuota ? 429 : 500 },
     );
@@ -343,11 +342,6 @@ export async function PATCH(request: Request, { params }: RouteProps) {
       return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
-    await ensureResolvedTabColumns(
-      "Households",
-      ["label", "notes", "wedding_photo_file_id", "married_date", "address", "city", "state", "zip"],
-      resolved.tenant.tenantKey,
-    );
     const updated = await updateTableRecordById(
       "Households",
       householdId,
@@ -401,7 +395,7 @@ export async function PATCH(request: Request, { params }: RouteProps) {
       {
         error: isQuota ? "household_save_quota_exceeded" : "household_save_failed",
         message: classified.message,
-        hint: isQuota ? "Close the workbook if open, wait 60-90 seconds, and retry." : undefined,
+        hint: isQuota ? "Wait 60-90 seconds and retry." : undefined,
       },
       { status: isQuota ? 429 : 500 },
     );

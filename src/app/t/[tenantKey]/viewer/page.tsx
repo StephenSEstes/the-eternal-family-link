@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
-import { getPeople, getPersonAttributes, getTenantConfig } from "@/lib/data/runtime";
+import { getPeople, getTenantConfig } from "@/lib/data/runtime";
 import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantViewerPageProps = {
@@ -46,16 +46,6 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
   }
 
   const people = await getPeople(normalizedTenantKey);
-  const attributes = await getPersonAttributes(normalizedTenantKey);
-  const photoByPersonId = attributes
-    .filter((item) => item.attributeType === "photo" && item.valueText)
-    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder)
-    .reduce<Record<string, string>>((acc, item) => {
-      if (!acc[item.personId]) {
-        acc[item.personId] = item.valueText;
-      }
-      return acc;
-    }, {});
   const pinned = people.filter((person) => person.isPinned);
 
   return (
@@ -65,7 +55,6 @@ export default async function TenantViewerPage({ params, searchParams }: TenantV
       <ViewerPeopleGrid
         people={pinned.length > 0 ? pinned : people.slice(0, 24)}
         tenantKey={normalizedTenantKey}
-        photoByPersonId={photoByPersonId}
       />
     </main>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
@@ -367,7 +368,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setAssociationBusy(true);
     setAssociationStatus("Removing person link...");
     const attrsRes = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      `/api/t/${encodeURIComponent(tenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(targetPersonId)}`,
       { cache: "no-store" },
     );
     const attrsBody = await attrsRes.json().catch(() => null);
@@ -376,13 +377,8 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
       setAssociationBusy(false);
       return false;
     }
-    const attrs = Array.isArray(attrsBody?.attributes)
-      ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
-      : [];
-    const matches = attrs.filter((item) => {
-      const type = item.attributeType.toLowerCase();
-      return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === fileId;
-    });
+    const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
+    const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, fileId));
     for (const match of matches) {
       await fetch(
         `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,

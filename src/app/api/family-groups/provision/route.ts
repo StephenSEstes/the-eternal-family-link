@@ -217,17 +217,17 @@ export async function POST(request: Request) {
       debug.getPeopleCalls += 1;
       return getPeople(tenantKey);
     };
-    const countedGetTableRecords = async (tabName: string | string[], tenantKey?: string) => {
+    const countedGetTableRecords = async (tableName: string | string[], tenantKey?: string) => {
       debug.getTableRecordsCalls += 1;
-      return getTableRecords(tabName, tenantKey);
+      return getTableRecords(tableName, tenantKey);
     };
     const countedCreateTableRecord = async (
-      tabName: string | string[],
+      tableName: string | string[],
       values: Record<string, string>,
       tenantKey?: string,
     ) => {
       debug.createTableRecordCalls += 1;
-      return createTableRecord(tabName, values, tenantKey);
+      return createTableRecord(tableName, values, tenantKey);
     };
     const countedUpsertTenantAccess = async (
       input: Parameters<typeof upsertTenantAccess>[0],

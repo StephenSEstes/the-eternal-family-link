@@ -74,25 +74,6 @@ export type PersonUpdateInput = {
   notes: string;
 };
 
-export type PersonAttributeRecord = {
-  attributeId: string;
-  tenantKey: string;
-  personId: string;
-  attributeType: string;
-  valueText: string;
-  valueJson: string;
-  mediaMetadata: string;
-  label: string;
-  isPrimary: boolean;
-  sortOrder: number;
-  startDate: string;
-  endDate: string;
-  visibility: string;
-  notes: string;
-  shareScope: "both_families" | "one_family";
-  shareFamilyGroupKey: string;
-};
-
 export type ImportantDateRecord = {
   id: string;
   title: string;

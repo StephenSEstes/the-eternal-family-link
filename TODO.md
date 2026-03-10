@@ -61,7 +61,7 @@ I will update this list as we add, complete, or remove work.
 - [x] Develop Family attributes
 - [x] Develop delete person workflow
 - [x] Create project TODO tracker (`TODO.md`)
-- [x] OCI migration readiness + first load milestone (OCI preflight, schema bootstrap, Sheets->OCI migration tooling, initial data load verification)
+- [x] OCI migration readiness + first load milestone (OCI preflight, schema bootstrap, initial data load verification)
 - [x] Simplify admin screen with sub-tabs under each main admin tab
 - [x] Review Viewer tile visibility on family home
 - [x] Gender-based fallback headshots for missing profile photos

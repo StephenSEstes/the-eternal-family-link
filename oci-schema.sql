@@ -1,4 +1,4 @@
--- OCI schema bootstrap for Google Sheets -> Oracle migration.
+-- OCI schema bootstrap for application runtime data.
 -- Safe to re-run: create statements are wrapped to ignore "already exists" errors.
 
 BEGIN

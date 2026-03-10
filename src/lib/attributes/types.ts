@@ -32,6 +32,7 @@ export type AttributeMediaLink = {
   description: string;
   photoDate: string;
   isPrimary: boolean;
+  sortOrder: number;
   mediaMetadata: string;
   createdAt: string;
 };

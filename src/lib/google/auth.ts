@@ -22,10 +22,7 @@ export function getServiceAccountAuth() {
   jwtClient = new google.auth.JWT({
     email: credentials.client_email,
     key: privateKey,
-    scopes: [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive",
-    ],
+    scopes: ["https://www.googleapis.com/auth/drive"],
   });
 
   return jwtClient;

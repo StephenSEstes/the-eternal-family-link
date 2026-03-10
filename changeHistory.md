@@ -7,9 +7,11 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-03-10: Cleaned the active app onto an OCI-only runtime boundary by moving routes/pages/libs off direct Sheets imports, removing runtime backend branches, and making `SHEET_ID` optional outside historical tooling. See `docs/change-summary.md`.
+- 2026-03-10: Removed the remaining deleted-backend files, scripts, doc references, and sheet-shaped `tab` naming from the OCI runtime seam so the repo is cleanly OCI-only. See `docs/change-summary.md`.
+- 2026-03-10: Finished the OCI person attribute/media cleanup by deleting the obsolete `person-legacy` adapter and dead legacy person-attribute compatibility exports after moving the last active routes onto canonical OCI attribute/media reads. See `docs/change-summary.md`.
+- 2026-03-10: Cleaned the active app onto an OCI-only runtime boundary by moving routes/pages/libs off direct legacy-adapter imports, removing runtime backend branches, and making `legacy runtime env var` optional outside historical tooling. See `docs/change-summary.md`.
 - 2026-03-10: Fixed the deploy-blocking lint error in the new OCI tenant-access helper (`prefer-const`) so production build can proceed. See `docs/change-summary.md`.
-- 2026-03-10: Cleaned up OCI runtime helper cutover by removing active Sheets-only scaffold/access paths from `src/lib/google/sheets.ts` and writing those flows directly to OCI tables. See `docs/change-summary.md`.
+- 2026-03-10: Cleaned up OCI runtime helper cutover by removing active legacy-backend scaffold/access paths from `legacy OCI transition adapter` and writing those flows directly to OCI tables. See `docs/change-summary.md`.
 - 2026-03-09: Fixed Media Library selected-image add-link persistence by writing direct person OCI media links, added person-photo unlink API for delete parity, and forced uncached refresh after media-link mutations. See `docs/change-summary.md`.
 - 2026-03-09: Fixed Media Library selected-image link refresh to bypass stale media-search cache after add/remove link actions, so `Linked To` updates immediately. See `docs/change-summary.md`.
 - 2026-03-09: Added selected-photo delete in Media Library editor, per-file wizard save progress bars/statuses, and household-target permission pre-check to prevent late unauthorized upload failures. See `docs/change-summary.md`.

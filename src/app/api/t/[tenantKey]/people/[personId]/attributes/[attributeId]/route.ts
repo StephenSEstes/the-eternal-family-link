@@ -1,51 +1,29 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
-import { deleteOciMediaLink, getOciMediaLinksForEntity, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
+import { toPersonMediaAttribute } from "@/lib/attributes/media-response";
 import {
-  deleteTableRecordById,
-  getPrimaryPhotoFileIdFromAttributes,
-  getPersonAttributes,
+  normalizePersonMediaAttributeType,
+  removePersonMediaAssociations,
+  syncPersonMediaAssociations,
+} from "@/lib/attributes/person-media";
+import {
+  deleteAttribute,
+  getAttributeWithMediaById,
+  getPrimaryPhotoFileIdForPerson,
+  updateAttribute,
+} from "@/lib/attributes/store";
+import {
   getPersonById,
-  PEOPLE_TAB,
-  PERSON_ATTRIBUTES_TAB,
+  PEOPLE_TABLE,
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { attributeUpdateSchema } from "@/lib/validation/attributes";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeItemRouteProps = {
   params: Promise<{ tenantKey: string; personId: string; attributeId: string }>;
 };
-
-function normalizeMediaAttributeType(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "photo") return "photo";
-  if (normalized === "video") return "video";
-  if (normalized === "audio") return "audio";
-  if (normalized === "media") return "media";
-  return "";
-}
-
-async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string, keepAttributeId: string) {
-  const current = await getPersonAttributes(tenantKey, personId);
-  const updates = current.filter(
-    (item) => item.attributeId !== keepAttributeId && item.attributeType === attributeType && item.isPrimary,
-  );
-  await Promise.all(
-    updates.map((item) =>
-      updateTableRecordById(
-        PERSON_ATTRIBUTES_TAB,
-        item.attributeId,
-        {
-          is_primary: "FALSE",
-        },
-        "attribute_id",
-        tenantKey,
-      ),
-    ),
-  );
-}
 
 export async function PATCH(request: Request, { params }: PersonAttributeItemRouteProps) {
   const { tenantKey, personId, attributeId } = await params;
@@ -63,108 +41,114 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const existing = (await getPersonAttributes(resolved.tenant.tenantKey, personId)).find(
-    (item) => item.attributeId === attributeId,
-  );
-  if (!existing) {
+  const existing = await getAttributeWithMediaById(resolved.tenant.tenantKey, attributeId);
+  if (!existing || existing.entityType !== "person" || existing.entityId !== personId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  const existingMedia = toPersonMediaAttribute(existing);
 
   const parsed = personAttributeUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const nextType = parsed.data.attributeType?.toLowerCase() ?? existing.attributeType;
-  const makePrimary = parsed.data.isPrimary ?? false;
-  if (makePrimary) {
-    await clearPrimaryForType(resolved.tenant.tenantKey, personId, nextType, attributeId);
+  const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
+  const nextType = parsed.data.attributeType?.toLowerCase() ?? existingAttributeType;
+  const canonical = attributeUpdateSchema.safeParse({
+    typeKey: parsed.data.attributeType,
+    attributeType: parsed.data.attributeType,
+    valueText: parsed.data.valueText,
+    attributeDetail: parsed.data.valueText,
+    notes: parsed.data.notes,
+    attributeNotes: parsed.data.notes,
+    dateStart: parsed.data.startDate,
+    attributeDate: parsed.data.startDate,
+    dateEnd: parsed.data.endDate,
+    endDate: parsed.data.endDate,
+    label: parsed.data.label,
+  });
+  if (!canonical.success) {
+    return NextResponse.json({ error: "invalid_payload", issues: canonical.error.flatten() }, { status: 400 });
   }
 
-  const payload: Record<string, string> = {};
-  if (parsed.data.attributeType !== undefined) payload.attribute_type = parsed.data.attributeType.toLowerCase();
-  if (parsed.data.valueText !== undefined) payload.value_text = parsed.data.valueText;
-  if (parsed.data.valueJson !== undefined) payload.value_json = parsed.data.valueJson;
-  if (parsed.data.label !== undefined) payload.label = parsed.data.label;
-  if (parsed.data.isPrimary !== undefined) payload.is_primary = parsed.data.isPrimary ? "TRUE" : "FALSE";
-  if (parsed.data.sortOrder !== undefined) payload.sort_order = String(parsed.data.sortOrder);
-  if (parsed.data.startDate !== undefined) payload.start_date = parsed.data.startDate;
-  if (parsed.data.endDate !== undefined) payload.end_date = parsed.data.endDate;
-  if (parsed.data.visibility !== undefined) payload.visibility = parsed.data.visibility.toLowerCase();
-  if (parsed.data.shareScope !== undefined) payload.share_scope = parsed.data.shareScope;
-  if (parsed.data.shareFamilyGroupKey !== undefined) {
-    payload.share_family_group_key =
-      parsed.data.shareScope === "one_family" || payload.share_scope === "one_family"
-        ? parsed.data.shareFamilyGroupKey.trim().toLowerCase() || resolved.tenant.tenantKey
-        : "";
-  }
-  if ((parsed.data.shareScope === "one_family" || payload.share_scope === "one_family") && !payload.share_family_group_key) {
-    payload.share_family_group_key = resolved.tenant.tenantKey;
-  }
-  if (parsed.data.notes !== undefined) payload.notes = parsed.data.notes;
-
-  const updated = await updateTableRecordById(
-    PERSON_ATTRIBUTES_TAB,
-    attributeId,
-    payload,
-    "attribute_id",
-    resolved.tenant.tenantKey,
-  );
+  const updated = await updateAttribute(resolved.tenant.tenantKey, attributeId, {
+    category: canonical.data.category,
+    attributeType: canonical.data.attributeType,
+    attributeTypeCategory: canonical.data.attributeTypeCategory,
+    attributeDate: canonical.data.attributeDate,
+    dateIsEstimated: canonical.data.dateIsEstimated,
+    estimatedTo: canonical.data.estimatedTo,
+    attributeDetail: canonical.data.attributeDetail,
+    attributeNotes: canonical.data.attributeNotes,
+    endDate: canonical.data.endDate,
+    typeKey: canonical.data.typeKey,
+    label: canonical.data.label,
+    valueText: canonical.data.valueText,
+    dateStart: canonical.data.dateStart,
+    dateEnd: canonical.data.dateEnd,
+    location: canonical.data.location,
+    notes: canonical.data.notes,
+  });
   if (!updated) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const existingMediaType = normalizeMediaAttributeType(existing.attributeType);
-  const nextMediaType = normalizeMediaAttributeType(nextType);
+  const existingMediaType = normalizePersonMediaAttributeType(existingAttributeType);
+  const nextMediaType = normalizePersonMediaAttributeType(nextType);
+  const existingFileId = (
+    existingMedia?.valueText ||
+    existing.attributeDetail ||
+    existing.valueText
+  ).trim();
+  const nextValueText = (
+    parsed.data.valueText ??
+    existingMedia?.valueText ??
+    existing.attributeDetail ??
+    existing.valueText
+  ).trim();
+  const nextLabel = parsed.data.label ?? existingMedia?.label ?? existing.label;
+  const nextDescription = parsed.data.notes ?? existingMedia?.notes ?? existing.attributeNotes ?? existing.notes;
+  const nextPhotoDate = parsed.data.startDate ?? existingMedia?.startDate ?? existing.attributeDate ?? existing.dateStart;
+  const nextSortOrder = parsed.data.sortOrder ?? existingMedia?.sortOrder ?? 0;
+  const nextMediaMetadata = parsed.data.valueJson ?? existingMedia?.valueJson ?? "";
+  const nextIsPrimary = parsed.data.isPrimary ?? existingMedia?.isPrimary ?? false;
   if (existingMediaType || nextMediaType) {
-    const existingLinks = await getOciMediaLinksForEntity({
-      familyGroupKey: resolved.tenant.tenantKey,
-      entityType: "attribute",
-      entityId: attributeId,
+    await removePersonMediaAssociations({
+      tenantKey: resolved.tenant.tenantKey,
+      personId,
+      attributeId,
+      fileIds: existingFileId ? [existingFileId] : [],
     });
-    await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
-
-    const nextValueText = (payload.value_text ?? existing.valueText).trim();
     if (nextMediaType && nextValueText) {
-      const mediaId = buildMediaId(nextValueText);
-      const usageType = nextMediaType === "photo" ? "photo" : "media";
-      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, nextValueText, usageType);
-      const nextLabel = payload.label ?? existing.label;
-      const nextDescription = payload.notes ?? existing.notes;
-      const nextPhotoDate = payload.start_date ?? existing.startDate;
-      const nextSortOrderRaw = payload.sort_order ?? String(existing.sortOrder);
-      const nextSortOrder = Number.parseInt(nextSortOrderRaw, 10) || 0;
-      const nextMediaMetadata = payload.value_json ?? existing.valueJson;
-      await upsertOciMediaAsset({
-        mediaId,
+      await syncPersonMediaAssociations({
+        tenantKey: resolved.tenant.tenantKey,
+        personId,
+        attributeId,
+        attributeType: nextMediaType,
         fileId: nextValueText,
-        storageProvider: "gdrive",
-        mediaMetadata: nextMediaMetadata,
-        createdAt: new Date().toISOString(),
-      });
-      const nextIsPrimaryRaw = payload.is_primary ?? (existing.isPrimary ? "TRUE" : "FALSE");
-      await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId,
-        mediaId,
-        entityType: "attribute",
-        entityId: attributeId,
-        usageType,
         label: nextLabel,
         description: nextDescription,
         photoDate: nextPhotoDate,
-        isPrimary: nextIsPrimaryRaw.trim().toLowerCase() === "true",
+        isPrimary: nextIsPrimary,
         sortOrder: nextSortOrder,
         mediaMetadata: nextMediaMetadata,
-        createdAt: new Date().toISOString(),
+        replaceAttributeLinks: false,
       });
     }
   }
 
-  if (existingMediaType === "photo" || nextMediaType === "photo") {
-    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+  if (
+    existingMediaType === "photo" ||
+    nextMediaType === "photo" ||
+    existingMedia?.isPrimary === true ||
+    parsed.data.isPrimary === true
+  ) {
+    const primaryPhotoFileId =
+      nextMediaType === "photo" && nextValueText && (parsed.data.isPrimary === true || existingMedia?.isPrimary === true)
+        ? nextValueText
+        : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
     await updateTableRecordById(
-      PEOPLE_TAB,
+      PEOPLE_TABLE,
       personId,
       { photo_file_id: primaryPhotoFileId },
       "person_id",
@@ -172,7 +156,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     );
   }
 
-  return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: updated.data });
+  return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: updated });
 }
 
 export async function DELETE(_: Request, { params }: PersonAttributeItemRouteProps) {
@@ -186,36 +170,31 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const existing = (await getPersonAttributes(resolved.tenant.tenantKey, personId)).find(
-    (item) => item.attributeId === attributeId,
-  );
-  if (!existing) {
+  const existing = await getAttributeWithMediaById(resolved.tenant.tenantKey, attributeId);
+  if (!existing || existing.entityType !== "person" || existing.entityId !== personId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  const existingMedia = toPersonMediaAttribute(existing);
 
-  const deleted = await deleteTableRecordById(
-    PERSON_ATTRIBUTES_TAB,
-    attributeId,
-    "attribute_id",
-    resolved.tenant.tenantKey,
-  );
+  const deleted = await deleteAttribute(resolved.tenant.tenantKey, attributeId);
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  if (normalizeMediaAttributeType(existing.attributeType)) {
-    const existingLinks = await getOciMediaLinksForEntity({
-      familyGroupKey: resolved.tenant.tenantKey,
-      entityType: "attribute",
-      entityId: attributeId,
+  const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
+  if (normalizePersonMediaAttributeType(existingAttributeType)) {
+    await removePersonMediaAssociations({
+      tenantKey: resolved.tenant.tenantKey,
+      personId,
+      attributeId,
+      fileIds: existingMedia?.valueText ? [existingMedia.valueText] : [],
     });
-    await Promise.all(existingLinks.map((item) => deleteOciMediaLink(item.linkId)));
   }
 
-  if (normalizeMediaAttributeType(existing.attributeType) === "photo") {
-    const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+  if (normalizePersonMediaAttributeType(existingAttributeType) === "photo") {
+    const primaryPhotoFileId = (await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "";
     await updateTableRecordById(
-      PEOPLE_TAB,
+      PEOPLE_TABLE,
       personId,
       { photo_file_id: primaryPhotoFileId },
       "person_id",

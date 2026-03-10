@@ -4,13 +4,11 @@ import {
   appendAuditLog,
   createTableRecord,
   ensurePersonFamilyGroupMembership,
-  ensureResolvedTabColumns,
   getPersonById,
   getPeople,
-  PERSON_ATTRIBUTES_TAB,
 } from "@/lib/data/runtime";
+import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 
 type TenantPeopleRouteProps = {
@@ -212,7 +210,6 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
       },
     };
   } else {
-    await ensureResolvedTabColumns("People", ["email", "maiden_name"], resolved.tenant.tenantKey);
     record = await createTableRecord(
       "People",
       {
@@ -239,26 +236,7 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
     await ensurePersonFamilyGroupMembership(personId, resolved.tenant.tenantKey, true);
   }
 
-  await createTableRecord(
-    PERSON_ATTRIBUTES_TAB,
-    {
-      attribute_id: buildEntityId("attr", `${resolved.tenant.tenantKey}|${personId}|birthday`),
-      person_id: personId,
-      attribute_type: "birthday",
-      value_text: parsed.data.birth_date,
-      value_json: "",
-      label: "Birthday",
-      is_primary: "TRUE",
-      sort_order: "0",
-      start_date: "",
-      end_date: "",
-      visibility: "family",
-      share_scope: "both_families",
-      share_family_group_key: "",
-      notes: "",
-    },
-    resolved.tenant.tenantKey,
-  );
+  await upsertPersonBirthAttribute(resolved.tenant.tenantKey, personId, parsed.data.birth_date);
 
   await appendAuditLog({
     actorEmail: resolved.session.user?.email ?? "",

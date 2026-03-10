@@ -9,8 +9,8 @@ import {
 } from "@/lib/data/runtime";
 import { hashPassword } from "@/lib/security/password";
 
-const USERS_TAB = "UserAccess";
-const POLICY_TABS = ["FamilySecurityPolicy", "TenantSecurityPolicy"];
+const USERS_TABLE = "UserAccess";
+const POLICY_TABLES = ["FamilySecurityPolicy", "TenantSecurityPolicy"];
 
 function readField(record: Record<string, string>, ...keys: string[]) {
   const lowered = new Map(Object.entries(record).map(([k, v]) => [k.trim().toLowerCase(), v]));
@@ -82,15 +82,15 @@ async function upsertDirectoryLocalRecord(input: {
     must_change_password: input.mustChangePassword ? "TRUE" : "FALSE",
   };
 
-  const updated = await updateTableRecordById(USERS_TAB, input.personId, payload, "person_id");
+  const updated = await updateTableRecordById(USERS_TABLE, input.personId, payload, "person_id");
   if (!updated) {
-    await createTableRecord(USERS_TAB, payload);
+    await createTableRecord(USERS_TABLE, payload);
   }
 }
 
 export async function getTenantSecurityPolicy(tenantKey: string): Promise<TenantSecurityPolicy> {
   try {
-    const rows = await getTableRecords(POLICY_TABS, tenantKey);
+    const rows = await getTableRecords(POLICY_TABLES, tenantKey);
     const row = rows[0];
     if (!row) {
       return defaultTenantSecurityPolicy(tenantKey);
@@ -120,9 +120,9 @@ export async function upsertTenantSecurityPolicy(tenantKey: string, policy: Tena
     require_lowercase: policy.requireLowercase ? "TRUE" : "FALSE",
     lockout_attempts: String(policy.lockoutAttempts),
   };
-  const updated = await updateTableRecordById(POLICY_TABS, recordId, payload, "id", tenantKey);
+  const updated = await updateTableRecordById(POLICY_TABLES, recordId, payload, "id", tenantKey);
   if (!updated) {
-    await createTableRecord(POLICY_TABS[0], payload, tenantKey);
+    await createTableRecord(POLICY_TABLES[0], payload, tenantKey);
   }
 }
 
@@ -186,7 +186,7 @@ export async function patchLocalUser(
   if (patch.lockedUntil !== undefined) payload.locked_until = patch.lockedUntil;
   if (patch.mustChangePassword !== undefined) payload.must_change_password = patch.mustChangePassword ? "TRUE" : "FALSE";
 
-  return updateTableRecordById(USERS_TAB, current.personId, payload, "person_id");
+  return updateTableRecordById(USERS_TABLE, current.personId, payload, "person_id");
 }
 
 export async function renameLocalUser(tenantKey: string, username: string, nextUsername: string) {
@@ -209,7 +209,7 @@ export async function renameLocalUser(tenantKey: string, username: string, nextU
   }
 
   const updated = await updateTableRecordById(
-    USERS_TAB,
+    USERS_TABLE,
     existing.personId,
     { username: next, local_access: "TRUE" },
     "person_id",
@@ -234,5 +234,5 @@ export async function deleteLocalUser(tenantKey: string, username: string) {
     must_change_password: "FALSE",
   };
 
-  return updateTableRecordById(USERS_TAB, existing.personId, payload, "person_id");
+  return updateTableRecordById(USERS_TABLE, existing.personId, payload, "person_id");
 }

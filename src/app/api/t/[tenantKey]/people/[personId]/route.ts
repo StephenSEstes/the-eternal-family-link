@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
+import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import {
   appendAuditLog,
   deleteTableRows,
   getPersonById,
   getTableRecords,
-  PERSON_ATTRIBUTES_TAB,
+  PERSON_ATTRIBUTES_TABLE,
   updatePerson,
 } from "@/lib/data/runtime";
 import { requireTenantAccess, requireTenantAdmin } from "@/lib/family-group/guard";
@@ -70,7 +71,7 @@ async function buildDeletePersonPreview(tenantKey: string, personId: string): Pr
       getTableRecords("UserAccess").catch(() => []),
       getTableRecords("Relationships").catch(() => []),
       getTableRecords("Households").catch(() => []),
-      getTableRecords(PERSON_ATTRIBUTES_TAB).catch(() => []),
+      getTableRecords(PERSON_ATTRIBUTES_TABLE).catch(() => []),
       getTableRecords("ImportantDates").catch(() => []),
     ]);
 
@@ -174,6 +175,7 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
   if (!person) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  await upsertPersonBirthAttribute(resolved.tenant.tenantKey, personId, parsed.data.birth_date);
 
   await appendAuditLog({
     actorEmail: resolved.session.user?.email ?? "",
@@ -215,7 +217,7 @@ export async function DELETE(request: Request, { params }: TenantPersonRouteProp
     const deletedUserAccessRows = await deleteTableRows("UserAccess", built.rowNumbers.userAccess);
     const deletedRelationshipRows = await deleteTableRows("Relationships", built.rowNumbers.relationships);
     const deletedHouseholdRows = await deleteTableRows("Households", built.rowNumbers.households);
-    const deletedAttributeRows = await deleteTableRows(PERSON_ATTRIBUTES_TAB, built.rowNumbers.personAttributes);
+    const deletedAttributeRows = await deleteTableRows(PERSON_ATTRIBUTES_TABLE, built.rowNumbers.personAttributes);
     const deletedImportantDateRows = await deleteTableRows("ImportantDates", built.rowNumbers.importantDates);
 
     await appendAuditLog({

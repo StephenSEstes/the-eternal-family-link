@@ -1,4 +1,5 @@
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import {
   type HouseholdLinkInput,
   type HouseholdUploadContractInput,
@@ -351,18 +352,13 @@ async function loadAssociationsByFileId(tenantKey: string, fileId: string): Prom
 }
 
 async function unlinkDuplicateFromPerson(tenantKey: string, personId: string, duplicateFileId: string) {
-  const attrsRes = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`, {
+  const attrsRes = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`, {
     cache: "no-store",
   });
   await assertOk(attrsRes, `Failed to load person attributes for duplicate replace (${personId})`);
   const attrsBody = await attrsRes.json().catch(() => null);
-  const attrs = Array.isArray(attrsBody?.attributes)
-    ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
-    : [];
-  const matches = attrs.filter((item) => {
-    const type = item.attributeType.trim().toLowerCase();
-    return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === duplicateFileId;
-  });
+  const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
+  const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, duplicateFileId));
   for (const match of matches) {
     const delRes = await fetch(
       `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes/${encodeURIComponent(match.attributeId)}`,

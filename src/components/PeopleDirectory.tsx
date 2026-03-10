@@ -29,7 +29,6 @@ type PeopleDirectoryProps = {
   tenantKey: string;
   canManage: boolean;
   people: PersonItem[];
-  photoByPersonId: Record<string, string>;
   edges: { id: string; fromPersonId: string; toPersonId: string; label: string }[];
   households: { id: string; partner1PersonId: string; partner2PersonId: string; label?: string }[];
 };
@@ -78,7 +77,6 @@ export function PeopleDirectory({
   tenantKey,
   canManage,
   people,
-  photoByPersonId,
   edges,
   households,
 }: PeopleDirectoryProps) {
@@ -164,7 +162,7 @@ export function PeopleDirectory({
       {mode === "people" ? (
         <section className="people-grid album-grid">
           {filtered.map((person) => {
-            const photoFileId = photoByPersonId[person.personId] || person.photoFileId;
+            const photoFileId = person.photoFileId;
             const fallbackAvatar =
               person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
             return (

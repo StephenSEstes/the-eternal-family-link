@@ -6,10 +6,10 @@ import {
   createTableRecords,
   deleteTableRows,
   getPeople,
-  PERSON_ATTRIBUTES_TAB,
+  PERSON_ATTRIBUTES_TABLE,
   getTableRecords,
   getTenantConfig,
-  listTabs,
+  listTables,
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
@@ -122,14 +122,14 @@ function scoreUserAccessRow(data: Record<string, string>) {
   return score;
 }
 
-async function resolveTenantScopedTabName(tabName: string, tenantKey: string) {
-  const titles = await listTabs().catch(() => []);
+async function resolveTenantScopedTableleName(tableName: string, tenantKey: string) {
+  const titles = await listTables().catch(() => []);
   const byLower = new Map(titles.map((title) => [title.toLowerCase(), title]));
   const normalizedTenant = normalize(tenantKey);
   const candidates =
     normalizedTenant === "snowestes"
-      ? [tabName]
-      : [`${normalizedTenant}__${tabName}`, tabName];
+      ? [tableName]
+      : [`${normalizedTenant}__${tableName}`, tableName];
   for (const candidate of candidates) {
     const match = byLower.get(candidate.toLowerCase());
     if (match) {
@@ -139,11 +139,11 @@ async function resolveTenantScopedTabName(tabName: string, tenantKey: string) {
   return null;
 }
 
-async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
+async function deleteRowsByNumber(tableName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
   }
-  return deleteTableRows(tabName, rowNumbers);
+  return deleteTableRows(tableName, rowNumbers);
 }
 
 function relCanonicalKey(fromPersonId: string, toPersonId: string, relType: string) {
@@ -187,7 +187,7 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
   const familyGroupKey = normalize(tenantKey);
   const [people, attributeRows, householdPhotoRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
-    getTableRecords(PERSON_ATTRIBUTES_TAB, tenantKey).catch(() => []),
+    getTableRecords(PERSON_ATTRIBUTES_TABLE, tenantKey).catch(() => []),
     getTableRecords("HouseholdPhotos", tenantKey).catch(() => []),
     getTableRecords("MediaAssets", tenantKey).catch(() => []),
     getTableRecords("MediaLinks", tenantKey).catch(() => []),
@@ -403,7 +403,7 @@ async function runIntegrityAudit(tenantKey: string) {
     householdsRows,
     familyConfigRows,
     legacyLocalRows,
-    tabs,
+    tables,
     relationshipRows,
     personAttributeRows,
     importantDateRows,
@@ -416,9 +416,9 @@ async function runIntegrityAudit(tenantKey: string) {
     getTableRecords("Households").catch(() => []),
     getTableRecords(["FamilyConfig", "TenantConfig"]).catch(() => []),
     getTableRecords("LocalUsers", tenantKey).catch(() => []),
-    listTabs().catch(() => []),
+    listTables().catch(() => []),
     getTableRecords("Relationships").catch(() => []),
-    getTableRecords(PERSON_ATTRIBUTES_TAB).catch(() => []),
+    getTableRecords(PERSON_ATTRIBUTES_TABLE).catch(() => []),
     getTableRecords("ImportantDates").catch(() => []),
   ]);
 
@@ -675,15 +675,15 @@ async function runIntegrityAudit(tenantKey: string) {
     });
   }
 
-  const scopedPeopleTabs = tabs
-    .map((tab) => tab.trim())
-    .filter((tab) => tab.toLowerCase().endsWith("__people"));
+  const scopedPeopleTables = tables
+    .map((table) => table.trim())
+    .filter((table) => table.toLowerCase().endsWith("__people"));
   pushFinding(
     findings,
     "warn",
-    "legacy_scoped_people_tabs_present",
-    "Legacy tenant-scoped People tabs exist. People data must remain global in the People tab only.",
-    scopedPeopleTabs,
+    "legacy_scoped_people_tables_present",
+    "Legacy tenant-scoped People tables exist. People data must remain global in the People table only.",
+    scopedPeopleTables,
   );
 
   const errorCount = findings.filter((item) => item.severity === "error").length;
@@ -883,7 +883,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       const attributeId = readField(row.data, "attribute_id");
       if (!attributeId || personId !== sourcePersonId) continue;
       const updated = await updateTableRecordById(
-        PERSON_ATTRIBUTES_TAB,
+        PERSON_ATTRIBUTES_TABLE,
         attributeId,
         { person_id: targetPersonId },
         "attribute_id",
@@ -1256,10 +1256,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
 
   let deletedLegacyLocalUsersRows = 0;
   if (before.legacyLocalRows.length > 0) {
-    const localUsersTab = await resolveTenantScopedTabName("LocalUsers", familyGroupKey);
-    if (localUsersTab) {
+    const localUsersTable = await resolveTenantScopedTableleName("LocalUsers", familyGroupKey);
+    if (localUsersTable) {
       deletedLegacyLocalUsersRows = await deleteRowsByNumber(
-        localUsersTab,
+        localUsersTable,
         before.legacyLocalRows.map((row) => row.rowNumber),
       );
     }

@@ -17,7 +17,7 @@ type OrphanHousehold = {
 
 type FamilyAttributeRecord = {
   source: "FamilyConfig" | "FamilySecurityPolicy";
-  tabName: "FamilyConfig" | "TenantConfig" | "FamilySecurityPolicy" | "TenantSecurityPolicy";
+  tableName: "FamilyConfig" | "TenantConfig" | "FamilySecurityPolicy" | "TenantSecurityPolicy";
   rowNumber: number;
   data: Record<string, string>;
 };
@@ -48,11 +48,11 @@ function hasLoginAccess(row: Record<string, string>) {
   return isEnabled && (hasGoogle || hasLocal || hasUsername || hasEmail);
 }
 
-async function deleteRowsByNumber(tabName: string, rowNumbers: number[]) {
+async function deleteRowsByNumber(tableName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
   }
-  return deleteTableRows(tabName, rowNumbers);
+  return deleteTableRows(tableName, rowNumbers);
 }
 
 async function buildDeletePreview(familyGroupKey: string) {
@@ -116,16 +116,16 @@ async function buildDeletePreview(familyGroupKey: string) {
   const familyAttributesToDelete: FamilyAttributeRecord[] = [
     ...familyConfigRows
       .filter((row) => normalize(row.data.family_group_key) === targetKey)
-      .map((row) => ({ source: "FamilyConfig" as const, tabName: "FamilyConfig" as const, rowNumber: row.rowNumber, data: row.data })),
+      .map((row) => ({ source: "FamilyConfig" as const, tableName: "FamilyConfig" as const, rowNumber: row.rowNumber, data: row.data })),
     ...tenantConfigRows
       .filter((row) => normalize(row.data.family_group_key) === targetKey)
-      .map((row) => ({ source: "FamilyConfig" as const, tabName: "TenantConfig" as const, rowNumber: row.rowNumber, data: row.data })),
+      .map((row) => ({ source: "FamilyConfig" as const, tableName: "TenantConfig" as const, rowNumber: row.rowNumber, data: row.data })),
     ...familyPolicyRows
       .filter((row) => normalize(row.data.family_group_key) === targetKey)
-      .map((row) => ({ source: "FamilySecurityPolicy" as const, tabName: "FamilySecurityPolicy" as const, rowNumber: row.rowNumber, data: row.data })),
+      .map((row) => ({ source: "FamilySecurityPolicy" as const, tableName: "FamilySecurityPolicy" as const, rowNumber: row.rowNumber, data: row.data })),
     ...tenantPolicyRows
       .filter((row) => normalize(row.data.family_group_key) === targetKey)
-      .map((row) => ({ source: "FamilySecurityPolicy" as const, tabName: "TenantSecurityPolicy" as const, rowNumber: row.rowNumber, data: row.data })),
+      .map((row) => ({ source: "FamilySecurityPolicy" as const, tableName: "TenantSecurityPolicy" as const, rowNumber: row.rowNumber, data: row.data })),
   ];
 
   const enabledUserFamilyRowsForTarget = userFamilyRows.filter(
@@ -172,16 +172,16 @@ async function buildDeletePreview(familyGroupKey: string) {
     .filter((row) => normalize(row.data.family_group_key) === targetKey)
     .map((row) => row.rowNumber);
   const familyConfigRowNumbersForDelete = familyAttributesToDelete
-    .filter((row) => row.tabName === "FamilyConfig")
+    .filter((row) => row.tableName === "FamilyConfig")
     .map((row) => row.rowNumber);
   const tenantConfigRowNumbersForDelete = familyAttributesToDelete
-    .filter((row) => row.tabName === "TenantConfig")
+    .filter((row) => row.tableName === "TenantConfig")
     .map((row) => row.rowNumber);
   const familyPolicyRowNumbersForDelete = familyAttributesToDelete
-    .filter((row) => row.tabName === "FamilySecurityPolicy")
+    .filter((row) => row.tableName === "FamilySecurityPolicy")
     .map((row) => row.rowNumber);
   const tenantPolicyRowNumbersForDelete = familyAttributesToDelete
-    .filter((row) => row.tabName === "TenantSecurityPolicy")
+    .filter((row) => row.tableName === "TenantSecurityPolicy")
     .map((row) => row.rowNumber);
 
   return {

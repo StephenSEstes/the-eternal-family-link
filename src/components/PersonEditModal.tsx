@@ -6,6 +6,12 @@ import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import {
+  matchesCanonicalMediaFileId,
+  toPersonMediaAttributes,
+  type AttributeWithMedia,
+  type PersonMediaAttributeRecord,
+} from "@/lib/attributes/media-response";
 import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
@@ -41,17 +47,7 @@ type HouseholdLink = {
   partner2PersonId: string;
 };
 
-type PersonAttribute = {
-  attributeId: string;
-  attributeType: string;
-  valueText: string;
-  valueJson?: string;
-  mediaMetadata?: string;
-  label: string;
-  isPrimary: boolean;
-  startDate?: string;
-  notes?: string;
-};
+type PersonAttribute = PersonMediaAttributeRecord;
 
 type AboutAttribute = {
   attributeId: string;
@@ -753,9 +749,9 @@ export function PersonEditModal({
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
   });
-  const loadAttributes = async (personId: string, scopedTenantKey = activeTenantKey) => {
+  const loadPersonAttributeState = async (personId: string, scopedTenantKey = activeTenantKey) => {
     const res = await fetch(
-      `/api/t/${encodeURIComponent(scopedTenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
+      `/api/t/${encodeURIComponent(scopedTenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
       { cache: "no-store" },
     );
     const body = await res.json().catch(() => null);
@@ -763,20 +759,9 @@ export function PersonEditModal({
       setStatus(`Attribute load failed: ${res.status}`);
       return;
     }
-    setAttributes(Array.isArray(body?.attributes) ? (body.attributes as PersonAttribute[]) : []);
-  };
-
-  const loadAboutAttributes = async (personId: string) => {
-    const res = await fetch(
-      `/api/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
-      { cache: "no-store" },
-    );
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      setStatus(`About attribute load failed: ${res.status}`);
-      return;
-    }
-    setAboutAttributes(Array.isArray(body?.attributes) ? (body.attributes as AboutAttribute[]) : []);
+    const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
+    setAboutAttributes(canonicalAttributes as AboutAttribute[]);
+    setAttributes(toPersonMediaAttributes(canonicalAttributes));
   };
 
   useEffect(() => {
@@ -847,8 +832,7 @@ export function PersonEditModal({
     setNewSpouseInLaw(true);
     pendingCreatedSpouseIdRef.current = "";
     setStatus("");
-    void loadAttributes(person.personId);
-    void loadAboutAttributes(person.personId);
+    void loadPersonAttributeState(person.personId);
   }, [open, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
 
   useEffect(() => {
@@ -1164,7 +1148,7 @@ export function PersonEditModal({
     }
     setStatus("Photo metadata saved.");
     setPhotoBusy(false);
-    await loadAttributes(person.personId);
+    await loadPersonAttributeState(person.personId);
     await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
     onSaved();
   };
@@ -1241,7 +1225,7 @@ export function PersonEditModal({
     setPhotoBusy(true);
     setPhotoAssociationStatus("Removing association...");
     const attrsRes = await fetch(
-      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes`,
+      `/api/t/${encodeURIComponent(activeTenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(targetPersonId)}`,
       { cache: "no-store" },
     );
     const attrsBody = await attrsRes.json().catch(() => null);
@@ -1250,13 +1234,8 @@ export function PersonEditModal({
       setPhotoBusy(false);
       return false;
     }
-    const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as PersonAttribute[]) : [];
-    const matches = attrs.filter(
-      (item) => {
-        const type = item.attributeType.toLowerCase();
-        return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === fileId;
-      },
-    );
+    const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
+    const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, fileId));
     for (const match of matches) {
       await fetch(
         `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(targetPersonId)}/attributes/${encodeURIComponent(match.attributeId)}`,
@@ -1267,7 +1246,7 @@ export function PersonEditModal({
     if (targetPersonId === person.personId) {
       setSelectedPhotoAttributeId("");
       setShowPhotoDetail(false);
-      await loadAttributes(person.personId);
+      await loadPersonAttributeState(person.personId);
       onSaved();
     }
     setPhotoAssociationStatus("Association removed.");
@@ -1367,7 +1346,7 @@ export function PersonEditModal({
   const handleWizardComplete = async (summary: MediaAttachExecutionSummary) => {
     if (!person) return;
     setStatus(formatMediaAttachUserSummary(summary));
-    await loadAttributes(person.personId);
+    await loadPersonAttributeState(person.personId);
     onSaved();
   };
 
@@ -1722,8 +1701,7 @@ export function PersonEditModal({
                           setContextHouseholds(nextHouseholds);
                           if (person?.personId) {
                             await Promise.all([
-                              loadAttributes(person.personId, nextKey),
-                              loadAboutAttributes(person.personId),
+                              loadPersonAttributeState(person.personId, nextKey),
                             ]);
                           }
                           setFamilySwitchBusy(false);
@@ -2039,8 +2017,7 @@ export function PersonEditModal({
               setSelectedAboutAttributeId("");
             }}
             onSaved={() => {
-              void loadAttributes(person.personId);
-              void loadAboutAttributes(person.personId);
+              void loadPersonAttributeState(person.personId);
               onSaved();
             }}
           />

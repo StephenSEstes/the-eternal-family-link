@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
 type MediaLibraryClientProps = {
@@ -341,18 +342,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     setPhotoAssociationStatus("Removing person link...");
     try {
       const attrsRes = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`,
+        `/api/t/${encodeURIComponent(tenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
         { cache: "no-store" },
       );
       const attrsBody = await attrsRes.json().catch(() => null);
       await assertOk(attrsRes, "Failed to load person attributes");
-      const attrs = Array.isArray(attrsBody?.attributes)
-        ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
-        : [];
-      const matches = attrs.filter((item) => {
-        const type = item.attributeType.toLowerCase();
-        return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === selectedPhotoItem.fileId;
-      });
+      const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
+      const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoItem.fileId));
       for (const match of matches) {
         const delRes = await fetch(
           `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
@@ -437,18 +433,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     try {
       for (const person of selectedPhotoAssociations.people) {
         const attrsRes = await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes`,
+          `/api/t/${encodeURIComponent(tenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(person.personId)}`,
           { cache: "no-store" },
         );
         const attrsBody = await attrsRes.json().catch(() => null);
         await assertOk(attrsRes, "Failed to load person attributes");
-        const attrs = Array.isArray(attrsBody?.attributes)
-          ? (attrsBody.attributes as Array<{ attributeId: string; attributeType: string; valueText: string }>)
-          : [];
-        const matches = attrs.filter((item) => {
-          const type = item.attributeType.toLowerCase();
-          return ["photo", "video", "audio", "media"].includes(type) && item.valueText.trim() === selectedPhotoItem.fileId;
-        });
+        const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
+        const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoItem.fileId));
         for (const match of matches) {
           const delRes = await fetch(
             `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(match.attributeId)}`,

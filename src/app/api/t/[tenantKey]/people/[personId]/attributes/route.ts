@@ -1,54 +1,58 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
-import { buildEntityId } from "@/lib/entity-id";
-import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
-import { upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
+import { toPersonMediaAttribute, type AttributeWithMedia } from "@/lib/attributes/media-response";
+import { normalizePersonMediaAttributeType, syncPersonMediaAssociations } from "@/lib/attributes/person-media";
 import {
-  createTableRecord,
-  getPrimaryPhotoFileIdFromAttributes,
-  getPersonAttributes,
+  createAttribute,
+  getAttributesForEntityWithMedia,
+  getPrimaryPhotoFileIdForPerson,
+} from "@/lib/attributes/store";
+import {
   getPersonById,
-  PEOPLE_TAB,
-  PERSON_ATTRIBUTES_TAB,
+  PEOPLE_TABLE,
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { attributeCreateSchema } from "@/lib/validation/attributes";
 import { personAttributeCreateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeRouteProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
 };
 
-function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
-  const typeKey = attributeType.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
-  return buildEntityId("attr", `${tenantKey}|${personId}|${typeKey}|${Date.now()}`);
-}
-
-function normalizeMediaAttributeType(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "photo") return "photo";
-  if (normalized === "video") return "video";
-  if (normalized === "audio") return "audio";
-  if (normalized === "media") return "media";
-  return "";
-}
-
-async function clearPrimaryForType(tenantKey: string, personId: string, attributeType: string) {
-  const current = await getPersonAttributes(tenantKey, personId);
-  const updates = current.filter((item) => item.attributeType === attributeType && item.isPrimary);
-  await Promise.all(
-    updates.map((item) =>
-      updateTableRecordById(
-        PERSON_ATTRIBUTES_TAB,
-        item.attributeId,
-        {
-          is_primary: "FALSE",
-        },
-        "attribute_id",
-        tenantKey,
-      ),
-    ),
-  );
+function toCompatibilityAttribute(
+  tenantKey: string,
+  personId: string,
+  item: AttributeWithMedia,
+  index: number,
+) {
+  const media = toPersonMediaAttribute(item);
+  const attributeType = String(item.attributeType || item.typeKey || "").trim().toLowerCase();
+  const attributeDate = String(item.attributeDate || item.dateStart || "").trim();
+  const endDate = String(item.endDate || item.dateEnd || "").trim();
+  const attributeDetail = String(item.attributeDetail || item.valueText || "").trim();
+  const valueText = (media?.valueText || attributeDetail || attributeDate).trim();
+  if (!attributeType || !(valueText || attributeDate)) {
+    return null;
+  }
+  return {
+    attributeId: item.attributeId,
+    tenantKey,
+    personId,
+    attributeType,
+    valueText,
+    valueJson: media?.valueJson || "",
+    mediaMetadata: media?.mediaMetadata || "",
+    label: (media?.label || item.label || item.attributeTypeCategory || attributeType).trim(),
+    isPrimary: media?.isPrimary ?? false,
+    sortOrder: media?.sortOrder ?? index,
+    startDate: media?.startDate || attributeDate,
+    endDate,
+    visibility: "family",
+    notes: media?.notes || item.attributeNotes || item.notes || "",
+    shareScope: "both_families" as const,
+    shareFamilyGroupKey: "",
+  };
 }
 
 export async function GET(_: Request, { params }: PersonAttributeRouteProps) {
@@ -63,7 +67,9 @@ export async function GET(_: Request, { params }: PersonAttributeRouteProps) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const attributes = await getPersonAttributes(resolved.tenant.tenantKey, personId);
+  const attributes = (await getAttributesForEntityWithMedia(resolved.tenant.tenantKey, "person", personId))
+    .map((item, index) => toCompatibilityAttribute(resolved.tenant.tenantKey, personId, item, index))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attributes });
 }
 
@@ -88,104 +94,68 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  await getPersonAttributes(resolved.tenant.tenantKey, personId);
-
-  if (parsed.data.isPrimary) {
-    await clearPrimaryForType(resolved.tenant.tenantKey, personId, parsed.data.attributeType);
+  const canonical = attributeCreateSchema.safeParse({
+    entityType: "person",
+    entityId: personId,
+    typeKey: parsed.data.attributeType,
+    attributeType: parsed.data.attributeType,
+    valueText: parsed.data.valueText,
+    attributeDetail: parsed.data.valueText,
+    notes: parsed.data.notes,
+    attributeNotes: parsed.data.notes,
+    dateStart: parsed.data.startDate,
+    attributeDate: parsed.data.startDate,
+    dateEnd: parsed.data.endDate,
+    endDate: parsed.data.endDate,
+    label: parsed.data.label,
+  });
+  if (!canonical.success) {
+    return NextResponse.json({ error: "invalid_payload", issues: canonical.error.flatten() }, { status: 400 });
   }
 
-  const attributeId = buildAttributeId(resolved.tenant.tenantKey, personId, parsed.data.attributeType);
-  const shareScope = parsed.data.shareScope;
-  const shareFamilyGroupKey =
-    shareScope === "one_family"
-      ? (parsed.data.shareFamilyGroupKey.trim().toLowerCase() || resolved.tenant.tenantKey)
-      : "";
-  const record = await createTableRecord(
-    PERSON_ATTRIBUTES_TAB,
-    {
-      attribute_id: attributeId,
-      entity_type: "person",
-      entity_id: personId,
-      person_id: personId,
-      attribute_type: parsed.data.attributeType.toLowerCase(),
-      value_text: parsed.data.valueText,
-      value_json: parsed.data.valueJson,
-      label: parsed.data.label,
-      is_primary: parsed.data.isPrimary ? "TRUE" : "FALSE",
-      sort_order: String(parsed.data.sortOrder),
-      start_date: parsed.data.startDate,
-      end_date: parsed.data.endDate,
-      visibility: parsed.data.visibility.toLowerCase(),
-      share_scope: shareScope,
-      share_family_group_key: shareFamilyGroupKey,
-      notes: parsed.data.notes,
-    },
-    resolved.tenant.tenantKey,
-  );
+  const created = await createAttribute(resolved.tenant.tenantKey, {
+    entityType: "person",
+    entityId: personId,
+    category: canonical.data.category,
+    attributeType: canonical.data.attributeType || canonical.data.typeKey,
+    attributeTypeCategory: canonical.data.attributeTypeCategory,
+    attributeDate: canonical.data.attributeDate || canonical.data.dateStart,
+    dateIsEstimated: canonical.data.dateIsEstimated,
+    estimatedTo: canonical.data.estimatedTo ?? "",
+    attributeDetail: canonical.data.attributeDetail || canonical.data.valueText,
+    attributeNotes: canonical.data.attributeNotes || canonical.data.notes,
+    endDate: canonical.data.endDate || canonical.data.dateEnd,
+    typeKey: canonical.data.typeKey,
+    label: canonical.data.label,
+    valueText: canonical.data.valueText,
+    dateStart: canonical.data.dateStart,
+    dateEnd: canonical.data.dateEnd,
+    location: canonical.data.location,
+    notes: canonical.data.notes,
+  });
 
-  const mediaAttributeType = normalizeMediaAttributeType(parsed.data.attributeType);
-  if (mediaAttributeType) {
-    if (parsed.data.valueText.trim()) {
-      const fileId = parsed.data.valueText.trim();
-      const mediaId = buildMediaId(fileId);
-      const usageType = mediaAttributeType === "photo" ? "photo" : "media";
-      const linkId = buildMediaLinkId(resolved.tenant.tenantKey, "attribute", attributeId, fileId, usageType);
-      const personUsageType =
-        mediaAttributeType === "photo"
-          ? parsed.data.isPrimary
-            ? "profile"
-            : "gallery"
-          : "media";
-      const personLinkId = buildMediaLinkId(
-        resolved.tenant.tenantKey,
-        "person",
-        personId,
-        fileId,
-        personUsageType,
-      );
-      const createdAt = new Date().toISOString();
-      await upsertOciMediaAsset({
-        mediaId,
-        fileId,
-        storageProvider: "gdrive",
-        mediaMetadata: parsed.data.valueJson,
-        createdAt,
-      });
-      await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId,
-        mediaId,
-        entityType: "attribute",
-        entityId: attributeId,
-        usageType,
-        label: parsed.data.label,
-        description: parsed.data.notes,
-        photoDate: parsed.data.startDate,
-        isPrimary: parsed.data.isPrimary,
-        sortOrder: parsed.data.sortOrder,
-        mediaMetadata: parsed.data.valueJson,
-        createdAt,
-      });
-      await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId: personLinkId,
-        mediaId,
-        entityType: "person",
-        entityId: personId,
-        usageType: personUsageType,
-        label: parsed.data.label,
-        description: parsed.data.notes,
-        photoDate: parsed.data.startDate,
-        isPrimary: parsed.data.isPrimary,
-        sortOrder: parsed.data.sortOrder,
-        mediaMetadata: parsed.data.valueJson,
-        createdAt,
-      });
-    }
+  const mediaAttributeType = normalizePersonMediaAttributeType(parsed.data.attributeType);
+  if (mediaAttributeType && parsed.data.valueText.trim()) {
+    const fileId = parsed.data.valueText.trim();
+    await syncPersonMediaAssociations({
+      tenantKey: resolved.tenant.tenantKey,
+      personId,
+      attributeId: created.attributeId,
+      attributeType: mediaAttributeType,
+      fileId,
+      label: parsed.data.label,
+      description: parsed.data.notes,
+      photoDate: parsed.data.startDate,
+      isPrimary: parsed.data.isPrimary,
+      sortOrder: parsed.data.sortOrder,
+      mediaMetadata: parsed.data.valueJson,
+    });
     if (mediaAttributeType === "photo") {
-      const primaryPhotoFileId = (await getPrimaryPhotoFileIdFromAttributes(personId, resolved.tenant.tenantKey)) ?? "";
+      const primaryPhotoFileId = parsed.data.isPrimary
+        ? fileId
+        : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
       await updateTableRecordById(
-        PEOPLE_TAB,
+        PEOPLE_TABLE,
         personId,
         { photo_file_id: primaryPhotoFileId },
         "person_id",
@@ -194,5 +164,5 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     }
   }
 
-  return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: record.data }, { status: 201 });
+  return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attribute: created }, { status: 201 });
 }

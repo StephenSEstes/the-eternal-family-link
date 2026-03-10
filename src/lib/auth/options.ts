@@ -201,7 +201,7 @@ export const authOptions: NextAuthOptions = {
               }[])
             : [];
         let allAccesses = cachedAccesses;
-        // Refresh from sheets only on initial sign-in or when cache is empty.
+        // Refresh only on initial sign-in or when cache is empty.
         if (user?.email || allAccesses.length === 0 || emailAccesses.length > 0) {
           try {
             allAccesses = await getAllFamilyGroupAccesses(personId);

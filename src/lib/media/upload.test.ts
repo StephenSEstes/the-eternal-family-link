@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMediaMetadata, normalizeMediaKind, sanitizeUploadFileName, validateUploadInput } from "./upload.ts";
+import { buildMediaMetadata, normalizeMediaKind, sanitizeUploadFileName, validateUploadInput } from "./upload";
 
 test("normalizeMediaKind classifies image/video/audio", () => {
   assert.equal(normalizeMediaKind("image/jpeg"), "image");

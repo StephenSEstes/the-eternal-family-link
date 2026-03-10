@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import oracledb from "oracledb";
-import type { SheetRecord } from "@/lib/google/sheets";
+import type { TableRecord } from "@/lib/data/types";
 
 // Ensure CLOB columns are returned as text instead of Lob objects.
 oracledb.fetchAsString = [oracledb.CLOB];
@@ -249,7 +249,7 @@ const TABLES: Record<string, TableConfig> = {
   },
 };
 
-export function listOciTabs() {
+export function listOciTables() {
   return Object.keys(TABLES);
 }
 
@@ -316,12 +316,12 @@ function normalizeHeader(header: string) {
   return normalized;
 }
 
-function resolveTab(tabName: string | string[]) {
-  const names = Array.isArray(tabName) ? tabName : [tabName];
+function resolveTable(tableName: string | string[]) {
+  const names = Array.isArray(tableName) ? tableName : [tableName];
   for (const name of names) {
-    if (TABLES[name]) return { tab: name, config: TABLES[name] };
+    if (TABLES[name]) return { table: name, config: TABLES[name] };
   }
-  throw new Error(`OCI table mapping not configured for tab name(s): ${names.join(", ")}`);
+  throw new Error(`OCI table mapping not configured for table name(s): ${names.join(", ")}`);
 }
 
 function resolveIdColumn(headers: string[], idColumn?: string): string {
@@ -462,8 +462,8 @@ async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
   householdsTableCompatEnsured = true;
 }
 
-export async function getOciTableRecords(tabName: string | string[]): Promise<SheetRecord[]> {
-  const { config } = resolveTab(tabName);
+export async function getOciTableRecords(tableName: string | string[]): Promise<TableRecord[]> {
+  const { config } = resolveTable(tableName);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   return withConnection(async (connection) => {
     if (config.tableName === "people") {
@@ -492,11 +492,11 @@ export async function getOciTableRecords(tabName: string | string[]): Promise<Sh
 }
 
 export async function getOciTableRecordById(
-  tabName: string | string[],
+  tableName: string | string[],
   recordId: string,
   idColumn?: string
-): Promise<SheetRecord | null> {
-  const { config } = resolveTab(tabName);
+): Promise<TableRecord | null> {
+  const { config } = resolveTable(tableName);
   const effectiveIdColumn = resolveIdColumn(config.headers, idColumn);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
   const whereColumn = effectiveIdColumn === "date" ? "date_value" : effectiveIdColumn;
@@ -526,11 +526,11 @@ export async function getOciTableRecordById(
 }
 
 export async function createOciTableRecords(
-  tabName: string | string[],
+  tableName: string | string[],
   payloads: Record<string, string>[]
-): Promise<SheetRecord[]> {
+): Promise<TableRecord[]> {
   if (!payloads.length) return [];
-  const { config } = resolveTab(tabName);
+  const { config } = resolveTable(tableName);
   const insertCols = config.headers.map((h) => (h === "date" ? "date_value" : h));
   const bindSlots = insertCols.map((_, idx) => `:${idx + 1}`).join(", ");
   const sql = `INSERT INTO ${config.tableName} (${insertCols.join(", ")}) VALUES (${bindSlots})`;
@@ -553,17 +553,17 @@ export async function createOciTableRecords(
 }
 
 export async function updateOciTableRecordById(
-  tabName: string | string[],
+  tableName: string | string[],
   recordId: string,
   payload: Record<string, string>,
   idColumn?: string
-): Promise<SheetRecord | null> {
-  const { config } = resolveTab(tabName);
+): Promise<TableRecord | null> {
+  const { config } = resolveTable(tableName);
   const effectiveIdColumn = resolveIdColumn(config.headers, idColumn);
   const normalizedPayload = normalizePayload(payload, config.headers);
   const entries = Object.entries(normalizedPayload).filter(([key]) => normalizeHeader(key) !== normalizeHeader(effectiveIdColumn));
   if (!entries.length) {
-    return getOciTableRecordById(tabName, recordId, effectiveIdColumn);
+    return getOciTableRecordById(tableName, recordId, effectiveIdColumn);
   }
 
   const setClauses = entries.map(([key], idx) => `${key === "date" ? "date_value" : key} = :v${idx + 1}`);
@@ -587,16 +587,16 @@ export async function updateOciTableRecordById(
       { autoCommit: true }
     );
     if (!update.rowsAffected) return null;
-    return getOciTableRecordById(tabName, recordId, effectiveIdColumn);
+    return getOciTableRecordById(tableName, recordId, effectiveIdColumn);
   });
 }
 
 export async function deleteOciTableRecordById(
-  tabName: string | string[],
+  tableName: string | string[],
   recordId: string,
   idColumn?: string
 ): Promise<boolean> {
-  const { config } = resolveTab(tabName);
+  const { config } = resolveTable(tableName);
   const effectiveIdColumn = resolveIdColumn(config.headers, idColumn);
   const whereColumn = effectiveIdColumn === "date" ? "date_value" : effectiveIdColumn;
   return withConnection(async (connection) => {
@@ -609,10 +609,10 @@ export async function deleteOciTableRecordById(
   });
 }
 
-export async function deleteOciTableRows(tabName: string | string[], rowNumbers: number[]): Promise<number> {
+export async function deleteOciTableRows(tableName: string | string[], rowNumbers: number[]): Promise<number> {
   const clean = Array.from(new Set(rowNumbers.filter((r) => Number.isInteger(r) && r >= 2))).sort((a, b) => b - a);
   if (!clean.length) return 0;
-  const { config } = resolveTab(tabName);
+  const { config } = resolveTable(tableName);
   return withConnection(async (connection) => {
     let deleted = 0;
     for (const rowNumber of clean) {
@@ -966,7 +966,7 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
   });
 }
 
-export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[]> {
+export async function getOciPeopleRows(tenantKey?: string): Promise<TableRecord[]> {
   const cols = TABLES.People.headers.join(", ");
   if (!tenantKey) {
     return withConnection(async (connection) => {
@@ -1005,7 +1005,7 @@ export async function getOciPeopleRows(tenantKey?: string): Promise<SheetRecord[
   });
 }
 
-export async function getOciRelationshipsForTenant(tenantKey: string): Promise<SheetRecord[]> {
+export async function getOciRelationshipsForTenant(tenantKey: string): Promise<TableRecord[]> {
   const normalized = tenantKey.trim().toLowerCase();
   if (!normalized) {
     return [];
@@ -1045,7 +1045,7 @@ export async function getOciRelationshipsForTenant(tenantKey: string): Promise<S
   });
 }
 
-export async function getOciHouseholdsForTenant(tenantKey: string): Promise<SheetRecord[]> {
+export async function getOciHouseholdsForTenant(tenantKey: string): Promise<TableRecord[]> {
   const normalized = tenantKey.trim().toLowerCase();
   if (!normalized) {
     return [];

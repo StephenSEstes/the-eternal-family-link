@@ -33,10 +33,6 @@
 - If uncertain, gather more evidence first; do not guess.
 - If the user interrupts with a side question, answer briefly and continue the active implementation unless the user explicitly says to stop or change scope.
 
-## Google Sheets Access Pre-Check
-- Before any live Google Sheets read/write from scripts or API tooling, confirm the workbook is closed on the user side.
-- If a sheet read fails unexpectedly, include "close the workbook and retry" as an immediate diagnostic step.
-
 ## Testing and Deployment Policy
 - Do not rely on local app testing as a release gate.
 - Use lint/type/build checks and deployed-environment validation as the primary verification path.

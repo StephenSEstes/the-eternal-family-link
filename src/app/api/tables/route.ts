@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { listTabs } from "@/lib/data/runtime";
+import { listTables } from "@/lib/data/runtime";
 import { DEFAULT_TENANT_KEY } from "@/lib/family-group/context";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 
@@ -11,13 +11,13 @@ export async function GET() {
   }
   const tenant = await getRequestTenantContext(session);
 
-  const tables = await listTabs();
+  const tables = await listTables();
   const tenantKey = tenant.tenantKey.trim().toLowerCase() || DEFAULT_TENANT_KEY;
   const scopedPrefix = `${tenantKey}__`;
   const filtered =
     tenantKey === DEFAULT_TENANT_KEY
-      ? tables.filter((tab) => !tab.includes("__"))
-      : tables.filter((tab) => tab.startsWith(scopedPrefix) || !tab.includes("__"));
+      ? tables.filter((table) => !table.includes("__"))
+      : tables.filter((table) => table.startsWith(scopedPrefix) || !table.includes("__"));
 
   return NextResponse.json({ tables: filtered });
 }

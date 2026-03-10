@@ -49,7 +49,6 @@ VIEWER_PIN=1234
 Notes:
 - `GOOGLE_SERVICE_ACCOUNT_JSON` must be a single-line stringified JSON object.
 - Share the target Photos Drive folder with the service account email.
-- `SHEET_ID` is optional and only needed for historical Sheets migration/admin tooling.
 
 ## Google OAuth setup
 
@@ -61,27 +60,6 @@ Notes:
    - `http://localhost:3000/api/auth/callback/google`
    - `https://<your-vercel-domain>/api/auth/callback/google`
 6. Copy Client ID and Client Secret into env vars.
-
-## Sheet structure expectations
-
-### `UserAccess` tab
-Headers expected:
-- `user_email`
-- `is_enabled` (`TRUE`/`FALSE`)
-- `role` (`ADMIN` or `USER`)
-- `person_id`
-
-### `People` tab
-Headers expected at minimum:
-- `person_id`
-- `display_name`
-- `phones`
-- `address`
-- `hobbies`
-- `notes`
-- `photo_file_id`
-- `is_pinned` or `is_pinned_viewer`
-- `relationships` (comma/semicolon-separated)
 
 ## Favicons and app icons
 

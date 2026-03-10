@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { getPersonById, PEOPLE_TAB, updateTableRecordById } from "@/lib/data/runtime";
+import { getPersonById, PEOPLE_TABLE, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 
 type RouteProps = {
@@ -42,7 +42,7 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   const currentPhotoFileId = person.photoFileId.trim();
   if (currentPhotoFileId === targetFileId) {
     await updateTableRecordById(
-      PEOPLE_TAB,
+      PEOPLE_TABLE,
       personId,
       { photo_file_id: "" },
       "person_id",

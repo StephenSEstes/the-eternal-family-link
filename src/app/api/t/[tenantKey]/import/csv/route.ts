@@ -14,22 +14,22 @@ const payloadSchema = z.object({
 
 function resolveTarget(target: z.infer<typeof payloadSchema>["target"]) {
   if (target === "people") {
-    return { tabName: "People", idColumn: "person_id", required: ["display_name", "birth_date"] };
+    return { tableName: "People", idColumn: "person_id", required: ["display_name", "birth_date"] };
   }
   if (target === "relationships") {
-    return { tabName: "Relationships", idColumn: "rel_id", required: ["from_person_id", "to_person_id", "rel_type"] };
+    return { tableName: "Relationships", idColumn: "rel_id", required: ["from_person_id", "to_person_id", "rel_type"] };
   }
   if (target === "households") {
     return {
-      tabName: "Households",
+      tableName: "Households",
       idColumn: "household_id",
       required: ["husband_person_id", "wife_person_id"],
     };
   }
   if (target === "person_attributes") {
-    return { tabName: "Attributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
+    return { tableName: "Attributes", idColumn: "attribute_id", required: ["person_id", "attribute_type", "value_text"] };
   }
-  return { tabName: "ImportantDates", idColumn: "id", required: ["date", "title"] };
+  return { tableName: "ImportantDates", idColumn: "id", required: ["date", "title"] };
 }
 
 function buildAttributeId(tenantKey: string, sourceRow: Record<string, string>) {
@@ -108,19 +108,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   for (let i = 0; i < parsedCsv.rows.length; i += 1) {
     const sourceRow = parsedCsv.rows[i];
     const recordId = (() => {
-      if (target.tabName === "People") {
+      if (target.tableName === "People") {
         return sourceRow[target.idColumn]?.trim() || buildPersonId(sourceRow.display_name ?? "", sourceRow.birth_date ?? "");
       }
-      if (target.tabName === "Attributes") {
+      if (target.tableName === "Attributes") {
         return sourceRow[target.idColumn]?.trim() || buildAttributeId(normalizedTenantKey, sourceRow);
       }
-      if (target.tabName === "Relationships") {
+      if (target.tableName === "Relationships") {
         return sourceRow[target.idColumn]?.trim() || buildRelationshipId(sourceRow);
       }
-      if (target.tabName === "Households") {
+      if (target.tableName === "Households") {
         return sourceRow[target.idColumn]?.trim() || buildHouseholdId(normalizedTenantKey, sourceRow);
       }
-      if (target.tabName === "ImportantDates") {
+      if (target.tableName === "ImportantDates") {
         return sourceRow[target.idColumn]?.trim() || buildImportantDateId(normalizedTenantKey, sourceRow, i + 2);
       }
       return sourceRow[target.idColumn]?.trim();
@@ -129,7 +129,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       errors.push({
         row: i + 2,
         message:
-          target.tabName === "People"
+          target.tableName === "People"
             ? "Missing person_id and could not generate from display_name + birth_date"
             : `Missing ${target.idColumn}`,
       });
@@ -140,30 +140,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     Object.entries(sourceRow).forEach(([key, value]) => {
       payload[key] = value;
     });
-    if (target.tabName === "People" && !payload.person_id) {
+    if (target.tableName === "People" && !payload.person_id) {
       payload.person_id = recordId;
     }
-    if (target.tabName === "Attributes" && !payload.attribute_id) {
+    if (target.tableName === "Attributes" && !payload.attribute_id) {
       payload.attribute_id = recordId;
     }
-    if (target.tabName === "Relationships" && !payload.rel_id) {
+    if (target.tableName === "Relationships" && !payload.rel_id) {
       payload.rel_id = recordId;
     }
-    if (target.tabName === "Households" && !payload.household_id) {
+    if (target.tableName === "Households" && !payload.household_id) {
       payload.household_id = recordId;
     }
-    if (target.tabName === "ImportantDates" && !payload.id) {
+    if (target.tableName === "ImportantDates" && !payload.id) {
       payload.id = recordId;
     }
     if (
-      target.tabName !== "People" &&
-      target.tabName !== "Attributes" &&
-      target.tabName !== "ImportantDates" &&
-      target.tabName !== "Relationships"
+      target.tableName !== "People" &&
+      target.tableName !== "Attributes" &&
+      target.tableName !== "ImportantDates" &&
+      target.tableName !== "Relationships"
     ) {
       payload.tenant_key = normalizedTenantKey;
     }
-    if (target.tabName === "Attributes") {
+    if (target.tableName === "Attributes") {
       payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";
       if (payload.share_scope === "one_family" && !payload.share_family_group_key?.trim()) {
         payload.share_family_group_key = normalizedTenantKey;
@@ -188,7 +188,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       payload.sort_order = payload.sort_order ?? "0";
       payload.is_primary = payload.is_primary ?? "FALSE";
     }
-    if (target.tabName === "ImportantDates") {
+    if (target.tableName === "ImportantDates") {
       payload.share_scope = payload.share_scope?.trim().toLowerCase() || "both_families";
       if (payload.share_scope === "one_family" && !payload.share_family_group_key?.trim()) {
         payload.share_family_group_key = normalizedTenantKey;
@@ -199,9 +199,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
 
     try {
-      const targetTenantKey = target.tabName === "Relationships" ? undefined : normalizedTenantKey;
+      const targetTenantKey = target.tableName === "Relationships" ? undefined : normalizedTenantKey;
       const updatedRow = await updateTableRecordById(
-        target.tabName,
+        target.tableName,
         recordId,
         payload,
         target.idColumn,
@@ -210,7 +210,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (updatedRow) {
         updated += 1;
       } else {
-        await createTableRecord(target.tabName, payload, targetTenantKey);
+        await createTableRecord(target.tableName, payload, targetTenantKey);
         created += 1;
       }
     } catch (error) {

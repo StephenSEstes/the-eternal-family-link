@@ -12,8 +12,8 @@ import type {
   AttributeEventTypeDefinition,
 } from "@/lib/attributes/event-definitions-types";
 
-const FAMILY_CONFIG_TAB = "FamilyConfig";
-const LEGACY_TENANT_CONFIG_TAB = "TenantConfig";
+const FAMILY_CONFIG_TABLE = "FamilyConfig";
+const LEGACY_TENANT_CONFIG_TABLE = "TenantConfig";
 const DEFINITIONS_COLUMN = "attribute_event_definitions_json";
 
 const FAMILY_CONFIG_HEADERS = [
@@ -162,7 +162,7 @@ async function ensureFamilyConfigShape(tenantKey: string) {
 
 async function findFamilyConfigRow(tenantKey: string) {
   const normalizedTenantKey = normalizeTenantKey(tenantKey);
-  const rows = await getTableRecords([FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB], normalizedTenantKey).catch(() => []);
+  const rows = await getTableRecords([FAMILY_CONFIG_TABLE, LEGACY_TENANT_CONFIG_TABLE], normalizedTenantKey).catch(() => []);
   return rows.find((row) => normalizeTenantKey(row.data.family_group_key ?? "") === normalizedTenantKey) ?? null;
 }
 
@@ -190,12 +190,12 @@ export async function upsertAttributeEventDefinitions(
   };
   const existing = await findFamilyConfigRow(normalizedTenantKey);
   if (existing) {
-    await updateTableRecordById([FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB], existing.data.family_group_key, payload, "family_group_key", normalizedTenantKey);
+    await updateTableRecordById([FAMILY_CONFIG_TABLE, LEGACY_TENANT_CONFIG_TABLE], existing.data.family_group_key, payload, "family_group_key", normalizedTenantKey);
     return next;
   }
   const base = await getTenantConfig(normalizedTenantKey);
   await createTableRecord(
-    FAMILY_CONFIG_TAB,
+    FAMILY_CONFIG_TABLE,
     {
       family_group_key: normalizedTenantKey,
       family_group_name: base.tenantName,

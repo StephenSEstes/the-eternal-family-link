@@ -6,7 +6,7 @@ import {
   isTenantGuardChecklistPassing,
   isTenantScopedValueAllowed,
   assertTenantScopedValue,
-} from "./guard-core.ts";
+} from "./guard-core";
 
 test("tenant guard checklist defaults to failing until all checks are true", () => {
   const state = buildTenantGuardChecklistState({});

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession, requireFamilyGroupSession } from "@/lib/auth/session";
+import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import { getPersonById, updatePerson } from "@/lib/data/runtime";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import { personUpdateSchema } from "@/lib/validation/person";
@@ -50,6 +51,7 @@ export async function POST(request: Request, { params }: PersonRouteProps) {
   if (!person) {
     return NextResponse.json({ error: "Person not found" }, { status: 404 });
   }
+  await upsertPersonBirthAttribute(tenant.tenantKey, personId, parsed.data.birth_date);
 
   return NextResponse.json({ person });
 }
