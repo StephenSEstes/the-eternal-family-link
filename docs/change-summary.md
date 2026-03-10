@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (manage-user modal invite tab)
+
+- `Change`: Moved person-specific invite creation into the `Manage User` flow by replacing the inline user-directory expansion with a modal that has `Manage User` and `Invite` tabs, and removed the standalone `Invites` subtab from `Users & Access`.
+- `Type`: UI
+- `Why`: Root cause was UI fragmentation after the initial invite rollout. Invites are person-specific actions, but the settings screen split them into a separate admin subtab while `Manage User` stayed on an inline row expander, forcing admins to switch context to do related work for the same person.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - `Users & Access > User Directory > Manage User` opens a modal instead of expanding the table row.
+  - The modal has `Manage User` and `Invite` tabs.
+  - Invite creation works from the `Invite` tab for the currently selected person without reselecting that person.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (person-bound invite flow with manual-share onboarding)
 
 - `Change`: Added a person-bound invite system with OCI-backed invite records, admin invite generation in Settings, a public `/invite/[token]` onboarding page, Google/local acceptance paths, and install/open-app guidance on the invite page.

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
 import type { InvitePresentation } from "@/lib/invite/types";
@@ -157,7 +157,8 @@ type CreateFamilyResponse = {
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import" | "attribute_definitions";
-type UserAdminSubTab = "directory" | "family_access" | "password_policy" | "invites";
+type UserAdminSubTab = "directory" | "family_access" | "password_policy";
+type ManageUserModalTab = "manage" | "invite";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
 
@@ -346,7 +347,6 @@ export function SettingsClient({
   const [localEnabled, setLocalEnabled] = useState(true);
   const [selectedLocalUsername, setSelectedLocalUsername] = useState("");
   const [userAdminSubTab, setUserAdminSubTab] = useState<UserAdminSubTab>("directory");
-  const [invitePersonId, setInvitePersonId] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("google");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "USER">("USER");
@@ -354,6 +354,7 @@ export function SettingsClient({
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14);
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteResult, setInviteResult] = useState<InviteCreationResult | null>(null);
+  const [manageUserModalTab, setManageUserModalTab] = useState<ManageUserModalTab>("manage");
   const [familyGroupsSubTab, setFamilyGroupsSubTab] = useState<FamilyGroupsSubTab>("overview");
   const [importSubTab, setImportSubTab] = useState<ImportSubTab>("target");
   const [selectedDirectoryPersonId, setSelectedDirectoryPersonId] = useState("");
@@ -1394,16 +1395,6 @@ export function SettingsClient({
     }
   }, [localUsers, selectedLocalUsername]);
 
-  useEffect(() => {
-    if (!invitePersonId) {
-      return;
-    }
-    if (!familyPeople.some((person) => person.personId === invitePersonId)) {
-      setInvitePersonId("");
-      setInviteLocalUsername("");
-    }
-  }, [familyPeople, invitePersonId]);
-
   const googleAccessByPersonId = useMemo(() => {
     const map = new Map<string, AccessItem[]>();
     for (const item of visibleAccessItems) {
@@ -1485,12 +1476,6 @@ export function SettingsClient({
     setUserEmail("");
   };
 
-  const handleInvitePersonSelect = (nextPersonId: string) => {
-    setInvitePersonId(nextPersonId);
-    const selected = familyPeople.find((person) => person.personId === nextPersonId);
-    setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
-  };
-
   const copyInviteValue = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -1501,7 +1486,7 @@ export function SettingsClient({
   };
 
   const createPersonInvite = async () => {
-    if (!invitePersonId) {
+    if (!selectedDirectoryPersonId) {
       setInviteStatus("Select a person before creating an invite.");
       return;
     }
@@ -1516,7 +1501,7 @@ export function SettingsClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        personId: invitePersonId,
+        personId: selectedDirectoryPersonId,
         inviteEmail,
         authMode: inviteAuthMode,
         role: inviteRole,
@@ -1540,9 +1525,12 @@ export function SettingsClient({
 
   const selectDirectoryPerson = (nextPersonId: string) => {
     setSelectedDirectoryPersonId(nextPersonId);
+    setManageUserModalTab("manage");
     setLocalPersonId(nextPersonId);
     setPersonId(nextPersonId);
     setLocalPassword("");
+    setInviteResult(null);
+    setInviteStatus("");
 
     const personGoogle = (googleAccessByPersonId.get(nextPersonId) ?? []).filter((entry) => entry.userEmail.trim());
     const personLocal = localAccessByPersonId.get(nextPersonId) ?? [];
@@ -1552,10 +1540,14 @@ export function SettingsClient({
       setUserEmail(firstGoogle.userEmail);
       setRole(firstGoogle.role);
       setIsEnabled(firstGoogle.isEnabled);
+      setInviteEmail(firstGoogle.userEmail);
+      setInviteRole(firstGoogle.role);
     } else {
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
+      setInviteEmail("");
+      setInviteRole("USER");
     }
 
     const firstLocal = personLocal[0];
@@ -1564,12 +1556,24 @@ export function SettingsClient({
       setLocalRole(firstLocal.role);
       setLocalEnabled(firstLocal.isEnabled);
       setSelectedLocalUsername(firstLocal.username);
+      setInviteLocalUsername(firstLocal.username);
+      setInviteRole(firstLocal.role);
     } else {
       setLocalUsername("");
       setLocalRole("USER");
       setLocalEnabled(true);
       setSelectedLocalUsername("");
+      const selected = familyPeople.find((person) => person.personId === nextPersonId);
+      setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
     }
+  };
+
+  const closeManageUserModal = () => {
+    setSelectedDirectoryPersonId("");
+    setManageUserModalTab("manage");
+    setLocalPassword("");
+    setInviteResult(null);
+    setInviteStatus("");
   };
 
   const selectedPersonGoogleAccess = useMemo(
@@ -1582,6 +1586,14 @@ export function SettingsClient({
   const selectedPersonLocalUsers = useMemo(
     () => (selectedDirectoryPersonId ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId) : []),
     [selectedDirectoryPersonId, localUsers],
+  );
+  const selectedDirectoryPerson = useMemo(
+    () => familyPeople.find((item) => item.personId === selectedDirectoryPersonId) ?? null,
+    [familyPeople, selectedDirectoryPersonId],
+  );
+  const selectedPersonLocalUser = useMemo(
+    () => localUsers.find((item) => item.username === selectedLocalUsername && item.personId === selectedDirectoryPersonId) ?? null,
+    [localUsers, selectedDirectoryPersonId, selectedLocalUsername],
   );
   useEffect(() => {
     const personId = selectedDirectoryPersonId.trim();
@@ -1600,11 +1612,15 @@ export function SettingsClient({
       setLocalRole(firstLocal.role);
       setLocalEnabled(firstLocal.isEnabled);
       setSelectedLocalUsername(firstLocal.username);
+      setInviteLocalUsername(firstLocal.username);
+      setInviteRole(firstLocal.role);
     } else {
       setLocalUsername("");
       setLocalRole("USER");
       setLocalEnabled(true);
       setSelectedLocalUsername("");
+      const selected = familyPeople.find((person) => person.personId === personId);
+      setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
     }
 
     const firstGoogle = selectedPersonGoogleAccess[0];
@@ -1612,12 +1628,18 @@ export function SettingsClient({
       setUserEmail(firstGoogle.userEmail);
       setRole(firstGoogle.role);
       setIsEnabled(firstGoogle.isEnabled);
+      setInviteEmail(firstGoogle.userEmail);
+      setInviteRole(firstGoogle.role);
     } else {
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
+      setInviteEmail("");
+      if (!firstLocal) {
+        setInviteRole("USER");
+      }
     }
-  }, [selectedDirectoryPersonId, selectedPersonGoogleAccess, selectedPersonLocalUsers]);
+  }, [familyPeople, selectedDirectoryPersonId, selectedPersonGoogleAccess, selectedPersonLocalUsers]);
   const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
   const importMemberCandidates = existingPeopleOptions.filter(
     (person) => person.sourceTenantKey.trim().toLowerCase() !== selectedTenantKey.trim().toLowerCase(),
@@ -1860,16 +1882,6 @@ export function SettingsClient({
           >
             Password Policy
           </button>
-          <button
-            type="button"
-            className={`settings-subtab ${userAdminSubTab === "invites" ? "active" : ""}`}
-            onClick={() => {
-              setUserAdminSubTab("invites");
-              setShowAddUserForm(false);
-            }}
-          >
-            Invites
-          </button>
         </div>
 
         {userAdminSubTab === "directory" ? (
@@ -1943,13 +1955,8 @@ export function SettingsClient({
                     const personLocal = localAccessByPersonId.get(person.personId) ?? [];
                     const hasGoogle = personGoogle.some((entry) => entry.isEnabled);
                     const hasLocal = personLocal.some((entry) => entry.isEnabled);
-                    const isExpanded = selectedDirectoryPersonId === person.personId;
-                    const personLocalSelected = isExpanded
-                      ? localUsers.find((item) => item.username === selectedLocalUsername && item.personId === person.personId) ?? null
-                      : null;
                     return (
-                      <Fragment key={person.personId}>
-                        <tr key={`${person.personId}-row`}>
+                        <tr key={person.personId}>
                           <td>{person.displayName}</td>
                           <td>
                             <span className={`settings-status-chip ${hasGoogle ? "is-on" : "is-off"}`}>
@@ -1965,210 +1972,13 @@ export function SettingsClient({
                             <button
                               type="button"
                               className="button secondary tap-button"
-                              onClick={() => {
-                                if (isExpanded) {
-                                  setSelectedDirectoryPersonId("");
-                                  return;
-                                }
-                                selectDirectoryPerson(person.personId);
-                              }}
+                              onClick={() => selectDirectoryPerson(person.personId)}
                             >
-                              {isExpanded ? "Close" : "Manage User"}
+                              Manage User
                             </button>
                           </td>
                         </tr>
-                        {isExpanded ? (
-                          <tr key={`${person.personId}-detail`}>
-                            <td colSpan={4}>
-                              <div className="card" style={{ marginTop: "0.5rem" }}>
-                                <h4 style={{ marginTop: 0 }}>Manage User: {person.displayName}</h4>
-
-                                <div className="settings-chip-list">
-                                  <label className="label">
-                                    <input
-                                      type="checkbox"
-                                      checked={isEnabled}
-                                      onChange={(e) => setIsEnabled(e.target.checked)}
-                                    />{" "}
-                                    Google Access Enabled
-                                  </label>
-                                  <label className="label">
-                                    <input
-                                      type="checkbox"
-                                      checked={localEnabled}
-                                      onChange={(e) => setLocalEnabled(e.target.checked)}
-                                    />{" "}
-                                    Local Access Enabled
-                                  </label>
-                                </div>
-
-                                <label className="label">Role</label>
-                                <select
-                                  className="input"
-                                  value={role}
-                                  onChange={(e) => {
-                                    const nextRole = e.target.value as "ADMIN" | "USER";
-                                    setRole(nextRole);
-                                    setLocalRole(nextRole);
-                                  }}
-                                >
-                                  <option value="USER">USER</option>
-                                  <option value="ADMIN">ADMIN</option>
-                                </select>
-
-                                <h5 style={{ marginBottom: "0.5rem" }}>Google Access</h5>
-                                <label className="label">Google Email</label>
-                                <input
-                                  className="input"
-                                  value={userEmail}
-                                  onChange={(e) => setUserEmail(e.target.value)}
-                                  placeholder="name@gmail.com"
-                                />
-
-                                <h5 style={{ marginBottom: "0.5rem", marginTop: "1rem" }}>Local Access</h5>
-                                <label className="label">Username</label>
-                                <input
-                                  className="input"
-                                  value={localUsername}
-                                  onChange={(e) => setLocalUsername(e.target.value)}
-                                  placeholder="local username"
-                                />
-                                <label className="label">Set / Change Password</label>
-                                <input
-                                  className="input"
-                                  type="password"
-                                  value={localPassword}
-                                  onChange={(e) => setLocalPassword(e.target.value)}
-                                  placeholder="new password"
-                                />
-                                <div className="settings-chip-list">
-                                  <button
-                                    type="button"
-                                    className="button tap-button"
-                                    onClick={() =>
-                                      void (async () => {
-                                        setPersonId(person.personId);
-                                        setLocalPersonId(person.personId);
-
-                                        if (isEnabled) {
-                                          if (!userEmail.trim()) {
-                                            setAccessStatus("Google email is required when Google Access is enabled.");
-                                            return;
-                                          }
-                                          await upsertAccess();
-                                        } else if (selectedPersonGoogleAccess.length > 0) {
-                                          const existing = selectedPersonGoogleAccess[0];
-                                          setUserEmail(existing.userEmail);
-                                          await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({
-                                              userEmail: existing.userEmail,
-                                              role,
-                                              personId: person.personId,
-                                              isEnabled: false,
-                                            }),
-                                          });
-                                          await loadTenantAdminData(selectedTenantKey);
-                                        }
-
-                                        if (localEnabled) {
-                                          if (personLocalSelected) {
-                                            if (
-                                              localUsername.trim() &&
-                                              localUsername.trim().toLowerCase() !== personLocalSelected.username
-                                            ) {
-                                              const renamed = await patchLocalUser(personLocalSelected.username, {
-                                                action: "rename_username",
-                                                nextUsername: localUsername.trim(),
-                                              });
-                                              if (!renamed) return;
-                                            }
-                                            const activeUsername = (
-                                              localUsername.trim().toLowerCase() || personLocalSelected.username
-                                            ).trim();
-                                            if (activeUsername) {
-                                              const roleOk = await patchLocalUser(activeUsername, {
-                                                action: "update_role",
-                                                role,
-                                              });
-                                              if (!roleOk) return;
-                                              await patchLocalUser(activeUsername, {
-                                                action: "set_enabled",
-                                                isEnabled: true,
-                                              });
-                                            }
-                                          } else {
-                                            if (!localUsername.trim() || !localPassword.trim()) {
-                                              setLocalUserStatus(
-                                                "Local username and password are required when enabling Local Access for a new user.",
-                                              );
-                                              return;
-                                            }
-                                            await createLocalUser();
-                                          }
-                                        } else if (personLocalSelected) {
-                                          await patchLocalUser(personLocalSelected.username, {
-                                            action: "set_enabled",
-                                            isEnabled: false,
-                                          });
-                                        }
-
-                                        setLocalUserStatus("User updated.");
-                                        await loadTenantAdminData(selectedTenantKey);
-                                        router.refresh();
-                                      })()
-                                    }
-                                  >
-                                    Update User
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="button tap-button"
-                                    onClick={() =>
-                                      void (async () => {
-                                        if (!personLocalSelected) {
-                                          setLocalUserStatus("No local user exists to update password.");
-                                          return;
-                                        }
-                                        if (!localPassword.trim()) {
-                                          setLocalUserStatus("Enter a password first.");
-                                          return;
-                                        }
-                                        const ok = await patchLocalUser(personLocalSelected.username, {
-                                          action: "reset_password",
-                                          password: localPassword,
-                                        });
-                                        if (!ok) return;
-                                        setLocalUserStatus("Password updated.");
-                                        setLocalPassword("");
-                                      })()
-                                    }
-                                  >
-                                    Update Password
-                                  </button>
-                                </div>
-
-                                <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
-                                  <table className="settings-table">
-                                    <thead>
-                                      <tr><th>Failed Attempts</th><th>Locked</th><th>Locked Until</th><th>Current Local Username</th></tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr>
-                                        <td>{personLocalSelected ? personLocalSelected.failedAttempts : 0}</td>
-                                        <td>{personLocalSelected?.lockedUntil ? "TRUE" : "FALSE"}</td>
-                                        <td>{personLocalSelected?.lockedUntil || "-"}</td>
-                                        <td>{personLocalSelected?.username || "-"}</td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
+                      
                     );
                   })}
                 </tbody>
@@ -2179,6 +1989,336 @@ export function SettingsClient({
               <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
                 No users found for this family group. Add user access for a person in this family to populate the directory.
               </p>
+            ) : null}
+
+            {selectedDirectoryPerson ? (
+              <div className="person-modal-backdrop" onClick={closeManageUserModal}>
+                <div
+                  className="person-modal-panel"
+                  style={{ maxWidth: "760px", width: "min(760px, 96vw)", height: "auto", maxHeight: "90vh" }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="person-modal-sticky-head">
+                    <div className="person-modal-header">
+                      <div
+                        className="person-modal-avatar"
+                        style={{
+                          display: "grid",
+                          placeItems: "center",
+                          fontWeight: 700,
+                          fontSize: "1.1rem",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {selectedDirectoryPerson.displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="person-modal-title">Manage User: {selectedDirectoryPerson.displayName}</h3>
+                        <p className="person-modal-meta">User directory and invite actions for this person.</p>
+                      </div>
+                      <button type="button" className="button secondary tap-button" onClick={closeManageUserModal}>
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                  <div className="person-modal-tabs" style={{ top: 0 }}>
+                    <button
+                      type="button"
+                      className={`tab-pill ${manageUserModalTab === "manage" ? "active" : ""}`}
+                      onClick={() => setManageUserModalTab("manage")}
+                    >
+                      Manage User
+                    </button>
+                    <button
+                      type="button"
+                      className={`tab-pill ${manageUserModalTab === "invite" ? "active" : ""}`}
+                      onClick={() => setManageUserModalTab("invite")}
+                    >
+                      Invite
+                    </button>
+                  </div>
+                  <div className="person-modal-content">
+                    {manageUserModalTab === "manage" ? (
+                      <>
+                        <div className="settings-chip-list">
+                          <label className="label">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) => setIsEnabled(e.target.checked)}
+                            />{" "}
+                            Google Access Enabled
+                          </label>
+                          <label className="label">
+                            <input
+                              type="checkbox"
+                              checked={localEnabled}
+                              onChange={(e) => setLocalEnabled(e.target.checked)}
+                            />{" "}
+                            Local Access Enabled
+                          </label>
+                        </div>
+
+                        <label className="label">Role</label>
+                        <select
+                          className="input"
+                          value={role}
+                          onChange={(e) => {
+                            const nextRole = e.target.value as "ADMIN" | "USER";
+                            setRole(nextRole);
+                            setLocalRole(nextRole);
+                            setInviteRole(nextRole);
+                          }}
+                        >
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+
+                        <h5 style={{ marginBottom: "0.5rem" }}>Google Access</h5>
+                        <label className="label">Google Email</label>
+                        <input
+                          className="input"
+                          value={userEmail}
+                          onChange={(e) => {
+                            const nextEmail = e.target.value;
+                            setUserEmail(nextEmail);
+                            setInviteEmail(nextEmail);
+                          }}
+                          placeholder="name@gmail.com"
+                        />
+
+                        <h5 style={{ marginBottom: "0.5rem", marginTop: "1rem" }}>Local Access</h5>
+                        <label className="label">Username</label>
+                        <input
+                          className="input"
+                          value={localUsername}
+                          onChange={(e) => {
+                            const nextUsername = e.target.value;
+                            setLocalUsername(nextUsername);
+                            setInviteLocalUsername(nextUsername);
+                          }}
+                          placeholder="local username"
+                        />
+                        <label className="label">Set / Change Password</label>
+                        <input
+                          className="input"
+                          type="password"
+                          value={localPassword}
+                          onChange={(e) => setLocalPassword(e.target.value)}
+                          placeholder="new password"
+                        />
+                        <div className="settings-chip-list">
+                          <button
+                            type="button"
+                            className="button tap-button"
+                            onClick={() =>
+                              void (async () => {
+                                setPersonId(selectedDirectoryPerson.personId);
+                                setLocalPersonId(selectedDirectoryPerson.personId);
+
+                                if (isEnabled) {
+                                  if (!userEmail.trim()) {
+                                    setAccessStatus("Google email is required when Google Access is enabled.");
+                                    return;
+                                  }
+                                  await upsertAccess();
+                                } else if (selectedPersonGoogleAccess.length > 0) {
+                                  const existing = selectedPersonGoogleAccess[0];
+                                  setUserEmail(existing.userEmail);
+                                  await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      userEmail: existing.userEmail,
+                                      role,
+                                      personId: selectedDirectoryPerson.personId,
+                                      isEnabled: false,
+                                    }),
+                                  });
+                                  await loadTenantAdminData(selectedTenantKey);
+                                }
+
+                                if (localEnabled) {
+                                  if (selectedPersonLocalUser) {
+                                    if (
+                                      localUsername.trim() &&
+                                      localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
+                                    ) {
+                                      const renamed = await patchLocalUser(selectedPersonLocalUser.username, {
+                                        action: "rename_username",
+                                        nextUsername: localUsername.trim(),
+                                      });
+                                      if (!renamed) return;
+                                    }
+                                    const activeUsername = (
+                                      localUsername.trim().toLowerCase() || selectedPersonLocalUser.username
+                                    ).trim();
+                                    if (activeUsername) {
+                                      const roleOk = await patchLocalUser(activeUsername, {
+                                        action: "update_role",
+                                        role,
+                                      });
+                                      if (!roleOk) return;
+                                      await patchLocalUser(activeUsername, {
+                                        action: "set_enabled",
+                                        isEnabled: true,
+                                      });
+                                    }
+                                  } else {
+                                    if (!localUsername.trim() || !localPassword.trim()) {
+                                      setLocalUserStatus(
+                                        "Local username and password are required when enabling Local Access for a new user.",
+                                      );
+                                      return;
+                                    }
+                                    await createLocalUser();
+                                  }
+                                } else if (selectedPersonLocalUser) {
+                                  await patchLocalUser(selectedPersonLocalUser.username, {
+                                    action: "set_enabled",
+                                    isEnabled: false,
+                                  });
+                                }
+
+                                setLocalUserStatus("User updated.");
+                                await loadTenantAdminData(selectedTenantKey);
+                                router.refresh();
+                              })()
+                            }
+                          >
+                            Update User
+                          </button>
+                          <button
+                            type="button"
+                            className="button tap-button"
+                            onClick={() =>
+                              void (async () => {
+                                if (!selectedPersonLocalUser) {
+                                  setLocalUserStatus("No local user exists to update password.");
+                                  return;
+                                }
+                                if (!localPassword.trim()) {
+                                  setLocalUserStatus("Enter a password first.");
+                                  return;
+                                }
+                                const ok = await patchLocalUser(selectedPersonLocalUser.username, {
+                                  action: "reset_password",
+                                  password: localPassword,
+                                });
+                                if (!ok) return;
+                                setLocalUserStatus("Password updated.");
+                                setLocalPassword("");
+                              })()
+                            }
+                          >
+                            Update Password
+                          </button>
+                        </div>
+
+                        <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
+                          <table className="settings-table">
+                            <thead>
+                              <tr><th>Failed Attempts</th><th>Locked</th><th>Locked Until</th><th>Current Local Username</th></tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td>{selectedPersonLocalUser ? selectedPersonLocalUser.failedAttempts : 0}</td>
+                                <td>{selectedPersonLocalUser?.lockedUntil ? "TRUE" : "FALSE"}</td>
+                                <td>{selectedPersonLocalUser?.lockedUntil || "-"}</td>
+                                <td>{selectedPersonLocalUser?.username || "-"}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="page-subtitle" style={{ marginTop: 0 }}>
+                          Create one shareable invite for {selectedDirectoryPerson.displayName}. The link can handle Google sign-in, local setup, or both, depending on the mode you choose.
+                        </p>
+                        <label className="label">Invite Email</label>
+                        <input
+                          className="input"
+                          type="email"
+                          autoComplete="off"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="name@example.com"
+                        />
+
+                        <label className="label">Sign-In Path</label>
+                        <select
+                          className="input"
+                          value={inviteAuthMode}
+                          onChange={(e) => setInviteAuthMode(e.target.value as "google" | "local" | "either")}
+                        >
+                          <option value="google">Google only</option>
+                          <option value="local">Local only</option>
+                          <option value="either">Google or Local</option>
+                        </select>
+
+                        <label className="label">Role</label>
+                        <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "ADMIN" | "USER")}>
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+
+                        <label className="label">Suggested Local Username</label>
+                        <input
+                          className="input"
+                          autoComplete="off"
+                          value={inviteLocalUsername}
+                          onChange={(e) => setInviteLocalUsername(e.target.value)}
+                          placeholder="optional username suggestion"
+                        />
+
+                        <label className="label">Expires In Days</label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={inviteExpiresInDays}
+                          onChange={(e) => setInviteExpiresInDays(Number.parseInt(e.target.value || "14", 10) || 14)}
+                        />
+
+                        <button type="button" className="button tap-button" onClick={createPersonInvite}>Create Invite</button>
+
+                        {inviteResult ? (
+                          <div className="card" style={{ marginTop: "0.75rem" }}>
+                            <h4 style={{ marginTop: 0 }}>Invite Ready</h4>
+                            <p className="page-subtitle" style={{ marginTop: 0 }}>
+                              Share the link directly, or copy the full message block for email or text.
+                            </p>
+                            <label className="label">Invite URL</label>
+                            <textarea className="input" rows={3} readOnly value={inviteResult.inviteUrl} />
+                            <div className="settings-chip-list">
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={() => void copyInviteValue(inviteResult.inviteUrl, "Invite URL")}
+                              >
+                                Copy Link
+                              </button>
+                            </div>
+                            <label className="label">Suggested Message</label>
+                            <textarea className="input" rows={9} readOnly value={inviteResult.inviteMessage} />
+                            <div className="settings-chip-list">
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={() => void copyInviteValue(inviteResult.inviteMessage, "Invite message")}
+                              >
+                                Copy Message
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : null}
 
           </>
@@ -2217,103 +2357,6 @@ export function SettingsClient({
               </table>
             </div>
             {familyAccessStatus ? <p>{familyAccessStatus}</p> : null}
-          </>
-        ) : null}
-
-        {userAdminSubTab === "invites" ? (
-          <>
-            <h3 style={{ marginTop: 0 }}>Invite Existing Person</h3>
-            <p className="page-subtitle" style={{ marginTop: 0 }}>
-              Create one shareable link for a person who already exists in this family group. The link handles Google sign-in or local username/password setup and includes install guidance.
-            </p>
-            <label className="label">Person</label>
-            <select className="input" value={invitePersonId} onChange={(e) => handleInvitePersonSelect(e.target.value)}>
-              <option value="">Select person</option>
-              {familyPeople.map((person) => (
-                <option key={person.personId} value={person.personId}>
-                  {person.displayName}
-                </option>
-              ))}
-            </select>
-
-            <label className="label">Invite Email</label>
-            <input
-              className="input"
-              type="email"
-              autoComplete="off"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="name@example.com"
-            />
-
-            <label className="label">Sign-In Path</label>
-            <select
-              className="input"
-              value={inviteAuthMode}
-              onChange={(e) => setInviteAuthMode(e.target.value as "google" | "local" | "either")}
-            >
-              <option value="google">Google only</option>
-              <option value="local">Local only</option>
-              <option value="either">Google or Local</option>
-            </select>
-
-            <label className="label">Role</label>
-            <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "ADMIN" | "USER")}>
-              <option value="USER">USER</option>
-              <option value="ADMIN">ADMIN</option>
-            </select>
-
-            <label className="label">Suggested Local Username</label>
-            <input
-              className="input"
-              autoComplete="off"
-              value={inviteLocalUsername}
-              onChange={(e) => setInviteLocalUsername(e.target.value)}
-              placeholder="optional username suggestion"
-            />
-
-            <label className="label">Expires In Days</label>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              max={60}
-              value={inviteExpiresInDays}
-              onChange={(e) => setInviteExpiresInDays(Number.parseInt(e.target.value || "14", 10) || 14)}
-            />
-
-            <button type="button" className="button tap-button" onClick={createPersonInvite}>Create Invite</button>
-
-            {inviteResult ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h4 style={{ marginTop: 0 }}>Invite Ready</h4>
-                <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  Share the link directly, or copy the full message block for email or text.
-                </p>
-                <label className="label">Invite URL</label>
-                <textarea className="input" rows={3} readOnly value={inviteResult.inviteUrl} />
-                <div className="settings-chip-list">
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => void copyInviteValue(inviteResult.inviteUrl, "Invite URL")}
-                  >
-                    Copy Link
-                  </button>
-                </div>
-                <label className="label">Suggested Message</label>
-                <textarea className="input" rows={9} readOnly value={inviteResult.inviteMessage} />
-                <div className="settings-chip-list">
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => void copyInviteValue(inviteResult.inviteMessage, "Invite message")}
-                  >
-                    Copy Message
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
 
