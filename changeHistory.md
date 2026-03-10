@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Added a person-bound invite flow with admin-generated shareable links, a public `/invite/[token]` onboarding page, Google/local acceptance paths, and install guidance. See `docs/change-summary.md`.
 - 2026-03-10: Removed the remaining deleted-backend files, scripts, doc references, and sheet-shaped `tab` naming from the OCI runtime seam so the repo is cleanly OCI-only. See `docs/change-summary.md`.
 - 2026-03-10: Finished the OCI person attribute/media cleanup by deleting the obsolete `person-legacy` adapter and dead legacy person-attribute compatibility exports after moving the last active routes onto canonical OCI attribute/media reads. See `docs/change-summary.md`.
 - 2026-03-10: Cleaned the active app onto an OCI-only runtime boundary by moving routes/pages/libs off direct legacy-adapter imports, removing runtime backend branches, and making `legacy runtime env var` optional outside historical tooling. See `docs/change-summary.md`.

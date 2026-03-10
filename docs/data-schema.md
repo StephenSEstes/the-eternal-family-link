@@ -164,6 +164,33 @@ This section is a quick reference for the three data areas that drive profile/me
 - Logical index/key:
   - Unique composite: (`user_email`, `family_group_key`)
 
+## Invites
+
+- Columns:
+  - `invite_id`
+  - `family_group_key`
+  - `person_id`
+  - `invite_email`
+  - `auth_mode`
+  - `role`
+  - `local_username`
+  - `family_groups_json`
+  - `status`
+  - `token_hash`
+  - `expires_at`
+  - `accepted_at`
+  - `accepted_by_email`
+  - `accepted_auth_mode`
+  - `created_at`
+  - `created_by_email`
+  - `created_by_person_id`
+- Purpose:
+  - Person-bound onboarding records used to generate shareable invite links, snapshot family-group access at invite time, and track acceptance for Google or local sign-in setup.
+- Logical index/key:
+  - Unique: `invite_id`
+  - Recommended unique: `token_hash`
+  - Common lookup: (`invite_email`, `status`), (`person_id`, `status`)
+
 ## FamilyConfig
 
 - Columns:
@@ -317,6 +344,11 @@ This section is a quick reference for the three data areas that drive profile/me
 - User directory/access by family:
   - `UserAccess.person_id` -> `PersonFamilyGroups.person_id` (membership context)
   - `UserFamilyGroups.user_email` + `family_group_key` for family-specific user access links
+- Invite acceptance:
+  - `Invites.person_id` -> `People.person_id`
+  - `Invites.family_groups_json[*].tenantKey` mirrors the family groups granted when the invite was created
+  - Accepted Google invites write/update `UserAccess` + `UserFamilyGroups`
+  - Accepted local invites write/update `UserAccess.username/password_hash/local_access` and ensure `UserFamilyGroups`
 - Relationships:
   - `Relationships.from_person_id` and `Relationships.to_person_id` -> `People.person_id`
   - Family views filter edges by membership of both endpoint people

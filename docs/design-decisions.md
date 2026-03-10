@@ -109,3 +109,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep legacy backend tooling for migration/debug only.
 - `Impact`: Active runtime now uses `src/lib/data/store.ts`, legacy backend env/config/routes/scripts are removed, and only Google Drive support remains under `src/lib/google/`.
 - `Follow-up`: Keep new code/docs free of legacy-backend naming and paths.
+
+- `Area`: User onboarding and invitations
+- `Decision`: Use person-bound invite records with a single invite URL as the onboarding path. Invite creation snapshots the person’s enabled family-group memberships, generates manual-share copy, pre-provisions Google access only when Google is allowed, and completes local credential setup from the invite page itself.
+- `Reason`: The app already treats `People`, `UserAccess`, and `UserFamilyGroups` as the canonical identity/access model. A person-bound invite flow avoids duplicate identity creation, keeps onboarding tied to an existing person, and supports both Google and local sign-in without introducing a second auth system.
+- `Alternatives Considered`: Email-only invites not bound to `person_id`; fully manual user provisioning without invite records; custom magic-link authentication.
+- `Impact`: Added an `Invites` table, admin invite generation in Settings, a public `/invite/[token]` acceptance path, and invite-time access snapshots for consistent acceptance behavior.
+- `Follow-up`: If outbound email is added later, send the existing invite URL/message from the same invite records instead of creating a parallel mail-only workflow.

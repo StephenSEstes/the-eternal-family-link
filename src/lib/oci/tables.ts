@@ -33,6 +33,7 @@ let poolPromise: Promise<OciPool> | null = null;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
+let invitesTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -247,6 +248,28 @@ const TABLES: Record<string, TableConfig> = {
       "details",
     ],
   },
+  Invites: {
+    tableName: "invites",
+    headers: [
+      "invite_id",
+      "family_group_key",
+      "person_id",
+      "invite_email",
+      "auth_mode",
+      "role",
+      "local_username",
+      "family_groups_json",
+      "status",
+      "token_hash",
+      "expires_at",
+      "accepted_at",
+      "accepted_by_email",
+      "accepted_auth_mode",
+      "created_at",
+      "created_by_email",
+      "created_by_person_id",
+    ],
+  },
 };
 
 export function listOciTables() {
@@ -329,7 +352,7 @@ function resolveIdColumn(headers: string[], idColumn?: string): string {
     const match = headers.find((h) => normalizeHeader(h) === normalizeHeader(idColumn));
     if (match) return match;
   }
-  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id"]) {
+  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id"]) {
     const match = headers.find((h) => normalizeHeader(h) === fallback);
     if (match) return match;
   }
@@ -462,6 +485,92 @@ async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
   householdsTableCompatEnsured = true;
 }
 
+async function ensureInvitesTableCompatibility(connection: OciConnection) {
+  if (invitesTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE invites (
+         invite_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128),
+         person_id VARCHAR2(128) NOT NULL,
+         invite_email VARCHAR2(320) NOT NULL,
+         auth_mode VARCHAR2(32) NOT NULL,
+         role VARCHAR2(32),
+         local_username VARCHAR2(256),
+         family_groups_json CLOB,
+         status VARCHAR2(32),
+         token_hash VARCHAR2(128) NOT NULL,
+         expires_at VARCHAR2(64),
+         accepted_at VARCHAR2(64),
+         accepted_by_email VARCHAR2(320),
+         accepted_auth_mode VARCHAR2(32),
+         created_at VARCHAR2(64),
+         created_by_email VARCHAR2(320),
+         created_by_person_id VARCHAR2(128)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_invites_token_hash ON invites(token_hash)`);
+    await connection.execute(`CREATE INDEX ix_invites_email_status ON invites(invite_email, status)`);
+    await connection.execute(`CREATE INDEX ix_invites_person_status ON invites(person_id, status)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "invite_email VARCHAR2(320)",
+    "auth_mode VARCHAR2(32)",
+    "role VARCHAR2(32)",
+    "local_username VARCHAR2(256)",
+    "family_groups_json CLOB",
+    "status VARCHAR2(32)",
+    "token_hash VARCHAR2(128)",
+    "expires_at VARCHAR2(64)",
+    "accepted_at VARCHAR2(64)",
+    "accepted_by_email VARCHAR2(320)",
+    "accepted_auth_mode VARCHAR2(32)",
+    "created_at VARCHAR2(64)",
+    "created_by_email VARCHAR2(320)",
+    "created_by_person_id VARCHAR2(128)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE invites ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_invites_token_hash ON invites(token_hash)",
+    "CREATE INDEX ix_invites_email_status ON invites(invite_email, status)",
+    "CREATE INDEX ix_invites_person_status ON invites(person_id, status)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+  await connection.commit();
+  invitesTableCompatEnsured = true;
+}
+
 export async function getOciTableRecords(tableName: string | string[]): Promise<TableRecord[]> {
   const { config } = resolveTable(tableName);
   const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
@@ -474,6 +583,9 @@ export async function getOciTableRecords(tableName: string | string[]): Promise<
     }
     if (config.tableName === "households") {
       await ensureHouseholdsTableCompatibility(connection);
+    }
+    if (config.tableName === "invites") {
+      await ensureInvitesTableCompatibility(connection);
     }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} ORDER BY ROWID`,
@@ -510,6 +622,9 @@ export async function getOciTableRecordById(
     if (config.tableName === "households") {
       await ensureHouseholdsTableCompatibility(connection);
     }
+    if (config.tableName === "invites") {
+      await ensureInvitesTableCompatibility(connection);
+    }
     const result = await connection.execute(
       `SELECT ${selectCols} FROM ${config.tableName} WHERE ${whereColumn} = :id FETCH FIRST 1 ROWS ONLY`,
       [recordId],
@@ -544,6 +659,9 @@ export async function createOciTableRecords(
     }
     if (config.tableName === "households") {
       await ensureHouseholdsTableCompatibility(connection);
+    }
+    if (config.tableName === "invites") {
+      await ensureInvitesTableCompatibility(connection);
     }
     const normalizedRows = payloads.map((payload) => normalizePayload(payload, config.headers));
     const binds = normalizedRows.map((row) => config.headers.map((h) => row[h] ?? ""));
@@ -580,6 +698,9 @@ export async function updateOciTableRecordById(
     }
     if (config.tableName === "households") {
       await ensureHouseholdsTableCompatibility(connection);
+    }
+    if (config.tableName === "invites") {
+      await ensureInvitesTableCompatibility(connection);
     }
     const update = await connection.execute(
       `UPDATE ${config.tableName} SET ${setClauses.join(", ")} WHERE ${whereColumn} = :id`,
@@ -912,6 +1033,87 @@ export async function upsertOciTenantAccess(input: {
           role,
           userEmail,
           googleAccess,
+        },
+        { autoCommit: false },
+      );
+    }
+
+    await connection.commit();
+    return action;
+  });
+}
+
+export async function upsertOciUserFamilyGroupAccess(input: {
+  userEmail: string;
+  tenantKey: string;
+  tenantName: string;
+  role: string;
+  personId: string;
+  isEnabled: boolean;
+}): Promise<"created" | "updated"> {
+  const userEmail = input.userEmail.trim().toLowerCase();
+  const tenantKey = input.tenantKey.trim().toLowerCase();
+  const tenantName = input.tenantName.trim();
+  const role = input.role.trim().toUpperCase() || "USER";
+  const personId = input.personId.trim();
+  const membershipEnabled = input.isEnabled ? "TRUE" : "FALSE";
+
+  if (!userEmail) {
+    throw new Error("user_email is required");
+  }
+  if (!tenantKey) {
+    throw new Error("family_group_key is required");
+  }
+  if (!personId) {
+    throw new Error("person_id is required");
+  }
+
+  return withConnection(async (connection) => {
+    const updated = await connection.execute(
+      `UPDATE user_family_groups
+       SET user_email = :userEmail,
+           family_group_name = :tenantName,
+           role = :role,
+           person_id = :personId,
+           is_enabled = :membershipEnabled
+       WHERE LOWER(TRIM(family_group_key)) = :tenantKey
+         AND TRIM(person_id) = :personId`,
+      {
+        userEmail,
+        tenantName,
+        role,
+        personId,
+        membershipEnabled,
+        tenantKey,
+      },
+      { autoCommit: false },
+    );
+
+    const action: "created" | "updated" = (updated.rowsAffected ?? 0) > 0 ? "updated" : "created";
+    if ((updated.rowsAffected ?? 0) === 0) {
+      await connection.execute(
+        `INSERT INTO user_family_groups (
+           user_email,
+           family_group_key,
+           family_group_name,
+           role,
+           person_id,
+           is_enabled
+         ) VALUES (
+           :userEmail,
+           :tenantKey,
+           :tenantName,
+           :role,
+           :personId,
+           :membershipEnabled
+         )`,
+        {
+          userEmail,
+          tenantKey,
+          tenantName,
+          role,
+          personId,
+          membershipEnabled,
         },
         { autoCommit: false },
       );

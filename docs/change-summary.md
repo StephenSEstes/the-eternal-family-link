@@ -13,6 +13,35 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (person-bound invite flow with manual-share onboarding)
+
+- `Change`: Added a person-bound invite system with OCI-backed invite records, admin invite generation in Settings, a public `/invite/[token]` onboarding page, Google/local acceptance paths, and install/open-app guidance on the invite page.
+- `Type`: UI, API, Schema
+- `Why`: Root cause was missing onboarding infrastructure. Existing access setup required admins to hand-create Google/local login rows, which made inviting an existing person into the app manual, inconsistent, and hard to distribute before outbound email was available.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/lib/invite/types.ts`
+  - `src/lib/invite/store.ts`
+  - `src/app/api/t/[tenantKey]/invites/route.ts`
+  - `src/app/api/invite/[token]/route.ts`
+  - `src/app/invite/[token]/page.tsx`
+  - `src/components/InviteAcceptClient.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `oci-schema.sql`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Adds OCI `invites` table (`invite_id`, `person_id`, `invite_email`, `auth_mode`, `family_groups_json`, `token_hash`, acceptance timestamps/identity fields). Google/either invites provision `UserAccess`/`UserFamilyGroups` for the invited email at invite creation; local setup is completed from the invite page.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Admin > Users & Access > Invites creates a shareable link/message for a person already in the selected family group.
+  - Opening the invite link shows Google and/or local setup according to the invite auth mode.
+  - Google invite acceptance returns to the same invite page and marks the invite accepted.
+  - Local invite acceptance creates credentials, signs the user in, and returns to the invite page with install/open-app actions.
+- `Rollback Notes`: Revert this change and redeploy. Existing invite rows can remain unused or be deleted after rollback.
+- `Design Decision Change`: Added 2026-03-10 decision for person-bound invite onboarding.
+
 ## 2026-03-10 (OCI-only repo cleanup)
 
 - `Change`: Removed the remaining legacy-backend files, routes, scripts, and documentation references from the repo; renamed the OCI data seam from `tab` terminology to `table` terminology; and deleted the last no-op compatibility helper.

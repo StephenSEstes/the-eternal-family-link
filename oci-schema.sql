@@ -134,6 +134,37 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE invites (
+      invite_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR),
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      invite_email VARCHAR2(320 CHAR) NOT NULL,
+      auth_mode VARCHAR2(32 CHAR) NOT NULL,
+      role VARCHAR2(32 CHAR),
+      local_username VARCHAR2(256 CHAR),
+      family_groups_json CLOB,
+      status VARCHAR2(32 CHAR),
+      token_hash VARCHAR2(128 CHAR) NOT NULL,
+      expires_at VARCHAR2(64 CHAR),
+      accepted_at VARCHAR2(64 CHAR),
+      accepted_by_email VARCHAR2(320 CHAR),
+      accepted_auth_mode VARCHAR2(32 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      created_by_email VARCHAR2(320 CHAR),
+      created_by_person_id VARCHAR2(128 CHAR),
+      CONSTRAINT pk_invites PRIMARY KEY (invite_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE family_config (
       family_group_key VARCHAR2(128 CHAR) NOT NULL,
       family_group_name VARCHAR2(512 CHAR),
@@ -449,6 +480,36 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_user_access_username ON user_access (username)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_invites_token_hash ON invites (token_hash)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_invites_email_status ON invites (invite_email, status)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_invites_person_status ON invites (person_id, status)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

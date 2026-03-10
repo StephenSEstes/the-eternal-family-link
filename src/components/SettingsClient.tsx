@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
+import type { InvitePresentation } from "@/lib/invite/types";
 
 type AccessItem = {
   userEmail: string;
@@ -156,9 +157,15 @@ type CreateFamilyResponse = {
 };
 
 type SettingsTab = "family_groups" | "user_admin" | "integrity" | "import" | "attribute_definitions";
-type UserAdminSubTab = "directory" | "family_access" | "password_policy";
+type UserAdminSubTab = "directory" | "family_access" | "password_policy" | "invites";
 type FamilyGroupsSubTab = "overview" | "create_group";
 type ImportSubTab = "target" | "csv";
+
+type InviteCreationResult = {
+  invite: InvitePresentation;
+  inviteUrl: string;
+  inviteMessage: string;
+};
 
 type FamilyAccessRow = {
   personId: string;
@@ -241,6 +248,15 @@ function buildFullName(firstName: string, middleName: string, lastName: string) 
 function titleCaseWord(value: string) {
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function suggestInviteUsername(displayName: string) {
+  const normalized = displayName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 80);
+  return normalized.length >= 3 ? normalized : "";
 }
 
 export function SettingsClient({
@@ -330,6 +346,14 @@ export function SettingsClient({
   const [localEnabled, setLocalEnabled] = useState(true);
   const [selectedLocalUsername, setSelectedLocalUsername] = useState("");
   const [userAdminSubTab, setUserAdminSubTab] = useState<UserAdminSubTab>("directory");
+  const [invitePersonId, setInvitePersonId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("google");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "USER">("USER");
+  const [inviteLocalUsername, setInviteLocalUsername] = useState("");
+  const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14);
+  const [inviteStatus, setInviteStatus] = useState("");
+  const [inviteResult, setInviteResult] = useState<InviteCreationResult | null>(null);
   const [familyGroupsSubTab, setFamilyGroupsSubTab] = useState<FamilyGroupsSubTab>("overview");
   const [importSubTab, setImportSubTab] = useState<ImportSubTab>("target");
   const [selectedDirectoryPersonId, setSelectedDirectoryPersonId] = useState("");
@@ -1369,6 +1393,17 @@ export function SettingsClient({
       setSelectedLocalUsername("");
     }
   }, [localUsers, selectedLocalUsername]);
+
+  useEffect(() => {
+    if (!invitePersonId) {
+      return;
+    }
+    if (!familyPeople.some((person) => person.personId === invitePersonId)) {
+      setInvitePersonId("");
+      setInviteLocalUsername("");
+    }
+  }, [familyPeople, invitePersonId]);
+
   const googleAccessByPersonId = useMemo(() => {
     const map = new Map<string, AccessItem[]>();
     for (const item of visibleAccessItems) {
@@ -1448,6 +1483,59 @@ export function SettingsClient({
 
     setLocalUsername(selected.displayName.trim());
     setUserEmail("");
+  };
+
+  const handleInvitePersonSelect = (nextPersonId: string) => {
+    setInvitePersonId(nextPersonId);
+    const selected = familyPeople.find((person) => person.personId === nextPersonId);
+    setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
+  };
+
+  const copyInviteValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setInviteStatus(`${label} copied.`);
+    } catch {
+      setInviteStatus(`${label} could not be copied. Copy it manually below.`);
+    }
+  };
+
+  const createPersonInvite = async () => {
+    if (!invitePersonId) {
+      setInviteStatus("Select a person before creating an invite.");
+      return;
+    }
+    if (!inviteEmail.trim()) {
+      setInviteStatus("Enter an email address for the invite.");
+      return;
+    }
+
+    setInviteStatus("Creating invite...");
+    setInviteResult(null);
+    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personId: invitePersonId,
+        inviteEmail,
+        authMode: inviteAuthMode,
+        role: inviteRole,
+        localUsername: inviteLocalUsername,
+        expiresInDays: inviteExpiresInDays,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) {
+      setInviteStatus(body?.message ? String(body.message) : `Invite creation failed (${res.status}).`);
+      return;
+    }
+
+    setInviteResult({
+      invite: body.invite as InvitePresentation,
+      inviteUrl: String(body.inviteUrl ?? ""),
+      inviteMessage: String(body.inviteMessage ?? ""),
+    });
+    setInviteStatus("Invite ready to copy and send.");
   };
 
   const selectDirectoryPerson = (nextPersonId: string) => {
@@ -1771,6 +1859,16 @@ export function SettingsClient({
             }}
           >
             Password Policy
+          </button>
+          <button
+            type="button"
+            className={`settings-subtab ${userAdminSubTab === "invites" ? "active" : ""}`}
+            onClick={() => {
+              setUserAdminSubTab("invites");
+              setShowAddUserForm(false);
+            }}
+          >
+            Invites
           </button>
         </div>
 
@@ -2122,6 +2220,103 @@ export function SettingsClient({
           </>
         ) : null}
 
+        {userAdminSubTab === "invites" ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>Invite Existing Person</h3>
+            <p className="page-subtitle" style={{ marginTop: 0 }}>
+              Create one shareable link for a person who already exists in this family group. The link handles Google sign-in or local username/password setup and includes install guidance.
+            </p>
+            <label className="label">Person</label>
+            <select className="input" value={invitePersonId} onChange={(e) => handleInvitePersonSelect(e.target.value)}>
+              <option value="">Select person</option>
+              {familyPeople.map((person) => (
+                <option key={person.personId} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+
+            <label className="label">Invite Email</label>
+            <input
+              className="input"
+              type="email"
+              autoComplete="off"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="name@example.com"
+            />
+
+            <label className="label">Sign-In Path</label>
+            <select
+              className="input"
+              value={inviteAuthMode}
+              onChange={(e) => setInviteAuthMode(e.target.value as "google" | "local" | "either")}
+            >
+              <option value="google">Google only</option>
+              <option value="local">Local only</option>
+              <option value="either">Google or Local</option>
+            </select>
+
+            <label className="label">Role</label>
+            <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "ADMIN" | "USER")}>
+              <option value="USER">USER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+
+            <label className="label">Suggested Local Username</label>
+            <input
+              className="input"
+              autoComplete="off"
+              value={inviteLocalUsername}
+              onChange={(e) => setInviteLocalUsername(e.target.value)}
+              placeholder="optional username suggestion"
+            />
+
+            <label className="label">Expires In Days</label>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={60}
+              value={inviteExpiresInDays}
+              onChange={(e) => setInviteExpiresInDays(Number.parseInt(e.target.value || "14", 10) || 14)}
+            />
+
+            <button type="button" className="button tap-button" onClick={createPersonInvite}>Create Invite</button>
+
+            {inviteResult ? (
+              <div className="card" style={{ marginTop: "0.75rem" }}>
+                <h4 style={{ marginTop: 0 }}>Invite Ready</h4>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Share the link directly, or copy the full message block for email or text.
+                </p>
+                <label className="label">Invite URL</label>
+                <textarea className="input" rows={3} readOnly value={inviteResult.inviteUrl} />
+                <div className="settings-chip-list">
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => void copyInviteValue(inviteResult.inviteUrl, "Invite URL")}
+                  >
+                    Copy Link
+                  </button>
+                </div>
+                <label className="label">Suggested Message</label>
+                <textarea className="input" rows={9} readOnly value={inviteResult.inviteMessage} />
+                <div className="settings-chip-list">
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => void copyInviteValue(inviteResult.inviteMessage, "Invite message")}
+                  >
+                    Copy Message
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
         {userAdminSubTab === "password_policy" ? (
           <>
             <h3 style={{ marginTop: 0 }}>Local Password Policy</h3>
@@ -2153,6 +2348,7 @@ export function SettingsClient({
         {adminLoadStatus ? <p className="status-warn">{adminLoadStatus}</p> : null}
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
+        {inviteStatus ? <p>{inviteStatus}</p> : null}
         </section>
       ) : null}
 
