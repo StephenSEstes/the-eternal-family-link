@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (media wizard UX refinement + video/audio support)
+
+- `Change`: Refined the shared media attach wizard so source selection uses direct icon cards, replaced the ambiguous raw file input with explicit picker actions, and extended the shared attach flow from image-only to support video and audio alongside photos.
+- `Type`: UI, API
+- `Why`: Root cause was that the wizard still reflected an image-only MVP. The first step relied on generic tab buttons plus a separate `Continue`, the select step relied on the browser's default file input chrome (`Choose Files / No file chosen`), and the shared attach pipeline hard-filtered uploads and library results down to images even though the upload routes and media library already understood video/audio.
+- `Files`:
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/lib/media/attach-contracts.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Wizard source step shows direct icon cards for `Device Files`, `Camera`, and `Media Library`.
+  - Device-file selection uses explicit CTA buttons instead of the browser's default `Choose Files` control.
+  - Person, household, attribute, and library wizard flows accept photos, videos, and audio where supported by the selected source.
+  - Selected-item previews and library labels correctly distinguish image, video, and audio items.
+  - Local `npm run build -- --no-lint` still fails only on the pre-existing Windows `spawn EPERM` environment issue.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (manage-user modal invite tab)
 
 - `Change`: Moved person-specific invite creation into the `Manage User` flow by replacing the inline user-directory expansion with a modal that has `Manage User` and `Invite` tabs, and removed the standalone `Invites` subtab from `Users & Access`.

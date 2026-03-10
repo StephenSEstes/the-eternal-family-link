@@ -1,4 +1,5 @@
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { normalizeMediaKind, type MediaKind } from "@/lib/media/upload";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import {
   type HouseholdLinkInput,
@@ -59,6 +60,7 @@ export type MediaAttachDraftItem = {
   source: "device_upload" | "camera_capture" | "library_existing";
   file?: File;
   fileId?: string;
+  mediaKind?: "image" | "video" | "audio";
   previewUrl?: string;
   existingMediaMetadata?: string;
   duplicateOfFileId?: string;
@@ -71,7 +73,7 @@ export type MediaAttachDraftItem = {
   notes: string;
   personIds: string[];
   householdIds: string[];
-  attributeType?: "photo" | "media";
+  attributeType?: "photo" | "video" | "audio" | "media";
 };
 
 export type MediaAttachSharedMetadata = {
@@ -117,6 +119,20 @@ function norm(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+type SupportedMediaKind = Exclude<MediaKind, "unknown">;
+
+function inferUploadMediaKind(file: Pick<File, "name" | "type">): SupportedMediaKind | "" {
+  const byMime = normalizeMediaKind(file.type);
+  if (byMime !== "unknown") {
+    return byMime;
+  }
+  const lower = file.name.toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(lower)) return "image";
+  if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return "video";
+  if (/\.(mp3|m4a|wav|ogg|aac|flac)$/.test(lower)) return "audio";
+  return "";
+}
+
 function mediaTabShareDefaults(context: MediaAttachContext) {
   if (context.source === "library") {
     return {
@@ -130,29 +146,32 @@ function mediaTabShareDefaults(context: MediaAttachContext) {
   };
 }
 
-function inferImageByMetadataOrFileId(fileId: string, mediaMetadata?: string) {
+export function inferMediaKindByMetadataOrFileId(fileId: string, mediaMetadata?: string): SupportedMediaKind {
   const raw = (mediaMetadata ?? "").trim();
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as { mediaKind?: string; mimeType?: string };
       const mediaKind = norm(parsed.mediaKind);
-      if (mediaKind) return mediaKind === "image";
+      if (mediaKind === "image" || mediaKind === "video" || mediaKind === "audio") {
+        return mediaKind;
+      }
       const mimeType = norm(parsed.mimeType);
-      if (mimeType) return mimeType.startsWith("image/");
+      if (mimeType.startsWith("video/")) return "video";
+      if (mimeType.startsWith("audio/")) return "audio";
+      if (mimeType.startsWith("image/")) return "image";
     } catch {
       // Ignore malformed metadata.
     }
   }
   const lower = fileId.toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(lower)) return true;
-  if (/\.(mp4|mov|webm|mp3|m4a|wav|ogg)$/.test(lower)) return false;
-  return true;
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(lower)) return "image";
+  if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return "video";
+  if (/\.(mp3|m4a|wav|ogg|aac|flac)$/.test(lower)) return "audio";
+  return "image";
 }
 
-export async function readImageFileMetadata(file: File): Promise<{ width?: number; height?: number; mimeType: string }> {
-  const result: { width?: number; height?: number; mimeType: string } = {
-    mimeType: file.type || "application/octet-stream",
-  };
+async function readImageDimensions(file: File): Promise<{ width?: number; height?: number }> {
+  const result: { width?: number; height?: number } = {};
   await new Promise<void>((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -171,12 +190,59 @@ export async function readImageFileMetadata(file: File): Promise<{ width?: numbe
   return result;
 }
 
-function buildClientImageMetadata(file: File, meta: { width?: number; height?: number; mimeType: string }) {
+async function readTimedMediaMetadata(file: File, mediaKind: "video" | "audio"): Promise<{ width?: number; height?: number; durationSec?: number }> {
+  const result: { width?: number; height?: number; durationSec?: number } = {};
+  await new Promise<void>((resolve) => {
+    const url = URL.createObjectURL(file);
+    const element = document.createElement(mediaKind);
+    element.preload = "metadata";
+    const finish = () => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    element.onloadedmetadata = () => {
+      result.durationSec = Number.isFinite(element.duration) ? element.duration : undefined;
+      if (mediaKind === "video") {
+        const video = element as HTMLVideoElement;
+        result.width = video.videoWidth || undefined;
+        result.height = video.videoHeight || undefined;
+      }
+      finish();
+    };
+    element.onerror = finish;
+    element.src = url;
+    element.load();
+  });
+  return result;
+}
+
+export async function readClientMediaFileMetadata(file: File): Promise<{
+  mediaKind: SupportedMediaKind;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  durationSec?: number;
+}> {
+  const mediaKind = inferUploadMediaKind(file) || "image";
+  const mimeType = file.type || "application/octet-stream";
+  if (mediaKind === "image") {
+    const dimensions = await readImageDimensions(file);
+    return { mediaKind, mimeType, ...dimensions };
+  }
+  const timed = await readTimedMediaMetadata(file, mediaKind);
+  return { mediaKind, mimeType, ...timed };
+}
+
+function buildClientMediaMetadata(
+  file: File,
+  meta: { mediaKind: SupportedMediaKind; width?: number; height?: number; durationSec?: number; mimeType: string },
+) {
   return JSON.stringify({
-    mediaKind: "image",
+    mediaKind: meta.mediaKind,
     mimeType: meta.mimeType,
     width: meta.width,
     height: meta.height,
+    durationSec: meta.durationSec,
     fileSizeBytes: Number.isFinite(file.size) ? file.size : undefined,
     originalFileName: file.name || undefined,
   });
@@ -196,7 +262,8 @@ async function uploadToPerson(input: {
   title: string;
   description: string;
   date: string;
-  attributeType: "photo" | "media";
+  attributeType: "photo" | "video" | "audio" | "media";
+  captureSource?: string;
 }) {
   const contract = buildPersonUploadContractFields({
     label: input.title,
@@ -205,7 +272,7 @@ async function uploadToPerson(input: {
     attributeType: input.attributeType,
     isHeadshot: false,
   });
-  const mediaMeta = await readImageFileMetadata(input.file);
+  const mediaMeta = await readClientMediaFileMetadata(input.file);
   const form = new FormData();
   form.append("file", input.file);
   form.append("label", contract.label);
@@ -221,18 +288,20 @@ async function uploadToPerson(input: {
   }
   if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
   if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
+  if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
+  if (input.captureSource) form.append("captureSource", input.captureSource);
   if (input.file.lastModified) form.append("fileCreatedAt", new Date(input.file.lastModified).toISOString());
   const res = await fetch(
     `/api/t/${encodeURIComponent(input.context.tenantKey)}/people/${encodeURIComponent(input.personId)}/photos/upload`,
     { method: "POST", body: form },
   );
-  await assertOk(res, "Failed to upload image to person");
+  await assertOk(res, "Failed to upload media to person");
   const body = (await res.json().catch(() => null)) as { fileId?: string } | null;
   const fileId = String(body?.fileId ?? "").trim();
   if (!fileId) {
     throw new Error("Upload completed but no file ID was returned.");
   }
-  return { fileId, mediaMetadata: buildClientImageMetadata(input.file, mediaMeta) };
+  return { fileId, mediaMetadata: buildClientMediaMetadata(input.file, mediaMeta) };
 }
 
 async function uploadToHousehold(input: {
@@ -242,6 +311,7 @@ async function uploadToHousehold(input: {
   title: string;
   description: string;
   date: string;
+  captureSource?: string;
 }) {
   const contract = buildHouseholdUploadContractFields({
     name: input.title,
@@ -249,7 +319,7 @@ async function uploadToHousehold(input: {
     photoDate: input.date,
     isPrimary: false,
   });
-  const mediaMeta = await readImageFileMetadata(input.file);
+  const mediaMeta = await readClientMediaFileMetadata(input.file);
   const form = new FormData();
   form.append("file", input.file);
   form.append("name", contract.name);
@@ -261,18 +331,20 @@ async function uploadToHousehold(input: {
   }
   if (typeof mediaMeta.width === "number") form.append("mediaWidth", String(Math.round(mediaMeta.width)));
   if (typeof mediaMeta.height === "number") form.append("mediaHeight", String(Math.round(mediaMeta.height)));
+  if (typeof mediaMeta.durationSec === "number") form.append("mediaDurationSec", String(mediaMeta.durationSec));
+  if (input.captureSource) form.append("captureSource", input.captureSource);
   if (input.file.lastModified) form.append("fileCreatedAt", new Date(input.file.lastModified).toISOString());
   const res = await fetch(
     `/api/t/${encodeURIComponent(input.context.tenantKey)}/households/${encodeURIComponent(input.householdId)}/photos/upload`,
     { method: "POST", body: form },
   );
-  await assertOk(res, "Failed to upload image to household");
+  await assertOk(res, "Failed to upload media to household");
   const body = (await res.json().catch(() => null)) as { fileId?: string } | null;
   const fileId = String(body?.fileId ?? "").trim();
   if (!fileId) {
     throw new Error("Upload completed but no file ID was returned.");
   }
-  return { fileId, mediaMetadata: buildClientImageMetadata(input.file, mediaMeta) };
+  return { fileId, mediaMetadata: buildClientMediaMetadata(input.file, mediaMeta) };
 }
 
 async function linkToPerson(input: {
@@ -283,7 +355,7 @@ async function linkToPerson(input: {
   title: string;
   description: string;
   date: string;
-  attributeType: "photo" | "media";
+  attributeType: "photo" | "video" | "audio" | "media";
 }) {
   const payload = buildPersonAttributeLinkPayload({
     attributeType: input.attributeType,
@@ -302,7 +374,7 @@ async function linkToPerson(input: {
       body: JSON.stringify(payload),
     },
   );
-  await assertOk(res, `Failed to link image to person ${input.personId}`);
+  await assertOk(res, `Failed to link media to person ${input.personId}`);
 }
 
 async function linkToHousehold(input: {
@@ -329,7 +401,7 @@ async function linkToHousehold(input: {
       body: JSON.stringify(payload),
     },
   );
-  await assertOk(res, `Failed to link image to household ${input.householdId}`);
+  await assertOk(res, `Failed to link media to household ${input.householdId}`);
   const body = (await res.json().catch(() => null)) as { existing?: boolean } | null;
   return { existing: Boolean(body?.existing) };
 }
@@ -382,13 +454,13 @@ function applySharedAndContextDefaults(
   shared: MediaAttachSharedMetadata,
 ) {
   const shouldApplyShared = shared.sameMemorySet;
-  const title = (shouldApplyShared ? shared.title : item.title).trim() || context.defaultLabel?.trim() || "photo";
+  const title = (shouldApplyShared ? shared.title : item.title).trim() || context.defaultLabel?.trim() || "media";
   const description = (shouldApplyShared ? shared.description : item.description).trim() || context.defaultDescription?.trim() || "";
   const date = (shouldApplyShared ? shared.date : item.date).trim() || context.defaultDate?.trim() || "";
   return { title, description, date };
 }
 
-export async function searchImageLibrary(input: {
+export async function searchMediaLibrary(input: {
   tenantKey: string;
   query: string;
   limit?: number;
@@ -399,13 +471,13 @@ export async function searchImageLibrary(input: {
     `/api/t/${encodeURIComponent(input.tenantKey)}/photos/search?q=${encodeURIComponent(query)}&limit=${limit}&includeDrive=1`,
     { cache: "no-store" },
   );
-  await assertOk(res, "Failed to search image library");
+  await assertOk(res, "Failed to search media library");
   const body = (await res.json().catch(() => null)) as { items?: MediaAttachLibraryItem[] } | null;
   const items = Array.isArray(body?.items) ? body.items : [];
-  return items.filter((item) => inferImageByMetadataOrFileId(item.fileId, item.mediaMetadata));
+  return items;
 }
 
-export function toImagePreviewSrc(tenantKey: string, fileId: string) {
+export function toMediaPreviewSrc(tenantKey: string, fileId: string) {
   return getPhotoProxyPath(fileId, tenantKey);
 }
 
@@ -458,11 +530,13 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
           input.onItemStatus?.(item.clientId, "failed", "No file selected for upload.");
           continue;
         }
-        if (!item.file.type.startsWith("image/")) {
-          summary.failures.push({ clientId: item.clientId, message: "Only image uploads are supported in MVP.", targetType: "upload" });
-          input.onItemStatus?.(item.clientId, "failed", "Only image uploads are supported in MVP.");
+        const uploadMediaKind = inferUploadMediaKind(item.file);
+        if (!uploadMediaKind) {
+          summary.failures.push({ clientId: item.clientId, message: "Unsupported media type. Use image, video, or audio files.", targetType: "upload" });
+          input.onItemStatus?.(item.clientId, "failed", "Unsupported media type.");
           continue;
         }
+        const captureSource = item.source === "camera_capture" ? "camera" : item.source === "device_upload" ? "device_upload" : "";
         if (personIds.length > 0) {
           uploadedViaPersonId = personIds[0];
           uploadedViaPerson = true;
@@ -474,6 +548,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
             description,
             date,
             attributeType,
+            captureSource,
           });
           fileId = uploaded.fileId;
           mediaMetadata = uploaded.mediaMetadata;
@@ -489,6 +564,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
             title,
             description,
             date,
+            captureSource,
           });
           fileId = uploaded.fileId;
           mediaMetadata = uploaded.mediaMetadata;

@@ -36,14 +36,14 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-03-30
   Desc: Implement primary attribute flags and UI behavior for phone, email, and address so one value can be designated as primary per type.
-- [ ] Develop user invitation flow with launch icon support
-  Priority: Med
-  Est date: 2026-04-05
-  Desc: Add invitation workflow (email-based) and support install/launch icon guidance for invited users.
 - [ ] Evaluate value/necessity of Viewer PIN function
   Priority: Med
   Est date: 2026-04-06
   Desc: Review whether Viewer PIN unlock is needed for this product phase, including UX complexity, security value, and whether to keep, simplify, or remove.
+- [ ] Add Android share-to-app media import flow
+  Priority: Med
+  Est date: 2026-04-08
+  Desc: Add Android PWA share-target support so images/videos shared from phone apps can open the app and route into the shared media attach flow. Keep iPhone on the in-app camera/upload path because iOS web apps do not support share-target onboarding the same way.
 
 ## Backlog
 - [ ] Define current top 3 development priorities
@@ -72,3 +72,4 @@ I will update this list as we add, complete, or remove work.
 - [x] Develop delete family workflow
 - [x] Develop delete household workflow (Untested)
 - [x] Multi-photo uploads in photo flow
+- [x] Develop user invitation flow with launch icon support

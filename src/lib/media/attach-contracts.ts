@@ -2,7 +2,7 @@ export type PersonUploadContractInput = {
   label: string;
   description: string;
   photoDate: string;
-  attributeType: "photo" | "media";
+  attributeType: "photo" | "video" | "audio" | "media";
   isHeadshot: boolean;
 };
 
@@ -14,7 +14,7 @@ export type HouseholdUploadContractInput = {
 };
 
 export type PersonAttributeLinkInput = {
-  attributeType: "photo" | "media";
+  attributeType: "photo" | "video" | "audio" | "media";
   valueText: string;
   valueJson: string;
   label: string;

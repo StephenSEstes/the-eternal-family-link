@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Refined the shared media attach wizard with direct icon-based source selection, explicit picker buttons, and shared photo/video/audio support instead of the old image-only flow. See `docs/change-summary.md`.
 - 2026-03-10: Moved invite creation into a person-level `Manage User` modal with `Manage User` and `Invite` tabs, replacing the inline directory expansion and removing the standalone invite subtab. See `docs/change-summary.md`.
 - 2026-03-10: Added a person-bound invite flow with admin-generated shareable links, a public `/invite/[token]` onboarding page, Google/local acceptance paths, and install guidance. See `docs/change-summary.md`.
 - 2026-03-10: Removed the remaining deleted-backend files, scripts, doc references, and sheet-shaped `tab` naming from the OCI runtime seam so the repo is cleanly OCI-only. See `docs/change-summary.md`.

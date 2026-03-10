@@ -8,13 +8,15 @@ import {
   type MediaAttachHouseholdOption,
   type MediaAttachLibraryItem,
   type MediaAttachPersonOption,
+  inferMediaKindByMetadataOrFileId,
   runMediaAttachPlan,
-  searchImageLibrary,
-  toImagePreviewSrc,
+  searchMediaLibrary,
+  toMediaPreviewSrc,
 } from "@/lib/media/attach-orchestrator";
 
 type WizardStep = "source" | "select" | "grouping" | "shared" | "per_item" | "review";
 type SourceChoice = "device_upload" | "camera_capture" | "library_existing";
+type DisplayMediaKind = "image" | "video" | "audio";
 type LinkedSearchResult =
   | { kind: "person"; key: string; displayName: string; personId: string; gender: "male" | "female" | "unspecified" }
   | { kind: "household"; key: string; displayName: string; householdId: string };
@@ -36,6 +38,57 @@ function formatSummary(summary: MediaAttachExecutionSummary) {
     `skipped=${summary.skipped}`,
     `failures=${failureCount}`,
   ].join(" | ");
+}
+
+function PhotoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M5 7h3l1.3-2h5.4L16 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M5 7h3l1.3-2h5.4L16 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm7 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.2-1.8h5.6L16 6h1.5A2.5 2.5 0 0 1 20 8.5v7A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5z" fill="currentColor" opacity="0.18" />
+      <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.2-1.8h5.6L16 6h1.5A2.5 2.5 0 0 1 20 8.5v7A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5zm8 6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LibraryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v11A2.5 2.5 0 0 1 16.5 20h-9A2.5 2.5 0 0 1 5 17.5z" fill="currentColor" opacity="0.18" />
+      <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v11A2.5 2.5 0 0 1 16.5 20h-9A2.5 2.5 0 0 1 5 17.5zm3.5 3.5h7m-7 3h7m-7 3h4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function UploadArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path d="M12 4v11m0-11 4 4m-4-4-4 4M5 18.5h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function inferDraftMediaKind(item: Pick<MediaAttachDraftItem, "mediaKind" | "file" | "fileId" | "existingMediaMetadata">): DisplayMediaKind {
+  if (item.mediaKind) {
+    return item.mediaKind;
+  }
+  if (item.file?.type?.startsWith("video/")) return "video";
+  if (item.file?.type?.startsWith("audio/")) return "audio";
+  if (item.file?.type?.startsWith("image/")) return "image";
+  return inferMediaKindByMetadataOrFileId(item.fileId ?? "", item.existingMediaMetadata);
+}
+
+function mediaLabel(kind: DisplayMediaKind) {
+  if (kind === "video") return "video";
+  if (kind === "audio") return "audio";
+  return "photo";
 }
 
 function validateDraftItem(context: MediaAttachContext, item: MediaAttachDraftItem) {
@@ -99,6 +152,8 @@ export function MediaAttachWizard({
   const previewUrlsRef = useRef<Set<string>>(new Set());
   const duplicateCatalogRef = useRef<Map<string, MediaAttachLibraryItem> | null>(null);
   const fileHashCacheRef = useRef<Map<string, string>>(new Map());
+  const devicePickerRef = useRef<HTMLInputElement | null>(null);
+  const cameraPickerRef = useRef<HTMLInputElement | null>(null);
 
   const selectedItem = items[perItemIndex] ?? null;
   const availableSources: SourceChoice[] =
@@ -206,6 +261,44 @@ export function MediaAttachWizard({
 
   if (!open) return null;
 
+  const openSourcePicker = (choice: SourceChoice) => {
+    setSourceChoice(choice);
+    setStatus("");
+    setStep("select");
+  };
+
+  const triggerDevicePicker = () => devicePickerRef.current?.click();
+  const triggerCameraPicker = () => cameraPickerRef.current?.click();
+
+  const renderMediaPreview = (
+    kind: DisplayMediaKind,
+    src: string,
+    alt: string,
+    options?: { maxHeight?: string; cover?: boolean; compact?: boolean },
+  ) => {
+    const maxHeight = options?.maxHeight ?? "220px";
+    const cover = options?.cover ?? false;
+    if (options?.compact && kind !== "image") {
+      return (
+        <div style={{ display: "grid", placeItems: "center", minHeight: "72px", borderRadius: "10px", background: "#f3f4f6", color: "#334155", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {kind}
+        </div>
+      );
+    }
+    if (kind === "video") {
+      return <video src={src} controls playsInline muted={options?.compact} style={{ width: "100%", maxHeight, borderRadius: "10px", objectFit: cover ? "cover" : "contain", background: "#f3f4f6" }} />;
+    }
+    if (kind === "audio") {
+      return (
+        <div style={{ display: "grid", gap: "0.5rem", padding: "0.9rem", borderRadius: "10px", background: "#f3f4f6", minHeight: options?.compact ? "72px" : "120px", alignContent: "center" }}>
+          <strong style={{ fontSize: options?.compact ? "0.85rem" : "0.95rem" }}>Audio Preview</strong>
+          <audio src={src} controls style={{ width: "100%" }} />
+        </div>
+      );
+    }
+    return <img src={src} alt={alt} style={{ width: "100%", maxHeight, objectFit: cover ? "cover" : "contain", background: "#f3f4f6", borderRadius: "10px" }} />;
+  };
+
   const parseMediaMetadata = (raw?: string) => {
     const text = (raw ?? "").trim();
     if (!text) return null;
@@ -263,7 +356,7 @@ export function MediaAttachWizard({
 
   const loadDuplicateCatalog = async () => {
     if (duplicateCatalogRef.current) return duplicateCatalogRef.current;
-    const catalog = await searchImageLibrary({
+    const catalog = await searchMediaLibrary({
       tenantKey: context.tenantKey,
       query: "",
       limit: 5000,
@@ -325,9 +418,12 @@ export function MediaAttachWizard({
 
   const appendFiles = async (files: FileList | null, source: SourceChoice) => {
     if (!files || files.length === 0) return;
-    const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const incoming = Array.from(files).filter((file) => {
+      const type = file.type.toLowerCase();
+      return type.startsWith("image/") || type.startsWith("video/") || type.startsWith("audio/");
+    });
     if (incoming.length === 0) {
-      setStatus("Only image files are supported in this MVP.");
+      setStatus("Select image, video, or audio files to continue.");
       return;
     }
     const shouldScanDuplicates = context.source !== "attribute";
@@ -344,15 +440,17 @@ export function MediaAttachWizard({
         seen.add(key);
         const previewUrl = URL.createObjectURL(file);
         const duplicate = duplicateMatches.get(key);
+        const mediaKind = inferDraftMediaKind({ file, existingMediaMetadata: duplicate?.mediaMetadata ?? "", fileId: duplicate?.fileId ?? "" });
         next.push({
           clientId: makeClientId(),
           source,
           file,
+          mediaKind,
           fileId: duplicate?.fileId || "",
           previewUrl,
           existingMediaMetadata: duplicate?.mediaMetadata ?? "",
           duplicateOfFileId: duplicate?.fileId ?? "",
-          duplicateExistingPreviewUrl: duplicate?.fileId ? toImagePreviewSrc(context.tenantKey, duplicate.fileId) : "",
+          duplicateExistingPreviewUrl: duplicate?.fileId ? toMediaPreviewSrc(context.tenantKey, duplicate.fileId) : "",
           duplicateDecision: duplicate?.fileId ? "undecided" : undefined,
           title: context.defaultLabel ?? "",
           description: context.defaultDescription ?? "",
@@ -360,18 +458,18 @@ export function MediaAttachWizard({
           notes: "",
           personIds: Array.from(new Set((context.preselectedPersonIds ?? []).map((value) => value.trim()).filter(Boolean))),
           householdIds: Array.from(new Set((context.preselectedHouseholdIds ?? []).map((value) => value.trim()).filter(Boolean))),
-          attributeType: context.defaultAttributeType ?? "media",
+          attributeType: mediaKind === "image" ? (context.defaultAttributeType ?? "media") : mediaKind,
         });
       }
       return next;
     });
     const duplicateCount = duplicateMatches.size;
-    setStatus(duplicateCount > 0 ? `Duplicate check complete: ${duplicateCount} duplicate image(s) found and will be linked without re-upload.` : "");
+    setStatus(duplicateCount > 0 ? `Duplicate check complete: ${duplicateCount} matching item(s) found and will be linked without re-upload.` : "");
   };
 
   const addLibrarySelection = () => {
     if (librarySelectedFileIds.length === 0) {
-      setStatus("Select one or more library images first.");
+      setStatus("Select one or more library items first.");
       return;
     }
     setItems((current) => {
@@ -381,19 +479,21 @@ export function MediaAttachWizard({
         if (seen.has(fileId)) continue;
         const match = libraryResults.find((item) => item.fileId === fileId);
         if (!match) continue;
+        const mediaKind = inferMediaKindByMetadataOrFileId(match.fileId, match.mediaMetadata);
         next.push({
           clientId: makeClientId(),
           source: "library_existing",
           fileId: match.fileId,
-          previewUrl: toImagePreviewSrc(context.tenantKey, match.fileId),
+          mediaKind,
+          previewUrl: toMediaPreviewSrc(context.tenantKey, match.fileId),
           existingMediaMetadata: match.mediaMetadata ?? "",
-          title: match.name || context.defaultLabel || "photo",
+          title: match.name || context.defaultLabel || mediaLabel(mediaKind),
           description: match.description || context.defaultDescription || "",
           date: match.date || context.defaultDate || "",
           notes: "",
           personIds: Array.from(new Set([...(context.preselectedPersonIds ?? []), ...match.people.map((person) => person.personId)])),
           householdIds: Array.from(new Set([...(context.preselectedHouseholdIds ?? []), ...match.households.map((household) => household.householdId)])),
-          attributeType: "photo",
+          attributeType: mediaKind === "image" ? (context.defaultAttributeType ?? "media") : mediaKind,
           duplicateDecision: undefined,
         });
       }
@@ -412,7 +512,7 @@ export function MediaAttachWizard({
     setLibraryBusy(true);
     setStatus("");
     try {
-      const results = await searchImageLibrary({ tenantKey: context.tenantKey, query, limit: 200 });
+      const results = await searchMediaLibrary({ tenantKey: context.tenantKey, query, limit: 200 });
       setLibraryResults(results);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Media search failed.");
@@ -424,7 +524,7 @@ export function MediaAttachWizard({
 
   const proceedFromSelect = () => {
     if (items.length === 0) {
-      setStatus("Select at least one image.");
+      setStatus("Select at least one media item.");
       return;
     }
     setStatus("");
@@ -478,7 +578,7 @@ export function MediaAttachWizard({
 
   const saveAll = async () => {
     if (items.length === 0) {
-      setStatus("Select at least one image.");
+      setStatus("Select at least one media item.");
       return;
     }
     const firstInvalidIndex = items.findIndex((item) => validateDraftItem(context, item).length > 0);
@@ -530,52 +630,117 @@ export function MediaAttachWizard({
 
   const canGoToReview = items.length > 0 && perItemIndex >= items.length - 1;
   const selectedItemErrors = selectedItem ? validateDraftItem(context, selectedItem) : [];
+  const selectedItemKind = selectedItem ? inferDraftMediaKind(selectedItem) : null;
 
   const renderSource = (
     <div style={{ display: "grid", gap: "0.75rem" }}>
-      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Choose Source</h4>
-      <div className="settings-chip-list">
+      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Choose How You Want To Add Media</h4>
+      <p className="page-subtitle" style={{ margin: 0 }}>
+        Pick a source to jump straight into the next step. You can come back and switch sources any time.
+      </p>
+      <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
         {availableSources.includes("device_upload") ? (
-          <button type="button" className={`tab-pill ${sourceChoice === "device_upload" ? "active" : ""}`} onClick={() => setSourceChoice("device_upload")}>Device Upload</button>
+          <button
+            type="button"
+            className="button-ghost tap-button"
+            onClick={() => openSourcePicker("device_upload")}
+            style={{ textAlign: "left", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.45rem", background: sourceChoice === "device_upload" ? "#eef6ff" : "#fff" }}
+          >
+            <span style={{ color: "#0f4c81" }}><PhotoIcon /></span>
+            <strong>Device Files</strong>
+            <span style={{ fontSize: "0.92rem", color: "#4b5563" }}>Pick photos, videos, or audio already on this device.</span>
+          </button>
         ) : null}
         {availableSources.includes("camera_capture") ? (
-          <button type="button" className={`tab-pill ${sourceChoice === "camera_capture" ? "active" : ""}`} onClick={() => setSourceChoice("camera_capture")}>Camera Capture</button>
+          <button
+            type="button"
+            className="button-ghost tap-button"
+            onClick={() => openSourcePicker("camera_capture")}
+            style={{ textAlign: "left", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.45rem", background: sourceChoice === "camera_capture" ? "#eef6ff" : "#fff" }}
+          >
+            <span style={{ color: "#0f4c81" }}><CameraIcon /></span>
+            <strong>Camera</strong>
+            <span style={{ fontSize: "0.92rem", color: "#4b5563" }}>Take a photo or record a video on this device.</span>
+          </button>
         ) : null}
         {availableSources.includes("library_existing") ? (
-          <button type="button" className={`tab-pill ${sourceChoice === "library_existing" ? "active" : ""}`} onClick={() => setSourceChoice("library_existing")}>Media Library</button>
+          <button
+            type="button"
+            className="button-ghost tap-button"
+            onClick={() => openSourcePicker("library_existing")}
+            style={{ textAlign: "left", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.45rem", background: sourceChoice === "library_existing" ? "#eef6ff" : "#fff" }}
+          >
+            <span style={{ color: "#0f4c81" }}><LibraryIcon /></span>
+            <strong>Media Library</strong>
+            <span style={{ fontSize: "0.92rem", color: "#4b5563" }}>Reuse items already stored in the family media library.</span>
+          </button>
         ) : null}
       </div>
-      <button type="button" className="button tap-button" onClick={() => setStep("select")}>Continue</button>
     </div>
   );
 
   const renderSelect = (
     <div style={{ display: "grid", gap: "0.75rem" }}>
-      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Select Images</h4>
+      <h4 className="ui-section-title" style={{ marginBottom: 0 }}>
+        {sourceChoice === "library_existing" ? "Select Library Media" : sourceChoice === "camera_capture" ? "Capture Or Pick Media" : "Choose Media Files"}
+      </h4>
+      <p className="page-subtitle" style={{ margin: 0 }}>
+        {sourceChoice === "library_existing"
+          ? "Search the library, then add the items you want to work with."
+          : sourceChoice === "camera_capture"
+            ? "Tap the button below to open your camera or media picker. Photos and videos are supported here."
+            : "Tap the button below to choose photos, videos, or audio files from this device."}
+      </p>
       {sourceChoice === "device_upload" ? (
-        <input
-          className="input"
-          type="file"
-          multiple
-          accept="image/*"
-          onChange={(event) => {
-            void appendFiles(event.target.files, "device_upload");
-            event.currentTarget.value = "";
-          }}
-        />
+        <>
+          <input
+            ref={devicePickerRef}
+            type="file"
+            multiple
+            accept="image/*,video/*,audio/*"
+            style={{ display: "none" }}
+            onChange={(event) => {
+              void appendFiles(event.target.files, "device_upload");
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="button-ghost tap-button"
+            onClick={triggerDevicePicker}
+            style={{ border: "1px dashed #94a3b8", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.35rem", justifyItems: "center", background: "#f8fafc" }}
+          >
+            <UploadArrowIcon />
+            <strong>Choose Photos, Videos, Or Audio</strong>
+            <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Opens the device file picker.</span>
+          </button>
+        </>
       ) : null}
       {sourceChoice === "camera_capture" ? (
-        <input
-          className="input"
-          type="file"
-          multiple
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => {
-            void appendFiles(event.target.files, "camera_capture");
-            event.currentTarget.value = "";
-          }}
-        />
+        <>
+          <input
+            ref={cameraPickerRef}
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(event) => {
+              void appendFiles(event.target.files, "camera_capture");
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="button-ghost tap-button"
+            onClick={triggerCameraPicker}
+            style={{ border: "1px dashed #94a3b8", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.35rem", justifyItems: "center", background: "#f8fafc" }}
+          >
+            <CameraIcon />
+            <strong>Open Camera Or Media Picker</strong>
+            <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Capture new photos or video, or choose existing ones.</span>
+          </button>
+        </>
       ) : null}
       {sourceChoice === "library_existing" ? (
         <div style={{ display: "grid", gap: "0.5rem" }}>
@@ -584,7 +749,7 @@ export function MediaAttachWizard({
               className="input"
               value={libraryQuery}
               onChange={(event) => setLibraryQuery(event.target.value)}
-              placeholder="Search image library"
+              placeholder="Search media library"
             />
             <button type="button" className="button secondary tap-button" onClick={() => void runLibrarySearch()} disabled={libraryBusy}>
               {libraryBusy ? "Searching..." : "Search"}
@@ -594,6 +759,7 @@ export function MediaAttachWizard({
             <div style={{ display: "grid", gap: "0.35rem", maxHeight: "220px", overflow: "auto" }}>
               {libraryResults.map((item) => {
                 const checked = librarySelectedFileIds.includes(item.fileId);
+                const kind = inferMediaKindByMetadataOrFileId(item.fileId, item.mediaMetadata);
                 return (
                   <label key={`library-${item.fileId}`} className="person-linked-row">
                     <input
@@ -607,7 +773,7 @@ export function MediaAttachWizard({
                         }
                       }}
                     />
-                    <span>{item.name || item.fileId}</span>
+                    <span>{item.name || item.fileId} <span style={{ color: "#6b7280" }}>({mediaLabel(kind)})</span></span>
                   </label>
                 );
               })}
@@ -623,21 +789,27 @@ export function MediaAttachWizard({
         {duplicateScanBusy ? <span style={{ fontSize: "0.85rem" }}>Checking selected files for duplicates...</span> : null}
         {items.length > 0 ? (
           <div style={{ display: "grid", gap: "0.25rem", maxHeight: "180px", overflow: "auto" }}>
-            {items.map((item) => (
+            {items.map((item) => {
+              const kind = inferDraftMediaKind(item);
+              return (
               <div key={item.clientId} style={{ display: "grid", gap: "0.25rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                  {item.previewUrl ? <img src={item.previewUrl} alt="" style={{ width: "72px", height: "72px", objectFit: "cover", borderRadius: "8px" }} /> : null}
-                  <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Image"}</span>
+                  {item.previewUrl ? (
+                    <div style={{ width: "72px", minWidth: "72px" }}>
+                      {renderMediaPreview(kind, item.previewUrl, "", { maxHeight: "72px", compact: true, cover: kind === "image" })}
+                    </div>
+                  ) : null}
+                  <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Media"} <span style={{ color: "#6b7280" }}>({mediaLabel(kind)})</span></span>
                 </div>
                 {item.duplicateOfFileId ? (
                   <span className="status-chip status-chip--neutral" style={{ width: "fit-content" }}>
-                    Duplicate found: {item.duplicateOfFileId} (will link, not re-upload)
+                    Matching library item found: {item.duplicateOfFileId} (will link, not re-upload)
                   </span>
                 ) : null}
               </div>
-            ))}
+            )})}
           </div>
-        ) : null}
+        ) : <span style={{ fontSize: "0.9rem", color: "#6b7280" }}>Nothing selected yet.</span>}
       </div>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <button type="button" className="button secondary tap-button" onClick={() => setStep("source")}>Back</button>
@@ -805,8 +977,8 @@ export function MediaAttachWizard({
           ))}
         </div>
       ) : null}
-      {selectedItem.previewUrl && !selectedItem.duplicateOfFileId ? (
-        <img src={selectedItem.previewUrl} alt="Selected image" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "#f3f4f6", borderRadius: "10px" }} />
+      {selectedItem.previewUrl && !selectedItem.duplicateOfFileId && selectedItemKind ? (
+        renderMediaPreview(selectedItemKind, selectedItem.previewUrl, `Selected ${mediaLabel(selectedItemKind)}`)
       ) : null}
       {!selectedItem.duplicateOfFileId ? (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -819,24 +991,24 @@ export function MediaAttachWizard({
               )
             }
           >
-            {selectedItem.skipImport ? "Unskip Image" : "Skip Image (Do Not Import)"}
+            {selectedItem.skipImport ? "Unskip Item" : "Skip Item (Do Not Import)"}
           </button>
         </div>
       ) : null}
-      {selectedItem.duplicateOfFileId && selectedItem.duplicateExistingPreviewUrl ? (
+      {selectedItem.duplicateOfFileId && selectedItem.duplicateExistingPreviewUrl && selectedItemKind ? (
         <div className="card" style={{ padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
-          <strong>Duplicate confirmed</strong>
+          <strong>Matching Library Item Found</strong>
           <span style={{ fontSize: "0.9rem" }}>
-            This selected image may match existing library file <code>{selectedItem.duplicateOfFileId}</code>.
+            This selected {mediaLabel(selectedItemKind)} may match existing library file <code>{selectedItem.duplicateOfFileId}</code>.
           </span>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
             <div style={{ display: "grid", gap: "0.25rem" }}>
-              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Selected Image</span>
-              <img src={selectedItem.previewUrl || ""} alt="Selected image preview" style={{ width: "100%", maxHeight: "170px", objectFit: "contain", background: "#f3f4f6", borderRadius: "8px" }} />
+              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Selected {mediaLabel(selectedItemKind)}</span>
+              {renderMediaPreview(selectedItemKind, selectedItem.previewUrl || "", `Selected ${mediaLabel(selectedItemKind)}`, { maxHeight: "170px" })}
             </div>
             <div style={{ display: "grid", gap: "0.25rem" }}>
-              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Existing Library Image</span>
-              <img src={selectedItem.duplicateExistingPreviewUrl} alt="Existing library duplicate preview" style={{ width: "100%", maxHeight: "170px", objectFit: "contain", background: "#f3f4f6", borderRadius: "8px" }} />
+              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Existing library {mediaLabel(selectedItemKind)}</span>
+              {renderMediaPreview(selectedItemKind, selectedItem.duplicateExistingPreviewUrl, `Existing ${mediaLabel(selectedItemKind)}`, { maxHeight: "170px" })}
             </div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -877,7 +1049,7 @@ export function MediaAttachWizard({
                 )
               }
             >
-              New Image Is Better (Overwrite Existing)
+              Import New And Replace Existing Links
             </button>
           </div>
           {selectedItem.duplicateDecision ? (
@@ -1049,7 +1221,7 @@ export function MediaAttachWizard({
             const errors = validateDraftItem(context, item);
             return (
           <div key={item.clientId} className="card" style={{ padding: "0.55rem" }}>
-            <strong>Item {index + 1}: {item.title || item.file?.name || item.fileId || "Image"}</strong>
+            <strong>Item {index + 1}: {item.title || item.file?.name || item.fileId || "Media"}</strong>
             <div style={{ fontSize: "0.85rem", marginTop: "0.2rem" }}>
               <span>Date: {item.date || "-"}</span>
               <span style={{ marginLeft: "0.65rem" }}>People: {item.personIds.length}</span>
@@ -1087,7 +1259,7 @@ export function MediaAttachWizard({
             return (
               <div key={`progress-${item.clientId}`} style={{ display: "grid", gap: "0.2rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
-                  <span>{index + 1}. {item.title || item.file?.name || item.fileId || "Image"}</span>
+                  <span>{index + 1}. {item.title || item.file?.name || item.fileId || "Media"}</span>
                   <span>{progress.status}</span>
                 </div>
                 <div style={{ height: "7px", background: "#e5e7eb", borderRadius: "6px", overflow: "hidden" }}>
@@ -1116,7 +1288,7 @@ export function MediaAttachWizard({
           <div className="person-modal-header">
             <div>
               <h3 className="person-modal-title">Media Attach Wizard</h3>
-              <p className="person-modal-meta">Image-only MVP. Existing backend contracts preserved.</p>
+              <p className="person-modal-meta">Add photos, videos, and audio, then link them to people or households.</p>
             </div>
             <button type="button" className="button secondary tap-button" onClick={onClose} disabled={busy}>Close</button>
           </div>
