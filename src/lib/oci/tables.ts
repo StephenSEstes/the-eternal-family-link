@@ -831,7 +831,7 @@ export async function upsertOciTenantAccess(input: {
       { autoCommit: false },
     );
 
-    let action: "created" | "updated" = (membershipUpdate.rowsAffected ?? 0) > 0 ? "updated" : "created";
+    const action: "created" | "updated" = (membershipUpdate.rowsAffected ?? 0) > 0 ? "updated" : "created";
     if ((membershipUpdate.rowsAffected ?? 0) === 0) {
       await connection.execute(
         `INSERT INTO user_family_groups (

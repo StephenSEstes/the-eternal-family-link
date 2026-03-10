@@ -30,6 +30,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this change and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-10 (deploy lint follow-up for OCI helper)
+
+- `Change`: Fixed a deploy-blocking lint error in the new OCI tenant-access helper by changing a non-reassigned variable to `const`.
+- `Type`: API, Infra
+- `Why`: Root cause was a `prefer-const` violation in the newly added OCI upsert path, which caused Vercel `next build` to fail during lint/type validation.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` no longer fails on the `prefer-const` error in `src/lib/oci/tables.ts`.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (media-tab one-family default + wizard skip/duplicate decision UX)
 
 - `Change`: Defaulted Media tab person upload/link operations to family-group scope (`one_family`) and current family-group key, added per-image skip (`Do Not Import`), enlarged selection thumbnails, moved `Caption/Title` and `Date` onto one row, renamed `Notes` to `Story/Notes`, and added explicit duplicate decision workflow (`Duplicate` vs `Not Duplicate`) with side-by-side image comparison.

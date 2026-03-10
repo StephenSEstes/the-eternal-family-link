@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Fixed the deploy-blocking lint error in the new OCI tenant-access helper (`prefer-const`) so production build can proceed. See `docs/change-summary.md`.
 - 2026-03-10: Cleaned up OCI runtime helper cutover by removing active Sheets-only scaffold/access paths from `src/lib/google/sheets.ts` and writing those flows directly to OCI tables. See `docs/change-summary.md`.
 - 2026-03-09: Fixed Media Library selected-image add-link persistence by writing direct person OCI media links, added person-photo unlink API for delete parity, and forced uncached refresh after media-link mutations. See `docs/change-summary.md`.
 - 2026-03-09: Fixed Media Library selected-image link refresh to bypass stale media-search cache after add/remove link actions, so `Linked To` updates immediately. See `docs/change-summary.md`.
