@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
-import { deleteTableRows, getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
+import { getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 
 type RouteProps = {
@@ -33,17 +33,6 @@ export async function DELETE(_: Request, { params }: RouteProps) {
     deletedLinks += await deleteOciMediaLink(link.linkId);
   }
 
-  const householdPhotoRows = await getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []);
-  const legacyRowNumbers = householdPhotoRows
-    .filter((row) => {
-      const rowHouseholdId = (row.data.household_id ?? "").trim();
-      const rowPhotoId = (row.data.photo_id ?? "").trim();
-      const rowFileId = (row.data.file_id ?? "").trim();
-      return rowHouseholdId === householdId && (rowPhotoId === targetPhotoId || rowFileId === targetFileId);
-    })
-    .map((row) => row.rowNumber);
-  const deletedLegacyRows = await deleteTableRows("HouseholdPhotos", legacyRowNumbers, resolved.tenant.tenantKey);
-
   let clearedWeddingPhoto = false;
   const householdRows = await getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []);
   const householdRow = householdRows.find((row) => (row.data.household_id ?? "").trim() === householdId);
@@ -58,7 +47,7 @@ export async function DELETE(_: Request, { params }: RouteProps) {
     clearedWeddingPhoto = Boolean(updated);
   }
 
-  if (deletedLinks === 0 && deletedLegacyRows === 0 && !clearedWeddingPhoto) {
+  if (deletedLinks === 0 && !clearedWeddingPhoto) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   await appendSessionAuditLog(resolved.session, {
@@ -67,12 +56,11 @@ export async function DELETE(_: Request, { params }: RouteProps) {
     entityId: targetFileId,
     familyGroupKey: resolved.tenant.tenantKey,
     status: "SUCCESS",
-    details: `Deleted household media links=${deletedLinks}, legacyRows=${deletedLegacyRows}, clearedWeddingPhoto=${String(clearedWeddingPhoto)} for household=${householdId}.`,
+    details: `Deleted household media links=${deletedLinks}, clearedWeddingPhoto=${String(clearedWeddingPhoto)} for household=${householdId}.`,
   });
   return NextResponse.json({
     ok: true,
     deletedLinks,
-    deletedLegacyRows,
     clearedWeddingPhoto,
   });
 }

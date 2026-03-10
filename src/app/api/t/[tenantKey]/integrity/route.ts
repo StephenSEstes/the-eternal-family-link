@@ -24,8 +24,14 @@ type IntegrityFinding = {
   sample: string[];
 };
 
-function readField(record: Record<string, string>, key: string) {
-  return (record[key] ?? "").trim();
+function readField(record: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
 function parseBool(value: string) {
@@ -122,23 +128,6 @@ function scoreUserAccessRow(data: Record<string, string>) {
   return score;
 }
 
-async function resolveTenantScopedTableleName(tableName: string, tenantKey: string) {
-  const titles = await listTables().catch(() => []);
-  const byLower = new Map(titles.map((title) => [title.toLowerCase(), title]));
-  const normalizedTenant = normalize(tenantKey);
-  const candidates =
-    normalizedTenant === "snowestes"
-      ? [tableName]
-      : [`${normalizedTenant}__${tableName}`, tableName];
-  for (const candidate of candidates) {
-    const match = byLower.get(candidate.toLowerCase());
-    if (match) {
-      return match;
-    }
-  }
-  return null;
-}
-
 async function deleteRowsByNumber(tableName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
@@ -155,9 +144,9 @@ function boolLike(value: string) {
 }
 
 type ExpectedMediaLink = {
-  source: "people_headshot" | "person_attribute" | "household_photo";
+  source: "people_headshot" | "attribute_media";
   familyGroupKey: string;
-  entityType: "person" | "attribute" | "household";
+  entityType: "person" | "attribute";
   entityId: string;
   usageType: string;
   fileId: string;
@@ -185,13 +174,17 @@ function mediaLinkKey(input: {
 
 async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: boolean) {
   const familyGroupKey = normalize(tenantKey);
-  const [people, attributeRows, householdPhotoRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
+  const [people, attributeRows, householdRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
     getPeople(tenantKey).catch(() => []),
     getTableRecords(PERSON_ATTRIBUTES_TABLE, tenantKey).catch(() => []),
-    getTableRecords("HouseholdPhotos", tenantKey).catch(() => []),
+    getTableRecords("Households", tenantKey).catch(() => []),
     getTableRecords("MediaAssets", tenantKey).catch(() => []),
     getTableRecords("MediaLinks", tenantKey).catch(() => []),
   ]);
+  const peopleIds = new Set(people.map((person) => normalize(person.personId)).filter(Boolean));
+  const householdIds = new Set(
+    householdRows.map((row) => normalize(readField(row.data, "household_id"))).filter(Boolean),
+  );
 
   const mediaIdByFileId = new Map<string, string>();
   const knownAssetByFileId = new Set<string>();
@@ -255,42 +248,27 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
   }
 
   for (const row of attributeRows) {
-    const personId = readField(row.data, "person_id");
-    if (!personId || !people.some((person) => normalize(person.personId) === normalize(personId))) continue;
-    const attributeType = normalize(readField(row.data, "attribute_type"));
-    if (!["photo", "video", "audio", "media"].includes(attributeType)) continue;
     const attributeId = readField(row.data, "attribute_id");
-    const fileId = readField(row.data, "value_text");
+    const entityType = normalize(readField(row.data, "entity_type"));
+    const entityId = readField(row.data, "entity_id", "person_id", "household_id");
+    const attributeType = normalize(readField(row.data, "attribute_type"));
+    const fileId = readField(row.data, "attribute_detail", "value_text");
     if (!attributeId || !fileId) continue;
+    if (!["photo", "video", "audio", "media"].includes(attributeType)) continue;
+    if (entityType === "person" && !peopleIds.has(normalize(entityId))) continue;
+    if (entityType === "household" && !householdIds.has(normalize(entityId))) continue;
+    if (entityType !== "person" && entityType !== "household") continue;
     expectedLinks.push({
-      source: "person_attribute",
+      source: "attribute_media",
       familyGroupKey,
       entityType: "attribute",
       entityId: attributeId,
       usageType: attributeType === "photo" ? "photo" : "media",
       fileId,
-      label: readField(row.data, "label"),
-      description: readField(row.data, "notes"),
-      photoDate: readField(row.data, "start_date"),
-      mediaMetadata: readField(row.data, "value_json"),
-    });
-  }
-
-  for (const row of householdPhotoRows) {
-    const fileId = readField(row.data, "file_id");
-    const householdId = readField(row.data, "household_id");
-    if (!fileId || !householdId) continue;
-    expectedLinks.push({
-      source: "household_photo",
-      familyGroupKey,
-      entityType: "household",
-      entityId: householdId,
-      usageType: "gallery",
-      fileId,
-      label: readField(row.data, "name"),
-      description: readField(row.data, "description"),
-      photoDate: readField(row.data, "photo_date"),
-      mediaMetadata: readField(row.data, "media_metadata"),
+      label: readField(row.data, "label", "attribute_type_category", "attribute_type"),
+      description: readField(row.data, "attribute_notes", "notes"),
+      photoDate: readField(row.data, "attribute_date", "start_date"),
+      mediaMetadata: "",
     });
   }
 
@@ -402,7 +380,6 @@ async function runIntegrityAudit(tenantKey: string) {
     userGroupRows,
     householdsRows,
     familyConfigRows,
-    legacyLocalRows,
     tables,
     relationshipRows,
     personAttributeRows,
@@ -415,7 +392,6 @@ async function runIntegrityAudit(tenantKey: string) {
     getTableRecords("UserFamilyGroups").catch(() => []),
     getTableRecords("Households").catch(() => []),
     getTableRecords(["FamilyConfig", "TenantConfig"]).catch(() => []),
-    getTableRecords("LocalUsers", tenantKey).catch(() => []),
     listTables().catch(() => []),
     getTableRecords("Relationships").catch(() => []),
     getTableRecords(PERSON_ATTRIBUTES_TABLE).catch(() => []),
@@ -482,7 +458,9 @@ async function runIntegrityAudit(tenantKey: string) {
     bump(personNonMembershipRefs, readField(row.data, "to_person_id"));
   }
   for (const row of personAttributeRows) {
-    bump(personNonMembershipRefs, readField(row.data, "person_id"));
+    if (normalize(readField(row.data, "entity_type")) === "person") {
+      bump(personNonMembershipRefs, readField(row.data, "entity_id", "person_id"));
+    }
   }
   for (const row of importantDateRows) {
     bump(personNonMembershipRefs, readField(row.data, "person_id"));
@@ -665,16 +643,6 @@ async function runIntegrityAudit(tenantKey: string) {
     Array.from(new Set(orphanUsersNoFamily)),
   );
 
-  if (legacyLocalRows.length > 0) {
-    findings.push({
-      severity: "warn",
-      code: "legacy_localusers_rows_present",
-      message: "Legacy LocalUsers rows still exist and should be retired.",
-      count: legacyLocalRows.length,
-      sample: legacyLocalRows.slice(0, 10).map((row) => `${row.rowNumber}`),
-    });
-  }
-
   const scopedPeopleTables = tables
     .map((table) => table.trim())
     .filter((table) => table.toLowerCase().endsWith("__people"));
@@ -695,7 +663,6 @@ async function runIntegrityAudit(tenantKey: string) {
     peopleCount: people.length,
     userAccessCount: userAccessRows.length,
     userFamilyGroupCount: filteredLinks.length,
-    legacyLocalUsersCount: legacyLocalRows.length,
   };
 
   return {
@@ -709,7 +676,6 @@ async function runIntegrityAudit(tenantKey: string) {
     householdsRows,
     personAttributeRows,
     importantDateRows,
-    legacyLocalRows,
     peopleIds,
     filteredLinks,
     userAccessByPerson,
@@ -879,13 +845,14 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
 
     let updatedAttributes = 0;
     for (const row of personAttributeRows) {
-      const personId = normalize(readField(row.data, "person_id"));
+      const entityType = normalize(readField(row.data, "entity_type"));
+      const personId = normalize(readField(row.data, "entity_id", "person_id"));
       const attributeId = readField(row.data, "attribute_id");
-      if (!attributeId || personId !== sourcePersonId) continue;
+      if (!attributeId || entityType !== "person" || personId !== sourcePersonId) continue;
       const updated = await updateTableRecordById(
         PERSON_ATTRIBUTES_TABLE,
         attributeId,
-        { person_id: targetPersonId },
+        { entity_id: targetPersonId },
         "attribute_id",
       );
       if (updated) updatedAttributes += 1;
@@ -1254,17 +1221,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     }
   }
 
-  let deletedLegacyLocalUsersRows = 0;
-  if (before.legacyLocalRows.length > 0) {
-    const localUsersTable = await resolveTenantScopedTableleName("LocalUsers", familyGroupKey);
-    if (localUsersTable) {
-      deletedLegacyLocalUsersRows = await deleteRowsByNumber(
-        localUsersTable,
-        before.legacyLocalRows.map((row) => row.rowNumber),
-      );
-    }
-  }
-
   let deletedDuplicatePeopleRows = 0;
   let deletedDuplicatePeopleMembershipRows = 0;
   for (const group of before.duplicatePeopleGroups) {
@@ -1307,7 +1263,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
       repairedSpouseFamilyMembershipRows,
       repairedSpouseHouseholdRows,
       skippedSpouseHouseholdConflicts,
-      deletedLegacyLocalUsersRows,
       deletedDuplicatePeopleRows,
       deletedDuplicatePeopleMembershipRows,
     },

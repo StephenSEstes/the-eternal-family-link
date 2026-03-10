@@ -105,11 +105,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
   }
 
-  const [people, attributeRows, householdRows, householdPhotoRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
+  const [people, attributeRows, householdRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
     getPeople(resolved.tenant.tenantKey),
     getTableRecords("Attributes", resolved.tenant.tenantKey).catch(() => []),
     getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []),
-    getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []),
     getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []),
     getTableRecords("MediaAssets", resolved.tenant.tenantKey).catch(() => []),
   ]);
@@ -221,7 +220,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
   }
 
-  // Always merge legacy links so OCI mode includes pre-existing media not yet backfilled into media_links.
+  // Keep direct profile pointers visible alongside normalized media links.
   for (const person of people) {
     const fileId = person.photoFileId.trim();
     if (!fileId) continue;
@@ -247,23 +246,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       item.people.push({
         personId: attr.personId,
         displayName: peopleById.get(attr.personId) || attr.personId,
-      });
-    }
-  }
-
-  for (const row of householdPhotoRows) {
-    const fileId = readCell(row.data, "file_id");
-    if (!fileId) continue;
-    const item = ensureItem(fileId);
-    const householdId = readCell(row.data, "household_id");
-    if (!item.name) item.name = readCell(row.data, "name");
-    if (!item.description) item.description = readCell(row.data, "description");
-    if (!item.date) item.date = readCell(row.data, "photo_date");
-    if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
-    if (householdId && !item.households.some((household) => household.householdId === householdId)) {
-      item.households.push({
-        householdId,
-        label: householdsById.get(householdId) || householdId,
       });
     }
   }

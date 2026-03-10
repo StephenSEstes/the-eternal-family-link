@@ -154,10 +154,6 @@ const TABLES: Record<string, TableConfig> = {
       "zip",
     ],
   },
-  HouseholdPhotos: {
-    tableName: "household_photos",
-    headers: ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
-  },
   MediaAssets: {
     tableName: "media_assets",
     headers: ["media_id", "file_id", "storage_provider", "mime_type", "file_name", "file_size_bytes", "media_metadata", "created_at"],

@@ -109,13 +109,6 @@ const PEOPLE_HEADERS = [
   "relationships",
 ];
 
-function normalizeHeader(header: string) {
-  const normalized = header.trim().toLowerCase();
-  if (normalized === "tenant_key") return "family_group_key";
-  if (normalized === "tenant_name") return "family_group_name";
-  return normalized;
-}
-
 function toRole(value: string | undefined): AppRole {
   return value?.trim().toUpperCase() === "ADMIN" ? "ADMIN" : "USER";
 }

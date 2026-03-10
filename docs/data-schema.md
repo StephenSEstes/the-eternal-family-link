@@ -53,8 +53,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `MediaLinks(entity_type='person', entity_id=People.person_id)` for direct links
   - `MediaLinks(entity_type='attribute', entity_id=Attributes.attribute_id)` for event/descriptor-linked media
 - Household gallery/media:
-  - Legacy: `HouseholdPhotos.file_id = MediaAssets.file_id`
-  - Normalized: `MediaLinks(entity_type='household', entity_id=Households.household_id)`
+  - `MediaLinks(entity_type='household', entity_id=Households.household_id)`
 - Attribute-attached media:
   - `MediaLinks.entity_type = 'attribute'`
   - `MediaLinks.entity_id = Attributes.attribute_id`
@@ -260,24 +259,6 @@ This section is a quick reference for the three data areas that drive profile/me
 - Logical index/key:
   - Unique: `attribute_id`
   - Common lookup: (`entity_type`, `entity_id`, `attribute_type`)
-
-## HouseholdPhotos
-
-- Columns:
-  - `family_group_key`
-  - `photo_id`
-  - `household_id`
-  - `file_id`
-  - `name`
-  - `description`
-  - `photo_date`
-  - `is_primary`
-  - `media_metadata`
-- Purpose:
-  - Household-level media associations and display metadata (image/video/audio).
-- Logical index/key:
-  - Unique: `photo_id`
-  - Common lookup: (`household_id`, `is_primary`)
 
 ## MediaAssets
 

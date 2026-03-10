@@ -744,7 +744,6 @@ export function PersonEditModal({
     ? "/placeholders/avatar-female.png"
     : "/placeholders/avatar-male.png";
   const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, activeTenantKey) : fallbackAvatar;
-  const photoAttributes = attributes.filter((item) => item.attributeType.toLowerCase() === "photo");
   const allMediaAttributes = attributes.filter((item) => {
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
@@ -1003,10 +1002,6 @@ export function PersonEditModal({
   const selectedPhoto = useMemo(
     () => allMediaAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
     [allMediaAttributes, selectedPhotoAttributeId],
-  );
-  const linkedPhotoFileIds = useMemo(
-    () => new Set(allMediaAttributes.map((item) => item.valueText.trim()).filter(Boolean)),
-    [allMediaAttributes],
   );
   const filteredPhotoAttributes = useMemo(() => {
     const query = personPhotoQuery.trim().toLowerCase();

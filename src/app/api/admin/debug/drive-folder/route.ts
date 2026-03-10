@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { getEnv } from "@/lib/env";
 import { getServiceAccountAuth } from "@/lib/google/auth";
-import { getTenantAccesses, getTenantContext } from "@/lib/family-group/context";
+import { getTenantAccesses } from "@/lib/family-group/context";
 
 function isProductionLikeRuntime() {
   return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL_URL);
@@ -46,7 +46,6 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const tenant = getTenantContext(session);
   const sessionRole = (session.user.role ?? "USER").toUpperCase();
   const hasAdminAccess =
     sessionRole === "ADMIN" || getTenantAccesses(session).some((entry) => entry.role === "ADMIN");

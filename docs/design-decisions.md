@@ -123,3 +123,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Static help pages only; client-side OpenAI calls; a broader AI agent that can modify data.
 - `Impact`: Added server-only OpenAI helpers, `/api/t/[tenantKey]/ai/help`, Help pages in root and tenant routes, Help navigation/home entry points, and optional OpenAI environment variables.
 - `Follow-up`: If interview-based data entry or AI email drafting is added later, keep those as separate reviewed workflows instead of expanding Help into a write-capable agent.
+
+- `Area`: Household media modeling
+- `Decision`: Use `MediaAssets` + `MediaLinks` as the only household gallery model, while keeping `Households.wedding_photo_file_id` as the direct household avatar pointer.
+- `Reason`: The old household-gallery compatibility path duplicated gallery state, complicated delete/search/integrity logic, and no longer matched the active OCI runtime model.
+- `Alternatives Considered`: Keep the obsolete household gallery compatibility path as a read/write bridge.
+- `Impact`: Runtime search/delete/integrity logic and schema docs now ignore the obsolete household gallery table; household gallery behavior is driven by `MediaLinks`, and the primary household image remains `wedding_photo_file_id`.
+- `Follow-up`: If needed later, add a targeted data cleanup script to drop the obsolete household gallery table from live OCI environments after validation.

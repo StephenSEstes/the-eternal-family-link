@@ -2,10 +2,6 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { normalizeMediaKind, type MediaKind } from "@/lib/media/upload";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import {
-  type HouseholdLinkInput,
-  type HouseholdUploadContractInput,
-  type PersonAttributeLinkInput,
-  type PersonUploadContractInput,
   buildHouseholdLinkPayload,
   buildHouseholdUploadContractFields,
   buildPersonAttributeLinkPayload,

@@ -44,6 +44,10 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-04-08
   Desc: Add Android PWA share-target support so images/videos shared from phone apps can open the app and route into the shared media attach flow. Keep iPhone on the in-app camera/upload path because iOS web apps do not support share-target onboarding the same way.
+- [ ] Optimize media search and library performance
+  Priority: Med
+  Est date: 2026-04-10
+  Desc: Rebuild media search/library loading to stop full-table scans and large in-memory joins across media-related tables. Query canonical media rows directly, preserve current person/household/attribute link behavior, and keep Drive listing optional and bounded.
 - [ ] Develop story/memory workflow with attached media
   Priority: Med
   Est date: 2026-04-12

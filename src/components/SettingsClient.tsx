@@ -69,7 +69,6 @@ type IntegrityReport = {
     peopleCount: number;
     userAccessCount: number;
     userFamilyGroupCount: number;
-    legacyLocalUsersCount: number;
   };
   findings: IntegrityFinding[];
   duplicatePeopleGroups: Array<{
@@ -1112,7 +1111,7 @@ export function SettingsClient({
     }
     const repaired = body?.repaired ?? {};
     setIntegrityRepairStatus(
-      `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}, removed legacy LocalUsers: ${Number(repaired.deletedLegacyLocalUsersRows ?? 0)}.`,
+      `Repair complete. Deduped UserAccess: ${Number(repaired.deletedDuplicateUserAccessRows ?? 0)}, created links: ${Number(repaired.createdMissingLinks ?? 0)}.`,
     );
     await runIntegrityCheck();
   };
@@ -2793,7 +2792,7 @@ export function SettingsClient({
           <div className="settings-table-wrap">
             <table className="settings-table">
               <thead>
-                <tr><th>Status</th><th>Errors</th><th>Warnings</th><th>People</th><th>UserAccess</th><th>UserFamilyGroups</th><th>Legacy LocalUsers</th></tr>
+                <tr><th>Status</th><th>Errors</th><th>Warnings</th><th>People</th><th>UserAccess</th><th>UserFamilyGroups</th></tr>
               </thead>
               <tbody>
                 <tr>
@@ -2803,7 +2802,6 @@ export function SettingsClient({
                   <td>{integrityReport.summary.peopleCount}</td>
                   <td>{integrityReport.summary.userAccessCount}</td>
                   <td>{integrityReport.summary.userFamilyGroupCount}</td>
-                  <td>{integrityReport.summary.legacyLocalUsersCount}</td>
                 </tr>
               </tbody>
             </table>

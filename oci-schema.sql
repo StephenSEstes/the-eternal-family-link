@@ -234,29 +234,6 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
-    CREATE TABLE household_photos (
-      family_group_key VARCHAR2(128 CHAR),
-      photo_id VARCHAR2(128 CHAR) NOT NULL,
-      household_id VARCHAR2(128 CHAR),
-      file_id VARCHAR2(512 CHAR),
-      name VARCHAR2(512 CHAR),
-      description VARCHAR2(4000 CHAR),
-      photo_date VARCHAR2(32 CHAR),
-      is_primary VARCHAR2(8 CHAR),
-      media_metadata VARCHAR2(4000 CHAR),
-      CONSTRAINT pk_household_photos PRIMARY KEY (photo_id)
-    )
-  ';
-EXCEPTION
-  WHEN OTHERS THEN
-    IF SQLCODE != -955 THEN
-      RAISE;
-    END IF;
-END;
-/
-
-BEGIN
-  EXECUTE IMMEDIATE '
     CREATE TABLE media_assets (
       media_id VARCHAR2(128 CHAR) NOT NULL,
       file_id VARCHAR2(512 CHAR) NOT NULL,

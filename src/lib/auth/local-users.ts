@@ -1,4 +1,4 @@
-import type { AppRole, LocalUserRecord, TenantSecurityPolicy } from "@/lib/google/types";
+import type { AppRole, TenantSecurityPolicy } from "@/lib/google/types";
 import {
   createTableRecord,
   ensureTenantScaffold,

@@ -13,6 +13,36 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (remove obsolete household media and legacy-local integrity paths)
+
+- `Change`: Removed the obsolete household-gallery compatibility model from active runtime/search/delete/integrity handling, dropped its repo schema/table mapping, removed integrity/UI reporting for retired legacy-local cleanup rows, and cleaned several confirmed unused locals/imports.
+- `Type`: API | Data | Schema
+- `Why`: Root cause was active runtime and integrity code still encoding retired designs: household media still had a second compatibility model, and integrity/admin UI still surfaced old legacy-local cleanup concepts even though local auth now runs on `UserAccess`. Those paths increased diagnosis noise and kept the repo aligned to models the app no longer uses.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/data/store.ts`
+  - `src/lib/auth/local-users.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/api/admin/debug/drive-folder/route.ts`
+  - `oci-schema.sql`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: No data migration. Existing obsolete household-gallery rows are now ignored by runtime and may be discarded; current runtime uses `MediaLinks` plus `Households.wedding_photo_file_id`.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Repo search returns no active runtime/integrity/UI references to the removed household-gallery compatibility model or the retired legacy-local cleanup summary fields.
+  - Media Library search and household media delete still operate through canonical `MediaLinks`.
+  - Integrity repair no longer reports or repairs the retired legacy-local cleanup rows, and orphan-media integrity no longer depends on the removed household-gallery compatibility model.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: Added 2026-03-10 decision clarifying household media uses only `MediaAssets` + `MediaLinks`, while `wedding_photo_file_id` remains the direct household avatar pointer.
+
 ## 2026-03-10 (grounded AI help assistant)
 
 - `Change`: Added a tenant-scoped AI Help assistant backed by the OpenAI API, grounded on a curated local product guide, exposed it on new Help pages and header/home navigation, and documented the optional OpenAI environment configuration.
@@ -1231,7 +1261,6 @@ Concise release notes for what changed, why it changed, and what to verify.
     - `family_config=2`
     - `family_security_policy=1`
     - `person_attributes=16`
-    - `household_photos=2`
     - `important_dates=0`
   - `npm run lint` passes.
   - `npm run build` passes.
@@ -1273,9 +1302,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/lib/google/types.ts`
   - `docs/data-schema.md`
 - `Data Changes`:
-  - Added `media_metadata` column support for:
-    - `PersonAttributes`
-    - `HouseholdPhotos`
+  - Added `media_metadata` column support for person attributes and household gallery media.
   - Upload routes now persist JSON metadata (`fileName`, `mimeType`, `sizeBytes`, `createdAt`) in `media_metadata`.
   - If media date is omitted on upload, API defaults date from provided file-created timestamp (or current timestamp fallback).
 - `Verify`:
@@ -1466,8 +1493,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
   - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
   - `legacy OCI transition adapter`
-- `Data Changes`: Added `HouseholdPhotos` table support with columns:
-  - `family_group_key`, `photo_id`, `household_id`, `file_id`, `name`, `description`, `photo_date`, `is_primary`
+- `Data Changes`: Added household gallery media persistence with family-scoped file/link metadata support.
 - `Verify`:
   - Person modal Photos tab: one `Add Photo` action opens camera/file picker on mobile and uploads file.
   - Person modal photo gallery displays preview + metadata and supports checkbox-based `Remove Selected Links`.
