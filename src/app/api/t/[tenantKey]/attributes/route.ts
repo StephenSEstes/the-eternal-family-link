@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { getAttributesForEntity, getAttributeMediaLinks } from "@/lib/attributes/store";
 import { getPersonById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
@@ -30,11 +29,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     if (!person) {
       return NextResponse.json({ error: "not_found", message: "person not found" }, { status: 404 });
     }
-    if (!canEditPerson(resolved.session, entityId, resolved.tenant)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-  } else if (resolved.tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const attributes = await getAttributesForEntity(resolved.tenant.tenantKey, entityType, entityId);

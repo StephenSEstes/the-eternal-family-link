@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getPersonById, PEOPLE_TABLE, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
@@ -14,9 +13,6 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
-  }
-  if (!canEditPerson(resolved.session, personId, resolved.tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const person = await getPersonById(personId, resolved.tenant.tenantKey);

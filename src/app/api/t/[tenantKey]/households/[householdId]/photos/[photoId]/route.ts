@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 
@@ -10,7 +10,7 @@ type RouteProps = {
 
 export async function DELETE(_: Request, { params }: RouteProps) {
   const { tenantKey, householdId, photoId } = await params;
-  const resolved = await requireTenantAdmin(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import { getPersonById } from "@/lib/data/runtime";
@@ -22,12 +21,6 @@ export async function GET(request: Request) {
   const entityId = String(params.get("entity_id") ?? "").trim();
   if (!entityType || !entityId) {
     return NextResponse.json({ error: "invalid_payload", message: "entity_type and entity_id are required" }, { status: 400 });
-  }
-  if (entityType === "person" && !canEditPerson(session, entityId, tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  if (entityType === "household" && tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const attributes = await getAttributesForEntity(tenant.tenantKey, entityType, entityId);
@@ -61,11 +54,6 @@ export async function POST(request: Request) {
     if (!person) {
       return NextResponse.json({ error: "not_found", message: "person not found" }, { status: 404 });
     }
-    if (!canEditPerson(session, parsed.data.entityId, tenant)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-  } else if (tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const created = await createAttribute(tenant.tenantKey, {

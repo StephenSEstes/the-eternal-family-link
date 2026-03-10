@@ -36,9 +36,8 @@ Home
 
 People
 - People shows family members.
-- Opening a person profile lets an authorized user edit that person's details.
+- Signed-in family-group users can add people and edit person profiles in their family group.
 - Person profile editing includes contact details, family details, attributes/events, and pictures/media.
-- If a user does not have permission to edit a person, the app blocks editing.
 
 Attributes and stories
 - Attributes are the main way to record facts, descriptors, events, and stories.
@@ -48,6 +47,7 @@ Attributes and stories
 
 Households
 - Households are their own entity and can have notes, address details, media, and attributes.
+- Signed-in family-group users can edit households, add children, and manage household media in their family group.
 - Household primary image is the wedding photo / main household image.
 
 Media
@@ -90,8 +90,8 @@ Invites
 - The app does not yet send outbound invite email directly.
 
 Permissions
-- Admin-only areas include most Settings/Admin tools, household-admin actions, family access changes, and audit access.
-- Normal users can access regular family-group areas they are allowed to use.
+- Signed-in family-group users can edit shared family data in regular app areas, including people, households, relationships, attributes, and media.
+- Admin-only areas include invites, audit, access management, password policy, integrity tools, import/admin tooling, and family-group administration.
 
 Planned or not-live items
 - AI-written person summaries are planned, not yet live.

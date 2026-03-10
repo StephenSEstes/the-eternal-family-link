@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { PersonProfileRouteClient } from "@/components/PersonProfileRouteClient";
-import { canEditPerson } from "@/lib/auth/permissions";
+import { canManageFamilyData } from "@/lib/auth/permissions";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getTenantBasePath } from "@/lib/family-group/context";
@@ -91,7 +91,7 @@ export default async function PersonPage({ params }: PersonPageProps) {
   const relationships = allRelationships.filter(
     (edge) => peopleInFamily.has(edge.fromPersonId) && peopleInFamily.has(edge.toPersonId),
   );
-  const canEdit = canEditPerson(session, person.personId, tenant);
+  const canEdit = canManageFamilyData(session, tenant);
 
   logRoute(route, {
     requestId,

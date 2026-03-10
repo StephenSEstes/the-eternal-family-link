@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Broadened `USER` role behavior so signed-in family-group users can edit shared family data (people, households, relationships, attributes, media), while admin remains limited to invites, access/security, audit, integrity, and family-group administration. See `docs/change-summary.md`.
 - 2026-03-10: Fixed person photo detail association labels so linked people show display names from the local person list instead of falling back to raw person IDs. See `docs/change-summary.md`.
 - 2026-03-10: Removed the obsolete household-gallery compatibility path and retired legacy-local cleanup reporting so household media now aligns cleanly to `MediaLinks` + `wedding_photo_file_id`. See `docs/change-summary.md`.
 - 2026-03-10: Added deterministic role-aware AI Help guardrails so non-admin users get fixed admin-only guidance for invite, audit, and related admin topics instead of relying only on model prompt behavior. See `docs/change-summary.md`.

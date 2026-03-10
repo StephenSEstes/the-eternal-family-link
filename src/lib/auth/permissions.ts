@@ -1,6 +1,13 @@
 import type { Session } from "next-auth";
 import type { TenantContext } from "@/lib/family-group/context";
 
+export function canManageFamilyData(session: Session | null, tenant?: TenantContext) {
+  if (tenant) {
+    return Boolean(tenant.tenantKey);
+  }
+  return Boolean(session?.user?.email);
+}
+
 export function canEditPerson(session: Session | null, personId: string, tenant?: TenantContext) {
   if (!session?.user && !tenant) {
     return false;

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { toPersonMediaAttribute } from "@/lib/attributes/media-response";
 import {
   normalizePersonMediaAttributeType,
@@ -31,10 +30,6 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
   const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
-  }
-
-  if (!canEditPerson(resolved.session, personId, resolved.tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const person = await getPersonById(personId, resolved.tenant.tenantKey);
@@ -174,10 +169,6 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
   const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
-  }
-
-  if (!canEditPerson(resolved.session, personId, resolved.tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const existing = await getAttributeWithMediaById(resolved.tenant.tenantKey, attributeId);

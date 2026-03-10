@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { toPersonMediaAttributes } from "@/lib/attributes/media-response";
 import { syncPersonMediaAssociations, type PersonMediaAttributeType } from "@/lib/attributes/person-media";
 import {
@@ -38,9 +37,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const resolved = await requireTenantAccess(tenantKey);
     if ("error" in resolved) {
       return resolved.error;
-    }
-    if (!canEditPerson(resolved.session, personId, resolved.tenant)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
 
     const person = await getPersonById(personId, resolved.tenant.tenantKey);

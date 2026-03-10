@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getPeople, getTableRecords } from "@/lib/data/runtime";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 
@@ -16,7 +16,7 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
 export async function GET(_: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
   try {
     const { tenantKey } = await params;
-    const resolved = await requireTenantAdmin(tenantKey);
+    const resolved = await requireTenantAccess(tenantKey);
     if ("error" in resolved) {
       return resolved.error;
     }

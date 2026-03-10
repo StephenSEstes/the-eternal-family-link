@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { buildEntityId } from "@/lib/entity-id";
+import { createAttribute, deleteAttribute, getAttributesForEntity, updateAttribute } from "@/lib/attributes/store";
 import {
   createTableRecord,
   createTableRecords,
@@ -98,77 +99,86 @@ function parseEnabledMembership(value: string) {
   return normalized === "true" || normalized === "yes" || normalized === "1";
 }
 
-function isInLawAttributeForFamily(row: Record<string, string>, familyGroupKey: string) {
-  const attributeType = readField(row, "attribute_type").toLowerCase();
+const IN_LAW_SYNC_NOTE_PREFIX = "[system] in_law_sync:";
+
+function inLawMarkerForFamily(familyGroupKey: string) {
+  return `${IN_LAW_SYNC_NOTE_PREFIX}${familyGroupKey}`;
+}
+
+function isInLawAttributeForFamily(
+  attribute: {
+    attributeType?: string;
+    typeKey?: string;
+    attributeNotes?: string;
+    notes?: string;
+  },
+  familyGroupKey: string,
+) {
+  const attributeType = (attribute.attributeType ?? attribute.typeKey ?? "").trim().toLowerCase();
   if (attributeType !== "in_law") return false;
-  const shareScope = readField(row, "share_scope").toLowerCase();
-  const shareFamilyGroupKey = readField(row, "share_family_group_key").toLowerCase();
-  if (shareScope !== "one_family" && shareScope !== "single_family") return false;
-  return shareFamilyGroupKey === familyGroupKey;
+  const marker = inLawMarkerForFamily(familyGroupKey);
+  const notes = `${attribute.attributeNotes ?? ""} ${attribute.notes ?? ""}`.toLowerCase();
+  return notes.includes(marker.toLowerCase());
 }
 
 async function reconcileInLawMarkerForFamily(
   tenantKey: string,
   personId: string,
   shouldBeInLaw: boolean,
-  attributesRows: Array<{ rowNumber: number; data: Record<string, string> }>,
 ) {
-  const scopedRows = attributesRows.filter((row) => {
-    const rowPersonId = readField(row.data, "person_id");
-    if (rowPersonId !== personId) return false;
-    return isInLawAttributeForFamily(row.data, tenantKey);
-  });
+  const marker = inLawMarkerForFamily(tenantKey);
+  const attributes = await getAttributesForEntity(tenantKey, "person", personId);
+  const scopedAttributes = attributes.filter((attribute) => isInLawAttributeForFamily(attribute, tenantKey));
   if (shouldBeInLaw) {
-    if (scopedRows.length > 0) {
+    if (scopedAttributes.length > 0) {
+      const [first, ...duplicates] = scopedAttributes;
+      await updateAttribute(tenantKey, first.attributeId, {
+        category: "descriptor",
+        attributeType: "in_law",
+        attributeTypeCategory: "",
+        attributeDate: "",
+        dateIsEstimated: false,
+        estimatedTo: "",
+        attributeDetail: "TRUE",
+        attributeNotes: marker,
+        endDate: "",
+        typeKey: "in_law",
+        label: "in-law",
+        valueText: "TRUE",
+        dateStart: "",
+        dateEnd: "",
+        location: "",
+        notes: marker,
+      });
       await Promise.all(
-        scopedRows.map((row) =>
-          updateTableRecordById(
-            "PersonAttributes",
-            readField(row.data, "attribute_id"),
-            {
-              value_text: "TRUE",
-              label: "in-law",
-              visibility: "family",
-              share_scope: "one_family",
-              share_family_group_key: tenantKey,
-            },
-            "attribute_id",
-            tenantKey,
-          ),
-        ),
+        duplicates.map((attribute) => deleteAttribute(tenantKey, attribute.attributeId)),
       );
       return;
     }
-    await createTableRecord(
-      "PersonAttributes",
-      {
-        attribute_id: buildEntityId("attr", `${tenantKey}|${personId}|in_law|${Date.now()}`),
-        person_id: personId,
-        attribute_type: "in_law",
-        value_text: "TRUE",
-        label: "in-law",
-        is_primary: "FALSE",
-        sort_order: "0",
-        visibility: "family",
-        share_scope: "one_family",
-        share_family_group_key: tenantKey,
-        notes: "",
-      },
-      tenantKey,
-    );
+    await createAttribute(tenantKey, {
+      entityType: "person",
+      entityId: personId,
+      category: "descriptor",
+      attributeType: "in_law",
+      attributeTypeCategory: "",
+      attributeDate: "",
+      dateIsEstimated: false,
+      estimatedTo: "",
+      attributeDetail: "TRUE",
+      attributeNotes: marker,
+      endDate: "",
+      typeKey: "in_law",
+      label: "in-law",
+      valueText: "TRUE",
+      dateStart: "",
+      dateEnd: "",
+      location: "",
+      notes: marker,
+    });
     return;
   }
-  if (scopedRows.length === 0) return;
-  await Promise.all(
-    scopedRows.map((row) =>
-      deleteTableRecordById(
-        "PersonAttributes",
-        readField(row.data, "attribute_id"),
-        "attribute_id",
-        tenantKey,
-      ),
-    ),
-  );
+  if (scopedAttributes.length === 0) return;
+  await Promise.all(scopedAttributes.map((attribute) => deleteAttribute(tenantKey, attribute.attributeId)));
 }
 
 async function createFamilyUnit(
@@ -223,9 +233,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   }
 
   const tenant = getTenantContext(session, normalizedTenantKey);
-  if (tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -538,7 +545,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "reconcile_in_law";
     const finalRelationships = await getTableRecords("Relationships", normalizedTenantKey);
-    const attributesRows = await getTableRecords("PersonAttributes", normalizedTenantKey).catch(() => []);
     const affectedPersonIds = new Set<string>([parsed.data.personId]);
     if (spouseId) affectedPersonIds.add(spouseId);
     for (const affectedPersonId of affectedPersonIds) {
@@ -559,7 +565,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         normalizedTenantKey,
         affectedPersonId,
         shouldBeInLaw,
-        attributesRows,
       );
     }
 

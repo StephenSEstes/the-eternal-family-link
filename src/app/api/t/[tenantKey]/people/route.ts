@@ -105,9 +105,6 @@ export async function POST(request: Request, { params }: TenantPeopleRouteProps)
   if ("error" in resolved) {
     return resolved.error;
   }
-  if (resolved.tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const parsed = createPersonSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

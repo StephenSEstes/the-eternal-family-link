@@ -130,3 +130,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep the obsolete household gallery compatibility path as a read/write bridge.
 - `Impact`: Runtime search/delete/integrity logic and schema docs now ignore the obsolete household gallery table; household gallery behavior is driven by `MediaLinks`, and the primary household image remains `wedding_photo_file_id`.
 - `Follow-up`: If needed later, add a targeted data cleanup script to drop the obsolete household gallery table from live OCI environments after validation.
+
+- `Area`: Family-group data editing permissions
+- `Decision`: Any signed-in user with family-group access can edit shared family data in that family group, including people, households, relationships, attributes, and media. Admin remains required only for operational/admin functions such as invites, access management, audit, security policy, integrity tooling, and family-group administration.
+- `Reason`: The product now expects regular family members to help curate shared family records, not just maintain their own self-profile. The old self-edit/admin split was blocking core family-building workflows like adding siblings, spouse households, children, and shared media.
+- `Alternatives Considered`: Keep `USER` self-edit only; add a separate `EDITOR` role before broadening permissions.
+- `Impact`: Family-data routes/pages are now gated by tenant access instead of admin role, while admin screens/routes stay restricted. Relationship-builder in-law sync now writes canonical `Attributes` rows instead of relying on the removed legacy attribute table.
+- `Follow-up`: If a true read-only non-admin role is needed later, add an explicit `VIEWER` or `EDITOR` role instead of overloading `USER`.

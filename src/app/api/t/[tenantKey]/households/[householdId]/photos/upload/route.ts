@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { buildEntityId } from "@/lib/entity-id";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
@@ -32,7 +32,7 @@ function normalizeDateFromTimestamp(raw: string): string {
 export async function POST(request: Request, { params }: UploadRouteProps) {
   try {
     const { tenantKey, householdId } = await params;
-    const resolved = await requireTenantAdmin(tenantKey);
+    const resolved = await requireTenantAccess(tenantKey);
     if ("error" in resolved) {
       return resolved.error;
     }

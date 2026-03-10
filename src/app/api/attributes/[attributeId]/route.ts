@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import {
@@ -26,12 +25,6 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   const existing = await getAttributeById(tenant.tenantKey, attributeId);
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-  if (existing.entityType === "person" && !canEditPerson(session, existing.entityId, tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  if (existing.entityType === "household" && tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
@@ -108,12 +101,6 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   const existing = await getAttributeById(tenant.tenantKey, attributeId);
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-  if (existing.entityType === "person" && !canEditPerson(session, existing.entityId, tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  if (existing.entityType === "household" && tenant.role !== "ADMIN") {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const ok = await deleteAttribute(tenant.tenantKey, attributeId);
   if (!ok) {

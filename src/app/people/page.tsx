@@ -1,5 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { PeopleDirectory } from "@/components/PeopleDirectory";
+import { canManageFamilyData } from "@/lib/auth/permissions";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
@@ -112,7 +113,7 @@ export default async function PeoplePage() {
       <AppHeader />
       <PeopleDirectory
         tenantKey={tenant.tenantKey}
-        canManage={tenant.role === "ADMIN"}
+        canManage={canManageFamilyData(session, tenant)}
         people={people.map((person) => ({
           personId: person.personId,
           displayName: person.displayName,

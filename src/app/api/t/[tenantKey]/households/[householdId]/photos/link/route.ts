@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import { getTableRecords } from "@/lib/data/runtime";
@@ -25,7 +25,7 @@ function normalize(value: string | undefined) {
 
 export async function POST(request: Request, { params }: RouteProps) {
   const { tenantKey, householdId } = await params;
-  const resolved = await requireTenantAdmin(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }

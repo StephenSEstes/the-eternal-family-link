@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession, requireFamilyGroupSession } from "@/lib/auth/session";
 import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import { getPersonById, updatePerson } from "@/lib/data/runtime";
@@ -30,9 +29,6 @@ export async function POST(request: Request, { params }: PersonRouteProps) {
   const tenant = await getRequestTenantContext(session);
 
   const { personId } = await params;
-  if (!canEditPerson(session, personId, tenant)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const body = await request.json().catch(() => null);
   const parsed = personUpdateSchema.safeParse(body);

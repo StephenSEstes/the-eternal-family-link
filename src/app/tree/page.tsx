@@ -1,5 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { TreeGraph } from "@/components/TreeGraph";
+import { canManageFamilyData } from "@/lib/auth/permissions";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { loadTreePageData, type TreePageData } from "@/lib/tree/load-tree-page-data";
@@ -106,7 +107,7 @@ export default async function TreePage() {
           {people.length > 0 ? (
             <TreeGraph
               tenantKey={tenant.tenantKey}
-              canManage={tenant.role === "ADMIN"}
+              canManage={canManageFamilyData(session, tenant)}
               nodes={people.map((person) => ({
                 personId: person.personId,
                 displayName: person.displayName,

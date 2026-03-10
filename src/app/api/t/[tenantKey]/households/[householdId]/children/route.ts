@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 import {
@@ -72,7 +72,7 @@ async function upsertParent(parentPersonId: string, childPersonId: string) {
 
 export async function POST(request: Request, { params }: RouteProps) {
   const { tenantKey, householdId } = await params;
-  const resolved = await requireTenantAdmin(tenantKey);
+  const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }

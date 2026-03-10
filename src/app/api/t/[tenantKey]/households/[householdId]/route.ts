@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { requireTenantAccess, requireTenantAdmin } from "@/lib/family-group/guard";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 import { createAttribute, deleteAttribute, getAttributesForEntity, updateAttribute } from "@/lib/attributes/store";
@@ -255,7 +255,7 @@ async function buildDeleteHouseholdPreview(tenantKey: string, householdId: strin
 export async function GET(_: Request, { params }: RouteProps) {
   try {
     const { tenantKey, householdId } = await params;
-    const resolved = await requireTenantAdmin(tenantKey);
+    const resolved = await requireTenantAccess(tenantKey);
     if ("error" in resolved) {
       return resolved.error;
     }
@@ -333,7 +333,7 @@ export async function GET(_: Request, { params }: RouteProps) {
 export async function PATCH(request: Request, { params }: RouteProps) {
   try {
     const { tenantKey, householdId } = await params;
-    const resolved = await requireTenantAdmin(tenantKey);
+    const resolved = await requireTenantAccess(tenantKey);
     if ("error" in resolved) {
       return resolved.error;
     }

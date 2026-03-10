@@ -28,6 +28,47 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this change and redeploy.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-10 (family-data editing for USER role)
+
+- `Change`: Broadened regular `USER` permissions from self-edit/admin-mixed behavior to full family-data editing within accessible family groups. `USER` can now add people, edit people and households, manage relationships/children/spouse-family creation, and manage person/household media from People, Tree, and Media flows. Admin-only areas remain limited to invites, access/security, audit, integrity, and family-group administration. Also removed the relationship builder's dead dependency on the removed `PersonAttributes` table by moving its in-law sync marker writes onto canonical `Attributes` rows.
+- `Type`: Access Control, UX, Bugfix
+- `Why`: Root cause was a split access model: APIs allowed only self-edit in some person routes, while most shared family creation/edit flows stayed admin-only in both UI and route guards. That blocked the intended collaborative family-building workflow. A second root cause was the relationship builder still trying to write in-law markers through a removed legacy attribute table, which would break spouse/family flows once those routes were opened to regular users.
+- `Files`:
+  - `src/lib/auth/permissions.ts`
+  - `src/app/people/page.tsx`
+  - `src/app/t/[tenantKey]/people/page.tsx`
+  - `src/app/people/[personId]/page.tsx`
+  - `src/app/t/[tenantKey]/people/[personId]/page.tsx`
+  - `src/app/tree/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+  - `src/app/media/page.tsx`
+  - `src/app/t/[tenantKey]/media/page.tsx`
+  - `src/app/api/t/[tenantKey]/people/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/app/api/attributes/route.ts`
+  - `src/app/api/attributes/[attributeId]/route.ts`
+  - `src/app/api/people/[personId]/route.ts`
+  - `src/lib/ai/help-guide.ts`
+- `Data Changes`: No schema change. Relationship builder now writes synced `in_law` markers as canonical `Attributes` rows with a system note marker instead of using the removed legacy attribute table.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Family-data write routes now require tenant access instead of admin role, while admin-only routes remain on `requireTenantAdmin`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Added 2026-03-10 decision for family-group data editing permissions.
+
 ## 2026-03-10 (remove obsolete household media and legacy-local integrity paths)
 
 - `Change`: Removed the obsolete household-gallery compatibility model from active runtime/search/delete/integrity handling, dropped its repo schema/table mapping, removed integrity/UI reporting for retired legacy-local cleanup rows, and cleaned several confirmed unused locals/imports.

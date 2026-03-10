@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { canEditPerson } from "@/lib/auth/permissions";
 import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import {
   appendAuditLog,
@@ -159,10 +158,6 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
   const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
-  }
-
-  if (!canEditPerson(resolved.session, personId, resolved.tenant)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
