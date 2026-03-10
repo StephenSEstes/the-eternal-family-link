@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getImportantDates } from "@/lib/google/sheets";
+import { getImportantDates } from "@/lib/data/runtime";
 
 type TenantTodayPageProps = {
   params: Promise<{ tenantKey: string }>;

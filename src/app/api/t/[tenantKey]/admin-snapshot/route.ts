@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTableRecords } from "@/lib/google/sheets";
+import { getTableRecords } from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type AppRole = "ADMIN" | "USER";

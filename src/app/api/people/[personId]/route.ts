@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession, requireFamilyGroupSession } from "@/lib/auth/session";
-import { getPersonById, updatePerson } from "@/lib/google/sheets";
+import { getPersonById, updatePerson } from "@/lib/data/runtime";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import { personUpdateSchema } from "@/lib/validation/person";
 

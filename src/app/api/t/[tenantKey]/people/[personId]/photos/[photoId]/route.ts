@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { getPersonById, PEOPLE_TAB, updateTableRecordById } from "@/lib/google/sheets";
+import { getPersonById, PEOPLE_TAB, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; personId: string; photoId: string }>;
 };
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
 
 export async function DELETE(_: Request, { params }: RouteProps) {
   const { tenantKey, personId, photoId } = await params;
@@ -33,16 +29,14 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   }
 
   let deletedLinks = 0;
-  if (isOciDataSource()) {
-    const personLinks = await getOciMediaLinksForEntity({
-      familyGroupKey: resolved.tenant.tenantKey,
-      entityType: "person",
-      entityId: personId,
-    });
-    const matchingLinks = personLinks.filter((item) => item.fileId.trim() === targetFileId);
-    for (const link of matchingLinks) {
-      deletedLinks += await deleteOciMediaLink(link.linkId);
-    }
+  const personLinks = await getOciMediaLinksForEntity({
+    familyGroupKey: resolved.tenant.tenantKey,
+    entityType: "person",
+    entityId: personId,
+  });
+  const matchingLinks = personLinks.filter((item) => item.fileId.trim() === targetFileId);
+  for (const link of matchingLinks) {
+    deletedLinks += await deleteOciMediaLink(link.linkId);
   }
 
   const currentPhotoFileId = person.photoFileId.trim();

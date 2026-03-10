@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople } from "@/lib/google/sheets";
+import { getPeople } from "@/lib/data/runtime";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantTreeRouteProps = {

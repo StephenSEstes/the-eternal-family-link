@@ -6,7 +6,7 @@ import {
   getTenantConfig,
   getTenantLocalAccessList,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { hashPassword } from "@/lib/security/password";
 
 const USERS_TAB = "UserAccess";

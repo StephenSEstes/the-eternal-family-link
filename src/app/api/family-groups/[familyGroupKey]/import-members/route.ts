@@ -7,7 +7,7 @@ import {
   getTableRecords,
   getTenantConfig,
   upsertTenantAccess,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const payloadSchema = z.object({

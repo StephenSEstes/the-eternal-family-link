@@ -10,7 +10,7 @@ import {
   getPersonById,
   getTableRecords,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string }>;

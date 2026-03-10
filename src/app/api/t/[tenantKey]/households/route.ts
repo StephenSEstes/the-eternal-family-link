@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
-import { getPeople, getTableRecords } from "@/lib/google/sheets";
+import { getPeople, getTableRecords } from "@/lib/data/runtime";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 
 function readCell(row: Record<string, string>, ...keys: string[]) {

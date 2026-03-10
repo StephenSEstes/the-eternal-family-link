@@ -107,3 +107,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Hardcoded frontend lists only; separate dedicated definitions tables.
 - `Impact`: Admin now has an Attribute Types tab for managing event categories/types (`type`, `type category`, detail label, date mode/end-date prompt). Add Attribute event form resolves options from this config with defaults fallback.
 - `Follow-up`: If definitions become large or need audit/version history, migrate from JSON-in-config to dedicated normalized tables.
+
+## 2026-03-10
+
+- `Area`: Runtime persistence backend
+- `Decision`: OCI is the only supported runtime persistence backend. Google Sheets remains available only for historical migration/admin tooling and must not be used by active app routes, pages, or shared runtime helpers.
+- `Reason`: Dual-backend runtime behavior was making production diagnosis harder, keeping dead mode-switching branches alive, and preserving runtime dependency on Sheets-only environment/config paths even after OCI became the source of truth.
+- `Alternatives Considered`: Continue supporting both runtime backends behind `EFL_DATA_SOURCE`; remove Sheets code entirely in one large rewrite.
+- `Impact`: Active app imports move to a neutral runtime data module, runtime env validation no longer requires `SHEET_ID`, and OCI media/attribute flows no longer branch on data source.
+- `Follow-up`: Continue retiring remaining legacy sheet-shaped field contracts and quarantine/delete obsolete Sheets admin tooling when historical migration support is no longer needed.

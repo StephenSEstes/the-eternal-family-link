@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
-import { getPeople, getPersonAttributes, getTenantConfig } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes, getTenantConfig } from "@/lib/data/runtime";
 import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantViewerPageProps = {

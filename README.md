@@ -6,7 +6,7 @@ Next.js 15 App Router MVP for a family memory support app.
 
 - Next.js 15 (App Router, TypeScript)
 - NextAuth (Google provider)
-- Google Sheets + Drive APIs (service account)
+- OCI + Google Drive APIs (service account)
 - Tailwind CSS
 - Zod validation
 
@@ -14,9 +14,9 @@ Next.js 15 App Router MVP for a family memory support app.
 
 - Auth via Google using NextAuth App Router route handlers
 - Route protection for all routes except `/viewer`
-- Allowlist authorization from Google Sheet tab `UserAccess`
+- Allowlist authorization from runtime `UserAccess`
 - Session token enrichment with `role` and `person_id`
-- Typed Google data layer in `src/lib/google/` for Sheets and Drive
+- Neutral runtime data layer in `src/lib/data/` with Google Drive helpers in `src/lib/google/`
 - Pages:
   - `/` dashboard (People, Family Tree, Today, Games)
   - `/people` list with photo + name
@@ -41,7 +41,6 @@ GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 
 GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
-SHEET_ID=1mDcmyYDYCTkFFT2k_AtnavuvZlF3qPshErxVs0ByzpQ
 PHOTOS_FOLDER_ID=14-SWEGBIog3RFxQG2kPenzdOZamBL4r-
 
 VIEWER_PIN=1234
@@ -49,7 +48,8 @@ VIEWER_PIN=1234
 
 Notes:
 - `GOOGLE_SERVICE_ACCOUNT_JSON` must be a single-line stringified JSON object.
-- Share the target Google Sheet and Photos Drive folder with the service account email.
+- Share the target Photos Drive folder with the service account email.
+- `SHEET_ID` is optional and only needed for historical Sheets migration/admin tooling.
 
 ## Google OAuth setup
 

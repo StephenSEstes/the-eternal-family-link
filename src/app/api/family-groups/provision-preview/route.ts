@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
-import { getPeople, getTableRecords } from "@/lib/google/sheets";
+import { getPeople, getTableRecords } from "@/lib/data/runtime";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({
@@ -93,4 +93,3 @@ export async function POST(request: Request) {
     householdImportCandidates,
   });
 }
-

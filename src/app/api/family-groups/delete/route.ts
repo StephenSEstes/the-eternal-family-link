@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
-import { appendAuditLog, deleteTableRows, getTableRecords, updateTableRecordById } from "@/lib/google/sheets";
+import { appendAuditLog, deleteTableRows, getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
 
 type OrphanPerson = {
   personId: string;

@@ -4,19 +4,14 @@ import { buildEntityId } from "@/lib/entity-id";
 import {
   createTableRecord,
   deleteTableRecordById,
-  ensureResolvedTabColumns,
   getTableRecords,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { deleteOciMediaLink, ensureOciAttributesTable, getOciMediaLinksForEntity } from "@/lib/oci/tables";
 import type { AttributeEntityType, AttributeMediaLink, AttributeRecord } from "@/lib/attributes/types";
 
 export const ATTRIBUTES_TAB = "Attributes";
 let attributesStorageReady = false;
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
 
 function readCell(row: Record<string, string>, ...keys: string[]) {
   for (const key of keys) {
@@ -73,31 +68,9 @@ function inferCategoryFromTypeKey(typeKey: string) {
 }
 
 async function ensureAttributesStorage(tenantKey: string) {
+  void tenantKey;
   if (attributesStorageReady) return;
-  if (isOciDataSource()) {
-    await ensureOciAttributesTable();
-    attributesStorageReady = true;
-    return;
-  }
-  await ensureResolvedTabColumns(
-    ATTRIBUTES_TAB,
-    [
-      "attribute_id",
-      "entity_type",
-      "entity_id",
-      "attribute_type",
-      "attribute_type_category",
-      "attribute_date",
-      "date_is_estimated",
-      "estimated_to",
-      "attribute_detail",
-      "attribute_notes",
-      "end_date",
-      "created_at",
-      "updated_at",
-    ],
-    tenantKey,
-  );
+  await ensureOciAttributesTable();
   attributesStorageReady = true;
 }
 
@@ -218,60 +191,36 @@ export async function deleteAttribute(tenantKey: string, attributeId: string) {
   if (!existing) return false;
   const deleted = await deleteTableRecordById(ATTRIBUTES_TAB, attributeId, "attribute_id", tenantKey);
   if (!deleted) return false;
-  if (isOciDataSource()) {
-    const links = await getOciMediaLinksForEntity({
-      familyGroupKey: tenantKey,
-      entityType: "attribute",
-      entityId: attributeId,
-    });
-    await Promise.all(links.map((item) => deleteOciMediaLink(item.linkId)));
-  }
+  const links = await getOciMediaLinksForEntity({
+    familyGroupKey: tenantKey,
+    entityType: "attribute",
+    entityId: attributeId,
+  });
+  await Promise.all(links.map((item) => deleteOciMediaLink(item.linkId)));
   return true;
 }
 
 export async function getAttributeMediaLinks(tenantKey: string, attributeId: string): Promise<AttributeMediaLink[]> {
-  if (isOciDataSource()) {
-    const links = await getOciMediaLinksForEntity({
-      familyGroupKey: tenantKey,
-      entityType: "attribute",
-      entityId: attributeId,
-    });
-    return links.map((item) => ({
-      linkId: item.linkId,
-      fileId: item.fileId,
-      label: item.label,
-      description: item.description,
-      photoDate: item.photoDate,
-      isPrimary: item.isPrimary,
-      mediaMetadata: item.mediaMetadata,
-      createdAt: item.createdAt,
-    }));
-  }
-  const mediaRows = await getTableRecords("MediaLinks", tenantKey).catch(() => []);
-  return mediaRows
-    .filter(
-      (row) =>
-        normalize(readCell(row.data, "entity_type")) === "attribute" &&
-        readCell(row.data, "entity_id") === attributeId,
-    )
-    .map((row) => ({
-      linkId: readCell(row.data, "link_id"),
-      fileId: readCell(row.data, "file_id"),
-      label: readCell(row.data, "label"),
-      description: readCell(row.data, "description"),
-      photoDate: readCell(row.data, "photo_date"),
-      isPrimary: normalize(readCell(row.data, "is_primary")) === "true",
-      mediaMetadata: readCell(row.data, "media_metadata"),
-      createdAt: readCell(row.data, "created_at"),
-    }))
-    .filter((item) => item.linkId && item.fileId);
+  const links = await getOciMediaLinksForEntity({
+    familyGroupKey: tenantKey,
+    entityType: "attribute",
+    entityId: attributeId,
+  });
+  return links.map((item) => ({
+    linkId: item.linkId,
+    fileId: item.fileId,
+    label: item.label,
+    description: item.description,
+    photoDate: item.photoDate,
+    isPrimary: item.isPrimary,
+    mediaMetadata: item.mediaMetadata,
+    createdAt: item.createdAt,
+  }));
 }
 
 export async function removeAttributeMediaLink(tenantKey: string, attributeId: string, linkId: string) {
   void attributeId;
-  if (isOciDataSource()) {
-    const count = await deleteOciMediaLink(linkId);
-    return count > 0;
-  }
-  return deleteTableRecordById("MediaLinks", linkId, "link_id", tenantKey);
+  void tenantKey;
+  const count = await deleteOciMediaLink(linkId);
+  return count > 0;
 }

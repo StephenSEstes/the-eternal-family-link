@@ -11,7 +11,7 @@ import {
   getTenantConfig,
   listTabs,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 type IntegritySeverity = "error" | "warn";
@@ -154,10 +154,6 @@ function boolLike(value: string) {
   return parseBool(value) ? "TRUE" : "FALSE";
 }
 
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
-
 type ExpectedMediaLink = {
   source: "people_headshot" | "person_attribute" | "household_photo";
   familyGroupKey: string;
@@ -188,14 +184,6 @@ function mediaLinkKey(input: {
 }
 
 async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: boolean) {
-  if (!isOciDataSource()) {
-    return {
-      ok: false,
-      reason: "unsupported_data_source",
-      message: "Orphan media link repair requires OCI data source.",
-    } as const;
-  }
-
   const familyGroupKey = normalize(tenantKey);
   const [people, attributeRows, householdPhotoRows, mediaAssetRows, mediaLinkRows] = await Promise.all([
     getPeople(tenantKey).catch(() => []),

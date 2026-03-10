@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPhotoContent } from "@/lib/google/drive";
-import { getTableRecords, getTenantConfig } from "@/lib/google/sheets";
+import { getTableRecords, getTenantConfig } from "@/lib/data/runtime";
 
 type FolderCache = {
   expiresAt: number;

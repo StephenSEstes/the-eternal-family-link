@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext, getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
-import { getPersonById } from "@/lib/google/sheets";
+import { getPersonById } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/tenant/context";
 
 type HoroscopePayload = {

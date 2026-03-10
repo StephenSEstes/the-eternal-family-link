@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getImportantDates } from "@/lib/google/sheets";
+import { getImportantDates } from "@/lib/data/runtime";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 type TenantTodayRouteProps = {

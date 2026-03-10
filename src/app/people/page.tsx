@@ -3,7 +3,7 @@ import { PeopleDirectory } from "@/components/PeopleDirectory";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes } from "@/lib/data/runtime";
 import { getOrLoadWithTtl } from "@/lib/server/route-cache";
 
 const PEOPLE_ROUTE_CACHE_TTL_MS = 20_000;

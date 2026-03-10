@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { deleteTableRecordById, getTableRecordById, updateTableRecordById } from "@/lib/google/sheets";
+import { deleteTableRecordById, getTableRecordById, updateTableRecordById } from "@/lib/data/runtime";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 
 const tableNameSchema = z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9 _-]+$/);

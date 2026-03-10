@@ -2,11 +2,10 @@ import "server-only";
 
 import {
   createTableRecord,
-  ensureResolvedTabColumns,
   getTableRecords,
   getTenantConfig,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import type {
   AttributeEventCategoryDefinition,
   AttributeEventDefinitions,
@@ -24,10 +23,6 @@ const FAMILY_CONFIG_HEADERS = [
   "photos_folder_id",
   DEFINITIONS_COLUMN,
 ];
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
 
 function normalizeTenantKey(value: string) {
   return value.trim().toLowerCase();
@@ -161,8 +156,8 @@ function normalizeConfig(input: unknown): AttributeEventDefinitions {
 }
 
 async function ensureFamilyConfigShape(tenantKey: string) {
-  if (isOciDataSource()) return;
-  await ensureResolvedTabColumns([FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB], FAMILY_CONFIG_HEADERS, tenantKey);
+  void tenantKey;
+  void FAMILY_CONFIG_HEADERS;
 }
 
 async function findFamilyConfigRow(tenantKey: string) {

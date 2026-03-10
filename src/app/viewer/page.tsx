@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ViewerPeopleGrid } from "@/components/ViewerPeopleGrid";
 import { getEnv } from "@/lib/env";
-import { getPeople } from "@/lib/google/sheets";
+import { getPeople } from "@/lib/data/runtime";
 
 type ViewerPageProps = {
   searchParams: Promise<{ error?: string }>;

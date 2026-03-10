@@ -8,7 +8,7 @@ import {
   getPersonById,
   getPeople,
   PERSON_ATTRIBUTES_TAB,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";

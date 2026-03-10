@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { HouseholdRecord, RelationshipRecord } from "@/lib/google/types";
-import { getPeople, getTableRecords } from "@/lib/google/sheets";
+import { getPeople, getTableRecords } from "@/lib/data/runtime";
 import { getOciRelationshipsForTenant } from "@/lib/oci/tables";
 
 function readCell(record: Record<string, string>, ...keys: string[]) {
@@ -15,29 +15,8 @@ function readCell(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
-
 export async function getRelationships(tenantKey?: string): Promise<RelationshipRecord[]> {
-  let rows = await getTableRecords("Relationships");
-  if (tenantKey && isOciDataSource()) {
-    try {
-      const tenantRows = await getOciRelationshipsForTenant(tenantKey);
-      if (tenantRows.length > 0) {
-        rows = tenantRows;
-      } else if (rows.length > 0) {
-        console.warn(
-          `[family:getRelationships] Tenant-scoped OCI relationships returned 0 rows for tenant '${tenantKey}'. Falling back to global relationships.`,
-        );
-      }
-    } catch (error) {
-      console.warn(
-        `[family:getRelationships] Tenant-scoped OCI relationships failed for tenant '${tenantKey}'. Falling back to global relationships.`,
-        error,
-      );
-    }
-  }
+  const rows = tenantKey ? await getOciRelationshipsForTenant(tenantKey) : await getTableRecords("Relationships");
   const normalizedTenantKey = (tenantKey ?? "").trim().toLowerCase();
   return rows
     .map((row, idx) => {
@@ -54,12 +33,7 @@ export async function getRelationships(tenantKey?: string): Promise<Relationship
 }
 
 export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[]> {
-  const [people, rows] = await Promise.all([
-    getPeople(tenantKey),
-    isOciDataSource()
-      ? getTableRecords("Households").catch(() => [])
-      : getTableRecords("Households", tenantKey),
-  ]);
+  const [people, rows] = await Promise.all([getPeople(tenantKey), getTableRecords("Households", tenantKey).catch(() => [])]);
   const allowedPersonIds = new Set(people.map((person) => person.personId));
   const byHouseholdId = new Map<string, HouseholdRecord>();
   for (let idx = 0; idx < rows.length; idx += 1) {

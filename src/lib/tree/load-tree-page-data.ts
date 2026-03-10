@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getHouseholds, getRelationships } from "@/lib/google/family";
-import { getPeople, getPersonAttributes } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes } from "@/lib/data/runtime";
 
 export type TreePageData = {
   people: Awaited<ReturnType<typeof getPeople>>;

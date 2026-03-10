@@ -6,7 +6,7 @@ import {
   ensurePersonFamilyGroupMembership,
   getPeople,
   getTableRecords,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string }>;

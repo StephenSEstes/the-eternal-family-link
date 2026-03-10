@@ -10,17 +10,13 @@ import {
   PEOPLE_TAB,
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { personAttributeUpdateSchema } from "@/lib/validation/person-attributes";
 
 type PersonAttributeItemRouteProps = {
   params: Promise<{ tenantKey: string; personId: string; attributeId: string }>;
 };
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
-}
 
 function normalizeMediaAttributeType(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -120,7 +116,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
 
   const existingMediaType = normalizeMediaAttributeType(existing.attributeType);
   const nextMediaType = normalizeMediaAttributeType(nextType);
-  if (isOciDataSource() && (existingMediaType || nextMediaType)) {
+  if (existingMediaType || nextMediaType) {
     const existingLinks = await getOciMediaLinksForEntity({
       familyGroupKey: resolved.tenant.tenantKey,
       entityType: "attribute",
@@ -207,7 +203,7 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  if (isOciDataSource() && normalizeMediaAttributeType(existing.attributeType)) {
+  if (normalizeMediaAttributeType(existing.attributeType)) {
     const existingLinks = await getOciMediaLinksForEntity({
       familyGroupKey: resolved.tenant.tenantKey,
       entityType: "attribute",

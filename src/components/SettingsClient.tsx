@@ -2167,7 +2167,7 @@ export function SettingsClient({
       {activeTab === "integrity" ? (
         <section className="card settings-panel">
         <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Data &amp; System</h2>
-        <p className="page-subtitle" style={{ marginTop: 0 }}>Import worksheet data and run system integrity diagnostics.</p>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>Import data and run system integrity diagnostics.</p>
         <div className="settings-toolbar-row">
           <div className="settings-toolbar-field">
             <label className="label">Family Group</label>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { canEditPerson } from "@/lib/auth/permissions";
 import { getAppSession } from "@/lib/auth/session";
 import { getRequestTenantContext } from "@/lib/family-group/context";
-import { getPersonById } from "@/lib/google/sheets";
+import { getPersonById } from "@/lib/data/runtime";
 import { createAttribute, getAttributeMediaLinks, getAttributesForEntity } from "@/lib/attributes/store";
 import { attributeCreateSchema } from "@/lib/validation/attributes";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getPeople } from "@/lib/google/sheets";
+import { getPeople } from "@/lib/data/runtime";
 import { getRequestTenantContext } from "@/lib/family-group/context";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
 
@@ -166,4 +166,3 @@ export async function GET() {
     }
   }
 }
-

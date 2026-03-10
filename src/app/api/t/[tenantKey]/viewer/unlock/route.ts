@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTenantConfig } from "@/lib/google/sheets";
+import { getTenantConfig } from "@/lib/data/runtime";
 import { verifyViewerPin } from "@/lib/security/pin";
 import { normalizeTenantRouteKey } from "@/lib/family-group/context";
 

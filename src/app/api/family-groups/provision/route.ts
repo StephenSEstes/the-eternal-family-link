@@ -11,7 +11,7 @@ import {
   getTableRecords,
   updateTableRecordById,
   upsertTenantAccess,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";

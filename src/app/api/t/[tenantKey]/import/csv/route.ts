@@ -4,7 +4,7 @@ import { getAppSession } from "@/lib/auth/session";
 import { parseCsvContent } from "@/lib/csv/parse";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
-import { createTableRecord, updateTableRecordById } from "@/lib/google/sheets";
+import { createTableRecord, updateTableRecordById } from "@/lib/data/runtime";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({

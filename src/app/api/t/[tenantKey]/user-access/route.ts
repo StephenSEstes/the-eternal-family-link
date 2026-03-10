@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { appendAuditLog, getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/google/sheets";
+import { appendAuditLog, getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const upsertSchema = z.object({

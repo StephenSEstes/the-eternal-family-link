@@ -11,7 +11,7 @@ import {
   getPeople,
   getTableRecords,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string }>;
@@ -53,10 +53,6 @@ const MARRIAGE_SYNC_NOTE_PREFIX = "[system] household_marriage_sync:";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
-}
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
 function readCell(row: Record<string, string>, ...keys: string[]) {
@@ -298,43 +294,22 @@ export async function GET(_: Request, { params }: RouteProps) {
         birthDate: person?.birthDate || "",
       };
     });
-    let householdPhotos: HouseholdPhotoLink[] = [];
-    if (isOciDataSource()) {
-      householdPhotos = (await getOciMediaLinksForEntity({
-        familyGroupKey: resolved.tenant.tenantKey,
-        entityType: "household",
-        entityId: householdId,
-        usageType: "gallery",
+    const householdPhotos: HouseholdPhotoLink[] = (await getOciMediaLinksForEntity({
+      familyGroupKey: resolved.tenant.tenantKey,
+      entityType: "household",
+      entityId: householdId,
+      usageType: "gallery",
+    }))
+      .map((item) => ({
+        photoId: item.linkId,
+        fileId: item.fileId,
+        name: item.label,
+        description: item.description,
+        photoDate: item.photoDate,
+        isPrimary: item.isPrimary,
+        mediaMetadata: item.mediaMetadata,
       }))
-        .map((item) => ({
-          photoId: item.linkId,
-          fileId: item.fileId,
-          name: item.label,
-          description: item.description,
-          photoDate: item.photoDate,
-          isPrimary: item.isPrimary,
-          mediaMetadata: item.mediaMetadata,
-        }))
-        .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
-    } else {
-      await ensureResolvedTabColumns(
-        "HouseholdPhotos",
-        ["family_group_key", "photo_id", "household_id", "file_id", "name", "description", "photo_date", "is_primary", "media_metadata"],
-        resolved.tenant.tenantKey,
-      );
-      householdPhotos = (await getTableRecords("HouseholdPhotos", resolved.tenant.tenantKey).catch(() => []))
-        .filter((row) => readCell(row.data, "household_id") === householdId)
-        .map((row) => ({
-          photoId: readCell(row.data, "photo_id"),
-          fileId: readCell(row.data, "file_id"),
-          name: readCell(row.data, "name"),
-          description: readCell(row.data, "description"),
-          photoDate: readCell(row.data, "photo_date"),
-          isPrimary: normalize(readCell(row.data, "is_primary")) === "true",
-          mediaMetadata: readCell(row.data, "media_metadata"),
-        }))
-        .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
-    }
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name));
 
     return NextResponse.json({
       tenantKey: resolved.tenant.tenantKey,
@@ -459,17 +434,14 @@ export async function DELETE(request: Request, { params }: RouteProps) {
       "Relationships",
       built.rowNumbers.spouseRelationships,
     );
-    let deletedMediaLinks = 0;
-    if (isOciDataSource()) {
-      const links = await getOciMediaLinksForEntity({
-        familyGroupKey: resolved.tenant.tenantKey,
-        entityType: "household",
-        entityId: householdId,
-        usageType: "gallery",
-      });
-      const deletedCounts = await Promise.all(links.map((item) => deleteOciMediaLink(item.linkId)));
-      deletedMediaLinks = deletedCounts.reduce((sum, value) => sum + value, 0);
-    }
+    const links = await getOciMediaLinksForEntity({
+      familyGroupKey: resolved.tenant.tenantKey,
+      entityType: "household",
+      entityId: householdId,
+      usageType: "gallery",
+    });
+    const deletedCounts = await Promise.all(links.map((item) => deleteOciMediaLink(item.linkId)));
+    const deletedMediaLinks = deletedCounts.reduce((sum, value) => sum + value, 0);
 
     await appendAuditLog({
       actorEmail: resolved.session.user?.email ?? "",

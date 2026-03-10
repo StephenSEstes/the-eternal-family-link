@@ -11,7 +11,7 @@ import {
   PEOPLE_TAB,
   PERSON_ATTRIBUTES_TAB,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { personAttributeCreateSchema } from "@/lib/validation/person-attributes";
 
@@ -22,10 +22,6 @@ type PersonAttributeRouteProps = {
 function buildAttributeId(tenantKey: string, personId: string, attributeType: string) {
   const typeKey = attributeType.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
   return buildEntityId("attr", `${tenantKey}|${personId}|${typeKey}|${Date.now()}`);
-}
-
-function isOciDataSource() {
-  return (process.env.EFL_DATA_SOURCE ?? "").trim().toLowerCase() === "oci";
 }
 
 function normalizeMediaAttributeType(value: string) {
@@ -129,7 +125,7 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
 
   const mediaAttributeType = normalizeMediaAttributeType(parsed.data.attributeType);
   if (mediaAttributeType) {
-    if (isOciDataSource() && parsed.data.valueText.trim()) {
+    if (parsed.data.valueText.trim()) {
       const fileId = parsed.data.valueText.trim();
       const mediaId = buildMediaId(fileId);
       const usageType = mediaAttributeType === "photo" ? "photo" : "media";

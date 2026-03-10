@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { GamesClient } from "@/components/GamesClient";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getImportantDates, getPeople } from "@/lib/google/sheets";
+import { getImportantDates, getPeople } from "@/lib/data/runtime";
 
 type TenantGamesPageProps = {
   params: Promise<{ tenantKey: string }>;

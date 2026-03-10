@@ -13,7 +13,7 @@ import {
   getEnabledUserAccess,
   getEnabledUserAccessList,
   getEnabledUserAccessListByPersonId,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { DEFAULT_TENANT_KEY, DEFAULT_TENANT_NAME } from "@/lib/family-group/context";
 import { verifyPassword } from "@/lib/security/password";
 
@@ -292,4 +292,3 @@ export const authOptions: NextAuthOptions = {
   },
   secret: getEnv().NEXTAUTH_SECRET,
 };
-

@@ -4,10 +4,10 @@ Canonical data structure reference for The Eternal Family Link.
 
 ## Scope
 
-- Storage backend: Google Sheets tabs and OCI tables (same logical schema)
+- Storage backend: OCI tables for active runtime; Google Sheets retained only for historical migration/admin tooling
 - Model style: global tables with family membership/access joins
 - Notes:
-  - Google Sheets does not provide database indexes/constraints.
+  - Historical Sheets-era names may still appear in compatibility code or migration tools, but OCI is the runtime source of truth.
   - "Indexes" below are logical lookup keys and uniqueness rules enforced by app logic.
 
 ## Focused Model: Person + Attributes + Media

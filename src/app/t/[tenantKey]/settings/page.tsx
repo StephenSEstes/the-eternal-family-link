@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SettingsClient } from "@/components/SettingsClient";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getPeople, getTenantUserAccessList } from "@/lib/google/sheets";
+import { getPeople, getTenantUserAccessList } from "@/lib/data/runtime";
 
 type SettingsPageProps = {
   params: Promise<{ tenantKey: string }>;

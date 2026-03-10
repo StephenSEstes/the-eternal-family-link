@@ -10,7 +10,7 @@ import {
   ensurePersonFamilyGroupMembership,
   getTableRecords,
   updateTableRecordById,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
 
 const payloadSchema = z.object({

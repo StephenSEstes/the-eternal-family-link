@@ -13,6 +13,40 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (OCI-only runtime boundary cleanup)
+
+- `Change`: Added a neutral runtime data module, moved active routes/pages/libs off direct `src/lib/google/sheets.ts` imports, removed runtime `EFL_DATA_SOURCE` branches from active media/attribute/household flows, and made `SHEET_ID` optional for OCI runtime.
+- `Type`: API, Infra
+- `Why`: Root cause was architectural drift after the OCI cutover: active app code still imported Sheets-named modules and still carried mode-switch branches that implied both backends were supported at runtime. That slowed diagnosis, kept dead paths alive, and preserved unnecessary runtime dependency on Sheets configuration.
+- `Files`:
+  - `src/lib/data/runtime.ts`
+  - `src/lib/env.ts`
+  - `src/lib/google/family.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `README.md`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: No schema change. Runtime reads/writes now assume OCI as the only supported persistence backend; Sheets remains only for historical tooling.
+- `Verify`:
+  - `npm run lint` passes.
+  - `rg -n "EFL_DATA_SOURCE|isOciDataSource" src` only reports `src/lib/google/sheets.ts`.
+  - `rg -n "@/lib/google/sheets" src` only reports the neutral runtime boundary plus explicit Sheets-only admin/tooling files.
+  - Active runtime no longer requires `SHEET_ID` to boot in OCI mode.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: OCI is now the only supported runtime persistence backend; Sheets is historical tooling only.
+
 ## 2026-03-10 (OCI-only runtime helper cleanup for scaffold/access flows)
 
 - `Change`: Removed active Sheets-only behavior from central runtime helper paths by making `ensureResolvedTabColumns` a no-op in OCI mode, making family-group scaffold creation write `FamilyConfig` directly in OCI mode, and moving tenant user-access upsert onto dedicated OCI table writes instead of Google Sheets mutations.

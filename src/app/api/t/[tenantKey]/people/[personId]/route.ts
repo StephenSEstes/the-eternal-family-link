@@ -7,7 +7,7 @@ import {
   getTableRecords,
   PERSON_ATTRIBUTES_TAB,
   updatePerson,
-} from "@/lib/google/sheets";
+} from "@/lib/data/runtime";
 import { requireTenantAccess, requireTenantAdmin } from "@/lib/family-group/guard";
 import { classifyOperationalError } from "@/lib/diagnostics/route";
 import { personUpdateSchema } from "@/lib/validation/person";

@@ -8,7 +8,7 @@ import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "
 import { getTenantBasePath } from "@/lib/family-group/context";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import { getPeople, getPersonAttributes, getPersonById } from "@/lib/google/sheets";
+import { getPeople, getPersonAttributes, getPersonById } from "@/lib/data/runtime";
 
 type TenantPersonPageProps = {
   params: Promise<{ tenantKey: string; personId: string }>;
