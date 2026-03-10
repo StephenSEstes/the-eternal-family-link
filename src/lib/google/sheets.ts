@@ -16,6 +16,7 @@ import {
   getOciTableRecords,
   getOciTenantUserAccessRows,
   listOciTabs,
+  upsertOciTenantAccess,
   upsertOciPersonFamilyGroupMembership,
   updateOciTableRecordById,
 } from "@/lib/oci/tables";
@@ -461,6 +462,12 @@ export async function ensureResolvedTabColumns(
   requiredHeaders: string[],
   tenantKey?: string,
 ) {
+  if (isOciDataSource()) {
+    void tabName;
+    void requiredHeaders;
+    void tenantKey;
+    return;
+  }
   const sheets = await createSheetsClient();
   let resolved = await resolveTenantTabNameWithClient(sheets, tabName, tenantKey);
   if (!resolved) {
@@ -499,18 +506,29 @@ export async function ensureTenantScaffold(input: {
   photosFolderId: string;
 }) {
   const normalizedTenantKey = normalizeTenantKey(input.tenantKey);
-  const sheets = await createSheetsClient();
-  for (const [tab, headers] of Object.entries(TENANT_TABLE_HEADERS)) {
-    const scopedTab = buildTenantScopedTabName(tab, normalizedTenantKey);
-    await ensureTabWithHeaders(sheets, scopedTab, headers);
-  }
-
   const configPayload: Record<string, string> = {
     family_group_key: normalizedTenantKey,
     family_group_name: input.tenantName.trim() || normalizedTenantKey,
     viewer_pin_hash: viewerPinHash(getEnv().VIEWER_PIN),
     photos_folder_id: input.photosFolderId,
   };
+  if (isOciDataSource()) {
+    const updated = await updateTableRecordById(
+      [FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB],
+      normalizedTenantKey,
+      configPayload,
+      "family_group_key",
+    );
+    if (!updated) {
+      await createTableRecord(FAMILY_CONFIG_TAB, configPayload);
+    }
+    return;
+  }
+  const sheets = await createSheetsClient();
+  for (const [tab, headers] of Object.entries(TENANT_TABLE_HEADERS)) {
+    const scopedTab = buildTenantScopedTabName(tab, normalizedTenantKey);
+    await ensureTabWithHeaders(sheets, scopedTab, headers);
+  }
 
   const updated = await updateTableRecordById(
     [FAMILY_CONFIG_TAB, LEGACY_TENANT_CONFIG_TAB],
@@ -1419,6 +1437,17 @@ export async function getTenantUserAccessList(tenantKey: string): Promise<UserAc
 }
 
 export async function upsertTenantAccess(input: UpsertTenantAccessInput): Promise<UpsertTenantAccessResult> {
+  if (isOciDataSource()) {
+    const action = await upsertOciTenantAccess({
+      userEmail: input.userEmail,
+      tenantKey: input.tenantKey,
+      tenantName: input.tenantName,
+      role: input.role,
+      personId: input.personId,
+      isEnabled: input.isEnabled,
+    });
+    return { action, rowNumber: 0 };
+  }
   const familyGroups = await ensureUserFamilyGroupsTabSchema();
   const familyIdx = buildHeaderIndex(familyGroups.headers);
   const normalizedEmail = input.userEmail.trim().toLowerCase();

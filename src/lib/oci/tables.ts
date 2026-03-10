@@ -787,6 +787,141 @@ export async function getOciTenantUserAccessRows(tenantKey: string): Promise<Oci
   });
 }
 
+export async function upsertOciTenantAccess(input: {
+  userEmail: string;
+  tenantKey: string;
+  tenantName: string;
+  role: string;
+  personId: string;
+  isEnabled: boolean;
+}): Promise<"created" | "updated"> {
+  const userEmail = input.userEmail.trim().toLowerCase();
+  const tenantKey = input.tenantKey.trim().toLowerCase();
+  const tenantName = input.tenantName.trim();
+  const role = input.role.trim().toUpperCase() || "USER";
+  const personId = input.personId.trim();
+  const googleAccess = input.isEnabled ? "TRUE" : "FALSE";
+  const membershipEnabled = input.isEnabled ? "TRUE" : "FALSE";
+
+  if (!tenantKey) {
+    throw new Error("family_group_key is required");
+  }
+
+  return withConnection(async (connection) => {
+    const membershipUpdate = await connection.execute(
+      `UPDATE user_family_groups
+       SET user_email = :userEmail,
+           family_group_name = :tenantName,
+           role = :role,
+           person_id = :personId,
+           is_enabled = :membershipEnabled
+       WHERE LOWER(TRIM(family_group_key)) = :tenantKey
+         AND (
+           (:personId <> '' AND TRIM(person_id) = :personId)
+           OR LOWER(TRIM(user_email)) = :userEmail
+         )`,
+      {
+        userEmail,
+        tenantName,
+        role,
+        personId,
+        membershipEnabled,
+        tenantKey,
+      },
+      { autoCommit: false },
+    );
+
+    let action: "created" | "updated" = (membershipUpdate.rowsAffected ?? 0) > 0 ? "updated" : "created";
+    if ((membershipUpdate.rowsAffected ?? 0) === 0) {
+      await connection.execute(
+        `INSERT INTO user_family_groups (
+           user_email,
+           family_group_key,
+           family_group_name,
+           role,
+           person_id,
+           is_enabled
+         ) VALUES (
+           :userEmail,
+           :tenantKey,
+           :tenantName,
+           :role,
+           :personId,
+           :membershipEnabled
+         )`,
+        {
+          userEmail,
+          tenantKey,
+          tenantName,
+          role,
+          personId,
+          membershipEnabled,
+        },
+        { autoCommit: false },
+      );
+    }
+
+    const userUpdate = await connection.execute(
+      `UPDATE user_access
+       SET user_email = :userEmail,
+           google_access = :googleAccess,
+           role = :role,
+           person_id = :personId
+       WHERE (
+         (:personId <> '' AND TRIM(person_id) = :personId)
+         OR LOWER(TRIM(user_email)) = :userEmail
+       )`,
+      {
+        userEmail,
+        googleAccess,
+        role,
+        personId,
+      },
+      { autoCommit: false },
+    );
+
+    if ((userUpdate.rowsAffected ?? 0) === 0) {
+      await connection.execute(
+        `INSERT INTO user_access (
+           person_id,
+           role,
+           user_email,
+           username,
+           google_access,
+           local_access,
+           is_enabled,
+           password_hash,
+           failed_attempts,
+           locked_until,
+           must_change_password
+         ) VALUES (
+           :personId,
+           :role,
+           :userEmail,
+           '',
+           :googleAccess,
+           'FALSE',
+           'TRUE',
+           '',
+           '0',
+           '',
+           'FALSE'
+         )`,
+        {
+          personId,
+          role,
+          userEmail,
+          googleAccess,
+        },
+        { autoCommit: false },
+      );
+    }
+
+    await connection.commit();
+    return action;
+  });
+}
+
 export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciLocalUserRow[]> {
   const normalized = tenantKey.trim().toLowerCase();
   if (!normalized) {

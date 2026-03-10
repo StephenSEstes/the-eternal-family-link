@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (OCI-only runtime helper cleanup for scaffold/access flows)
+
+- `Change`: Removed active Sheets-only behavior from central runtime helper paths by making `ensureResolvedTabColumns` a no-op in OCI mode, making family-group scaffold creation write `FamilyConfig` directly in OCI mode, and moving tenant user-access upsert onto dedicated OCI table writes instead of Google Sheets mutations.
+- `Type`: API, Infra
+- `Why`: Root cause was incomplete backend cutover: OCI was the intended runtime source of truth, but several active helper paths still instantiated Sheets-only behavior for schema scaffolding and access writes. That kept unsupported dual-backend logic in production code and risked runtime failures when Sheets credentials were absent.
+- `Files`:
+  - `src/lib/google/sheets.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: No schema change. Runtime writes for family config and user access now persist directly to OCI tables instead of relying on Sheets-mode branches.
+- `Verify`:
+  - `npm run lint` passes.
+  - Family-group scaffold paths no longer require Google Sheets helpers when `EFL_DATA_SOURCE=oci`.
+  - Tenant access upsert now writes `user_family_groups` and `user_access` in OCI mode.
+  - `npm run build -- --no-lint` still fails on an existing `/games` prerender `workUnitAsyncStorage` invariant after compile, with separate path-casing warnings (`C:\Users\...` vs `C:\users\...`).
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-07 (media-tab one-family default + wizard skip/duplicate decision UX)
 
 - `Change`: Defaulted Media tab person upload/link operations to family-group scope (`one_family`) and current family-group key, added per-image skip (`Do Not Import`), enlarged selection thumbnails, moved `Caption/Title` and `Date` onto one row, renamed `Notes` to `Story/Notes`, and added explicit duplicate decision workflow (`Duplicate` vs `Not Duplicate`) with side-by-side image comparison.
