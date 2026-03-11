@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { reconcileFamilyGroupRelationshipTypes } from "@/lib/family-group/relationship-type";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 import {
@@ -179,6 +180,10 @@ export async function POST(request: Request, { params }: RouteProps) {
       is_enabled: "TRUE",
     });
     existingChildUserGroupKeys.add(familyGroupKey);
+  }
+
+  for (const familyGroupKey of inheritedFamilyKeys) {
+    await reconcileFamilyGroupRelationshipTypes(familyGroupKey);
   }
 
   await appendAuditLog({

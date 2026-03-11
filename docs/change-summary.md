@@ -3366,6 +3366,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Design Decision Change`: No design decision change.
 ## 2026-03-09 (media library add-link persistence + delete parity hardening)
 
+- `Change`: Fixed household `Add Child` so new children are immediately reclassified from default `undeclared` to the correct family-group relationship type after parent edges are created.
+- `Type`: Bugfix, Data Integrity
+- `Why`: Root cause was the household child-create route inserting `PersonFamilyGroups` rows as `undeclared` and writing parent relationships, but never running family-group relationship-type reconciliation. That left correctly-parented children stuck as unassigned in the family group.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: No schema change. New child-add operations now update `PersonFamilyGroups.family_group_relationship_type` immediately through the existing reconciliation path.
+- `Verify`:
+  - From `Household -> Children -> Add Child`, save a new child and confirm the child no longer remains in `Needs Placement`.
+  - Confirm the child appears with `Direct` family relationship after save.
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 - `Change`: Fixed Media Library selected-image add-link persistence by creating direct OCI person media links when linking from person attribute API, added dedicated person-photo unlink API, and updated Media Library mutation refreshes to force uncached library reads after add/remove/delete actions.
 - `Type`: Bugfix, Reliability
 - `Why`: Root cause was add-link writes only creating `entity_type=attribute` media links while Media Library chip/list behavior depended on direct person linkage; delete/unlink also missed person-level media links and could leave stale results due to cache.
