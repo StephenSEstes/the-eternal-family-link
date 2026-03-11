@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Fixed the Media Library metadata save SQL path so editing a media item's `Name` no longer fails on the OCI update helper. See `docs/change-summary.md`.
 - 2026-03-10: Moved Family relationship guidance into a hover chip in the person form and fixed Media Library so saving media details closes the editor modal as expected. See `docs/change-summary.md`.
 - 2026-03-10: Replaced the oversized Timeline sort arrow with a compact `Oldest first` / `Newest first` toggle plus inline icon. See `docs/change-summary.md`.
 - 2026-03-10: Fixed person Timeline editing/sort behavior, kept Timeline to dated events only, moved story items into the Stories card, and routed spouse creation through the spouse picker with a `+ Add Person` option. See `docs/change-summary.md`.

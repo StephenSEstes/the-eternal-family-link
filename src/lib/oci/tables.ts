@@ -2015,16 +2015,15 @@ export async function updateOciMediaLinksForFile(input: {
   }
   return withConnection(async (connection) => {
     const result = await connection.execute(
-      `UPDATE media_links l
+      `UPDATE media_links
        SET label = :label,
            description = :description,
            photo_date = :photoDate
-       WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
-         AND EXISTS (
-           SELECT 1
-           FROM media_assets a
-           WHERE TRIM(a.media_id) = TRIM(l.media_id)
-             AND TRIM(a.file_id) = :fileId
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(media_id) IN (
+           SELECT TRIM(file_id_media.media_id)
+           FROM media_assets file_id_media
+           WHERE TRIM(file_id_media.file_id) = :fileId
          )`,
       {
         familyGroupKey,

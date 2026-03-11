@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (media name save SQL fix)
+
+- `Change`: Fixed the Media Library metadata save path so editing a media `Name` uses a safer OCI update query against `media_links`.
+- `Type`: API
+- `Why`: Root cause was the media-name PATCH route depending on an aliased Oracle `UPDATE media_links l ...` statement in the OCI helper. That was the highest-risk write on the save path and the likely source of the uncaught save failure that surfaced in the client as `Failed to save media details`.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Editing a media item's `Name` in Media Library now saves successfully instead of returning `Failed to save media details`.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (family relationship hover + media save-close fix)
 
 - `Change`: Removed the large family-relationship guidance banner from the person `Family` section and moved the same guidance onto the family relationship chip as hover text. In Media Library, saving media details now closes the editor modal and returns the success message to the library view.
