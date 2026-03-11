@@ -15,7 +15,8 @@ type TreePageCacheEntry = {
   expiresAt: number;
 };
 
-const TREE_PAGE_CACHE_TTL_MS = 20_000;
+// Disable caching to ensure tree reflects the latest person/household names after edits.
+const TREE_PAGE_CACHE_TTL_MS = 0;
 const treePageDataCache = new Map<string, TreePageCacheEntry>();
 const inFlightTreePageLoads = new Map<string, Promise<TreePageData>>();
 

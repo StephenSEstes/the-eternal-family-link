@@ -54,6 +54,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Family Tree now reloads fresh data on each request (tree cache disabled) so person/household display names and saves reflect immediately after edits.
+- `Type`: UI | API
+- `Why`: The tree used a 20s cache, so editing a person from the tree showed stale names and saves appeared to “not work” until the cache expired.
+- `Files`:
+  - `src/lib/tree/load-tree-page-data.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Change a person display name from the Tree modal; close -> tree shows new name immediately.
+  - Change a household name from the Tree modal; tree shows new name immediately.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

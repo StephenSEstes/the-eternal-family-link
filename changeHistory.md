@@ -10,6 +10,7 @@ This file is a quick release-log entry point.
 - 2026-03-11: Enabled household edit dots in Family Tree (pointer events fixed) and added a maiden-name field to the Add Spouse dialog that only appears for female spouses. See `docs/change-summary.md`.
 - 2026-03-11: Household saves no longer fail with `ORA-14411` when background DDL contention occurs; household schema compatibility checks now skip transient contention. See `docs/change-summary.md`.
 - 2026-03-11: Household modal button now says “Save and Close,” dismisses after save, and refreshes the parent view so tree labels reflect updates. See `docs/change-summary.md`.
+- 2026-03-11: Disabled Family Tree caching so person/household name edits from the tree reflect immediately after saving. See `docs/change-summary.md`.
 - 2026-03-11: Tightened spouse eligibility so spouse links require both people to be at least 19 and parents cannot be selected as spouse. See `docs/change-summary.md`.
 - 2026-03-11: Fixed the household child -> person modal handoff so a newly added child opens with the current family relationship instead of stale `undeclared` state. See `docs/change-summary.md`.
 - 2026-03-11: Fixed person-save family inheritance for direct + in-law parents and changed the standalone Add Person birthday field to a native date picker. See `docs/change-summary.md`.
