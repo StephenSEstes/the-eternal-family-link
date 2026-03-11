@@ -15,6 +15,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 
 ## 2026-03-10 (reviewed AI story import from person notes)
 
+- `Date`: 2026-03-11
+- `Change`: Fixed person-save relationship building so children can inherit family-group membership from a direct/founder parent plus in-law spouse, and changed the standalone `Add Person` form to use a native birthdate picker instead of a plain text field.
+- `Type`: UI | API
+- `Why`: Root cause for the save failure was that the relationship builder required every selected parent to already be `founder` or `direct`, and it did not propagate parent family-group memberships to the child on the normal person-save path. Root cause for the birthday issue was a stale UI control in the standalone add-person card; newer spouse/child flows already used native date inputs.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/components/AddPersonCard.tsx`
+- `Data Changes`: No schema change. Person-save relationship updates now inherit parent family groups to the child before reconciliation.
+- `Verify`:
+  - Save a child from the person panel where one parent is `direct` and the spouse parent is `in_law`; confirm the save succeeds.
+  - Confirm the child inherits the relevant family groups and is classified correctly after save.
+  - Open the standalone `Add Person` form and confirm `Birthday` uses a native date picker.
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 - `Change`: Added `Import Story with AI` to the person Notes panel, plus a new tenant/person-scoped AI route that turns story text into canonical attribute drafts and opens each draft in the existing attribute modal for user review and save one at a time.
 - `Type`: UI | API
 - `Why`: The approved design change was to add AI-assisted story import without changing existing attribute save/retrieval flows. Root cause was that the app only had AI Help and no structured, review-first path to turn narrative text into canonical person attributes.

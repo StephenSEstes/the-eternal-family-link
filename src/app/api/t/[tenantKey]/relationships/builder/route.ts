@@ -128,6 +128,50 @@ function addEnabledGroup(
   enabledGroupsByPerson.set(personId, groups);
 }
 
+function hasSpouseFamilyLink(
+  relationships: ReturnType<typeof toRelationshipLike>[],
+  personA: string,
+  personB: string,
+) {
+  const normalizedPersonA = personA.trim();
+  const normalizedPersonB = personB.trim();
+  if (!normalizedPersonA || !normalizedPersonB) {
+    return false;
+  }
+  return relationships.some((relationship) => {
+    const relType = relationship.relType.trim().toLowerCase();
+    if (relType !== "spouse" && relType !== "family") {
+      return false;
+    }
+    const fromPersonId = relationship.fromPersonId.trim();
+    const toPersonId = relationship.toPersonId.trim();
+    return (
+      (fromPersonId === normalizedPersonA && toPersonId === normalizedPersonB) ||
+      (fromPersonId === normalizedPersonB && toPersonId === normalizedPersonA)
+    );
+  });
+}
+
+async function inheritEnabledGroupsFromPeople(
+  targetPersonId: string,
+  sourcePersonIds: string[],
+  enabledGroupsByPerson: Map<string, Set<string>>,
+) {
+  const inheritedGroups = new Set<string>();
+  for (const sourcePersonId of sourcePersonIds) {
+    const groups = enabledGroupsByPerson.get(sourcePersonId.trim());
+    if (!groups) {
+      continue;
+    }
+    groups.forEach((groupKey) => inheritedGroups.add(groupKey));
+  }
+  for (const familyGroupKey of inheritedGroups) {
+    await ensurePersonFamilyGroupMembership(targetPersonId, familyGroupKey, true);
+    addEnabledGroup(enabledGroupsByPerson, targetPersonId, familyGroupKey);
+  }
+  return inheritedGroups;
+}
+
 async function createFamilyUnit(
   tenantKey: string,
   personA: string,
@@ -209,6 +253,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const existing = await getTableRecords("Relationships", normalizedTenantKey);
     const people = await getTableRecords("People", normalizedTenantKey);
     const personFamilyRows = await getTableRecords("PersonFamilyGroups").catch(() => []);
+    const existingRelationshipsLike = existing.map((row) => toRelationshipLike(row.data));
     const peopleById = new Map<string, { gender: string; lastName: string }>();
     for (const row of people) {
       const personId = readField(row.data, "person_id", "id");
@@ -230,7 +275,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
     const currentRelationshipTypes = deriveExpectedFamilyGroupRelationshipTypes({
       familyGroupKey: normalizedTenantKey,
-      relationships: existing.map((row) => toRelationshipLike(row.data)),
+      relationships: existingRelationshipsLike,
       memberships: personFamilyRows.map((row) => toMembershipLike(row.data)),
     });
     const currentPersonRelationshipType =
@@ -251,21 +296,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         { status: 409 },
       );
     }
-    const invalidParentIds = parentIds.filter(
-      (parentId) => !isAnchorFamilyGroupRelationshipType(currentRelationshipTypes.get(parentId)),
+    const anchorParentIds = parentIds.filter((parentId) =>
+      isAnchorFamilyGroupRelationshipType(currentRelationshipTypes.get(parentId)),
     );
+    if (parentIds.length > 0 && anchorParentIds.length === 0) {
+      return NextResponse.json(
+        {
+          error: "invalid_parent_placement",
+          message: "At least one parent in this family must already be a founder or direct member.",
+          invalidParentIds: parentIds,
+        },
+        { status: 409 },
+      );
+    }
+    const invalidParentIds = parentIds.filter((parentId) => {
+      if (anchorParentIds.includes(parentId)) {
+        return false;
+      }
+      if (normalizeFamilyGroupRelationshipType(currentRelationshipTypes.get(parentId)) !== "in_law") {
+        return true;
+      }
+      return !anchorParentIds.some((anchorParentId) =>
+        hasSpouseFamilyLink(existingRelationshipsLike, parentId, anchorParentId),
+      );
+    });
     if (invalidParentIds.length > 0) {
       return NextResponse.json(
         {
           error: "invalid_parent_placement",
-          message: "Parents in this family must already be founders or direct members.",
+          message: "Additional parents in this family must already be spouse-linked to a founder or direct member.",
           invalidParentIds,
         },
         { status: 409 },
       );
     }
     const nextPersonWillBeAnchor =
-      isFounderFamilyGroupRelationshipType(currentPersonRelationshipType) || (invalidParentIds.length === 0 && parentIds.length > 0);
+      isFounderFamilyGroupRelationshipType(currentPersonRelationshipType) || parentIds.length > 0;
     if (
       spouseId &&
       !nextPersonWillBeAnchor &&
@@ -347,6 +413,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
     if (relationsToCreate.length > 0) {
       await createTableRecords("Relationships", relationsToCreate, normalizedTenantKey);
+    }
+
+    debugContext.phase = "propagate_lineage_memberships";
+    if (parentIds.length > 0) {
+      await inheritEnabledGroupsFromPeople(parsed.data.personId, parentIds, enabledGroupsByPerson);
+    }
+    if (childIds.length > 0) {
+      for (const childId of childIds) {
+        await inheritEnabledGroupsFromPeople(childId, [parsed.data.personId], enabledGroupsByPerson);
+      }
     }
 
     debugContext.phase = "upsert_spouse_edges";

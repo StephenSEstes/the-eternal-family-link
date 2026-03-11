@@ -160,8 +160,8 @@ export function AddPersonCard({ tenantKey, canManage, compact = false }: AddPers
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Optional: how this name should appear in the app"
           />
-          <label className="label">Birthday (YYYY-MM-DD)</label>
-          <input className="input" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          <label className="label">Birthday</label>
+          <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
           <label className="label">Gender</label>
           <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")}>
             <option value="unspecified">Unspecified</option>
