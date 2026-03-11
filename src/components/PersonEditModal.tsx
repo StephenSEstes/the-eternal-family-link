@@ -707,6 +707,7 @@ export function PersonEditModal({
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
   const [newSpouseNickName, setNewSpouseNickName] = useState("");
   const [newSpouseDisplayName, setNewSpouseDisplayName] = useState("");
+  const [newSpouseMaidenName, setNewSpouseMaidenName] = useState("");
   const [newSpouseBirthDate, setNewSpouseBirthDate] = useState("");
   const [newSpouseGender, setNewSpouseGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [creatingSpouse, setCreatingSpouse] = useState(false);
@@ -991,6 +992,7 @@ export function PersonEditModal({
     setNewSpouseLastName("");
     setNewSpouseNickName("");
     setNewSpouseDisplayName("");
+    setNewSpouseMaidenName("");
     setNewSpouseBirthDate("");
     setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
     pendingCreatedSpouseIdRef.current = "";
@@ -1626,6 +1628,7 @@ export function PersonEditModal({
       first_name: newSpouseFirstName.trim(),
       middle_name: newSpouseMiddleName.trim(),
       last_name: newSpouseLastName.trim(),
+      maiden_name: newSpouseGender === "female" ? newSpouseMaidenName.trim() : "",
       nick_name: newSpouseNickName.trim(),
       display_name: newSpouseDisplayName.trim(),
       birth_date: newSpouseBirthDate.trim(),
@@ -2675,6 +2678,17 @@ export function PersonEditModal({
               <input className="input" value={newSpouseMiddleName} onChange={(e) => setNewSpouseMiddleName(e.target.value)} />
               <label className="label">Last Name</label>
               <input className="input" value={newSpouseLastName} onChange={(e) => setNewSpouseLastName(e.target.value)} />
+              {newSpouseGender === "female" ? (
+                <>
+                  <label className="label">Maiden Name (optional)</label>
+                  <input
+                    className="input"
+                    value={newSpouseMaidenName}
+                    onChange={(e) => setNewSpouseMaidenName(e.target.value)}
+                    placeholder="If known"
+                  />
+                </>
+              ) : null}
               <label className="label">Nick Name</label>
               <input className="input" value={newSpouseNickName} onChange={(e) => setNewSpouseNickName(e.target.value)} />
               <label className="label">Display Name (optional)</label>
@@ -2685,7 +2699,13 @@ export function PersonEditModal({
               <select
                 className="input"
                 value={newSpouseGender}
-                onChange={(e) => setNewSpouseGender(e.target.value as "male" | "female" | "unspecified")}
+                onChange={(e) => {
+                  const nextGender = e.target.value as "male" | "female" | "unspecified";
+                  setNewSpouseGender(nextGender);
+                  if (nextGender !== "female") {
+                    setNewSpouseMaidenName("");
+                  }
+                }}
               >
                 <option value="unspecified">Unspecified</option>
                 <option value="male">Male</option>

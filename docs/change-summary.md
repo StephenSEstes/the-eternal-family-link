@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-11 (tree household edit + spouse maiden capture)
+
+- `Date`: 2026-03-11
+- `Change`: Restored household edit access from the Family Tree and added a gender-aware maiden name field when creating a new spouse (shown for female spouses, hidden for male/unspecified).
+- `Type`: UI
+- `Why`: Root causes were (1) the tree lines layer consumed pointer events so household action dots never fired their click handlers, and (2) the inline Add Spouse dialog had no maiden-name field and didn’t gate it by spouse gender.
+- `Files`:
+  - `src/app/globals.css`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In Tree view, click a household cluster dot; Household Edit modal opens.
+  - Start “+ Add Person” from the Spouse dropdown: selecting Female shows optional Maiden Name; selecting Male hides/clears it.
+  - Create a female spouse with a maiden name and confirm it persists on the new person record.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

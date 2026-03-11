@@ -841,7 +841,7 @@ main {
   position: absolute;
   top: 0;
   left: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .tree-line {
@@ -849,6 +849,7 @@ main {
   stroke-width: 2;
   transition: opacity 160ms ease;
   vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .tree-spouse-cluster {
