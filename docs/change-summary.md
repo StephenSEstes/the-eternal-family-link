@@ -79,6 +79,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Stopped the Family Tree from rewriting canonical `displayName` values before opening the person modal, so Tree and People views now seed the edit form from the same person record.
+- `Type`: UI
+- `Why`: Root cause was a tree-only client transform in `TreeGraph` that replaced `displayName` with `first_name + last_name`. For people whose canonical `display_name` differs from their legal first name, the tree modal showed the wrong name and made display-name edits appear not to persist.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None. OCI data already contained one canonical person row for this record (`display_name = Brent Estes`, `first_name = Brenton`), so no data remediation was needed.
+- `Verify`:
+  - Open the same person from People and Family Tree and confirm the modal shows the same `Display Name`.
+  - Change `Display Name` from the tree modal, save, reopen from tree, and confirm the modal keeps the updated value.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

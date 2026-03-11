@@ -12,6 +12,7 @@ This file is a quick release-log entry point.
 - 2026-03-11: Household modal button now says “Save and Close,” dismisses after save, and refreshes the parent view so tree labels reflect updates. See `docs/change-summary.md`.
 - 2026-03-11: Disabled Family Tree caching so person/household name edits from the tree reflect immediately after saving. See `docs/change-summary.md`.
 - 2026-03-11: Disabled People page caching so People tab and Family Tree stay in sync on display-name edits. See `docs/change-summary.md`.
+- 2026-03-11: Family Tree now opens the person modal with the canonical stored `display_name` instead of rebuilding it from `first_name + last_name`, fixing Brent/Brenton-style mismatches. See `docs/change-summary.md`.
 - 2026-03-11: Tightened spouse eligibility so spouse links require both people to be at least 19 and parents cannot be selected as spouse. See `docs/change-summary.md`.
 - 2026-03-11: Fixed the household child -> person modal handoff so a newly added child opens with the current family relationship instead of stale `undeclared` state. See `docs/change-summary.md`.
 - 2026-03-11: Fixed person-save family inheritance for direct + in-law parents and changed the standalone Add Person birthday field to a native date picker. See `docs/change-summary.md`.

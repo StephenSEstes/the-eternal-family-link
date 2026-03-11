@@ -463,17 +463,6 @@ export function TreeGraph({
     offsetRef.current = offset;
   }, [offset]);
 
-  const toTreeDisplayName = (value: string) => {
-    const parts = value
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-    if (parts.length <= 2) {
-      return value.trim();
-    }
-    return `${parts[0]} ${parts[parts.length - 1]}`;
-  };
-
   const toMonthDay = (value?: string) => {
     const raw = (value ?? "").trim();
     const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -483,12 +472,7 @@ export function TreeGraph({
     return "";
   };
 
-  const asTreePerson = (person: PersonNode): PersonNode => ({
-    ...person,
-    displayName: [person.firstName, person.lastName].filter((part) => part?.trim()).join(" ").trim() || toTreeDisplayName(person.displayName),
-  });
-
-  const peopleById = new Map(nodes.map((node) => [node.personId, asTreePerson(node)]));
+  const peopleById = new Map(nodes.map((node) => [node.personId, node]));
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
 
   const getAvatarUrl = useCallback(
