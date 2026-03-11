@@ -389,7 +389,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       } else {
         await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       }
-      setPhotoAssociationStatus("Media details saved.");
+      setShowPhotoEditor(false);
+      setPhotoAssociationStatus("");
+      setStatus("Media details saved.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Save failed");
     } finally {

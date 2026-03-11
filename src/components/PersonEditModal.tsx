@@ -1002,6 +1002,18 @@ export function PersonEditModal({
   const isFounderPerson = displayedFamilyGroupRelationshipType === "founder";
   const isInLawPerson = displayedFamilyGroupRelationshipType === "in_law";
   const isUndeclaredPerson = displayedFamilyGroupRelationshipType === "undeclared";
+  const familyRelationshipHint = useMemo(() => {
+    if (isUndeclaredPerson) {
+      return "This person belongs to the family group but is not yet placed in the tree. Add a direct parent or marry into a direct/founder line to place them.";
+    }
+    if (isFounderPerson) {
+      return "Founders anchor this family group. Founders cannot have parents assigned in this family.";
+    }
+    if (isInLawPerson) {
+      return "In-laws can be spouses and parents in this family, but their own parents are not shown in this family view.";
+    }
+    return "";
+  }, [isFounderPerson, isInLawPerson, isUndeclaredPerson]);
   const currentPersonCanAnchorMarriage = isFounderPerson || parentIds.length > 0;
   const spouseOptions = useMemo(
     () => {
@@ -1780,6 +1792,8 @@ export function PersonEditModal({
                 >
                   <span className="label" style={{ marginBottom: 0 }}>Family Group</span>
                   <span
+                    title={familyRelationshipHint || undefined}
+                    aria-label={familyRelationshipHint ? `${formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}. ${familyRelationshipHint}` : formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -1798,6 +1812,7 @@ export function PersonEditModal({
                       fontSize: "0.82rem",
                       fontWeight: 700,
                       color: "#1f2937",
+                      cursor: familyRelationshipHint ? "help" : "default",
                     }}
                   >
                     {formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
@@ -1883,39 +1898,6 @@ export function PersonEditModal({
                     </select>
                   </div>
                 ) : null}
-                <div
-                  style={{
-                    marginBottom: "0.85rem",
-                    padding: "0.85rem 1rem",
-                    borderRadius: 16,
-                    border: `1px solid ${
-                      isUndeclaredPerson ? "#d98c7a" : isFounderPerson ? "#b29a59" : isInLawPerson ? "#7b8db8" : "#8aa8a0"
-                    }`,
-                    background: isUndeclaredPerson
-                      ? "linear-gradient(180deg, #fff3ef 0%, #ffe4db 100%)"
-                      : isFounderPerson
-                        ? "linear-gradient(180deg, #fff7df 0%, #f5ebc1 100%)"
-                        : isInLawPerson
-                          ? "linear-gradient(180deg, #eef2fb 0%, #dfe7fb 100%)"
-                          : "linear-gradient(180deg, #edf8f3 0%, #deefe8 100%)",
-                  }}
-                >
-                  {isUndeclaredPerson ? (
-                    <p className="page-subtitle" style={{ margin: 0 }}>
-                      This person belongs to the family group but is not yet placed in the tree. Add a direct parent or marry into a direct/founder line to place them.
-                    </p>
-                  ) : null}
-                  {isFounderPerson ? (
-                    <p className="page-subtitle" style={{ margin: 0 }}>
-                      Founders anchor this family group. Founders cannot have parents assigned in this family.
-                    </p>
-                  ) : null}
-                  {isInLawPerson ? (
-                    <p className="page-subtitle" style={{ margin: 0 }}>
-                      In-laws can be spouses and parents in this family, but their own parents are not shown in this family view.
-                    </p>
-                  ) : null}
-                </div>
                 {canManage ? (
                   <>
                     <div className="settings-chip-list">

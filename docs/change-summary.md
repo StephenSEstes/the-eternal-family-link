@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (family relationship hover + media save-close fix)
+
+- `Change`: Removed the large family-relationship guidance banner from the person `Family` section and moved the same guidance onto the family relationship chip as hover text. In Media Library, saving media details now closes the editor modal and returns the success message to the library view.
+- `Type`: UI
+- `Why`: Root cause was duplicated UI state and an incomplete save flow. The Family section was already showing the relationship chip next to `Family Group`, so the full-width guidance banner was duplicating that context and taking unnecessary vertical space. In Media Library, the save handler updated the selected media state but never closed the editor modal, so Save did not complete the expected user flow.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Person `Family` section no longer shows the large relationship guidance banner.
+  - Hovering the family relationship chip shows the relationship guidance text when guidance exists.
+  - Saving media details from Media Library closes the editor modal and returns to the library with a success message.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (timeline sort control polish)
 
 - `Change`: Replaced the oversized Timeline sort arrow with a compact pill-style toggle that shows `Oldest first` or `Newest first` with a small inline arrow icon.
