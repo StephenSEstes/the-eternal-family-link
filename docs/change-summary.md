@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (timeline sort control polish)
+
+- `Change`: Replaced the oversized Timeline sort arrow with a compact pill-style toggle that shows `Oldest first` or `Newest first` with a small inline arrow icon.
+- `Type`: UI
+- `Why`: Root cause was the Timeline sort control using a large text arrow glyph, which looked oversized next to the section title and also rendered poorly because of encoding. A compact text-plus-icon control better matches the rest of the UI and avoids glyph issues.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Person Timeline shows a compact sort control next to `Timeline` instead of the large standalone arrow.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (person timeline, stories, and spouse picker polish)
 
 - `Change`: Fixed person Timeline chips so dated events open the edit modal when clicked, limited Timeline to dated event rows only, replaced the large Ascending/Descending buttons with a single inline sort arrow, moved story items into the Stories card as editable chips, and routed spouse creation through the spouse dropdown with a `+ Add Person` option that opens the existing add-person modal. The shared attribute add modal now uses launch-aware titles such as `Add Story`, `Add Event`, `Edit Story`, and `Edit Event`.

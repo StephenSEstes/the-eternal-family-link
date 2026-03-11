@@ -1737,7 +1737,38 @@ export function PersonEditModal({
               </div>
 
               <div className="card">
-                <h4 className="ui-section-title">Family</h4>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    flexWrap: "wrap",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Family</h4>
+                  {canManageRelationshipType ? (
+                    <label
+                      className="label"
+                      style={{
+                        marginBottom: 0,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isFounderPerson}
+                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
+                        onChange={(e) => void saveFounderDesignation(e.target.checked)}
+                      />
+                      Founder
+                    </label>
+                  ) : null}
+                </div>
                 <div
                   style={{
                     display: "flex",
@@ -1769,28 +1800,8 @@ export function PersonEditModal({
                       color: "#1f2937",
                     }}
                   >
-                    Family Relationship: {formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
+                    {formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
                   </span>
-                  {canManageRelationshipType ? (
-                    <label
-                      className="label"
-                      style={{
-                        marginBottom: 0,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        fontSize: "0.82rem",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isFounderPerson}
-                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
-                        onChange={(e) => void saveFounderDesignation(e.target.checked)}
-                      />
-                      Set as Founder
-                    </label>
-                  ) : null}
                 </div>
                 {familyGroupOptions.length > 1 ? (
                   <div style={{ marginBottom: "0.75rem" }}>
@@ -1902,11 +1913,6 @@ export function PersonEditModal({
                   {isInLawPerson ? (
                     <p className="page-subtitle" style={{ margin: 0 }}>
                       In-laws can be spouses and parents in this family, but their own parents are not shown in this family view.
-                    </p>
-                  ) : null}
-                  {!isUndeclaredPerson && !isFounderPerson && !isInLawPerson ? (
-                    <p className="page-subtitle" style={{ margin: 0 }}>
-                      This person is part of the direct family line for this family group.
                     </p>
                   ) : null}
                 </div>
@@ -2172,11 +2178,29 @@ export function PersonEditModal({
                   <button
                     type="button"
                     className="button secondary tap-button"
-                    style={{ minWidth: "42px", padding: "0.35rem 0.65rem", fontSize: "1rem", lineHeight: 1 }}
+                    style={{
+                      minWidth: 0,
+                      padding: "0.32rem 0.6rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      borderRadius: 999,
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      lineHeight: 1.1,
+                      whiteSpace: "nowrap",
+                    }}
                     aria-label={timelineSortOrder === "asc" ? "Show newest first" : "Show oldest first"}
                     onClick={() => setTimelineSortOrder((current) => (current === "asc" ? "desc" : "asc"))}
                   >
-                    {timelineSortOrder === "asc" ? "↑" : "↓"}
+                    <span>{timelineSortOrder === "asc" ? "Oldest first" : "Newest first"}</span>
+                    <svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" style={{ display: "block" }}>
+                      {timelineSortOrder === "asc" ? (
+                        <path d="M8 3 4.25 6.75l.9.9L7.35 5.45V13h1.3V5.45l2.2 2.2.9-.9Z" fill="currentColor" />
+                      ) : (
+                        <path d="M8 13l3.75-3.75-.9-.9-2.2 2.2V3h-1.3v7.55l-2.2-2.2-.9.9Z" fill="currentColor" />
+                      )}
+                    </svg>
                   </button>
                 </div>
                 <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Replaced the oversized Timeline sort arrow with a compact `Oldest first` / `Newest first` toggle plus inline icon. See `docs/change-summary.md`.
 - 2026-03-10: Fixed person Timeline editing/sort behavior, kept Timeline to dated events only, moved story items into the Stories card, and routed spouse creation through the spouse picker with a `+ Add Person` option. See `docs/change-summary.md`.
 - 2026-03-10: Polished the family/admin UI so Attribute Definition categories use a clearer 3-row editor layout, the person Family section shows relationship + founder control inline next to `Family Group`, and the `Add User` modal close button aligns correctly. See `docs/change-summary.md`.
 - 2026-03-10: Cleaned the Attribute Definitions admin/editor layout, moved `Add User` into a modal with a stricter non-user-only picker, normalized Google/Local directory status labels to `Enabled`/`Disabled`, and compacted the Audit filters into two rows. See `docs/change-summary.md`.
