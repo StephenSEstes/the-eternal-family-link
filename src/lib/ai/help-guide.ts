@@ -78,7 +78,7 @@ Admin
 - Manage User includes two tabs: Manage User and Invite.
 - Invite generates a shareable invite link and message for an existing person already in the database.
 - Audit shows recent logins and change events with filters for actor, action, entity type, result, and date range.
-- Attribute Definitions lets admins manage family-specific event/attribute definitions.
+- Attribute Definitions lets admins manage family-specific descriptor and event definitions.
 - Integrity includes data and system checks, duplicate merge tooling, and orphan-media tools.
 - Import supports CSV-based import flows where available.
 - Family Group creation and delete flows are admin-only.

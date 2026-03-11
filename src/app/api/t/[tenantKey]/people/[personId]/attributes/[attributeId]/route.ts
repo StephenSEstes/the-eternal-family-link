@@ -79,6 +79,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
 
   const updated = await updateAttribute(resolved.tenant.tenantKey, attributeId, {
     category: canonical.data.category,
+    attributeKind: canonical.data.attributeKind ?? canonical.data.category,
     attributeType: canonical.data.attributeType,
     attributeTypeCategory: canonical.data.attributeTypeCategory,
     attributeDate: canonical.data.attributeDate,

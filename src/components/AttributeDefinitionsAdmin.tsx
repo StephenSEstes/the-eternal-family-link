@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  makeAttributeDefinitionCategoryId,
+  makeAttributeDefinitionTypeId,
+  normalizeAttributeTypeKey,
+} from "@/lib/attributes/definition-defaults";
+import type { AttributeCategory } from "@/lib/attributes/types";
+import type {
+  AttributeEventCategoryDefinition,
+  AttributeEventDefinitions,
+  AttributeEventTypeDefinition,
+} from "@/lib/attributes/event-definitions-types";
 
 type TenantOption = {
   tenantKey: string;
@@ -8,39 +19,33 @@ type TenantOption = {
   role: "ADMIN" | "USER";
 };
 
-type CategoryRow = {
-  categoryKey: string;
-  categoryLabel: string;
-  categoryColor: string;
-  description: string;
-  sortOrder: number;
-  isEnabled: boolean;
-};
+type CategoryRow = AttributeEventCategoryDefinition;
+type TypeRow = AttributeEventTypeDefinition;
+type DefinitionsPayload = AttributeEventDefinitions;
 
-type TypeRow = {
-  typeKey: string;
-  categoryKey: string;
-  typeLabel: string;
-  detailLabel: string;
-  dateMode: "single" | "range";
-  askEndDate: boolean;
-  sortOrder: number;
-  isEnabled: boolean;
-};
+function normalizeLabel(value: string) {
+  return value.trim();
+}
 
-type DefinitionsPayload = {
-  version: number;
-  categories: CategoryRow[];
-  types: TypeRow[];
-};
+function categoryIdFor(row: Pick<CategoryRow, "kind" | "categoryKey">) {
+  return makeAttributeDefinitionCategoryId(row.kind, row.categoryKey);
+}
 
-function normalizeKey(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_ -]/g, "").replace(/\s+/g, "_").replace(/-+/g, "_");
+function typeIdFor(row: Pick<TypeRow, "kind" | "categoryKey" | "typeKey">) {
+  return makeAttributeDefinitionTypeId(row.kind, row.categoryKey, row.typeKey);
+}
+
+function prettyKind(value: AttributeCategory) {
+  return value === "event" ? "Event" : "Descriptor";
 }
 
 function stableStringify(payload: DefinitionsPayload) {
-  const sortedCategories = [...payload.categories].sort((a, b) => a.sortOrder - b.sortOrder || a.categoryKey.localeCompare(b.categoryKey));
-  const sortedTypes = [...payload.types].sort((a, b) => a.sortOrder - b.sortOrder || `${a.categoryKey}:${a.typeKey}`.localeCompare(`${b.categoryKey}:${b.typeKey}`));
+  const sortedCategories = [...payload.categories].sort(
+    (a, b) => a.sortOrder - b.sortOrder || `${a.kind}:${a.categoryKey}`.localeCompare(`${b.kind}:${b.categoryKey}`),
+  );
+  const sortedTypes = [...payload.types].sort(
+    (a, b) => a.sortOrder - b.sortOrder || `${a.kind}:${a.categoryKey}:${a.typeKey}`.localeCompare(`${b.kind}:${b.categoryKey}:${b.typeKey}`),
+  );
   return JSON.stringify({ version: payload.version, categories: sortedCategories, types: sortedTypes });
 }
 
@@ -57,8 +62,8 @@ export function AttributeDefinitionsAdmin({
   const [types, setTypes] = useState<TypeRow[]>([]);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [selectedCategoryKey, setSelectedCategoryKey] = useState("");
-  const [selectedTypeKey, setSelectedTypeKey] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedTypeId, setSelectedTypeId] = useState("");
   const [search, setSearch] = useState("");
   const [baseline, setBaseline] = useState("");
 
@@ -74,24 +79,38 @@ export function AttributeDefinitionsAdmin({
     }
     const defs = body?.definitions as DefinitionsPayload | undefined;
     const nextCategories = Array.isArray(defs?.categories)
-      ? defs.categories.map((row) => ({
-          ...row,
-          categoryColor: (row.categoryColor || "#e5e7eb").trim() || "#e5e7eb",
-        }))
+      ? defs.categories.map((row) => {
+          const kind: AttributeCategory = row.kind === "event" ? "event" : "descriptor";
+          return {
+            ...row,
+            categoryKey: normalizeAttributeTypeKey(row.categoryKey),
+            categoryColor: (row.categoryColor || "#e5e7eb").trim() || "#e5e7eb",
+            kind,
+          };
+        })
       : [];
-    const nextTypes = Array.isArray(defs?.types) ? defs.types : [];
+    const nextTypes = Array.isArray(defs?.types)
+      ? defs.types.map((row) => {
+          const kind: AttributeCategory = row.kind === "event" ? "event" : "descriptor";
+          return {
+            ...row,
+            typeKey: normalizeAttributeTypeKey(row.typeKey),
+            categoryKey: normalizeAttributeTypeKey(row.categoryKey),
+            kind,
+          };
+        })
+      : [];
     setCategories(nextCategories);
     setTypes(nextTypes);
     const firstCategory = [...nextCategories]
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.categoryLabel.localeCompare(b.categoryLabel))[0]
-      ?.categoryKey ?? "";
-    setSelectedCategoryKey(firstCategory);
+      .sort((a, b) => a.sortOrder - b.sortOrder || `${a.kind}:${a.categoryLabel}`.localeCompare(`${b.kind}:${b.categoryLabel}`))[0] ?? null;
+    const firstCategoryId = firstCategory ? categoryIdFor(firstCategory) : "";
+    setSelectedCategoryId(firstCategoryId);
     const firstType = [...nextTypes]
-      .filter((row) => row.categoryKey === firstCategory)
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
-      ?.typeKey ?? "";
-    setSelectedTypeKey(firstType);
-    const snapshot = stableStringify({ version: 1, categories: nextCategories, types: nextTypes });
+      .filter((row) => firstCategory && row.kind === firstCategory.kind && row.categoryKey === firstCategory.categoryKey)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0] ?? null;
+    setSelectedTypeId(firstType ? typeIdFor(firstType) : "");
+    const snapshot = stableStringify({ version: defs?.version ?? 2, categories: nextCategories, types: nextTypes });
     setBaseline(snapshot);
     setStatus("");
     setBusy(false);
@@ -102,7 +121,7 @@ export function AttributeDefinitionsAdmin({
   }, [load]);
 
   const sortedCategories = useMemo(
-    () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.categoryLabel.localeCompare(b.categoryLabel)),
+    () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder || `${a.kind}:${a.categoryLabel}`.localeCompare(`${b.kind}:${b.categoryLabel}`)),
     [categories],
   );
 
@@ -110,49 +129,54 @@ export function AttributeDefinitionsAdmin({
     const q = search.trim().toLowerCase();
     if (!q) return sortedCategories;
     return sortedCategories.filter((row) => {
-      const haystack = `${row.categoryLabel} ${row.categoryKey} ${row.description}`.toLowerCase();
+      const haystack = `${row.kind} ${row.categoryLabel} ${row.categoryKey} ${row.description}`.toLowerCase();
       return haystack.includes(q);
     });
   }, [search, sortedCategories]);
 
   const selectedCategory = useMemo(
-    () => sortedCategories.find((row) => row.categoryKey === selectedCategoryKey) ?? null,
-    [sortedCategories, selectedCategoryKey],
+    () => sortedCategories.find((row) => categoryIdFor(row) === selectedCategoryId) ?? null,
+    [sortedCategories, selectedCategoryId],
   );
 
   const categoryTypes = useMemo(
     () =>
-      types
-        .filter((row) => row.categoryKey === selectedCategoryKey)
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel)),
-    [types, selectedCategoryKey],
+      selectedCategory
+        ? types
+            .filter((row) => row.kind === selectedCategory.kind && row.categoryKey === selectedCategory.categoryKey)
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))
+        : [],
+    [selectedCategory, types],
   );
 
   const selectedType = useMemo(
-    () => categoryTypes.find((row) => row.typeKey === selectedTypeKey) ?? null,
-    [categoryTypes, selectedTypeKey],
+    () => categoryTypes.find((row) => typeIdFor(row) === selectedTypeId) ?? null,
+    [categoryTypes, selectedTypeId],
   );
 
   useEffect(() => {
     if (categoryTypes.length === 0) {
-      setSelectedTypeKey("");
+      setSelectedTypeId("");
       return;
     }
-    if (!categoryTypes.some((row) => row.typeKey === selectedTypeKey)) {
-      setSelectedTypeKey(categoryTypes[0]?.typeKey ?? "");
+    if (!categoryTypes.some((row) => typeIdFor(row) === selectedTypeId)) {
+      setSelectedTypeId(typeIdFor(categoryTypes[0]!));
     }
-  }, [categoryTypes, selectedTypeKey]);
+  }, [categoryTypes, selectedTypeId]);
 
   const duplicateCategoryKeys = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const row of categories) counts.set(normalizeKey(row.categoryKey), (counts.get(normalizeKey(row.categoryKey)) ?? 0) + 1);
+    for (const row of categories) {
+      const key = categoryIdFor({ kind: row.kind, categoryKey: normalizeAttributeTypeKey(row.categoryKey) });
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
     return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([key]) => key));
   }, [categories]);
 
   const duplicateTypeKeys = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of types) {
-      const key = `${normalizeKey(row.categoryKey)}:${normalizeKey(row.typeKey)}`;
+      const key = typeIdFor({ kind: row.kind, categoryKey: normalizeAttributeTypeKey(row.categoryKey), typeKey: normalizeAttributeTypeKey(row.typeKey) });
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([key]) => key));
@@ -160,29 +184,31 @@ export function AttributeDefinitionsAdmin({
 
   const hasValidationErrors = useMemo(() => {
     if (duplicateCategoryKeys.size > 0 || duplicateTypeKeys.size > 0) return true;
-    if (categories.some((row) => !row.categoryLabel.trim() || !normalizeKey(row.categoryKey))) return true;
-    if (types.some((row) => !row.typeLabel.trim() || !normalizeKey(row.typeKey) || !normalizeKey(row.categoryKey))) return true;
+    if (categories.some((row) => !row.categoryLabel.trim() || !normalizeAttributeTypeKey(row.categoryKey))) return true;
+    if (types.some((row) => !row.typeLabel.trim() || !normalizeAttributeTypeKey(row.typeKey) || !normalizeAttributeTypeKey(row.categoryKey))) return true;
     return false;
   }, [categories, duplicateCategoryKeys, duplicateTypeKeys, types]);
 
   const payloadSnapshot = useMemo(
     () =>
       stableStringify({
-        version: 1,
+        version: 2,
         categories: categories.map((row, index) => ({
           ...row,
-          categoryKey: normalizeKey(row.categoryKey),
-          categoryLabel: row.categoryLabel.trim(),
+          kind: row.kind,
+          categoryKey: normalizeAttributeTypeKey(row.categoryKey),
+          categoryLabel: normalizeLabel(row.categoryLabel),
           categoryColor: row.categoryColor.trim(),
           description: row.description.trim(),
           sortOrder: Number.isFinite(row.sortOrder) ? row.sortOrder : (index + 1) * 10,
         })),
         types: types.map((row, index) => ({
           ...row,
-          typeKey: normalizeKey(row.typeKey),
-          categoryKey: normalizeKey(row.categoryKey),
-          typeLabel: row.typeLabel.trim(),
-          detailLabel: row.detailLabel.trim(),
+          kind: row.kind,
+          typeKey: normalizeAttributeTypeKey(row.typeKey),
+          categoryKey: normalizeAttributeTypeKey(row.categoryKey),
+          typeLabel: normalizeLabel(row.typeLabel),
+          detailLabel: normalizeLabel(row.detailLabel),
           sortOrder: Number.isFinite(row.sortOrder) ? row.sortOrder : (index + 1) * 10,
         })),
       }),
@@ -223,6 +249,7 @@ export function AttributeDefinitionsAdmin({
   const addCategory = () => {
     const index = categories.length + 1;
     const next: CategoryRow = {
+      kind: "descriptor",
       categoryKey: `category_${index}`,
       categoryLabel: `Category ${index}`,
       categoryColor: "#e5e7eb",
@@ -231,58 +258,87 @@ export function AttributeDefinitionsAdmin({
       isEnabled: true,
     };
     setCategories((prev) => [...prev, next]);
-    setSelectedCategoryKey(next.categoryKey);
-    setSelectedTypeKey("");
+    setSelectedCategoryId(categoryIdFor(next));
+    setSelectedTypeId("");
   };
 
-  const updateCategory = (categoryKey: string, patch: Partial<CategoryRow>) => {
-    setCategories((prev) => prev.map((row) => (row.categoryKey === categoryKey ? { ...row, ...patch } : row)));
+  const updateCategory = (categoryId: string, patch: Partial<CategoryRow>) => {
+    const current = categories.find((row) => categoryIdFor(row) === categoryId);
+    if (!current) return;
+    const nextCategory: CategoryRow = { ...current, ...patch };
+    const nextCategoryId = categoryIdFor(nextCategory);
+    setCategories((prev) => prev.map((row) => (categoryIdFor(row) === categoryId ? nextCategory : row)));
+    setTypes((prev) =>
+      prev.map((row) =>
+        row.kind === current.kind && row.categoryKey === current.categoryKey
+          ? { ...row, kind: nextCategory.kind, categoryKey: nextCategory.categoryKey }
+          : row,
+      ),
+    );
+    if (selectedCategoryId === categoryId) {
+      setSelectedCategoryId(nextCategoryId);
+    }
+    if (selectedTypeId) {
+      const currentType = types.find((row) => typeIdFor(row) === selectedTypeId);
+      if (currentType && currentType.kind === current.kind && currentType.categoryKey === current.categoryKey) {
+        setSelectedTypeId(typeIdFor({ ...currentType, kind: nextCategory.kind, categoryKey: nextCategory.categoryKey }));
+      }
+    }
   };
 
-  const deleteCategory = (categoryKey: string) => {
-    setCategories((prev) => prev.filter((row) => row.categoryKey !== categoryKey));
-    setTypes((prev) => prev.filter((row) => row.categoryKey !== categoryKey));
-    if (selectedCategoryKey === categoryKey) {
-      const fallback = sortedCategories.find((row) => row.categoryKey !== categoryKey)?.categoryKey ?? "";
-      setSelectedCategoryKey(fallback);
-      const fallbackType = types
-        .filter((row) => row.categoryKey === fallback)
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
-        ?.typeKey ?? "";
-      setSelectedTypeKey(fallbackType);
+  const deleteCategory = (categoryId: string) => {
+    const current = categories.find((row) => categoryIdFor(row) === categoryId);
+    if (!current) return;
+    const nextCategories = categories.filter((row) => categoryIdFor(row) !== categoryId);
+    setCategories(nextCategories);
+    setTypes((prev) => prev.filter((row) => !(row.kind === current.kind && row.categoryKey === current.categoryKey)));
+    if (selectedCategoryId === categoryId) {
+      const fallback = [...nextCategories].sort((a, b) => a.sortOrder - b.sortOrder || a.categoryLabel.localeCompare(b.categoryLabel))[0] ?? null;
+      setSelectedCategoryId(fallback ? categoryIdFor(fallback) : "");
+      const fallbackType = fallback
+        ? types
+            .filter((row) => row.kind === fallback.kind && row.categoryKey === fallback.categoryKey)
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0] ?? null
+        : null;
+      setSelectedTypeId(fallbackType ? typeIdFor(fallbackType) : "");
     }
   };
 
   const addType = () => {
-    if (!selectedCategoryKey) return;
-    const next = types.filter((row) => row.categoryKey === selectedCategoryKey).length + 1;
-    setTypes((prev) => [
-      ...prev,
-      {
-        typeKey: `${selectedCategoryKey}_type_${next}`,
-        categoryKey: selectedCategoryKey,
-        typeLabel: `Type ${next}`,
-        detailLabel: "Attribute Detail",
-        dateMode: "single",
-        askEndDate: false,
-        sortOrder: next * 10,
-        isEnabled: true,
-      },
-    ]);
-    setSelectedTypeKey(`${selectedCategoryKey}_type_${next}`);
+    if (!selectedCategory) return;
+    const next = categoryTypes.length + 1;
+    const created: TypeRow = {
+      kind: selectedCategory.kind,
+      typeKey: `${selectedCategory.categoryKey}_type_${next}`,
+      categoryKey: selectedCategory.categoryKey,
+      typeLabel: `Type ${next}`,
+      detailLabel: "Attribute Detail",
+      dateMode: "single",
+      askEndDate: false,
+      sortOrder: next * 10,
+      isEnabled: true,
+    };
+    setTypes((prev) => [...prev, created]);
+    setSelectedTypeId(typeIdFor(created));
   };
 
-  const updateType = (typeKey: string, categoryKey: string, patch: Partial<TypeRow>) => {
-    setTypes((prev) =>
-      prev.map((row) => (row.typeKey === typeKey && row.categoryKey === categoryKey ? { ...row, ...patch } : row)),
-    );
+  const updateType = (typeId: string, patch: Partial<TypeRow>) => {
+    setTypes((prev) => {
+      const nextRows = prev.map((row) => (typeIdFor(row) === typeId ? { ...row, ...patch } : row));
+      const selected = nextRows.find((row) => typeIdFor(row) === typeId);
+      if (selected && selectedTypeId === typeId) {
+        setSelectedTypeId(typeIdFor(selected));
+      }
+      return nextRows;
+    });
   };
 
-  const deleteType = (typeKey: string, categoryKey: string) => {
-    setTypes((prev) => prev.filter((row) => !(row.typeKey === typeKey && row.categoryKey === categoryKey)));
-    if (selectedTypeKey === typeKey) {
-      const fallback = categoryTypes.find((row) => row.typeKey !== typeKey)?.typeKey ?? "";
-      setSelectedTypeKey(fallback);
+  const deleteType = (typeId: string) => {
+    const nextTypes = types.filter((row) => typeIdFor(row) !== typeId);
+    setTypes(nextTypes);
+    if (selectedTypeId === typeId) {
+      const fallback = categoryTypes.find((row) => typeIdFor(row) !== typeId) ?? null;
+      setSelectedTypeId(fallback ? typeIdFor(fallback) : "");
     }
   };
 
@@ -290,9 +346,9 @@ export function AttributeDefinitionsAdmin({
     <section className="card settings-panel">
       <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "end", flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Attribute Event Definitions</h2>
+          <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>Attribute Definitions</h2>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Configure event categories and category types used by Add Attribute.
+            Configure descriptor and event categories and types used by Add Attribute.
           </p>
         </div>
         <div style={{ minWidth: "240px" }}>
@@ -321,22 +377,22 @@ export function AttributeDefinitionsAdmin({
       <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)", marginTop: "0.75rem" }}>
         <div className="card">
           <label className="label">Search Categories</label>
-          <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search label or key" />
+          <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search label, key, or kind" />
           <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.45rem", maxHeight: "55vh", overflow: "auto" }}>
             {filteredCategories.map((row) => {
-              const active = row.categoryKey === selectedCategoryKey;
+              const rowId = categoryIdFor(row);
+              const active = rowId === selectedCategoryId;
               return (
                 <button
-                  key={row.categoryKey}
+                  key={rowId}
                   type="button"
                   className="button secondary tap-button"
                   onClick={() => {
-                    setSelectedCategoryKey(row.categoryKey);
+                    setSelectedCategoryId(rowId);
                     const firstType = types
-                      .filter((item) => item.categoryKey === row.categoryKey)
-                      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0]
-                      ?.typeKey ?? "";
-                    setSelectedTypeKey(firstType);
+                      .filter((item) => item.kind === row.kind && item.categoryKey === row.categoryKey)
+                      .sort((a, b) => a.sortOrder - b.sortOrder || a.typeLabel.localeCompare(b.typeLabel))[0] ?? null;
+                    setSelectedTypeId(firstType ? typeIdFor(firstType) : "");
                   }}
                   style={{ textAlign: "left", borderColor: active ? "#1f2937" : undefined, background: active ? "#eef2ff" : undefined }}
                 >
@@ -353,6 +409,7 @@ export function AttributeDefinitionsAdmin({
                       }}
                     />
                     <span>{row.categoryLabel || row.categoryKey}</span>
+                    <span className="status-chip status-chip--neutral">{prettyKind(row.kind)}</span>
                   </div>
                 </button>
               );
@@ -371,103 +428,120 @@ export function AttributeDefinitionsAdmin({
             <>
               <div
                 className="settings-chip-list"
-                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 110px 96px minmax(220px, 1.2fr)", gap: "0.6rem", alignItems: "end" }}
+                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 140px 110px minmax(220px, 1.1fr)", gap: "0.6rem", alignItems: "end" }}
               >
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Category Label</label>
-                  <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryLabel: e.target.value })} />
+                  <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategoryId, { categoryLabel: e.target.value })} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <label className="label">Kind</label>
+                  <select className="input" value={selectedCategory.kind} onChange={(e) => updateCategory(selectedCategoryId, { kind: e.target.value as AttributeCategory })}>
+                    <option value="descriptor">Descriptor</option>
+                    <option value="event">Event</option>
+                  </select>
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Color</label>
-                  <input
-                    className="input"
-                    type="color"
-                    value={selectedCategory.categoryColor || "#e5e7eb"}
-                    onChange={(e) => updateCategory(selectedCategory.categoryKey, { categoryColor: e.target.value })}
-                  />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <label className="label">Sort</label>
-                  <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategory.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
+                  <input className="input" type="color" value={selectedCategory.categoryColor || "#e5e7eb"} onChange={(e) => updateCategory(selectedCategoryId, { categoryColor: e.target.value })} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Description</label>
-                  <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategory.categoryKey, { description: e.target.value })} />
+                  <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategoryId, { description: e.target.value })} />
                 </div>
               </div>
               <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
-                <button type="button" className="button secondary tap-button" onClick={() => deleteCategory(selectedCategory.categoryKey)} disabled={busy}>
-                  Delete Category
-                </button>
+                <div style={{ minWidth: "160px" }}>
+                  <label className="label">Sort</label>
+                  <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategoryId, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
+                </div>
+                <div style={{ minWidth: "220px" }}>
+                  <label className="label">Category Key</label>
+                  <input className="input" value={selectedCategory.categoryKey} onChange={(e) => updateCategory(selectedCategoryId, { categoryKey: normalizeAttributeTypeKey(e.target.value) })} />
+                </div>
                 <label className="label" style={{ marginBottom: 0, display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-                  <input type="checkbox" checked={selectedCategory.isEnabled} onChange={(e) => updateCategory(selectedCategory.categoryKey, { isEnabled: e.target.checked })} />
+                  <input type="checkbox" checked={selectedCategory.isEnabled} onChange={(e) => updateCategory(selectedCategoryId, { isEnabled: e.target.checked })} />
                   Enabled
                 </label>
+                <button type="button" className="button secondary tap-button" onClick={() => deleteCategory(selectedCategoryId)} disabled={busy}>
+                  Delete Category
+                </button>
               </div>
 
-              <label className="label" style={{ marginTop: "0.75rem" }}>Type Categories</label>
+              <div className="settings-chip-list" style={{ marginTop: "0.75rem", justifyContent: "space-between", alignItems: "center" }}>
+                <label className="label" style={{ marginBottom: 0 }}>Types</label>
+                <button type="button" className="button secondary tap-button" onClick={addType} disabled={busy || !selectedCategoryId}>
+                  Add Type
+                </button>
+              </div>
               <div className="card" style={{ maxHeight: "220px", overflow: "auto", display: "grid", gap: "0.45rem" }}>
                 {categoryTypes.map((row) => {
-                  const active = row.typeKey === selectedTypeKey;
+                  const rowId = typeIdFor(row);
+                  const active = rowId === selectedTypeId;
                   return (
                     <button
-                      key={`${row.categoryKey}:${row.typeKey}`}
+                      key={rowId}
                       type="button"
                       className="button secondary tap-button"
-                      onClick={() => setSelectedTypeKey(row.typeKey)}
+                      onClick={() => setSelectedTypeId(rowId)}
                       style={{ textAlign: "left", borderColor: active ? "#1f2937" : undefined, background: active ? "#eef2ff" : undefined }}
                     >
                       {row.typeLabel || "Untitled Type"}
                     </button>
                   );
                 })}
-                {categoryTypes.length === 0 ? <p className="page-subtitle" style={{ margin: 0 }}>No types yet. Click Add Type.</p> : null}
+                {categoryTypes.length === 0 ? <p className="page-subtitle" style={{ margin: 0 }}>No types yet.</p> : null}
               </div>
 
               {selectedType ? (
                 <div className="card" style={{ marginTop: "0.75rem" }}>
-                  <h4 style={{ marginTop: 0, marginBottom: "0.6rem" }}>Edit Type Category</h4>
+                  <h4 style={{ marginTop: 0, marginBottom: "0.6rem" }}>Edit Type</h4>
                   <div className="settings-chip-list">
                     <div style={{ flex: 1, minWidth: "180px" }}>
-                      <label className="label">Type Category</label>
-                      <input className="input" value={selectedType.typeLabel} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { typeLabel: e.target.value })} />
+                      <label className="label">Type Label</label>
+                      <input className="input" value={selectedType.typeLabel} onChange={(e) => updateType(selectedTypeId, { typeLabel: e.target.value })} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: "180px" }}>
+                      <label className="label">Type Key</label>
+                      <input className="input" value={selectedType.typeKey} onChange={(e) => updateType(selectedTypeId, { typeKey: normalizeAttributeTypeKey(e.target.value) })} />
                     </div>
                     <div style={{ flex: 1, minWidth: "180px" }}>
                       <label className="label">Detail Label</label>
-                      <input className="input" value={selectedType.detailLabel} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { detailLabel: e.target.value })} />
+                      <input className="input" value={selectedType.detailLabel} onChange={(e) => updateType(selectedTypeId, { detailLabel: e.target.value })} />
                     </div>
                   </div>
+                  {selectedCategory.kind === "event" ? (
+                    <div className="settings-chip-list">
+                      <div style={{ minWidth: "180px" }}>
+                        <label className="label">Date Mode</label>
+                        <select className="input" value={selectedType.dateMode} onChange={(e) => updateType(selectedTypeId, { dateMode: e.target.value as "single" | "range" })}>
+                          <option value="single">Single</option>
+                          <option value="range">Range</option>
+                        </select>
+                      </div>
+                      <div style={{ minWidth: "140px" }}>
+                        <label className="label">Ask End Date</label>
+                        <label className="label" style={{ marginBottom: 0 }}>
+                          <input type="checkbox" checked={selectedType.askEndDate} onChange={(e) => updateType(selectedTypeId, { askEndDate: e.target.checked })} /> Yes
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="settings-chip-list">
-                    <div style={{ minWidth: "180px" }}>
-                      <label className="label">Date Mode</label>
-                      <select className="input" value={selectedType.dateMode} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { dateMode: e.target.value as "single" | "range" })}>
-                        <option value="single">Single</option>
-                        <option value="range">Range</option>
-                      </select>
-                    </div>
-                    <div style={{ minWidth: "140px" }}>
-                      <label className="label">Ask End Date</label>
-                      <label className="label" style={{ marginBottom: 0 }}>
-                        <input type="checkbox" checked={selectedType.askEndDate} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { askEndDate: e.target.checked })} /> Yes
-                      </label>
-                    </div>
                     <div style={{ minWidth: "120px" }}>
                       <label className="label">Enabled</label>
                       <label className="label" style={{ marginBottom: 0 }}>
-                        <input type="checkbox" checked={selectedType.isEnabled} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { isEnabled: e.target.checked })} /> Yes
+                        <input type="checkbox" checked={selectedType.isEnabled} onChange={(e) => updateType(selectedTypeId, { isEnabled: e.target.checked })} /> Yes
                       </label>
                     </div>
                     <div style={{ minWidth: "120px" }}>
                       <label className="label">Sort Order</label>
-                      <input className="input" type="number" value={selectedType.sortOrder} onChange={(e) => updateType(selectedType.typeKey, selectedType.categoryKey, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
+                      <input className="input" type="number" value={selectedType.sortOrder} onChange={(e) => updateType(selectedTypeId, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
                     </div>
                   </div>
                   <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
-                    <button type="button" className="button secondary tap-button" onClick={addType} disabled={busy || !selectedCategoryKey}>
-                      Add Type
-                    </button>
-                    <button type="button" className="button secondary tap-button" onClick={() => deleteType(selectedType.typeKey, selectedType.categoryKey)}>
-                      Delete Type Category
+                    <button type="button" className="button secondary tap-button" onClick={() => deleteType(selectedTypeId)}>
+                      Delete Type
                     </button>
                   </div>
                 </div>

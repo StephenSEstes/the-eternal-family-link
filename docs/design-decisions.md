@@ -103,6 +103,13 @@ This file captures product and engineering choices that affect behavior, data sh
 
 ## 2026-03-10
 
+- `Area`: Attribute kind and unified definitions
+- `Decision`: Persist `Attributes.attribute_kind` as the canonical stored discriminator (`descriptor` | `event`) and manage both descriptor and event definitions from the same family-level definitions document in `FamilyConfig.attribute_event_definitions_json`.
+- `Reason`: Event-vs-descriptor behavior was previously inferred from `attribute_type` plus hardcoded UI lists, which made filtering, validation, and historical consistency weaker. Storing `attribute_kind` removes inference drift, and unified definitions keep descriptor and event options on one admin-managed source of truth.
+- `Alternatives Considered`: Continue inferring kind from `attribute_type`; store a generic `category` field instead of a dedicated kind; keep only event definitions admin-managed while leaving descriptor behavior hardcoded.
+- `Impact`: Attribute reads/writes now persist and prefer `attribute_kind`, existing rows are backfilled compatibly, the Add Attribute modal uses the same definitions layer for both descriptor and event types, and the Attribute Definitions admin screen now manages both kinds instead of event-only metadata.
+- `Follow-up`: If production data later needs stronger guarantees, add explicit integrity audits for missing/invalid `attribute_kind` rows beyond the current compatibility backfill.
+
 - `Area`: Runtime persistence backend
 - `Decision`: OCI is the only supported persistence backend, and the legacy backend runtime/tooling path is removed from the repo.
 - `Reason`: Keeping deleted-backend tooling and naming around was adding diagnosis noise, preserving dead operational paths, and weakening the OCI-only mental model.

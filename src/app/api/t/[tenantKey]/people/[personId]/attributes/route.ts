@@ -126,6 +126,7 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
     entityType: "person",
     entityId: personId,
     category: canonical.data.category,
+    attributeKind: canonical.data.attributeKind ?? canonical.data.category,
     attributeType: canonical.data.attributeType || canonical.data.typeKey,
     attributeTypeCategory: canonical.data.attributeTypeCategory,
     attributeDate: canonical.data.attributeDate || canonical.data.dateStart,

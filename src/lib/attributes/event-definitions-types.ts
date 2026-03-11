@@ -1,3 +1,5 @@
+import type { AttributeCategory } from "@/lib/attributes/types";
+
 export type EventTypeDateMode = "single" | "range";
 
 export type AttributeEventCategoryDefinition = {
@@ -7,6 +9,7 @@ export type AttributeEventCategoryDefinition = {
   description: string;
   sortOrder: number;
   isEnabled: boolean;
+  kind: AttributeCategory;
 };
 
 export type AttributeEventTypeDefinition = {
@@ -18,6 +21,7 @@ export type AttributeEventTypeDefinition = {
   askEndDate: boolean;
   sortOrder: number;
   isEnabled: boolean;
+  kind: AttributeCategory;
 };
 
 export type AttributeEventDefinitions = {

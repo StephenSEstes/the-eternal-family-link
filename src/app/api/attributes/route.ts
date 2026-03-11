@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     entityType: parsed.data.entityType,
     entityId: parsed.data.entityId,
     category: parsed.data.category,
+    attributeKind: parsed.data.attributeKind ?? parsed.data.category,
     attributeType: parsed.data.attributeType || parsed.data.typeKey,
     attributeTypeCategory: parsed.data.attributeTypeCategory ?? "",
     attributeDate: parsed.data.attributeDate || parsed.data.dateStart,

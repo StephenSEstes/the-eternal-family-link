@@ -245,6 +245,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `attribute_id`
   - `entity_type` (`person` | `household`)
   - `entity_id`
+  - `attribute_kind` (`descriptor` | `event`)
   - `attribute_type`
   - `attribute_type_category`
   - `attribute_date`
@@ -256,7 +257,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_at`
   - `updated_at`
 - Purpose:
-  - Canonical one-value-per-row descriptors/events for people and households.
+  - Canonical one-value-per-row descriptors/events for people and households, with explicit stored kind for filtering and validation.
 - Logical index/key:
   - Unique: `attribute_id`
   - Common lookup: (`entity_type`, `entity_id`, `attribute_type`)

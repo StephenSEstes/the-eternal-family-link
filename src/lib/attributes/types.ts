@@ -6,6 +6,7 @@ export type AttributeRecord = {
   entityType: AttributeEntityType;
   entityId: string;
   category: AttributeCategory;
+  attributeKind: AttributeCategory;
   attributeType: string;
   attributeTypeCategory: string;
   attributeDate: string;

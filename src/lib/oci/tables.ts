@@ -187,6 +187,7 @@ const TABLES: Record<string, TableConfig> = {
       "attribute_id",
       "entity_type",
       "entity_id",
+      "attribute_kind",
       "attribute_type",
       "attribute_type_category",
       "attribute_date",
@@ -283,6 +284,7 @@ export async function ensureOciAttributesTable() {
            attribute_id VARCHAR2(128) PRIMARY KEY,
            entity_type VARCHAR2(32) NOT NULL,
            entity_id VARCHAR2(128) NOT NULL,
+           attribute_kind VARCHAR2(32),
            attribute_type VARCHAR2(80) NOT NULL,
            attribute_type_category VARCHAR2(120),
            attribute_date VARCHAR2(32),
@@ -307,6 +309,7 @@ export async function ensureOciAttributesTable() {
     }
 
     const additiveColumns = [
+      "attribute_kind VARCHAR2(32)",
       "attribute_type VARCHAR2(80)",
       "attribute_type_category VARCHAR2(120)",
       "attribute_date VARCHAR2(32)",
@@ -327,6 +330,29 @@ export async function ensureOciAttributesTable() {
         }
       }
     }
+    await connection.execute(`
+      UPDATE attributes
+         SET attribute_kind =
+               CASE
+                 WHEN NVL(TRIM(attribute_kind), '') <> '' THEN attribute_kind
+                 WHEN LOWER(TRIM(attribute_type)) = 'other' AND NVL(TRIM(attribute_date), '') <> '' THEN 'event'
+                 WHEN LOWER(TRIM(attribute_type)) IN (
+                   'birth',
+                   'education',
+                   'religious',
+                   'accomplishment',
+                   'injury_health',
+                   'life_event',
+                   'moved',
+                   'employment',
+                   'family_relationship',
+                   'pet',
+                   'travel'
+                 ) THEN 'event'
+                 ELSE 'descriptor'
+               END
+       WHERE NVL(TRIM(attribute_kind), '') = ''
+    `);
     await connection.commit();
   });
 }

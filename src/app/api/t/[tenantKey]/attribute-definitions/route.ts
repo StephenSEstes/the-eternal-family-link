@@ -12,6 +12,7 @@ const payloadSchema = z.object({
   categories: z
     .array(
       z.object({
+        kind: z.enum(["descriptor", "event"]),
         categoryKey: z.string().trim().min(1).max(120),
         categoryLabel: z.string().trim().min(1).max(120),
         categoryColor: z.string().trim().max(16).optional(),
@@ -24,6 +25,7 @@ const payloadSchema = z.object({
   types: z
     .array(
       z.object({
+        kind: z.enum(["descriptor", "event"]),
         typeKey: z.string().trim().min(1).max(120),
         categoryKey: z.string().trim().min(1).max(120),
         typeLabel: z.string().trim().min(1).max(120),
@@ -64,8 +66,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
   }
 
   const saved = await upsertAttributeEventDefinitions(resolved.tenant.tenantKey, {
-    version: 1,
+    version: parsed.data.version ?? 2,
     categories: parsed.data.categories.map((row, index) => ({
+      kind: row.kind,
       categoryKey: row.categoryKey,
       categoryLabel: row.categoryLabel,
       categoryColor: row.categoryColor ?? "",
@@ -74,6 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       isEnabled: row.isEnabled ?? true,
     })),
     types: parsed.data.types.map((row, index) => ({
+      kind: row.kind,
       typeKey: row.typeKey,
       categoryKey: row.categoryKey,
       typeLabel: row.typeLabel,

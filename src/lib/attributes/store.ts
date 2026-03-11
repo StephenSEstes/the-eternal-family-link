@@ -2,6 +2,11 @@ import "server-only";
 
 import { buildEntityId } from "@/lib/entity-id";
 import {
+  inferAttributeKindFromTypeKey,
+  normalizeAttributeKind,
+  normalizeAttributeTypeKey,
+} from "@/lib/attributes/definition-defaults";
+import {
   createTableRecord,
   deleteTableRecordById,
   getTableRecords,
@@ -59,27 +64,14 @@ const CANONICAL_TYPE_KEY_MAP: Record<string, string> = {
   health: "physical_attribute",
 };
 
-function inferCategoryFromTypeKey(typeKey: string) {
-  const normalized = (CANONICAL_TYPE_KEY_MAP[typeKey.trim().toLowerCase()] ?? typeKey.trim().toLowerCase());
-  if (
-    [
-      "birth",
-      "education",
-      "religious",
-      "accomplishment",
-      "injury_health",
-      "life_event",
-      "moved",
-      "employment",
-      "family_relationship",
-      "pet",
-      "travel",
-      "other",
-    ].includes(normalized)
-  ) {
+function inferCategoryFromTypeKey(typeKey: string, attributeDate = "") {
+  const normalized = normalizeAttributeTypeKey(
+    CANONICAL_TYPE_KEY_MAP[typeKey.trim().toLowerCase()] ?? typeKey.trim().toLowerCase(),
+  );
+  if (EVENT_TYPE_KEYS.has(normalized)) {
     return "event";
   }
-  return EVENT_TYPE_KEYS.has(normalized) ? "event" : "descriptor";
+  return inferAttributeKindFromTypeKey(normalized, attributeDate);
 }
 
 async function ensureAttributesStorage(tenantKey: string) {
@@ -91,13 +83,13 @@ async function ensureAttributesStorage(tenantKey: string) {
 
 function toAttributeRecord(row: Record<string, string>): AttributeRecord {
   const rawType = readCell(row, "attribute_type", "type_key");
-  const typeKey = CANONICAL_TYPE_KEY_MAP[rawType.trim().toLowerCase()] ?? rawType;
+  const typeKey = normalizeAttributeTypeKey(CANONICAL_TYPE_KEY_MAP[rawType.trim().toLowerCase()] ?? rawType);
   const entityType = (readCell(row, "entity_type") ||
     (readCell(row, "person_id") ? "person" : readCell(row, "household_id") ? "household" : "person")) as AttributeEntityType;
   const entityId = readCell(row, "entity_id", "person_id", "household_id");
-  const category = inferCategoryFromTypeKey(typeKey) as "descriptor" | "event";
   const attributeTypeCategory = readCell(row, "attribute_type_category", "type_category");
   const attributeDate = readCell(row, "attribute_date", "date", "date_start", "start_date");
+  const category = normalizeAttributeKind(readCell(row, "attribute_kind")) ?? inferCategoryFromTypeKey(typeKey, attributeDate);
   const attributeDetail = readCell(row, "attribute_detail", "value_text");
   const attributeNotes = readCell(row, "attribute_notes", "notes");
   const endDate = readCell(row, "end_date", "date_end");
@@ -106,6 +98,7 @@ function toAttributeRecord(row: Record<string, string>): AttributeRecord {
     entityType,
     entityId,
     category,
+    attributeKind: category,
     attributeType: typeKey,
     attributeTypeCategory,
     attributeDate,
@@ -172,18 +165,28 @@ export async function getAttributeWithMediaById(tenantKey: string, attributeId: 
 
 export async function createAttribute(
   tenantKey: string,
-  input: Omit<AttributeRecord, "attributeId" | "createdAt" | "updatedAt" | "label"> & { label?: string },
+  input: Omit<AttributeRecord, "attributeId" | "createdAt" | "updatedAt" | "label" | "attributeKind"> & {
+    label?: string;
+    attributeKind?: AttributeRecord["attributeKind"];
+  },
 ) {
   await ensureAttributesStorage(tenantKey);
   const now = new Date().toISOString();
   const attributeId = buildEntityId("attr", `${tenantKey}|${input.entityType}|${input.entityId}|${input.typeKey}|${Date.now()}`);
+  const attributeType = normalizeAttributeTypeKey(input.attributeType || input.typeKey);
+  const attributeDate = input.attributeDate || input.dateStart;
+  const attributeKind =
+    input.attributeKind ??
+    input.category ??
+    inferCategoryFromTypeKey(attributeType, attributeDate);
   const payload: Record<string, string> = {
     attribute_id: attributeId,
     entity_type: input.entityType,
     entity_id: input.entityId,
-    attribute_type: input.attributeType || input.typeKey,
+    attribute_kind: attributeKind,
+    attribute_type: attributeType,
     attribute_type_category: input.attributeTypeCategory,
-    attribute_date: input.attributeDate || input.dateStart,
+    attribute_date: attributeDate,
     date_is_estimated: input.dateIsEstimated ? "TRUE" : "FALSE",
     estimated_to: input.estimatedTo || "",
     attribute_detail: input.attributeDetail || input.valueText,
@@ -202,11 +205,23 @@ export async function updateAttribute(
   patch: Partial<Omit<AttributeRecord, "attributeId" | "entityType" | "entityId" | "createdAt" | "updatedAt">>,
 ) {
   await ensureAttributesStorage(tenantKey);
+  const existing = await getAttributeById(tenantKey, attributeId);
+  if (!existing) {
+    return null;
+  }
   const payload: Record<string, string> = {
     updated_at: new Date().toISOString(),
   };
-  if (patch.typeKey !== undefined) payload.attribute_type = patch.typeKey;
-  if (patch.attributeType !== undefined) payload.attribute_type = patch.attributeType;
+  const nextAttributeType = normalizeAttributeTypeKey(
+    patch.attributeType ?? patch.typeKey ?? existing.attributeType ?? existing.typeKey,
+  );
+  const nextAttributeDate = patch.attributeDate ?? patch.dateStart ?? existing.attributeDate ?? existing.dateStart;
+  const nextAttributeKind =
+    patch.attributeKind ??
+    patch.category ??
+    inferCategoryFromTypeKey(nextAttributeType, nextAttributeDate);
+  payload.attribute_kind = nextAttributeKind;
+  if (patch.typeKey !== undefined || patch.attributeType !== undefined) payload.attribute_type = nextAttributeType;
   if (patch.attributeTypeCategory !== undefined) payload.attribute_type_category = patch.attributeTypeCategory;
   if (patch.valueText !== undefined) payload.attribute_detail = patch.valueText;
   if (patch.attributeDetail !== undefined) payload.attribute_detail = patch.attributeDetail;

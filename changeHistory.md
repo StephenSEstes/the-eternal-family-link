@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Added canonical `Attributes.attribute_kind` storage and unified family-group Attribute Definitions so both descriptor and event types are admin-managed from one source of truth, with the Add Attribute modal now using those shared definitions for both kinds. See `docs/change-summary.md`.
 - 2026-03-10: Replaced the old in-law flag with canonical `PersonFamilyGroups.family_group_relationship_type` values (`founder`, `direct`, `in_law`, `undeclared`), added admin founder controls and integrity repair, and moved undeclared people into a `Needs Placement` flow outside the main tree. See `docs/change-summary.md`.
 - 2026-03-10: Local/either invites now generate a real local username and temporary password at invite creation time and include those credentials in the copied invite message, while keeping the invite accept flow backward-compatible for older pending invites. See `docs/change-summary.md`.
 - 2026-03-10: Broadened `USER` role behavior so signed-in family-group users can edit shared family data (people, households, relationships, attributes, media), while admin remains limited to invites, access/security, audit, integrity, and family-group administration. See `docs/change-summary.md`.

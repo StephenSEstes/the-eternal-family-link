@@ -5,6 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import type { AttributeCategory, AttributeEntityType } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
+import {
+  defaultAttributeDefinitions,
+  inferAttributeKindFromTypeKey,
+  makeAttributeDefinitionCategoryId,
+  normalizeAttributeTypeKey,
+} from "@/lib/attributes/definition-defaults";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
@@ -24,6 +30,7 @@ type AttributeItem = {
   entityType: AttributeEntityType;
   entityId: string;
   category: AttributeCategory;
+  attributeKind?: AttributeCategory;
   attributeType: string;
   attributeTypeCategory: string;
   attributeDate: string;
@@ -45,71 +52,6 @@ type AttributeItem = {
 };
 
 type AttributeTab = "all" | "descriptor" | "event";
-const DESCRIPTOR_TYPES = ["physical_attribute", "hobbies_interests", "talent", "other"];
-const EVENT_TYPES = [
-  "birth",
-  "education",
-  "religious",
-  "accomplishment",
-  "injury_health",
-  "life_event",
-  "moved",
-  "employment",
-  "family_relationship",
-  "pet",
-  "travel",
-  "other",
-];
-const EVENT_TYPE_CATEGORY_MAP: Record<string, string[]> = {
-  education: ["enrolled", "awarded", "exam_test", "grade"],
-  religious: ["baptism", "ordinance", "mission", "calling"],
-  employment: ["hired", "departed", "promotion", "awarded"],
-  family_relationship: ["married", "divorced", "adopted"],
-};
-
-function defaultEventDefinitions(): AttributeEventDefinitions {
-  const categories = EVENT_TYPES.map((typeKey, index) => ({
-    categoryKey: typeKey,
-    categoryLabel: prettyLabel(typeKey, ""),
-    categoryColor: "#e5e7eb",
-    description: "",
-    sortOrder: (index + 1) * 10,
-    isEnabled: true,
-  }));
-  const types = Object.entries(EVENT_TYPE_CATEGORY_MAP).flatMap(([categoryKey, items]) =>
-    items.map((typeKey, index) => ({
-      typeKey,
-      categoryKey,
-      typeLabel: prettyLabel(typeKey, ""),
-      detailLabel: "Attribute Detail",
-      dateMode: "single" as const,
-      askEndDate: false,
-      sortOrder: (index + 1) * 10,
-      isEnabled: true,
-    })),
-  );
-  return { version: 1, categories, types };
-}
-const THINGS_TYPE_CATEGORY_MAP: Record<string, string[]> = {
-  physical_attribute: ["eyes", "height", "blood_type", "allergy", "other"],
-};
-const LEGACY_TYPE_MAP: Record<string, string> = {
-  graduation: "education",
-  missions: "religious",
-  religious_event: "religious",
-  injuries: "injury_health",
-  accomplishments: "accomplishment",
-  stories: "life_event",
-  lived_in: "moved",
-  jobs: "employment",
-  hobbies: "hobbies_interests",
-  likes: "hobbies_interests",
-  allergies: "physical_attribute",
-  blood_type: "physical_attribute",
-  hair_color: "physical_attribute",
-  height: "physical_attribute",
-  health: "physical_attribute",
-};
 
 type AttributeFieldCopy = {
   valueLabel: string;
@@ -126,17 +68,16 @@ function prettyLabel(typeKey: string, label: string) {
 }
 
 function normalizeTypeKey(value: string) {
-  const key = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-  return LEGACY_TYPE_MAP[key] ?? key;
+  return normalizeAttributeTypeKey(value);
 }
 
 function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   const normalizedType = normalizeTypeKey(item.attributeType || item.typeKey || "");
   const attributeDate = getSafeAttributeValueText(item.attributeDate || item.dateStart);
   const category =
-    normalizedType === "other"
-      ? (attributeDate ? "event" : "descriptor")
-      : inferCategory(normalizedType);
+    item.attributeKind ??
+    item.category ??
+    inferAttributeKindFromTypeKey(normalizedType, attributeDate);
   const endDate = getSafeAttributeValueText(item.endDate || item.dateEnd);
   const attributeTypeCategory = getSafeAttributeValueText(item.attributeTypeCategory);
   const attributeDetail = getSafeAttributeValueText(item.attributeDetail || item.valueText);
@@ -145,6 +86,7 @@ function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   return {
     ...item,
     category,
+    attributeKind: category,
     attributeType: normalizedType,
     attributeTypeCategory,
     typeKey: normalizedType,
@@ -174,14 +116,6 @@ function summarizeSingle(item: AttributeItem) {
   const location = item.location.trim();
   const parts = [value, datePart, location].filter(Boolean);
   return parts.join(" | ") || "-";
-}
-
-function typeListForCategory(category: AttributeCategory) {
-  return category === "event" ? EVENT_TYPES : DESCRIPTOR_TYPES;
-}
-
-function inferCategory(typeKey: string): AttributeCategory {
-  return EVENT_TYPES.includes(normalizeTypeKey(typeKey)) ? "event" : "descriptor";
 }
 
 function fieldCopyFor(category: AttributeCategory, typeKey: string): AttributeFieldCopy {
@@ -352,20 +286,30 @@ export function AttributesModal({
 
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
-  const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultEventDefinitions());
+  const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultAttributeDefinitions());
   const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
-  const eventCategoryOptions = useMemo(
+  const definitionCategoryOptions = useMemo(
     () =>
       [...eventDefinitions.categories]
         .filter((item) => item.isEnabled)
         .sort((a, b) => a.sortOrder - b.sortOrder || a.categoryLabel.localeCompare(b.categoryLabel)),
     [eventDefinitions],
   );
-  const eventTypeOptionsByCategory = useMemo(() => {
-    const map = new Map<string, Array<{ typeKey: string; typeLabel: string; detailLabel: string; dateMode: "single" | "range"; askEndDate: boolean }>>();
+  const categoryOptionsByKind = useMemo(
+    () => ({
+      descriptor: definitionCategoryOptions.filter((item) => item.kind === "descriptor"),
+      event: definitionCategoryOptions.filter((item) => item.kind === "event"),
+    }),
+    [definitionCategoryOptions],
+  );
+  const definitionTypeOptionsByCategory = useMemo(() => {
+    const map = new Map<
+      string,
+      Array<{ typeKey: string; typeLabel: string; detailLabel: string; dateMode: "single" | "range"; askEndDate: boolean }>
+    >();
     for (const item of eventDefinitions.types) {
       if (!item.isEnabled) continue;
-      const key = normalizeTypeKey(item.categoryKey);
+      const key = makeAttributeDefinitionCategoryId(item.kind, item.categoryKey);
       const list = map.get(key) ?? [];
       list.push({
         typeKey: normalizeTypeKey(item.typeKey),
@@ -383,37 +327,36 @@ export function AttributesModal({
     return map;
   }, [eventDefinitions]);
   const addTypeSuggestions = useMemo(() => {
-    if (category !== "event") return typeListForCategory(category);
-    if (eventCategoryOptions.length === 0) return EVENT_TYPES;
-    return eventCategoryOptions.map((item) => normalizeTypeKey(item.categoryKey));
-  }, [category, eventCategoryOptions]);
+    const categoryOptions = categoryOptionsByKind[category];
+    return categoryOptions.map((item) => normalizeTypeKey(item.categoryKey));
+  }, [category, categoryOptionsByKind]);
   const typeCategorySuggestions = useMemo(() => {
     const normalizedType = normalizeTypeKey(typeKey);
-    if (category === "event") return (eventTypeOptionsByCategory.get(normalizedType) ?? []).map((item) => item.typeKey);
-    return THINGS_TYPE_CATEGORY_MAP[normalizedType] ?? [];
-  }, [category, typeKey, eventTypeOptionsByCategory]);
-  const selectedEventTypeOption = useMemo(() => {
-    if (category !== "event") return null;
+    const categoryId = makeAttributeDefinitionCategoryId(category, normalizedType);
+    return (definitionTypeOptionsByCategory.get(categoryId) ?? []).map((item) => item.typeKey);
+  }, [category, typeKey, definitionTypeOptionsByCategory]);
+  const selectedTypeDefinition = useMemo(() => {
     const normalizedType = normalizeTypeKey(typeKey);
     const normalizedCategory = normalizeTypeKey(attributeTypeCategory);
-    return (eventTypeOptionsByCategory.get(normalizedType) ?? []).find((item) => item.typeKey === normalizedCategory) ?? null;
-  }, [category, typeKey, attributeTypeCategory, eventTypeOptionsByCategory]);
-  const typeLabelByKey = useMemo(() => {
+    const categoryId = makeAttributeDefinitionCategoryId(category, normalizedType);
+    return (definitionTypeOptionsByCategory.get(categoryId) ?? []).find((item) => item.typeKey === normalizedCategory) ?? null;
+  }, [attributeTypeCategory, category, definitionTypeOptionsByCategory, typeKey]);
+  const categoryLabelById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const item of eventCategoryOptions) {
-      map.set(normalizeTypeKey(item.categoryKey), item.categoryLabel);
+    for (const item of definitionCategoryOptions) {
+      map.set(makeAttributeDefinitionCategoryId(item.kind, item.categoryKey), item.categoryLabel);
     }
     return map;
-  }, [eventCategoryOptions]);
-  const eventCategoryColorByKey = useMemo(() => {
+  }, [definitionCategoryOptions]);
+  const categoryColorById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const item of eventCategoryOptions) {
-      map.set(normalizeTypeKey(item.categoryKey), (item.categoryColor || "#e5e7eb").trim() || "#e5e7eb");
+    for (const item of definitionCategoryOptions) {
+      map.set(makeAttributeDefinitionCategoryId(item.kind, item.categoryKey), (item.categoryColor || "#e5e7eb").trim() || "#e5e7eb");
     }
     return map;
-  }, [eventCategoryOptions]);
-  const chipColorStyleForType = (rawTypeKey: string) => {
-    const color = eventCategoryColorByKey.get(normalizeTypeKey(rawTypeKey)) || "#e5e7eb";
+  }, [definitionCategoryOptions]);
+  const chipColorStyleForType = (kind: AttributeCategory, rawTypeKey: string) => {
+    const color = categoryColorById.get(makeAttributeDefinitionCategoryId(kind, normalizeTypeKey(rawTypeKey))) || "#e5e7eb";
     return {
       borderColor: color,
       background: `${color}33`,
@@ -446,7 +389,7 @@ export function AttributesModal({
     if (initialTypeKey) {
       const normalizedType = normalizeTypeKey(initialTypeKey);
       setTypeKey(normalizedType);
-      setCategory(inferCategory(normalizedType));
+      setCategory(inferAttributeKindFromTypeKey(normalizedType));
     }
     if (initialTypeCategory) {
       setAttributeTypeCategory(normalizeTypeKey(initialTypeCategory));
@@ -503,10 +446,10 @@ export function AttributesModal({
 
   useEffect(() => {
     if (category !== "event") return;
-    if (selectedEventTypeOption && !selectedEventTypeOption.askEndDate && selectedEventTypeOption.dateMode !== "range") {
+    if (selectedTypeDefinition && !selectedTypeDefinition.askEndDate && selectedTypeDefinition.dateMode !== "range") {
       setDateEnd("");
     }
-  }, [category, selectedEventTypeOption]);
+  }, [category, selectedTypeDefinition]);
 
   useEffect(() => {
     const normalizedCurrent = normalizeTypeKey(typeKey);
@@ -593,6 +536,7 @@ export function AttributesModal({
       entityType,
       entityId,
       category,
+      attributeKind: category,
       isDateRelated: category === "event",
       attributeType: normalizedType,
       attributeTypeCategory,
@@ -702,9 +646,12 @@ export function AttributesModal({
     const normalizedInitialType = initialTypeKey ? normalizeTypeKey(initialTypeKey) : "";
     const defaultCategory: AttributeCategory =
       launchSourceLabel.toLowerCase().includes("things") ? "descriptor" : "event";
-    const nextCategory = normalizedInitialType ? inferCategory(normalizedInitialType) : defaultCategory;
+    const nextCategory = normalizedInitialType ? inferAttributeKindFromTypeKey(normalizedInitialType) : defaultCategory;
+    const defaultTypeKey = categoryOptionsByKind[nextCategory][0]?.categoryKey
+      ? normalizeTypeKey(categoryOptionsByKind[nextCategory][0]!.categoryKey)
+      : "";
     setCategory(nextCategory);
-    setTypeKey(normalizedInitialType || (nextCategory === "event" ? EVENT_TYPES[0] : DESCRIPTOR_TYPES[0]));
+    setTypeKey(normalizedInitialType || defaultTypeKey);
     setAddModalOpen(true);
     setDrawerEditMode(false);
   };
@@ -806,7 +753,7 @@ export function AttributesModal({
                           key={item.attributeId}
                           type="button"
                           className="button secondary tap-button"
-                          style={{ borderRadius: "999px", ...chipColorStyleForType(item.typeKey) }}
+                          style={{ borderRadius: "999px", ...chipColorStyleForType(item.category, item.typeKey) }}
                           onClick={() => openAttributeDrawer(item)}
                         >
                           {getSafeAttributeValueText(item.valueText) || "-"}
@@ -835,7 +782,7 @@ export function AttributesModal({
                           key={item.attributeId}
                           type="button"
                           className="person-linked-row"
-                          style={{ width: "100%", textAlign: "left", ...chipColorStyleForType(item.typeKey) }}
+                          style={{ width: "100%", textAlign: "left", ...chipColorStyleForType(item.category, item.typeKey) }}
                           onClick={() => openAttributeDrawer(item)}
                         >
                           <div style={{ minWidth: 0 }}>
@@ -925,7 +872,7 @@ export function AttributesModal({
                     <select className="input" value={category} onChange={(e) => {
                       const nextCategory = e.target.value as AttributeCategory;
                       setCategory(nextCategory);
-                      const defaults = typeListForCategory(nextCategory);
+                      const defaults = categoryOptionsByKind[nextCategory].map((item) => normalizeTypeKey(item.categoryKey));
                       const normalizedCurrent = normalizeTypeKey(typeKey);
                       if (!defaults.includes(normalizedCurrent)) {
                         setTypeKey(defaults[0] || "");
@@ -939,8 +886,8 @@ export function AttributesModal({
                       setTypeKey(normalizeTypeKey(e.target.value));
                       setAttributeTypeCategory("");
                     }}>
-                      {typeListForCategory(category).map((item) => (
-                        <option key={item} value={item}>{prettyLabel(item, "")}</option>
+                      {addTypeSuggestions.map((item) => (
+                        <option key={item} value={item}>{categoryLabelById.get(makeAttributeDefinitionCategoryId(category, item)) ?? prettyLabel(item, "")}</option>
                       ))}
                     </select>
                   </div>
@@ -950,7 +897,14 @@ export function AttributesModal({
                       <select className="input" value={attributeTypeCategory} onChange={(e) => setAttributeTypeCategory(e.target.value)}>
                         <option value="">Select category</option>
                         {typeCategorySuggestions.map((item) => (
-                          <option key={item} value={item}>{prettyLabel(item, "")}</option>
+                          <option key={item} value={item}>
+                            {selectedTypeDefinition?.typeKey === normalizeTypeKey(item)
+                              ? selectedTypeDefinition.typeLabel
+                              : (definitionTypeOptionsByCategory
+                                  .get(makeAttributeDefinitionCategoryId(category, normalizeTypeKey(typeKey)))
+                                  ?.find((entry) => entry.typeKey === normalizeTypeKey(item))
+                                  ?.typeLabel ?? prettyLabel(item, ""))}
+                          </option>
                         ))}
                       </select>
                     </>
@@ -959,43 +913,47 @@ export function AttributesModal({
                   <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
                   <label className="label">Attribute Detail</label>
                   <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
-                  <div className="settings-chip-list">
-                    <div style={{ flex: 1, minWidth: "170px" }}>
-                      <label className="label">Start Date</label>
-                      <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: "170px" }}>
-                      <label className="label">End Date</label>
-                      <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="settings-chip-list">
-                    <div style={{ flex: 1, minWidth: "170px" }}>
-                      <label className="label">Date Is Estimated?</label>
-                      <select
-                        className="input"
-                        value={dateIsEstimated ? "yes" : "no"}
-                        onChange={(e) => {
-                          const next = e.target.value === "yes";
-                          setDateIsEstimated(next);
-                          if (!next) setEstimatedTo("");
-                        }}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </div>
-                    {dateIsEstimated ? (
-                      <div style={{ flex: 1, minWidth: "170px" }}>
-                        <label className="label">Estimated To</label>
-                        <select className="input" value={estimatedTo} onChange={(e) => setEstimatedTo(e.target.value as "" | "month" | "year")}>
-                          <option value="">Select one</option>
-                          <option value="month">Month</option>
-                          <option value="year">Year</option>
-                        </select>
+                  {category === "event" ? (
+                    <>
+                      <div className="settings-chip-list">
+                        <div style={{ flex: 1, minWidth: "170px" }}>
+                          <label className="label">Start Date</label>
+                          <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: "170px" }}>
+                          <label className="label">End Date</label>
+                          <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
+                      <div className="settings-chip-list">
+                        <div style={{ flex: 1, minWidth: "170px" }}>
+                          <label className="label">Date Is Estimated?</label>
+                          <select
+                            className="input"
+                            value={dateIsEstimated ? "yes" : "no"}
+                            onChange={(e) => {
+                              const next = e.target.value === "yes";
+                              setDateIsEstimated(next);
+                              if (!next) setEstimatedTo("");
+                            }}
+                          >
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
+                          </select>
+                        </div>
+                        {dateIsEstimated ? (
+                          <div style={{ flex: 1, minWidth: "170px" }}>
+                            <label className="label">Estimated To</label>
+                            <select className="input" value={estimatedTo} onChange={(e) => setEstimatedTo(e.target.value as "" | "month" | "year")}>
+                              <option value="">Select one</option>
+                              <option value="month">Month</option>
+                              <option value="year">Year</option>
+                            </select>
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
                   <label className="label">Attribute Notes</label>
                   <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
                   <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
@@ -1101,7 +1059,7 @@ export function AttributesModal({
                         onChange={(e) => {
                           const nextCategory: AttributeCategory = e.target.checked ? "event" : "descriptor";
                           setCategory(nextCategory);
-                          const defaults = typeListForCategory(nextCategory);
+                          const defaults = categoryOptionsByKind[nextCategory].map((item) => normalizeTypeKey(item.categoryKey));
                           const normalizedCurrent = normalizeTypeKey(typeKey);
                           if (!defaults.includes(normalizedCurrent)) {
                             setTypeKey(defaults[0] || "");
@@ -1137,7 +1095,7 @@ export function AttributesModal({
                     >
                       {addTypeSuggestions.map((item) => (
                         <option key={item} value={item}>
-                          {category === "event" ? (typeLabelByKey.get(normalizeTypeKey(item)) ?? prettyLabel(item, "")) : prettyLabel(item, "")}
+                          {categoryLabelById.get(makeAttributeDefinitionCategoryId(category, normalizeTypeKey(item))) ?? prettyLabel(item, "")}
                         </option>
                       ))}
                     </select>
@@ -1153,12 +1111,10 @@ export function AttributesModal({
                         <option value="">Select category</option>
                         {typeCategorySuggestions.map((item) => (
                           <option key={item} value={item}>
-                            {category === "event"
-                              ? (eventTypeOptionsByCategory
-                                .get(normalizeTypeKey(typeKey))
-                                ?.find((entry) => entry.typeKey === normalizeTypeKey(item))
-                                ?.typeLabel ?? prettyLabel(item, ""))
-                              : prettyLabel(item, "")}
+                            {(definitionTypeOptionsByCategory
+                              .get(makeAttributeDefinitionCategoryId(category, normalizeTypeKey(typeKey)))
+                              ?.find((entry) => entry.typeKey === normalizeTypeKey(item))
+                              ?.typeLabel ?? prettyLabel(item, ""))}
                           </option>
                         ))}
                       </select>
@@ -1166,8 +1122,8 @@ export function AttributesModal({
                   ) : null}
                 </div>
                 <label className="label">
-                  {category === "event" && selectedEventTypeOption?.detailLabel
-                    ? selectedEventTypeOption.detailLabel
+                  {category === "event" && selectedTypeDefinition?.detailLabel
+                    ? selectedTypeDefinition.detailLabel
                     : getDetailLabel(attributeTypeCategory || typeKey)}
                 </label>
                 <input
@@ -1175,8 +1131,8 @@ export function AttributesModal({
                   value={valueText}
                   onChange={(e) => setValueText(e.target.value)}
                   placeholder={
-                    category === "event" && selectedEventTypeOption?.detailLabel
-                      ? selectedEventTypeOption.detailLabel
+                    category === "event" && selectedTypeDefinition?.detailLabel
+                      ? selectedTypeDefinition.detailLabel
                       : getDetailLabel(attributeTypeCategory || typeKey)
                   }
                 />
@@ -1188,7 +1144,7 @@ export function AttributesModal({
                         <label className="label">Date</label>
                         <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
                       </div>
-                      {selectedEventTypeOption == null || selectedEventTypeOption.askEndDate || selectedEventTypeOption.dateMode === "range" ? (
+                      {selectedTypeDefinition == null || selectedTypeDefinition.askEndDate || selectedTypeDefinition.dateMode === "range" ? (
                         <div style={{ flex: 1, minWidth: "170px" }}>
                           <label className="label">{addFormCopy.endDateLabel}</label>
                           <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />

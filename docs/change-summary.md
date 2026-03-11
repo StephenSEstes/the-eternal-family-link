@@ -13,6 +13,41 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (stored attribute kind and unified attribute definitions)
+
+- `Change`: Added canonical `Attributes.attribute_kind` storage (`descriptor` | `event`), backfilled existing rows compatibly, and unified family-group Attribute Definitions so admins now manage both descriptor and event categories/types from one definitions document. The Add Attribute modal now reads those unified definitions for both kinds instead of mixing event definitions with hardcoded descriptor lists.
+- `Type`: Schema | Data | API | UI
+- `Why`: Root cause was a split model. Event-vs-descriptor behavior was being inferred from `attribute_type`, old rows could be reinterpreted differently over time, admin definitions only controlled event types, and the add/edit UI still kept a separate hardcoded descriptor taxonomy. That made filtering, validation, and long-term consistency weaker than the schema intended.
+- `Files`:
+  - `oci-schema.sql`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/attributes/definition-defaults.ts`
+  - `src/lib/attributes/event-definitions-types.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/validation/attributes.ts`
+  - `src/app/api/t/[tenantKey]/attribute-definitions/route.ts`
+  - `src/app/api/attributes/route.ts`
+  - `src/app/api/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/data-schema.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: Added and backfilled `Attributes.attribute_kind` in the OCI compatibility layer. Old family-group event-only definition JSON is upgraded compatibly so existing saved event definitions stay intact while descriptor definitions are added automatically.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Admin `Attribute Definitions` shows both descriptor and event categories/types.
+  - A descriptor attribute no longer asks for date fields in Add/Edit.
+  - An event attribute still requires/shows date fields in Add/Edit.
+  - Existing attribute records still load with the correct descriptor/event behavior after backfill.
+- `Rollback Notes`: Revert this change and redeploy. Rows backfilled with `attribute_kind` can be recomputed from `attribute_type` + `attribute_date` if rollback cleanup is needed.
+- `Design Decision Change`: Added a design decision for stored `attribute_kind` and unified descriptor/event definition management.
+
 ## 2026-03-10 (invite text includes local credentials)
 
 - `Change`: Local-capable invites now generate a local username and temporary password at invite creation time and include those credentials in the copied invite message. The local invite-accept flow still works for older pending invites, but new invites pre-provision the local credential before the recipient opens the link.

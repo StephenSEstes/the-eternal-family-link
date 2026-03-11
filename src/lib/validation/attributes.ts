@@ -1,57 +1,18 @@
 import { z } from "zod";
+import {
+  inferAttributeKindFromTypeKey,
+  normalizeAttributeKind,
+  normalizeAttributeTypeKey,
+} from "@/lib/attributes/definition-defaults";
 
 const ENTITY_TYPES = ["person", "household"] as const;
 const CATEGORIES = ["descriptor", "event"] as const;
-const EVENT_TYPES = [
-  "birth",
-  "education",
-  "religious",
-  "accomplishment",
-  "injury_health",
-  "life_event",
-  "moved",
-  "employment",
-  "family_relationship",
-  "pet",
-  "travel",
-  "other",
-] as const;
-const DESCRIPTOR_TYPES = ["physical_attribute", "hobbies_interests", "talent", "other"] as const;
-
-const LEGACY_TYPE_MAP: Record<string, string> = {
-  graduation: "education",
-  missions: "religious",
-  religious_event: "religious",
-  injuries: "injury_health",
-  accomplishments: "accomplishment",
-  stories: "life_event",
-  lived_in: "moved",
-  jobs: "employment",
-  hobbies: "hobbies_interests",
-  likes: "hobbies_interests",
-  allergies: "physical_attribute",
-  blood_type: "physical_attribute",
-  hair_color: "physical_attribute",
-  height: "physical_attribute",
-  health: "physical_attribute",
-};
-
-function normalizeTypeKey(value: string) {
-  const raw = value.trim().toLowerCase();
-  const normalized = raw.replace(/[^a-z0-9_-]/g, "_");
-  return LEGACY_TYPE_MAP[normalized] ?? normalized;
-}
-
-function inferCategory(typeKey: string): "descriptor" | "event" {
-  if ((DESCRIPTOR_TYPES as readonly string[]).includes(typeKey)) return "descriptor";
-  if ((EVENT_TYPES as readonly string[]).includes(typeKey)) return "event";
-  return "descriptor";
-}
 
 const baseSchema = z.object({
   entityType: z.enum(ENTITY_TYPES).optional(),
   entityId: z.string().trim().min(1).max(80).optional(),
   category: z.enum(CATEGORIES).optional(),
+  attributeKind: z.enum(CATEGORIES).optional(),
   isDateRelated: z.boolean().optional(),
   attributeType: z.string().trim().min(1).max(120).optional(),
   attributeTypeCategory: z.string().trim().max(120).optional().default(""),
@@ -76,15 +37,19 @@ export const attributeCreateSchema = baseSchema
     entityId: z.string().trim().min(1).max(80),
   })
   .transform((input) => {
-    const normalizedAttributeType = normalizeTypeKey(input.attributeType || input.typeKey);
+    const normalizedAttributeType = normalizeAttributeTypeKey(input.attributeType || input.typeKey);
     const typeKey = normalizedAttributeType;
-    const isDateRelated = input.isDateRelated ?? input.category === "event";
+    const explicitKind = normalizeAttributeKind(input.attributeKind ?? input.category);
+    const inferredKind = inferAttributeKindFromTypeKey(normalizedAttributeType, input.attributeDate || input.dateStart);
+    const category = explicitKind ?? (input.isDateRelated ? "event" : inferredKind);
+    const isDateRelated = input.isDateRelated ?? category === "event";
     return {
       ...input,
       isDateRelated,
+      attributeKind: category,
       attributeType: normalizedAttributeType,
       typeKey,
-      category: input.category ?? (isDateRelated ? "event" : inferCategory(typeKey)),
+      category,
       attributeDate: input.attributeDate || input.dateStart,
       endDate: input.endDate || input.dateEnd,
       attributeDetail: input.attributeDetail || input.valueText,
@@ -108,10 +73,15 @@ export const attributeCreateSchema = baseSchema
 export const attributeUpdateSchema = baseSchema
   .partial()
   .transform((input) => {
-    const typeKey = input.typeKey ? normalizeTypeKey(input.typeKey) : undefined;
-    const category = input.category ?? (typeKey ? inferCategory(typeKey) : undefined);
+    const attributeType = input.attributeType ? normalizeAttributeTypeKey(input.attributeType) : undefined;
+    const typeKey = input.typeKey ? normalizeAttributeTypeKey(input.typeKey) : undefined;
+    const normalizedType = attributeType ?? typeKey;
+    const explicitKind = normalizeAttributeKind(input.attributeKind ?? input.category);
+    const category = explicitKind ?? (normalizedType ? inferAttributeKindFromTypeKey(normalizedType, input.attributeDate || input.dateStart || "") : undefined);
     return {
       ...input,
+      attributeType,
+      attributeKind: category,
       typeKey,
       category,
     };

@@ -172,6 +172,7 @@ BEGIN
       family_group_name VARCHAR2(512 CHAR),
       viewer_pin_hash VARCHAR2(512 CHAR),
       photos_folder_id VARCHAR2(512 CHAR),
+      attribute_event_definitions_json CLOB,
       CONSTRAINT pk_family_config PRIMARY KEY (family_group_key)
     )
   ';
@@ -206,23 +207,22 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
-    CREATE TABLE person_attributes (
+    CREATE TABLE attributes (
       attribute_id VARCHAR2(128 CHAR) NOT NULL,
-      person_id VARCHAR2(128 CHAR),
+      entity_type VARCHAR2(64 CHAR),
+      entity_id VARCHAR2(128 CHAR),
+      attribute_kind VARCHAR2(32 CHAR),
       attribute_type VARCHAR2(128 CHAR),
-      value_text VARCHAR2(4000 CHAR),
-      value_json VARCHAR2(4000 CHAR),
-      media_metadata VARCHAR2(4000 CHAR),
-      label VARCHAR2(512 CHAR),
-      is_primary VARCHAR2(8 CHAR),
-      sort_order VARCHAR2(32 CHAR),
-      start_date VARCHAR2(32 CHAR),
+      attribute_type_category VARCHAR2(128 CHAR),
+      attribute_date VARCHAR2(32 CHAR),
+      date_is_estimated VARCHAR2(8 CHAR),
+      estimated_to VARCHAR2(32 CHAR),
+      attribute_detail VARCHAR2(4000 CHAR),
+      attribute_notes VARCHAR2(4000 CHAR),
       end_date VARCHAR2(32 CHAR),
-      visibility VARCHAR2(64 CHAR),
-      share_scope VARCHAR2(64 CHAR),
-      share_family_group_key VARCHAR2(128 CHAR),
-      notes VARCHAR2(4000 CHAR),
-      CONSTRAINT pk_person_attributes PRIMARY KEY (attribute_id)
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_attributes PRIMARY KEY (attribute_id)
     )
   ';
 EXCEPTION
