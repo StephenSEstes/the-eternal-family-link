@@ -1982,7 +1982,7 @@ export async function getOciPersonMediaAttributeRowsForFile(input: {
          AND (${enabledExpr("pfg.is_enabled")} OR TRIM(NVL(pfg.is_enabled, '')) = '')
          AND LOWER(TRIM(a.entity_type)) = 'person'
          AND LOWER(TRIM(a.attribute_type)) IN ('photo', 'video', 'audio', 'media')
-         AND TRIM(a.attribute_detail) = :fileId
+         AND DBMS_LOB.COMPARE(TO_CLOB(a.attribute_detail), TO_CLOB(:fileId)) = 0
        ORDER BY a.attribute_id`,
       { familyGroupKey, fileId },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },

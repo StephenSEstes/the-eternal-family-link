@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (media attribute-detail CLOB comparison fix)
+
+- `Change`: Fixed the Media Library selected-file attribute lookup so it matches `Attributes.attribute_detail` against the target `fileId` with a CLOB-safe Oracle comparison.
+- `Type`: API
+- `Why`: Root cause was a second Oracle `ORA-22848` on the same media detail path. The attribute lookup helper was using `TRIM(a.attribute_detail) = :fileId`, but `attribute_detail` is a CLOB in the canonical OCI attributes table, so Oracle rejected the comparison.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Editing media details no longer fails with `ORA-22848` when selected-file detail loading matches person media attributes by `fileId`.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (media metadata CLOB-safe detail query fix)
 
 - `Change`: Fixed the Media Library media-detail read path to use a CLOB-safe fallback for `media_metadata` when loading a selected file after save.
