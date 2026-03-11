@@ -100,6 +100,7 @@ type FamilyGroupOption = {
 
 type TabKey = "contact" | "attributes" | "photos";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
+const ADD_NEW_SPOUSE_OPTION = "__add_new_spouse__";
 type DraftMeta = {
   label: string;
   description: string;
@@ -734,15 +735,15 @@ export function PersonEditModal({
   const phoneActionItems = useMemo(() => extractPhoneLinkItems(phones), [phones]);
   const attributeLaunchMeta = useMemo(() => {
     if (attributeLaunchSource === "main_events") {
-      return { label: "Main Events", initialTypeKey: "life_event", initialTypeCategory: "" };
+      return { label: "Main Events", initialTypeKey: "life_event", initialTypeCategory: "", addTitle: "Add Event" };
     }
     if (attributeLaunchSource === "things") {
-      return { label: "Things About", initialTypeKey: "physical_attribute", initialTypeCategory: "" };
+      return { label: "Things About", initialTypeKey: "physical_attribute", initialTypeCategory: "", addTitle: "Add Attribute" };
     }
     if (attributeLaunchSource === "stories") {
-      return { label: "Stories", initialTypeKey: "life_event", initialTypeCategory: "story" };
+      return { label: "Stories", initialTypeKey: "life_event", initialTypeCategory: "story", addTitle: "Add Story" };
     }
-    return { label: "Timeline", initialTypeKey: "life_event", initialTypeCategory: "" };
+    return { label: "Timeline", initialTypeKey: "life_event", initialTypeCategory: "", addTitle: "Add Event" };
   }, [attributeLaunchSource]);
 
   useEffect(() => {
@@ -941,7 +942,13 @@ export function PersonEditModal({
   const timelineItems = useMemo(() => {
     const filtered = aboutAttributes.filter((item) => {
       const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
-      return !["photo", "media", "audio", "video", "in_law"].includes(typeKey);
+      const itemKind = item.category ?? (
+        ["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey)
+          ? "event"
+          : "descriptor"
+      );
+      const hasDate = Boolean(parseDate(item.attributeDate)?.getTime() || parseDate(item.endDate)?.getTime());
+      return itemKind === "event" && hasDate && !["photo", "media", "audio", "video", "in_law"].includes(typeKey);
     });
     const toDateMs = (item: AboutAttribute) =>
       parseDate(item.attributeDate)?.getTime()
@@ -962,6 +969,18 @@ export function PersonEditModal({
       return getTimelineChipLabel(a).localeCompare(getTimelineChipLabel(b));
     });
   }, [aboutAttributes, timelineSortOrder]);
+  const storyItems = useMemo(() => {
+    return aboutAttributes.filter((item) => {
+      const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
+      const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
+      const itemKind = item.category ?? (
+        ["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey)
+          ? "event"
+          : "descriptor"
+      );
+      return itemKind === "event" && typeCategory === "story";
+    });
+  }, [aboutAttributes]);
   const displayedFamilyGroupRelationshipType = useMemo<FamilyGroupRelationshipType>(() => {
     if (storedFamilyGroupRelationshipType === "founder") {
       return "founder";
@@ -1957,13 +1976,26 @@ export function PersonEditModal({
                       <div style={{ flex: 1, minWidth: 180 }}>
                         <label className="label">Spouse</label>
                         <select className="input" value={spouseId} onChange={(e) => {
-                          setSpouseId(e.target.value);
+                          const nextValue = e.target.value;
+                          if (nextValue === ADD_NEW_SPOUSE_OPTION) {
+                            if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
+                              return;
+                            }
+                            setShowAddSpouse(true);
+                            setNewSpouseGender(oppositeGender(gender));
+                            setStatus("");
+                            return;
+                          }
+                          setSpouseId(nextValue);
                           setFamilyTouched(true);
                         }}>
                           <option value="">None</option>
                           {spouseOptions.map((option) => (
                             <option key={`sp-${option.personId}`} value={option.personId}>{option.displayName}</option>
                           ))}
+                          {isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
+                            <option value={ADD_NEW_SPOUSE_OPTION}>+ Add Person</option>
+                          ) : null}
                         </select>
                       </div>
                       {gender === "female" && spouseId ? (
@@ -1973,28 +2005,11 @@ export function PersonEditModal({
                         </div>
                       ) : null}
                     </div>
-                    {!hasVisibleSpouseSelection ? (
+                    {!hasVisibleSpouseSelection && !isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
                       <div style={{ marginTop: "0.75rem" }}>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          disabled={!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)}
-                          onClick={() => {
-                            if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
-                              return;
-                            }
-                            setShowAddSpouse(true);
-                            setNewSpouseGender(oppositeGender(gender));
-                            setStatus("");
-                          }}
-                        >
-                          Add New Person as Spouse
-                        </button>
-                        {!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
-                          <p className="page-subtitle" style={{ margin: "0.45rem 0 0" }}>
-                            Add or connect this person to a direct parent first, or choose an existing direct/founder spouse.
-                          </p>
-                        ) : null}
+                        <p className="page-subtitle" style={{ margin: "0.45rem 0 0" }}>
+                          Add or connect this person to a direct parent first, or choose an existing direct/founder spouse.
+                        </p>
                       </div>
                     ) : null}
                     {householdId ? (
@@ -2104,7 +2119,39 @@ export function PersonEditModal({
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Stories</h4>
-                <div style={{ flex: 1 }} />
+                <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.6rem" }}>
+                  {storyItems.length > 0 ? (
+                    storyItems.map((item) => (
+                      <button
+                        key={item.attributeId}
+                        type="button"
+                        className="status-chip status-chip--neutral"
+                        style={{
+                          textAlign: "left",
+                          width: "auto",
+                          maxWidth: "100%",
+                          borderRadius: "999px",
+                          border: "1px solid #d9e2ec",
+                          ...chipColorStyle(item.attributeType || item.typeKey || ""),
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          padding: "0.45rem 0.7rem",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setAttributeLaunchSource("stories");
+                          setSelectedAboutAttributeId(item.attributeId);
+                          setShowAttributeAddModal(true);
+                        }}
+                      >
+                        <span>{getTimelineChipLabel(item)}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="page-subtitle" style={{ margin: 0 }}>No stories added yet.</p>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="button secondary tap-button"
@@ -2115,33 +2162,29 @@ export function PersonEditModal({
                     setShowAttributeAddModal(true);
                   }}
                 >
-                  + Add Attribute
+                  + Add Story
                 </button>
               </div>
 
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
-                <h4 className="ui-section-title">Timeline</h4>
-                <div className="settings-chip-list" style={{ marginBottom: "0.55rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.55rem" }}>
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Timeline</h4>
                   <button
                     type="button"
-                    className={`button secondary tap-button ${timelineSortOrder === "asc" ? "game-option-selected" : ""}`}
-                    onClick={() => setTimelineSortOrder("asc")}
+                    className="button secondary tap-button"
+                    style={{ minWidth: "42px", padding: "0.35rem 0.65rem", fontSize: "1rem", lineHeight: 1 }}
+                    aria-label={timelineSortOrder === "asc" ? "Show newest first" : "Show oldest first"}
+                    onClick={() => setTimelineSortOrder((current) => (current === "asc" ? "desc" : "asc"))}
                   >
-                    Ascending
-                  </button>
-                  <button
-                    type="button"
-                    className={`button secondary tap-button ${timelineSortOrder === "desc" ? "game-option-selected" : ""}`}
-                    onClick={() => setTimelineSortOrder("desc")}
-                  >
-                    Descending
+                    {timelineSortOrder === "asc" ? "↑" : "↓"}
                   </button>
                 </div>
                 <div className="settings-chip-list" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                   {timelineItems.length > 0 ? (
                     timelineItems.map((item) => (
-                      <span
+                      <button
                         key={item.attributeId}
+                        type="button"
                         className="status-chip status-chip--neutral"
                         style={{
                           borderRadius: "999px",
@@ -2151,11 +2194,17 @@ export function PersonEditModal({
                           alignItems: "center",
                           gap: "0.35rem",
                           padding: "0.4rem 0.65rem",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setAttributeLaunchSource("timeline");
+                          setSelectedAboutAttributeId(item.attributeId);
+                          setShowAttributeAddModal(true);
                         }}
                       >
                         {item.attributeDate ? <strong>{formatDisplayDate(item.attributeDate)}</strong> : null}
                         <span>{getTimelineChipLabel(item)}</span>
-                      </span>
+                      </button>
                     ))
                   ) : (
                     <p className="page-subtitle" style={{ margin: 0 }}>No events listed yet.</p>
@@ -2197,6 +2246,7 @@ export function PersonEditModal({
             initialTypeCategory={attributeLaunchMeta.initialTypeCategory}
             initialEditAttributeId={selectedAboutAttributeId}
             startInAddMode
+            addModalTitle={attributeLaunchMeta.addTitle}
             launchSourceLabel={attributeLaunchMeta.label}
             onClose={() => {
               setShowAttributeAddModal(false);
@@ -2422,9 +2472,9 @@ export function PersonEditModal({
               style={{ width: "min(560px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
               onClick={(event) => event.stopPropagation()}
             >
-              <h4 style={{ marginTop: 0 }}>Create New Spouse</h4>
+              <h4 style={{ marginTop: 0 }}>Add Person</h4>
               <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
-                Use spouse dropdown for existing people. This dialog creates a new person and links spouse automatically.
+                Use the spouse dropdown for existing people. This dialog creates a new person and links them as spouse automatically.
               </p>
               <label className="label">First Name</label>
               <input className="input" value={newSpouseFirstName} onChange={(e) => setNewSpouseFirstName(e.target.value)} />

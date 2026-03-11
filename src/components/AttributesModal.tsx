@@ -236,6 +236,7 @@ export function AttributesModal({
   initialTypeCategory,
   initialEditAttributeId = "",
   startInAddMode = false,
+  addModalTitle = "Add Attribute",
   launchSourceLabel = "",
   onClose,
   onSaved,
@@ -250,6 +251,7 @@ export function AttributesModal({
   initialTypeCategory?: string;
   initialEditAttributeId?: string;
   startInAddMode?: boolean;
+  addModalTitle?: string;
   launchSourceLabel?: string;
   onClose: () => void;
   onSaved: () => void;
@@ -341,6 +343,15 @@ export function AttributesModal({
     const categoryId = makeAttributeDefinitionCategoryId(category, normalizedType);
     return (definitionTypeOptionsByCategory.get(categoryId) ?? []).find((item) => item.typeKey === normalizedCategory) ?? null;
   }, [attributeTypeCategory, category, definitionTypeOptionsByCategory, typeKey]);
+  const activeAddModalTitle = useMemo(() => {
+    if (editingId) {
+      if (category === "event" && normalizeTypeKey(attributeTypeCategory) === "story") {
+        return "Edit Story";
+      }
+      return category === "event" ? "Edit Event" : "Edit Attribute";
+    }
+    return addModalTitle;
+  }, [addModalTitle, attributeTypeCategory, category, editingId]);
   const categoryLabelById = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of definitionCategoryOptions) {
@@ -1043,7 +1054,7 @@ export function AttributesModal({
             <div className="person-modal-sticky-head">
                 <div className="person-modal-header">
                   <div>
-                    <h3 className="person-modal-title">Add Attribute</h3>
+                    <h3 className="person-modal-title">{activeAddModalTitle}</h3>
                     <p className="person-modal-meta">{launchSourceLabel ? `${entityLabel} | ${launchSourceLabel}` : entityLabel}</p>
                   </div>
               </div>

@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (person timeline, stories, and spouse picker polish)
+
+- `Change`: Fixed person Timeline chips so dated events open the edit modal when clicked, limited Timeline to dated event rows only, replaced the large Ascending/Descending buttons with a single inline sort arrow, moved story items into the Stories card as editable chips, and routed spouse creation through the spouse dropdown with a `+ Add Person` option that opens the existing add-person modal. The shared attribute add modal now uses launch-aware titles such as `Add Story`, `Add Event`, `Edit Story`, and `Edit Event`.
+- `Type`: UI
+- `Why`: Root cause was split UI behavior. Timeline chips were rendered as non-clickable spans, Timeline filtering was too broad and still admitted non-date items, spouse creation lived on a separate button path instead of the spouse picker, and story launches still looked like generic attribute creation even when the flow was story-specific.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build -- --no-lint` still fails locally only with the pre-existing Windows `spawn EPERM`.
+  - Person Timeline only shows dated events and clicking a Timeline chip opens the edit modal.
+  - Timeline sort is controlled by a single inline arrow next to `Timeline`.
+  - Stories card shows story chips and `+ Add Story`.
+  - Spouse picker includes `+ Add Person` and selecting it opens the add-person modal.
+  - Story/event launches show story/event-specific add/edit modal titles.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (family header and admin layout polish)
 
 - `Change`: Adjusted the Attribute Definitions category editor so `Kind` and `Category Label` stay on the first row, `Description` moves to a full second row, and `Sort` / `Color` / `Enabled` move to the third row. In the person Family section, the family relationship now appears next to `Family Group`, `Set as Founder` is a compact checkbox instead of a full button, and the relationship banner text now reflects the current state without duplicating the label. In `Users & Access`, the `Add User` modal header was tightened so the close button aligns correctly.
