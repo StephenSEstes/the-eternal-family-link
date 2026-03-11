@@ -42,6 +42,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Household modal primary action now reads “Save and Close,” and after a successful save it closes the modal and triggers the parent refresh to reflect updates (including in the Family Tree).
+- `Type`: UI
+- `Why`: The modal kept focus and the tree view didn’t refresh after a household rename, leaving stale labels until a manual refresh.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Edit household label/notes and click “Save and Close”; the modal dismisses and the underlying page/tree shows the updated name.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

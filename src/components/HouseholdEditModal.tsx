@@ -1301,12 +1301,12 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       return;
                     }
                     setStatus("Household saved.");
-                    await refresh();
                     onSaved();
+                    onClose();
                   })()
                 }
               >
-                Save Household
+                Save and Close
               </button>
               <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
             </div>
