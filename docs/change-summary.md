@@ -27,6 +27,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - In Tree view, click a household cluster dot; Household Edit modal opens.
   - Start “+ Add Person” from the Spouse dropdown: selecting Female shows optional Maiden Name; selecting Male hides/clears it.
   - Create a female spouse with a maiden name and confirm it persists on the new person record.
+  - `Rollback Notes`: Revert commit.
+  - `Design Decision Change`: No design decision change.
+
+- `Date`: 2026-03-11
+- `Change`: Stopped transient household saves from failing with `ORA-14411` by treating concurrent DDL contention as non-fatal in the household compatibility helper.
+- `Type`: API
+- `Why`: Root cause was the hot-path schema compatibility helper attempting `ALTER TABLE households ADD ...` during household PATCH; concurrent DDL elsewhere could raise `ORA-14411`, returning a 500 even though the schema was already compatible.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Save a Household name/notes/address; it should succeed without 500s even under concurrent activity.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 

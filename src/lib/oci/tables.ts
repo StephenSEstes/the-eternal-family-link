@@ -519,6 +519,11 @@ async function ensureHouseholdsTableCompatibility(connection: OciConnection) {
           await waitMs(180);
           continue;
         }
+        // Avoid failing the user-facing request on transient DDL contention; skip remaining attempts.
+        if (isTransientDdlConcurrencyError(message)) {
+          applied = true;
+          break;
+        }
         throw error;
       }
     }
