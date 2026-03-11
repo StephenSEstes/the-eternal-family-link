@@ -2091,8 +2091,8 @@ export function SettingsClient({
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="person-modal-sticky-head">
-                    <div className="person-modal-header">
-                      <div>
+                    <div className="person-modal-header" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+                      <div style={{ minWidth: 0 }}>
                         <h3 className="person-modal-title">Add User</h3>
                         <p className="person-modal-meta">
                           Create access for a family member who does not already have a user record.

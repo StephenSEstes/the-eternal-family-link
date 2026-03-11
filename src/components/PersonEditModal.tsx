@@ -1719,9 +1719,62 @@ export function PersonEditModal({
 
               <div className="card">
                 <h4 className="ui-section-title">Family</h4>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem 0.9rem",
+                    flexWrap: "wrap",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <span className="label" style={{ marginBottom: 0 }}>Family Group</span>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "0.25rem 0.6rem",
+                      borderRadius: 999,
+                      border: `1px solid ${
+                        isUndeclaredPerson ? "#d98c7a" : isFounderPerson ? "#b29a59" : isInLawPerson ? "#7b8db8" : "#8aa8a0"
+                      }`,
+                      background: isUndeclaredPerson
+                        ? "#fff3ef"
+                        : isFounderPerson
+                          ? "#fff7df"
+                          : isInLawPerson
+                            ? "#eef2fb"
+                            : "#edf8f3",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      color: "#1f2937",
+                    }}
+                  >
+                    Family Relationship: {formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
+                  </span>
+                  {canManageRelationshipType ? (
+                    <label
+                      className="label"
+                      style={{
+                        marginBottom: 0,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isFounderPerson}
+                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
+                        onChange={(e) => void saveFounderDesignation(e.target.checked)}
+                      />
+                      Set as Founder
+                    </label>
+                  ) : null}
+                </div>
                 {familyGroupOptions.length > 1 ? (
                   <div style={{ marginBottom: "0.75rem" }}>
-                    <label className="label">Family Group</label>
                     <select
                       className="input"
                       value={activeTenantKey}
@@ -1817,35 +1870,24 @@ export function PersonEditModal({
                           : "linear-gradient(180deg, #edf8f3 0%, #deefe8 100%)",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-                    <div>
-                      <div className="label" style={{ marginBottom: "0.2rem" }}>Family Relationship Type</div>
-                      <strong>{formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}</strong>
-                    </div>
-                    {canManageRelationshipType ? (
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
-                        onClick={() => void saveFounderDesignation(!isFounderPerson)}
-                      >
-                        {isFounderPerson ? "Remove Founder" : "Set as Founder"}
-                      </button>
-                    ) : null}
-                  </div>
                   {isUndeclaredPerson ? (
-                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                    <p className="page-subtitle" style={{ margin: 0 }}>
                       This person belongs to the family group but is not yet placed in the tree. Add a direct parent or marry into a direct/founder line to place them.
                     </p>
                   ) : null}
                   {isFounderPerson ? (
-                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                    <p className="page-subtitle" style={{ margin: 0 }}>
                       Founders anchor this family group. Founders cannot have parents assigned in this family.
                     </p>
                   ) : null}
                   {isInLawPerson ? (
-                    <p className="page-subtitle" style={{ margin: "0.5rem 0 0" }}>
+                    <p className="page-subtitle" style={{ margin: 0 }}>
                       In-laws can be spouses and parents in this family, but their own parents are not shown in this family view.
+                    </p>
+                  ) : null}
+                  {!isUndeclaredPerson && !isFounderPerson && !isInLawPerson ? (
+                    <p className="page-subtitle" style={{ margin: 0 }}>
+                      This person is part of the direct family line for this family group.
                     </p>
                   ) : null}
                 </div>

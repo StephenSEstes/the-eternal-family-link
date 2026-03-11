@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (family header and admin layout polish)
+
+- `Change`: Adjusted the Attribute Definitions category editor so `Kind` and `Category Label` stay on the first row, `Description` moves to a full second row, and `Sort` / `Color` / `Enabled` move to the third row. In the person Family section, the family relationship now appears next to `Family Group`, `Set as Founder` is a compact checkbox instead of a full button, and the relationship banner text now reflects the current state without duplicating the label. In `Users & Access`, the `Add User` modal header was tightened so the close button aligns correctly.
+- `Type`: UI
+- `Why`: Root cause was layout mismatch, not business logic. The category editor fields were grouped for data density rather than the admin editing flow, the Family section separated closely related information into different visual blocks, and the Add User modal reused a header grid meant for avatar modals, which left the close button visually off.
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build -- --no-lint` still fails locally only with the pre-existing Windows `spawn EPERM`.
+  - Attribute category editing shows `Kind` and `Category Label` on row 1, `Description` on row 2, and `Sort` / `Color` / `Enabled` on row 3.
+  - Person Family section shows the current family relationship next to `Family Group`.
+  - Founder control appears as a small checkbox next to `Family Group`.
+  - `Users & Access > Add User` modal shows an aligned `Close` button in the header.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (attribute definitions and admin access UI cleanup)
 
 - `Change`: Simplified the Attribute Definitions admin screen so categories are filtered by kind at the top instead of showing `Descriptor`/`Event` badges in every row, hid the internal category key from the editor, reordered the category editor to lead with `Kind`, and tightened the category edit layout so `Sort` is smaller and `Description` is larger. In `Users & Access`, `Add User` is now a modal instead of an inline card, the person picker excludes anyone who already has either Google or local user access, Google/local directory status chips both read `Enabled`/`Disabled`, and the Audit filter controls were compacted into two rows with narrower Actor Person / Action / Result / From fields.

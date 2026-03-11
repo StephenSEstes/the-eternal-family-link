@@ -458,7 +458,7 @@ export function AttributeDefinitionsAdmin({
                 className="settings-chip-list"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "140px minmax(180px, 1fr) 96px minmax(260px, 1.4fr)",
+                  gridTemplateColumns: "140px minmax(220px, 1fr)",
                   gap: "0.6rem",
                   alignItems: "end",
                 }}
@@ -474,17 +474,17 @@ export function AttributeDefinitionsAdmin({
                   <label className="label">Category Label</label>
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategoryId, { categoryLabel: e.target.value })} />
                 </div>
-                <div style={{ minWidth: 0 }}>
+              </div>
+              <div style={{ marginTop: "0.6rem" }}>
+                <label className="label">Description</label>
+                <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategoryId, { description: e.target.value })} />
+              </div>
+              <div className="settings-chip-list" style={{ marginTop: "0.6rem", alignItems: "end" }}>
+                <div style={{ width: "88px" }}>
                   <label className="label">Sort</label>
                   <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategoryId, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <label className="label">Description</label>
-                  <input className="input" value={selectedCategory.description} onChange={(e) => updateCategory(selectedCategoryId, { description: e.target.value })} />
-                </div>
-              </div>
-              <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
-                <div style={{ minWidth: "120px" }}>
+                <div style={{ width: "120px" }}>
                   <label className="label">Color</label>
                   <input className="input" type="color" value={selectedCategory.categoryColor || "#e5e7eb"} onChange={(e) => updateCategory(selectedCategoryId, { categoryColor: e.target.value })} />
                 </div>
