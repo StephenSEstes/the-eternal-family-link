@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (media metadata CLOB-safe detail query fix)
+
+- `Change`: Fixed the Media Library media-detail read path to use a CLOB-safe fallback for `media_metadata` when loading a selected file after save.
+- `Type`: API
+- `Why`: Root cause was Oracle rejecting the selected media detail query with `ORA-22848: cannot use CLOB type as comparison key`. The query in the OCI media-link helper was using `NULLIF(TRIM(l.media_metadata), '')` against a CLOB column, which Oracle does not allow.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Editing media details no longer fails with `ORA-22848` on the selected-file detail reload path.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (media name save SQL fix)
 
 - `Change`: Fixed the Media Library metadata save path so editing a media `Name` uses a safer OCI update query against `media_links`.

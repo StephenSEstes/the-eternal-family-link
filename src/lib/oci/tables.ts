@@ -911,7 +911,10 @@ async function queryOciMediaLinks(
          l.photo_date,
          l.is_primary,
          l.sort_order,
-         COALESCE(NULLIF(TRIM(l.media_metadata), ''), a.media_metadata) AS media_metadata,
+         CASE
+           WHEN l.media_metadata IS NOT NULL AND DBMS_LOB.GETLENGTH(l.media_metadata) > 0 THEN l.media_metadata
+           ELSE a.media_metadata
+         END AS media_metadata,
          l.created_at
        FROM media_links l
        INNER JOIN media_assets a

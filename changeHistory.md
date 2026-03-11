@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Fixed the Media Library selected-file detail query so Oracle no longer throws `ORA-22848` when media metadata falls back across CLOB columns. See `docs/change-summary.md`.
 - 2026-03-10: Fixed the Media Library metadata save SQL path so editing a media item's `Name` no longer fails on the OCI update helper. See `docs/change-summary.md`.
 - 2026-03-10: Moved Family relationship guidance into a hover chip in the person form and fixed Media Library so saving media details closes the editor modal as expected. See `docs/change-summary.md`.
 - 2026-03-10: Replaced the oversized Timeline sort arrow with a compact `Oldest first` / `Newest first` toggle plus inline icon. See `docs/change-summary.md`.
