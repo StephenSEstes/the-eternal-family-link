@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Fixed the person modal Family switch so it navigates to the selected family group's route, keeping the app header in sync with the newly selected family. See `docs/change-summary.md`.
 - 2026-03-10: Fixed the Media Library selected-file attribute lookup so Oracle no longer compares `Attributes.attribute_detail` as a CLOB comparison key when matching by file ID. See `docs/change-summary.md`.
 - 2026-03-10: Fixed the Media Library selected-file detail query so Oracle no longer throws `ORA-22848` when media metadata falls back across CLOB columns. See `docs/change-summary.md`.
 - 2026-03-10: Fixed the Media Library metadata save SQL path so editing a media item's `Name` no longer fails on the OCI update helper. See `docs/change-summary.md`.

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
@@ -15,6 +16,7 @@ import {
 import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
+import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
 type FamilyGroupRelationshipType = "founder" | "direct" | "in_law" | "undeclared";
 
@@ -125,6 +127,37 @@ function firstNameFromDisplayName(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "Person";
   return trimmed.split(/\s+/)[0] || "Person";
+}
+
+function buildSwitchedFamilyPath(currentPath: string, nextTenantKey: string) {
+  const normalizedNext = nextTenantKey.trim().toLowerCase();
+  const isDefaultNext = normalizedNext === DEFAULT_FAMILY_GROUP_KEY;
+  const parts = currentPath.split("/").filter(Boolean);
+  const hasTenantPrefix = parts[0] === "t" && Boolean(parts[1]);
+
+  if (hasTenantPrefix) {
+    const tail = parts.slice(2).join("/");
+    if (isDefaultNext) {
+      return tail ? `/${tail}` : "/";
+    }
+    return tail ? `/t/${encodeURIComponent(normalizedNext)}/${tail}` : `/t/${encodeURIComponent(normalizedNext)}`;
+  }
+
+  if (isDefaultNext) {
+    return currentPath || "/";
+  }
+  if (!currentPath || currentPath === "/") {
+    return `/t/${encodeURIComponent(normalizedNext)}`;
+  }
+  return `/t/${encodeURIComponent(normalizedNext)}${currentPath}`;
+}
+
+function buildSwitchedFamilyFallbackPath(nextTenantKey: string) {
+  const normalizedNext = nextTenantKey.trim().toLowerCase();
+  if (normalizedNext === DEFAULT_FAMILY_GROUP_KEY) {
+    return "/people";
+  }
+  return `/t/${encodeURIComponent(normalizedNext)}/people`;
 }
 
 function parseDate(value?: string) {
@@ -594,6 +627,8 @@ export function PersonEditModal({
   onSaved,
   onEditHousehold,
 }: Props) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("contact");
   const [displayName, setDisplayName] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -1880,13 +1915,16 @@ export function PersonEditModal({
                               nextPersonRecord?.familyGroupRelationshipType ?? person?.familyGroupRelationshipType,
                             ),
                           );
-                          if (person?.personId) {
-                            await Promise.all([
-                              loadPersonAttributeState(person.personId, nextKey),
-                            ]);
-                          }
-                          setFamilySwitchBusy(false);
-                          setStatus("");
+                          const isPersonProfilePath = Boolean(
+                            person?.personId && pathname?.match(/\/people\/[^/]+$/i),
+                          );
+                          const switchedPath =
+                            isPersonProfilePath && !nextPersonRecord
+                              ? buildSwitchedFamilyFallbackPath(nextKey)
+                              : buildSwitchedFamilyPath(pathname || "/", nextKey);
+                          const query = searchParams?.toString() ?? "";
+                          const destination = query ? `${switchedPath}?${query}` : switchedPath;
+                          window.location.assign(destination);
                         })()
                       }
                     >

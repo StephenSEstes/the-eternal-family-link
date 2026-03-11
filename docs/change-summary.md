@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (person modal family switch route sync)
+
+- `Change`: Fixed the person modal Family switch so selecting a different family group performs a real app navigation instead of only updating modal-local state.
+- `Type`: UI
+- `Why`: Root cause was the person modal posting the active-family switch and then only mutating its own `activeTenantKey` and loaded people/tree data. The app header is server-rendered from the route tenant, so the header stayed on the old family group until the page navigated or refreshed.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Changing the family group from the person modal updates the app header to the newly selected family group.
+  - On person profile routes, if the person is not present in the selected family group, the app falls back to that family group's people page.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (media attribute-detail CLOB comparison fix)
 
 - `Change`: Fixed the Media Library selected-file attribute lookup so it matches `Attributes.attribute_detail` against the target `fileId` with a CLOB-safe Oracle comparison.
