@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-10: Cleaned the Attribute Definitions admin/editor layout, moved `Add User` into a modal with a stricter non-user-only picker, normalized Google/Local directory status labels to `Enabled`/`Disabled`, and compacted the Audit filters into two rows. See `docs/change-summary.md`.
+- 2026-03-10: Reworked Media Library to use a direct per-file media detail API, enabled editing `Name`/`Description`/`Date` in the media modal, and replaced the old generic full-table media search path with tenant-scoped OCI media queries. See `docs/change-summary.md`.
 - 2026-03-10: Added canonical `Attributes.attribute_kind` storage and unified family-group Attribute Definitions so both descriptor and event types are admin-managed from one source of truth, with the Add Attribute modal now using those shared definitions for both kinds. See `docs/change-summary.md`.
 - 2026-03-10: Replaced the old in-law flag with canonical `PersonFamilyGroups.family_group_relationship_type` values (`founder`, `direct`, `in_law`, `undeclared`), added admin founder controls and integrity repair, and moved undeclared people into a `Needs Placement` flow outside the main tree. See `docs/change-summary.md`.
 - 2026-03-10: Local/either invites now generate a real local username and temporary password at invite creation time and include those credentials in the copied invite message, while keeping the invite accept flow backward-compatible for older pending invites. See `docs/change-summary.md`.

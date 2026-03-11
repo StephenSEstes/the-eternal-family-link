@@ -1555,6 +1555,11 @@ export function SettingsClient({
     setIsEnabled(false);
   };
 
+  const closeAddUserModal = () => {
+    setShowAddUserForm(false);
+    resetAddUserForm();
+  };
+
   const handleAddUserPersonSelect = (nextPersonId: string) => {
     setLocalPersonId(nextPersonId);
     setPersonId(nextPersonId);
@@ -1769,11 +1774,23 @@ export function SettingsClient({
     (person) => person.sourceTenantKey.trim().toLowerCase() !== selectedTenantKey.trim().toLowerCase(),
   );
   const addUserCandidatePeople = useMemo(() => {
-    const existingUserPersonIds = new Set(visibleAccessItems.map((item) => item.personId.trim()).filter(Boolean));
+    const existingUserPersonIds = new Set<string>();
+    for (const item of visibleAccessItems) {
+      const personId = item.personId.trim();
+      if (personId) {
+        existingUserPersonIds.add(personId);
+      }
+    }
+    for (const item of localUsers) {
+      const personId = item.personId.trim();
+      if (personId) {
+        existingUserPersonIds.add(personId);
+      }
+    }
     return familyPeople
       .filter((person) => !existingUserPersonIds.has(person.personId.trim()))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }, [familyPeople, visibleAccessItems]);
+  }, [familyPeople, localUsers, visibleAccessItems]);
   const createGroupInitialAdminOptions = useMemo(
     () => [...familyPeople].sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [familyPeople],
@@ -1965,14 +1982,11 @@ export function SettingsClient({
             className="button tap-button settings-toolbar-action"
             onClick={() => {
               setUserAdminSubTab("directory");
-              const next = !showAddUserForm;
-              setShowAddUserForm(next);
-              if (next) {
-                resetAddUserForm();
-              }
+              resetAddUserForm();
+              setShowAddUserForm(true);
             }}
           >
-            {showAddUserForm ? "Hide Add User" : "Add User"}
+            Add User
           </button>
         </div>
         <div className="settings-subtabs">
@@ -2020,62 +2034,6 @@ export function SettingsClient({
 
         {userAdminSubTab === "directory" ? (
           <>
-            {showAddUserForm ? (
-              <div className="card" style={{ marginTop: "0.75rem" }}>
-                <h3 style={{ marginTop: 0 }}>Add User To Directory</h3>
-                <label className="label">Person</label>
-                <select
-                  className="input"
-                  value={localPersonId}
-                  onChange={(e) => handleAddUserPersonSelect(e.target.value)}
-                >
-                  <option value="">Select person</option>
-                  {addUserCandidatePeople.map((person) => (
-                    <option key={person.personId} value={person.personId}>{person.displayName}</option>
-                  ))}
-                </select>
-                {addUserCandidatePeople.length === 0 ? (
-                  <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                    No available people to add. Everyone in this family already has a user record.
-                  </p>
-                ) : null}
-                <label className="label">Local Username</label>
-                <input
-                  className="input"
-                  autoComplete="off"
-                  value={localUsername}
-                  onChange={(e) => setLocalUsername(e.target.value)}
-                />
-                <label className="label">Temporary Password</label>
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={localPassword}
-                  onChange={(e) => setLocalPassword(e.target.value)}
-                />
-                <label className="label">Role</label>
-                <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
-                  <option value="USER">USER</option><option value="ADMIN">ADMIN</option>
-                </select>
-                <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
-                <label className="label">Google Email (optional)</label>
-                <input
-                  className="input"
-                  type="email"
-                  autoComplete="off"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder="name@gmail.com"
-                />
-                <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
-                <button type="button" className="button tap-button" onClick={createDirectoryUser}>Create User</button>
-                <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                  Google access supports Gmail and Google Workspace accounts.
-                </p>
-              </div>
-            ) : null}
-
             <div className="card settings-users-card" style={{ marginTop: "0.75rem" }}>
               <h3 style={{ marginTop: 0, marginBottom: "0.75rem" }}>Users</h3>
               <div className="settings-table-wrap">
@@ -2094,7 +2052,7 @@ export function SettingsClient({
                           <td>{person.displayName}</td>
                           <td>
                             <span className={`settings-status-chip ${hasGoogle ? "is-on" : "is-off"}`}>
-                              {hasGoogle ? "Connected" : "Disabled"}
+                              {hasGoogle ? "Enabled" : "Disabled"}
                             </span>
                           </td>
                           <td>
@@ -2123,6 +2081,88 @@ export function SettingsClient({
               <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
                 No users found for this family group. Add user access for a person in this family to populate the directory.
               </p>
+            ) : null}
+
+            {showAddUserForm ? (
+              <div className="person-modal-backdrop" onClick={closeAddUserModal}>
+                <div
+                  className="person-modal-panel"
+                  style={{ maxWidth: "620px", width: "min(620px, 96vw)", height: "auto", maxHeight: "90vh" }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="person-modal-sticky-head">
+                    <div className="person-modal-header">
+                      <div>
+                        <h3 className="person-modal-title">Add User</h3>
+                        <p className="person-modal-meta">
+                          Create access for a family member who does not already have a user record.
+                        </p>
+                      </div>
+                      <button type="button" className="button secondary tap-button" onClick={closeAddUserModal}>
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                  <div className="person-modal-content">
+                    <label className="label">Person</label>
+                    <select
+                      className="input"
+                      value={localPersonId}
+                      onChange={(e) => handleAddUserPersonSelect(e.target.value)}
+                    >
+                      <option value="">Select person</option>
+                      {addUserCandidatePeople.map((person) => (
+                        <option key={person.personId} value={person.personId}>{person.displayName}</option>
+                      ))}
+                    </select>
+                    {addUserCandidatePeople.length === 0 ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                        No available people to add. Everyone in this family already has a user record.
+                      </p>
+                    ) : null}
+                    <label className="label">Local Username</label>
+                    <input
+                      className="input"
+                      autoComplete="off"
+                      value={localUsername}
+                      onChange={(e) => setLocalUsername(e.target.value)}
+                    />
+                    <label className="label">Temporary Password</label>
+                    <input
+                      className="input"
+                      type="password"
+                      autoComplete="new-password"
+                      value={localPassword}
+                      onChange={(e) => setLocalPassword(e.target.value)}
+                    />
+                    <label className="label">Role</label>
+                    <select className="input" value={localRole} onChange={(e) => setLocalRole(e.target.value as "ADMIN" | "USER")}>
+                      <option value="USER">USER</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                    <label className="label"><input type="checkbox" checked={localEnabled} onChange={(e) => setLocalEnabled(e.target.checked)} /> Local Access Enabled</label>
+                    <label className="label">Google Email (optional)</label>
+                    <input
+                      className="input"
+                      type="email"
+                      autoComplete="off"
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
+                      placeholder="name@gmail.com"
+                    />
+                    <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
+                    <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                      <button type="button" className="button tap-button" onClick={createDirectoryUser}>Create User</button>
+                      <button type="button" className="button secondary tap-button" onClick={closeAddUserModal}>
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                      Google access supports Gmail and Google Workspace accounts.
+                    </p>
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             {selectedDirectoryPerson ? (
@@ -2529,8 +2569,14 @@ export function SettingsClient({
               Review logins and change history for the selected family group. Filters apply to the most recent 200 matching events.
             </p>
             <div className="card" style={{ marginTop: "0.75rem" }}>
-              <div className="settings-toolbar-row">
-                <div className="settings-toolbar-field">
+              <div
+                style={{
+                  display: "grid",
+                  gap: "0.6rem",
+                  gridTemplateColumns: "minmax(150px, 180px) minmax(220px, 1fr) minmax(120px, 150px) minmax(110px, 130px)",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Actor Person</label>
                   <select
                     className="input"
@@ -2545,7 +2591,7 @@ export function SettingsClient({
                     ))}
                   </select>
                 </div>
-                <div className="settings-toolbar-field">
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Actor Email</label>
                   <input
                     className="input"
@@ -2554,9 +2600,7 @@ export function SettingsClient({
                     placeholder="name@example.com"
                   />
                 </div>
-              </div>
-              <div className="settings-toolbar-row">
-                <div className="settings-toolbar-field">
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Action</label>
                   <input
                     className="input"
@@ -2565,16 +2609,7 @@ export function SettingsClient({
                     placeholder="LOGIN, UPDATE, DELETE..."
                   />
                 </div>
-                <div className="settings-toolbar-field">
-                  <label className="label">Entity Type</label>
-                  <input
-                    className="input"
-                    value={auditEntityTypeFilter}
-                    onChange={(e) => setAuditEntityTypeFilter(e.target.value)}
-                    placeholder="AUTH, ATTRIBUTE, PERSON_MEDIA..."
-                  />
-                </div>
-                <div className="settings-toolbar-field">
+                <div style={{ minWidth: 0 }}>
                   <label className="label">Result</label>
                   <select
                     className="input"
@@ -2587,8 +2622,25 @@ export function SettingsClient({
                   </select>
                 </div>
               </div>
-              <div className="settings-toolbar-row">
-                <div className="settings-toolbar-field">
+              <div
+                style={{
+                  display: "grid",
+                  gap: "0.6rem",
+                  gridTemplateColumns: "minmax(220px, 1fr) minmax(130px, 150px) minmax(130px, 150px) auto",
+                  marginTop: "0.6rem",
+                  alignItems: "end",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <label className="label">Entity Type</label>
+                  <input
+                    className="input"
+                    value={auditEntityTypeFilter}
+                    onChange={(e) => setAuditEntityTypeFilter(e.target.value)}
+                    placeholder="AUTH, ATTRIBUTE, PERSON_MEDIA..."
+                  />
+                </div>
+                <div style={{ minWidth: 0 }}>
                   <label className="label">From</label>
                   <input
                     className="input"
@@ -2597,7 +2649,7 @@ export function SettingsClient({
                     onChange={(e) => setAuditFromDate(e.target.value)}
                   />
                 </div>
-                <div className="settings-toolbar-field">
+                <div style={{ minWidth: 0 }}>
                   <label className="label">To</label>
                   <input
                     className="input"
@@ -2606,28 +2658,28 @@ export function SettingsClient({
                     onChange={(e) => setAuditToDate(e.target.value)}
                   />
                 </div>
-              </div>
-              <div className="settings-chip-list">
-                <button type="button" className="button tap-button" onClick={() => void loadAuditEntries(selectedTenantKey)}>
-                  Apply Filters
-                </button>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  onClick={() => {
-                    setAuditActorEmailFilter("");
-                    setAuditActorPersonIdFilter("");
-                    setAuditActionFilter("");
-                    setAuditEntityTypeFilter("");
-                    setAuditResultStatusFilter("");
-                    setAuditFromDate("");
-                    setAuditToDate("");
-                    setAuditItems([]);
-                    setAuditStatusMessage("Filters cleared. Click Apply Filters to reload all events.");
-                  }}
-                >
-                  Clear Filters
-                </button>
+                <div className="settings-chip-list" style={{ marginBottom: 0 }}>
+                  <button type="button" className="button tap-button" onClick={() => void loadAuditEntries(selectedTenantKey)}>
+                    Apply Filters
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => {
+                      setAuditActorEmailFilter("");
+                      setAuditActorPersonIdFilter("");
+                      setAuditActionFilter("");
+                      setAuditEntityTypeFilter("");
+                      setAuditResultStatusFilter("");
+                      setAuditFromDate("");
+                      setAuditToDate("");
+                      setAuditItems([]);
+                      setAuditStatusMessage("Filters cleared. Click Apply Filters to reload all events.");
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
               </div>
             </div>
             <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>

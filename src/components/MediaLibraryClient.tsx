@@ -21,6 +21,12 @@ type MediaItem = {
   households: Array<{ householdId: string; label: string }>;
 };
 
+type MediaItemDetailPayload = {
+  item?: MediaItem;
+  editable?: boolean;
+  canEditName?: boolean;
+};
+
 type PersonOption = {
   personId: string;
   displayName: string;
@@ -101,7 +107,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [status, setStatus] = useState("");
   const [showAttachWizard, setShowAttachWizard] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
-  const [selectedPhotoFileId, setSelectedPhotoFileId] = useState("");
+  const [selectedPhotoDetail, setSelectedPhotoDetail] = useState<MediaItem | null>(null);
+  const [selectedPhotoEditable, setSelectedPhotoEditable] = useState(false);
+  const [selectedPhotoCanEditName, setSelectedPhotoCanEditName] = useState(false);
+  const [selectedPhotoName, setSelectedPhotoName] = useState("");
+  const [selectedPhotoDescription, setSelectedPhotoDescription] = useState("");
+  const [selectedPhotoDate, setSelectedPhotoDate] = useState("");
   const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
     people: Array<{ personId: string; displayName: string }>;
     households: Array<{ householdId: string; label: string }>;
@@ -175,10 +186,42 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const peopleById = useMemo(() => new Map(peopleOptions.map((item) => [item.personId, item])), [peopleOptions]);
   const householdsById = useMemo(() => new Map(householdOptions.map((item) => [item.householdId, item])), [householdOptions]);
-  const selectedPhotoItem = useMemo(
-    () => mediaItems.find((item) => item.fileId === selectedPhotoFileId) ?? null,
-    [mediaItems, selectedPhotoFileId],
-  );
+
+  const upsertMediaItem = (nextItem: MediaItem) => {
+    setMediaItems((current) => {
+      const index = current.findIndex((item) => item.fileId === nextItem.fileId);
+      if (index < 0) {
+        return [nextItem, ...current];
+      }
+      const next = current.slice();
+      next[index] = nextItem;
+      return next;
+    });
+  };
+
+  const applySelectedPhotoDetail = (
+    nextItem: MediaItem,
+    options?: {
+      editable?: boolean;
+      canEditName?: boolean;
+      preserveExistingText?: boolean;
+    },
+  ) => {
+    const preserveExistingText = options?.preserveExistingText ?? false;
+    setSelectedPhotoDetail(nextItem);
+    setSelectedPhotoEditable(Boolean(options?.editable));
+    setSelectedPhotoCanEditName(Boolean(options?.canEditName));
+    setSelectedPhotoAssociations({
+      people: Array.isArray(nextItem.people) ? nextItem.people : [],
+      households: Array.isArray(nextItem.households) ? nextItem.households : [],
+    });
+    setSelectedPhotoName((current) => (preserveExistingText && current ? current : nextItem.name || ""));
+    setSelectedPhotoDescription((current) =>
+      preserveExistingText && current ? current : nextItem.description || "",
+    );
+    setSelectedPhotoDate((current) => (preserveExistingText && current ? current : nextItem.date || ""));
+    upsertMediaItem(nextItem);
+  };
 
   const photoTagSearchResults = useMemo(() => {
     const q = photoTagQuery.trim().toLowerCase();
@@ -253,81 +296,134 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     );
   };
 
-  const loadSelectedPhotoAssociations = async (
+  const loadSelectedPhotoDetail = async (
     fileId: string,
-    options?: { noStore?: boolean; includeDrive?: boolean },
+    options?: { noStore?: boolean; fallbackItem?: MediaItem | null },
   ) => {
-    const includeDrive = options?.includeDrive ?? false;
-    const noCache = options?.noStore ? "&noCache=1" : "";
+    const noCache = options?.noStore ? "?noCache=1" : "";
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(fileId)}&limit=40&includeDrive=${includeDrive ? "1" : "0"}${noCache}`,
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(fileId)}${noCache}`,
       { cache: options?.noStore ? "no-store" : "default" },
     );
-    const body = await res.json().catch(() => null);
+    const body = (await res.json().catch(() => null)) as MediaItemDetailPayload | null;
     if (!res.ok) {
-      setPhotoAssociationStatus(`Failed to load links: ${res.status}`);
-      return;
+      setPhotoAssociationStatus(`Failed to load media details: ${res.status}`);
+      return null;
     }
-    const items = Array.isArray(body?.items) ? (body.items as MediaItem[]) : [];
-    const match = items.find((item) => item.fileId === fileId) ?? null;
-    if (!match) {
-      setSelectedPhotoAssociations({ people: [], households: [] });
-      return;
+    const serverItem = body?.item;
+    if (!serverItem) {
+      return null;
     }
-    setSelectedPhotoAssociations({
-      people: Array.isArray(match.people) ? match.people : [],
-      households: Array.isArray(match.households) ? match.households : [],
+    const fallbackItem = options?.fallbackItem ?? selectedPhotoDetail;
+    const mergedItem: MediaItem = {
+      fileId: serverItem.fileId,
+      name: serverItem.name || fallbackItem?.name || "",
+      description: serverItem.description || fallbackItem?.description || "",
+      date: serverItem.date || fallbackItem?.date || "",
+      mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
+      people: Array.isArray(serverItem.people) ? serverItem.people : [],
+      households: Array.isArray(serverItem.households) ? serverItem.households : [],
+    };
+    applySelectedPhotoDetail(mergedItem, {
+      editable: body?.editable ?? false,
+      canEditName: body?.canEditName ?? false,
     });
+    return mergedItem;
   };
 
   const openPhotoEditor = async (fileId: string) => {
-    setSelectedPhotoFileId(fileId);
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
-      setSelectedPhotoAssociations({
-        people: Array.isArray(prefill.people) ? prefill.people : [],
-        households: Array.isArray(prefill.households) ? prefill.households : [],
+      applySelectedPhotoDetail(prefill, {
+        editable: false,
+        canEditName: false,
       });
     } else {
+      setSelectedPhotoDetail(null);
+      setSelectedPhotoEditable(false);
+      setSelectedPhotoCanEditName(false);
+      setSelectedPhotoName("");
+      setSelectedPhotoDescription("");
+      setSelectedPhotoDate("");
       setSelectedPhotoAssociations({ people: [], households: [] });
     }
     setPhotoAssociationStatus("Refreshing links...");
     setShowPhotoEditor(true);
     void (async () => {
-      await loadSelectedPhotoAssociations(fileId, { noStore: true, includeDrive: false });
+      await loadSelectedPhotoDetail(fileId, { noStore: true, fallbackItem: prefill });
       setPhotoAssociationStatus("");
     })();
   };
 
+  const saveSelectedPhotoMetadata = async () => {
+    if (!selectedPhotoDetail) return;
+    setPhotoAssociationBusy(true);
+    setPhotoAssociationStatus("Saving media details...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: selectedPhotoName,
+            description: selectedPhotoDescription,
+            date: selectedPhotoDate,
+          }),
+        },
+      );
+      const body = (await res.json().catch(() => null)) as MediaItemDetailPayload | { message?: string; error?: string } | null;
+      if (!res.ok) {
+        const message =
+          (body && "message" in body && typeof body.message === "string" && body.message) ||
+          (body && "error" in body && typeof body.error === "string" && body.error) ||
+          "Failed to save media details";
+        throw new Error(message);
+      }
+      if (body && "item" in body && body.item) {
+        applySelectedPhotoDetail(body.item, {
+          editable: body.editable ?? false,
+          canEditName: body.canEditName ?? false,
+        });
+      } else {
+        await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      }
+      setPhotoAssociationStatus("Media details saved.");
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "Save failed");
+    } finally {
+      setPhotoAssociationBusy(false);
+    }
+  };
+
   const linkPhotoToPerson = async (personId: string) => {
-    if (!selectedPhotoItem) return;
+    if (!selectedPhotoDetail) return;
     setPhotoAssociationBusy(true);
     setPhotoAssociationStatus("Linking person...");
     try {
-      const kind = inferMediaKind(selectedPhotoItem.fileId, selectedPhotoItem.mediaMetadata);
+      const kind = inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata);
       const attributeType = kind === "image" ? "photo" : "media";
       const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           attributeType,
-          valueText: selectedPhotoItem.fileId,
-          valueJson: selectedPhotoItem.mediaMetadata || "",
-          label: selectedPhotoItem.name || "media",
+          valueText: selectedPhotoDetail.fileId,
+          valueJson: selectedPhotoDetail.mediaMetadata || "",
+          label: selectedPhotoName || selectedPhotoDetail.name || "media",
           isPrimary: false,
           sortOrder: 0,
-          startDate: selectedPhotoItem.date || "",
+          startDate: selectedPhotoDate || selectedPhotoDetail.date || "",
           endDate: "",
           visibility: "family",
           shareScope: "one_family",
           shareFamilyGroupKey: tenantKey,
-          notes: selectedPhotoItem.description || "",
+          notes: selectedPhotoDescription || selectedPhotoDetail.description || "",
         }),
       });
       await assertOk(res, "Failed to link person");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search, { noCache: true });
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Person linked.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Link failed");
@@ -337,7 +433,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const unlinkPhotoFromPerson = async (personId: string) => {
-    if (!selectedPhotoItem) return;
+    if (!selectedPhotoDetail) return;
     setPhotoAssociationBusy(true);
     setPhotoAssociationStatus("Removing person link...");
     try {
@@ -348,7 +444,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       const attrsBody = await attrsRes.json().catch(() => null);
       await assertOk(attrsRes, "Failed to load person attributes");
       const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
-      const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoItem.fileId));
+      const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoDetail.fileId));
       for (const match of matches) {
         const delRes = await fetch(
           `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
@@ -357,12 +453,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         await assertOk(delRes, "Failed to remove person link");
       }
       const unlinkRes = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+        `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
         { method: "DELETE" },
       );
       await assertOk(unlinkRes, "Failed to remove person photo link");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search, { noCache: true });
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Person link removed.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Remove failed");
@@ -372,7 +467,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const linkPhotoToHousehold = async (householdId: string) => {
-    if (!selectedPhotoItem) return;
+    if (!selectedPhotoDetail) return;
     setPhotoAssociationBusy(true);
     setPhotoAssociationStatus("Linking household...");
     try {
@@ -382,18 +477,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fileId: selectedPhotoItem.fileId,
-            name: selectedPhotoItem.name || "photo",
-            description: selectedPhotoItem.description || "",
-            photoDate: selectedPhotoItem.date || "",
-            mediaMetadata: selectedPhotoItem.mediaMetadata || "",
+            fileId: selectedPhotoDetail.fileId,
+            name: selectedPhotoName || selectedPhotoDetail.name || "photo",
+            description: selectedPhotoDescription || selectedPhotoDetail.description || "",
+            photoDate: selectedPhotoDate || selectedPhotoDetail.date || "",
+            mediaMetadata: selectedPhotoDetail.mediaMetadata || "",
             isPrimary: false,
           }),
         },
       );
       await assertOk(res, "Failed to link household");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search, { noCache: true });
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Household linked.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Link failed");
@@ -403,17 +497,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const unlinkPhotoFromHousehold = async (householdId: string) => {
-    if (!selectedPhotoItem) return;
+    if (!selectedPhotoDetail) return;
     setPhotoAssociationBusy(true);
     setPhotoAssociationStatus("Removing household link...");
     try {
       const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+        `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
         { method: "DELETE" },
       );
       await assertOk(res, "Failed to remove household link");
-      await loadSelectedPhotoAssociations(selectedPhotoItem.fileId, { noStore: true, includeDrive: false });
-      await loadLibrary(search, { noCache: true });
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Household link removed.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Remove failed");
@@ -423,7 +516,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const deleteSelectedPhoto = async () => {
-    if (!selectedPhotoItem) return;
+    if (!selectedPhotoDetail) return;
     const confirmed = window.confirm(
       "Delete this selected media from all current person/household links? This does not remove the Drive file itself.",
     );
@@ -439,7 +532,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         const attrsBody = await attrsRes.json().catch(() => null);
         await assertOk(attrsRes, "Failed to load person attributes");
         const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
-        const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoItem.fileId));
+        const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoDetail.fileId));
         for (const match of matches) {
           const delRes = await fetch(
             `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
@@ -448,7 +541,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           await assertOk(delRes, "Failed to remove person media link");
         }
         const unlinkRes = await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+          `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(person.personId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
           { method: "DELETE" },
         );
         await assertOk(unlinkRes, "Failed to remove person photo link");
@@ -456,7 +549,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
       for (const household of selectedPhotoAssociations.households) {
         const delRes = await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(household.householdId)}/photos/${encodeURIComponent(selectedPhotoItem.fileId)}`,
+          `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(household.householdId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
           { method: "DELETE" },
         );
         await assertOk(delRes, "Failed to remove household media link");
@@ -660,7 +753,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           })}
         </div>
       </div>
-      {showPhotoEditor && selectedPhotoItem ? (
+      {showPhotoEditor && selectedPhotoDetail ? (
         <div className="person-modal-backdrop" onClick={() => setShowPhotoEditor(false)}>
           <div
             className="person-modal-panel"
@@ -672,6 +765,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 <div className="person-photo-detail-head">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Photo</h4>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      onClick={() => void saveSelectedPhotoMetadata()}
+                      disabled={photoAssociationBusy || !selectedPhotoEditable}
+                    >
+                      Save
+                    </button>
                     {canManage ? (
                       <button
                         type="button"
@@ -689,19 +790,19 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   </div>
                 </div>
                 <div style={{ marginTop: "0.75rem" }}>
-                  {inferMediaKind(selectedPhotoItem.fileId, selectedPhotoItem.mediaMetadata) === "video" ? (
+                  {inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "video" ? (
                     <video
-                      src={getPhotoProxyPath(selectedPhotoItem.fileId, tenantKey)}
+                      src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
                       className="person-photo-detail-preview"
                       controls
                       playsInline
                     />
-                  ) : inferMediaKind(selectedPhotoItem.fileId, selectedPhotoItem.mediaMetadata) === "audio" ? (
-                    <audio src={getPhotoProxyPath(selectedPhotoItem.fileId, tenantKey)} className="person-photo-detail-preview" controls />
+                  ) : inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "audio" ? (
+                    <audio src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)} className="person-photo-detail-preview" controls />
                   ) : (
                     <img
-                      src={getPhotoProxyPath(selectedPhotoItem.fileId, tenantKey)}
-                      alt={selectedPhotoItem.name || "photo"}
+                      src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                      alt={selectedPhotoDetail.name || "photo"}
                       className="person-photo-detail-preview"
                     />
                   )}
@@ -709,11 +810,36 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 <div className="card" style={{ marginTop: "0.75rem" }}>
                   <h5 style={{ margin: "0 0 0.5rem" }}>Photo Info</h5>
                   <label className="label">Name</label>
-                  <input className="input" value={selectedPhotoItem.name || ""} disabled />
+                  <input
+                    className="input"
+                    value={selectedPhotoName}
+                    onChange={(event) => setSelectedPhotoName(event.target.value)}
+                    disabled={photoAssociationBusy || !selectedPhotoCanEditName}
+                  />
                   <label className="label">Description</label>
-                  <input className="input" value={selectedPhotoItem.description || ""} disabled />
+                  <input
+                    className="input"
+                    value={selectedPhotoDescription}
+                    onChange={(event) => setSelectedPhotoDescription(event.target.value)}
+                    disabled={photoAssociationBusy || !selectedPhotoEditable}
+                  />
                   <label className="label">Date</label>
-                  <input className="input" value={selectedPhotoItem.date || ""} disabled />
+                  <input
+                    className="input"
+                    value={selectedPhotoDate}
+                    onChange={(event) => setSelectedPhotoDate(event.target.value)}
+                    disabled={photoAssociationBusy || !selectedPhotoEditable}
+                  />
+                  {!selectedPhotoEditable ? (
+                    <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
+                      Link this file to a person or household before editing app metadata.
+                    </p>
+                  ) : null}
+                  {selectedPhotoEditable && !selectedPhotoCanEditName ? (
+                    <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
+                      Name becomes editable when this file has a stored media link in the app.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="person-photo-tags-card card">
                   <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>

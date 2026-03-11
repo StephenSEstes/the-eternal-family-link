@@ -3,8 +3,13 @@ import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
-import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
-import { getTableRecords } from "@/lib/data/runtime";
+import {
+  getOciHouseholdsForTenant,
+  getOciMediaLinksForEntity,
+  setOciPrimaryMediaLink,
+  upsertOciMediaAsset,
+  upsertOciMediaLink,
+} from "@/lib/oci/tables";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; householdId: string }>;
@@ -19,8 +24,14 @@ const payloadSchema = z.object({
   mediaMetadata: z.string().trim().max(4000).optional().default(""),
 });
 
-function normalize(value: string | undefined) {
-  return String(value ?? "").trim().toLowerCase();
+function readCell(row: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
 export async function POST(request: Request, { params }: RouteProps) {
@@ -35,8 +46,8 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const households = await getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []);
-  const exists = households.some((row) => (row.data.household_id ?? "").trim() === householdId);
+  const households = await getOciHouseholdsForTenant(resolved.tenant.tenantKey).catch(() => []);
+  const exists = households.some((row) => readCell(row.data, "household_id") === householdId);
   if (!exists) {
     return NextResponse.json({ error: "household_not_found" }, { status: 404 });
   }
@@ -48,20 +59,18 @@ export async function POST(request: Request, { params }: RouteProps) {
   const mediaMetadata = parsed.data.mediaMetadata.trim();
   const nowIso = new Date().toISOString();
 
-  const existing = await getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []);
-  const existingForHousehold = existing.filter(
-    (row) =>
-      normalize(row.data.family_group_key) === normalize(resolved.tenant.tenantKey) &&
-      normalize(row.data.entity_type) === "household" &&
-      (row.data.entity_id ?? "").trim() === householdId &&
-      normalize(row.data.usage_type) === "gallery",
-  );
-  const existingLink = existingForHousehold.find((row) => (row.data.file_id ?? "").trim() === fileId);
+  const existingForHousehold = await getOciMediaLinksForEntity({
+    familyGroupKey: resolved.tenant.tenantKey,
+    entityType: "household",
+    entityId: householdId,
+    usageType: "gallery",
+  });
+  const existingLink = existingForHousehold.find((row) => row.fileId.trim() === fileId);
   if (existingLink) {
     return NextResponse.json({
       ok: true,
       existing: true,
-      linkId: String(existingLink.data.link_id ?? "").trim(),
+      linkId: existingLink.linkId,
       fileId,
       householdId,
     });

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { isMediaAttributeType } from "@/lib/attributes/media-response";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { listFilesInFolder } from "@/lib/google/drive";
-import { getPeople, getTableRecords, getTenantConfig } from "@/lib/data/runtime";
+import { getPeople, getTenantConfig } from "@/lib/data/runtime";
+import {
+  getOciHouseholdsForTenant,
+  getOciMediaLinksForTenant,
+  getOciPersonMediaAttributeRowsForTenant,
+} from "@/lib/oci/tables";
 
 type SearchItem = {
   fileId: string;
@@ -105,12 +109,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     }
   }
 
-  const [people, attributeRows, householdRows, mediaLinkRows, mediaAssetRows] = await Promise.all([
+  const [people, personMediaAttributeRows, householdRows, mediaLinkRows] = await Promise.all([
     getPeople(resolved.tenant.tenantKey),
-    getTableRecords("Attributes", resolved.tenant.tenantKey).catch(() => []),
-    getTableRecords("Households", resolved.tenant.tenantKey).catch(() => []),
-    getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []),
-    getTableRecords("MediaAssets", resolved.tenant.tenantKey).catch(() => []),
+    getOciPersonMediaAttributeRowsForTenant(resolved.tenant.tenantKey).catch(() => []),
+    getOciHouseholdsForTenant(resolved.tenant.tenantKey).catch(() => []),
+    getOciMediaLinksForTenant(resolved.tenant.tenantKey).catch(() => []),
   ]);
 
   const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
@@ -139,16 +142,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     return catalog.get(key)!;
   };
 
-  const mediaById = new Map(
-    mediaAssetRows.map((row) => [readCell(row.data, "media_id"), readCell(row.data, "file_id")] as const),
-  );
   const personAttributeById = new Map(
-    attributeRows
+    personMediaAttributeRows
       .map((row) => {
-        const attributeId = readCell(row.data, "attribute_id");
-        const personId = readCell(row.data, "entity_id", "person_id");
-        const entityType = norm(readCell(row.data, "entity_type"));
-        const attributeType = norm(readCell(row.data, "attribute_type", "type_key"));
+        const attributeId = row.attributeId.trim();
+        const personId = row.entityId.trim();
+        const entityType = norm(row.entityType);
+        const attributeType = norm(row.attributeType);
         return [
           attributeId,
           {
@@ -156,10 +156,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
             personId,
             entityType,
             attributeType,
-            label: readCell(row.data, "label", "attribute_type_category"),
-            notes: readCell(row.data, "attribute_notes", "notes"),
-            date: readCell(row.data, "attribute_date", "start_date"),
-            detail: readCell(row.data, "attribute_detail", "value_text"),
+            label: row.attributeTypeCategory.trim(),
+            notes: row.attributeNotes.trim(),
+            date: row.attributeDate.trim(),
+            detail: row.attributeDetail.trim(),
           },
         ] as const;
       })
@@ -169,19 +169,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       ),
   );
   for (const row of mediaLinkRows) {
-    const familyGroupKey = readCell(row.data, "family_group_key");
-    if (norm(familyGroupKey) !== norm(resolved.tenant.tenantKey)) continue;
-    const entityType = norm(readCell(row.data, "entity_type"));
-    const entityId = readCell(row.data, "entity_id");
-    const mediaId = readCell(row.data, "media_id");
-    const fileId = mediaById.get(mediaId) || "";
+    const entityType = norm(row.entityType);
+    const entityId = row.entityId.trim();
+    const fileId = row.fileId.trim();
     if (!fileId) continue;
 
     const item = ensureItem(fileId);
-    if (!item.name) item.name = readCell(row.data, "label");
-    if (!item.description) item.description = readCell(row.data, "description");
-    if (!item.date) item.date = readCell(row.data, "photo_date");
-    if (!item.mediaMetadata) item.mediaMetadata = readCell(row.data, "media_metadata");
+    if (!item.name) item.name = row.label.trim() || row.fileName.trim();
+    if (!item.description) item.description = row.description.trim();
+    if (!item.date) item.date = row.photoDate.trim();
+    if (!item.mediaMetadata) item.mediaMetadata = row.mediaMetadata.trim();
 
     if (entityType === "person") {
       if (!item.people.some((person) => person.personId === entityId)) {
@@ -235,7 +232,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   }
 
   for (const attr of personAttributeById.values()) {
-    if (!isMediaAttributeType(attr.attributeType)) continue;
     const fileId = attr.detail.trim();
     if (!fileId) continue;
     const item = ensureItem(fileId);

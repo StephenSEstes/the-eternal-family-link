@@ -13,6 +13,49 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (attribute definitions and admin access UI cleanup)
+
+- `Change`: Simplified the Attribute Definitions admin screen so categories are filtered by kind at the top instead of showing `Descriptor`/`Event` badges in every row, hid the internal category key from the editor, reordered the category editor to lead with `Kind`, and tightened the category edit layout so `Sort` is smaller and `Description` is larger. In `Users & Access`, `Add User` is now a modal instead of an inline card, the person picker excludes anyone who already has either Google or local user access, Google/local directory status chips both read `Enabled`/`Disabled`, and the Audit filter controls were compacted into two rows with narrower Actor Person / Action / Result / From fields.
+- `Type`: UI
+- `Why`: Root cause was admin UX exposing internal implementation details and using layouts optimized for raw editing rather than current admin tasks. Attribute Definitions was surfacing the internal category key and repeating kind labels in every row instead of letting admins filter by kind. `Add User` was an inline form that broke the directory workflow, and its picker only filtered against one user source. The audit filter used three wide rows even though the fields did not need that much space.
+- `Files`:
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Attribute Definitions shows a top-level kind filter and no longer shows `Descriptor`/`Event` badges in category rows.
+  - Category edit layout shows `Kind` first, no visible `Category Key`, a smaller `Sort`, and a larger `Description`.
+  - `Users & Access > Add User` opens as a modal.
+  - The Add User person picker excludes people who already have either Google or local user records.
+  - User Directory status chips read `Enabled` / `Disabled` for both Google and Local access.
+  - Audit filters render in two rows with the narrower field widths.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-10 (media library detail editing and query-path cleanup)
+
+- `Change`: Reworked Media Library so the per-file editor uses a direct `/photos/[fileId]` API instead of reusing `/photos/search`, enabled editing of media `Name`, `Description`, and `Date` from the media detail modal, and replaced the main media search full-table path with tenant-scoped OCI media queries. Household media linking now uses entity-scoped media-link reads instead of scanning all media links.
+- `Type`: API | UI | Performance
+- `Why`: Root cause was a query-shape problem plus a disabled UI. The media detail modal had its metadata inputs disabled, and both opening a single file and refreshing links after link/unlink were calling the heavy media search route. That search route was loading whole `Attributes`, `Households`, `MediaLinks`, and `MediaAssets` tables through the generic table reader and joining/filtering in memory before slicing to the requested limit. As data grows, load time scaled with total table size instead of the visible result set.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No schema change. Media metadata edits now update the canonical tenant-scoped `MediaLinks` rows for the selected file and, where applicable, matching person media `Attributes` rows for date/description parity.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Opening a media item in Media Library no longer uses `/photos/search?q=<fileId>` as its detail refresh path.
+  - Media detail `Name`, `Description`, and `Date` are editable for app-linked media and save through `/api/t/[tenantKey]/photos/[fileId]`.
+  - Linking/unlinking a person or household from the media detail modal refreshes the selected file without reloading the entire library.
+  - Main Media Library search still returns the same item shape, but no longer loads generic full tables for `Attributes`, `Households`, `MediaLinks`, and `MediaAssets`.
+- `Rollback Notes`: Revert this change and redeploy. Existing media rows remain valid because no schema or ID format changed.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (stored attribute kind and unified attribute definitions)
 
 - `Change`: Added canonical `Attributes.attribute_kind` storage (`descriptor` | `event`), backfilled existing rows compatibly, and unified family-group Attribute Definitions so admins now manage both descriptor and event categories/types from one definitions document. The Add Attribute modal now reads those unified definitions for both kinds instead of mixing event definitions with hardcoded descriptor lists.

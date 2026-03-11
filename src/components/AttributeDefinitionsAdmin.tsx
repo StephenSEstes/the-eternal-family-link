@@ -35,10 +35,6 @@ function typeIdFor(row: Pick<TypeRow, "kind" | "categoryKey" | "typeKey">) {
   return makeAttributeDefinitionTypeId(row.kind, row.categoryKey, row.typeKey);
 }
 
-function prettyKind(value: AttributeCategory) {
-  return value === "event" ? "Event" : "Descriptor";
-}
-
 function stableStringify(payload: DefinitionsPayload) {
   const sortedCategories = [...payload.categories].sort(
     (a, b) => a.sortOrder - b.sortOrder || `${a.kind}:${a.categoryKey}`.localeCompare(`${b.kind}:${b.categoryKey}`),
@@ -65,6 +61,7 @@ export function AttributeDefinitionsAdmin({
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<"all" | AttributeCategory>("all");
   const [baseline, setBaseline] = useState("");
 
   const load = useCallback(async () => {
@@ -127,17 +124,29 @@ export function AttributeDefinitionsAdmin({
 
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return sortedCategories;
     return sortedCategories.filter((row) => {
-      const haystack = `${row.kind} ${row.categoryLabel} ${row.categoryKey} ${row.description}`.toLowerCase();
+      if (kindFilter !== "all" && row.kind !== kindFilter) {
+        return false;
+      }
+      if (!q) return true;
+      const haystack = `${row.categoryLabel} ${row.description}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [search, sortedCategories]);
+  }, [kindFilter, search, sortedCategories]);
 
   const selectedCategory = useMemo(
     () => sortedCategories.find((row) => categoryIdFor(row) === selectedCategoryId) ?? null,
     [sortedCategories, selectedCategoryId],
   );
+
+  useEffect(() => {
+    if (filteredCategories.length === 0) {
+      return;
+    }
+    if (!filteredCategories.some((row) => categoryIdFor(row) === selectedCategoryId)) {
+      setSelectedCategoryId(categoryIdFor(filteredCategories[0]!));
+    }
+  }, [filteredCategories, selectedCategoryId]);
 
   const categoryTypes = useMemo(
     () =>
@@ -248,8 +257,9 @@ export function AttributeDefinitionsAdmin({
 
   const addCategory = () => {
     const index = categories.length + 1;
+    const nextKind: AttributeCategory = kindFilter === "all" ? "descriptor" : kindFilter;
     const next: CategoryRow = {
-      kind: "descriptor",
+      kind: nextKind,
       categoryKey: `category_${index}`,
       categoryLabel: `Category ${index}`,
       categoryColor: "#e5e7eb",
@@ -376,8 +386,27 @@ export function AttributeDefinitionsAdmin({
 
       <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)", marginTop: "0.75rem" }}>
         <div className="card">
-          <label className="label">Search Categories</label>
-          <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search label, key, or kind" />
+          <div
+            style={{
+              display: "grid",
+              gap: "0.6rem",
+              gridTemplateColumns: "minmax(0, 1fr) 160px",
+              alignItems: "end",
+            }}
+          >
+            <div>
+              <label className="label">Search Categories</label>
+              <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search label or description" />
+            </div>
+            <div>
+              <label className="label">Kind Filter</label>
+              <select className="input" value={kindFilter} onChange={(e) => setKindFilter(e.target.value as "all" | AttributeCategory)}>
+                <option value="all">All</option>
+                <option value="descriptor">Attributes</option>
+                <option value="event">Events</option>
+              </select>
+            </div>
+          </div>
           <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.45rem", maxHeight: "55vh", overflow: "auto" }}>
             {filteredCategories.map((row) => {
               const rowId = categoryIdFor(row);
@@ -409,7 +438,6 @@ export function AttributeDefinitionsAdmin({
                       }}
                     />
                     <span>{row.categoryLabel || row.categoryKey}</span>
-                    <span className="status-chip status-chip--neutral">{prettyKind(row.kind)}</span>
                   </div>
                 </button>
               );
@@ -428,22 +456,27 @@ export function AttributeDefinitionsAdmin({
             <>
               <div
                 className="settings-chip-list"
-                style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 140px 110px minmax(220px, 1.1fr)", gap: "0.6rem", alignItems: "end" }}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "140px minmax(180px, 1fr) 96px minmax(260px, 1.4fr)",
+                  gap: "0.6rem",
+                  alignItems: "end",
+                }}
               >
+                <div style={{ minWidth: 0 }}>
+                  <label className="label">Kind</label>
+                  <select className="input" value={selectedCategory.kind} onChange={(e) => updateCategory(selectedCategoryId, { kind: e.target.value as AttributeCategory })}>
+                    <option value="descriptor">Attribute</option>
+                    <option value="event">Event</option>
+                  </select>
+                </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Category Label</label>
                   <input className="input" value={selectedCategory.categoryLabel} onChange={(e) => updateCategory(selectedCategoryId, { categoryLabel: e.target.value })} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <label className="label">Kind</label>
-                  <select className="input" value={selectedCategory.kind} onChange={(e) => updateCategory(selectedCategoryId, { kind: e.target.value as AttributeCategory })}>
-                    <option value="descriptor">Descriptor</option>
-                    <option value="event">Event</option>
-                  </select>
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <label className="label">Color</label>
-                  <input className="input" type="color" value={selectedCategory.categoryColor || "#e5e7eb"} onChange={(e) => updateCategory(selectedCategoryId, { categoryColor: e.target.value })} />
+                  <label className="label">Sort</label>
+                  <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategoryId, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Description</label>
@@ -451,13 +484,9 @@ export function AttributeDefinitionsAdmin({
                 </div>
               </div>
               <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
-                <div style={{ minWidth: "160px" }}>
-                  <label className="label">Sort</label>
-                  <input className="input" type="number" value={selectedCategory.sortOrder} onChange={(e) => updateCategory(selectedCategoryId, { sortOrder: Number.parseInt(e.target.value || "0", 10) || 0 })} />
-                </div>
-                <div style={{ minWidth: "220px" }}>
-                  <label className="label">Category Key</label>
-                  <input className="input" value={selectedCategory.categoryKey} onChange={(e) => updateCategory(selectedCategoryId, { categoryKey: normalizeAttributeTypeKey(e.target.value) })} />
+                <div style={{ minWidth: "120px" }}>
+                  <label className="label">Color</label>
+                  <input className="input" type="color" value={selectedCategory.categoryColor || "#e5e7eb"} onChange={(e) => updateCategory(selectedCategoryId, { categoryColor: e.target.value })} />
                 </div>
                 <label className="label" style={{ marginBottom: 0, display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
                   <input type="checkbox" checked={selectedCategory.isEnabled} onChange={(e) => updateCategory(selectedCategoryId, { isEnabled: e.target.checked })} />

@@ -839,7 +839,7 @@ type OciAuditLogRow = {
   details: string;
 };
 
-type OciMediaLinkRow = {
+export type OciMediaLinkRow = {
   familyGroupKey: string;
   linkId: string;
   mediaId: string;
@@ -847,6 +847,7 @@ type OciMediaLinkRow = {
   entityId: string;
   usageType: string;
   fileId: string;
+  fileName: string;
   label: string;
   description: string;
   photoDate: string;
@@ -855,6 +856,80 @@ type OciMediaLinkRow = {
   mediaMetadata: string;
   createdAt: string;
 };
+
+export type OciPersonMediaAttributeRow = {
+  attributeId: string;
+  entityType: string;
+  entityId: string;
+  attributeType: string;
+  attributeTypeCategory: string;
+  attributeDate: string;
+  attributeDetail: string;
+  attributeNotes: string;
+  endDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
+  return {
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    linkId: fromDbValue(row.LINK_ID),
+    mediaId: fromDbValue(row.MEDIA_ID),
+    entityType: fromDbValue(row.ENTITY_TYPE),
+    entityId: fromDbValue(row.ENTITY_ID),
+    usageType: fromDbValue(row.USAGE_TYPE),
+    fileId: fromDbValue(row.FILE_ID),
+    fileName: fromDbValue(row.FILE_NAME),
+    label: fromDbValue(row.LABEL),
+    description: fromDbValue(row.DESCRIPTION),
+    photoDate: fromDbValue(row.PHOTO_DATE),
+    isPrimary: fromDbValue(row.IS_PRIMARY).trim().toLowerCase() === "true",
+    sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
+    mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+    createdAt: fromDbValue(row.CREATED_AT),
+  };
+}
+
+async function queryOciMediaLinks(
+  whereClause: string,
+  binds: Record<string, string>,
+): Promise<OciMediaLinkRow[]> {
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         l.family_group_key,
+         l.link_id,
+         l.media_id,
+         l.entity_type,
+         l.entity_id,
+         l.usage_type,
+         a.file_id,
+         a.file_name,
+         l.label,
+         l.description,
+         l.photo_date,
+         l.is_primary,
+         l.sort_order,
+         COALESCE(NULLIF(TRIM(l.media_metadata), ''), a.media_metadata) AS media_metadata,
+         l.created_at
+       FROM media_links l
+       INNER JOIN media_assets a
+         ON TRIM(a.media_id) = TRIM(l.media_id)
+       ${whereClause}
+       ORDER BY
+         a.file_id,
+         CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
+         TO_NUMBER(NVL(NULLIF(TRIM(l.sort_order), ''), '0')),
+         l.created_at,
+         l.link_id`,
+      binds,
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map(mapOciMediaLinkRow);
+  });
+}
 
 function enabledExpr(column: string) {
   return `LOWER(TRIM(NVL(${column}, 'TRUE'))) IN ('true','yes','1')`;
@@ -1786,58 +1861,181 @@ export async function getOciMediaLinksForEntity(input: {
   if (!familyGroupKey || !entityId) {
     return [];
   }
+  const usageClause = usageType ? "AND LOWER(TRIM(NVL(l.usage_type, ''))) = :usageType" : "";
+  return queryOciMediaLinks(
+    `WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
+       AND LOWER(TRIM(l.entity_type)) = :entityType
+       AND TRIM(l.entity_id) = :entityId
+       ${usageClause}`,
+    usageType
+      ? { familyGroupKey, entityType, entityId, usageType }
+      : { familyGroupKey, entityType, entityId },
+  );
+}
+
+export async function getOciMediaLinksForTenant(familyGroupKey: string): Promise<OciMediaLinkRow[]> {
+  const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
+  if (!normalizedFamilyGroupKey) {
+    return [];
+  }
+  return queryOciMediaLinks(
+    `WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey`,
+    { familyGroupKey: normalizedFamilyGroupKey },
+  );
+}
+
+export async function getOciMediaLinksForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciMediaLinkRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return [];
+  }
+  return queryOciMediaLinks(
+    `WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
+       AND TRIM(a.file_id) = :fileId`,
+    { familyGroupKey, fileId },
+  );
+}
+
+export async function getOciPersonMediaAttributeRowsForTenant(
+  familyGroupKey: string,
+): Promise<OciPersonMediaAttributeRow[]> {
+  const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
+  if (!normalizedFamilyGroupKey) {
+    return [];
+  }
   return withConnection(async (connection) => {
-    const usageClause = usageType ? "AND LOWER(TRIM(NVL(l.usage_type, ''))) = :usageType" : "";
     const result = await connection.execute(
       `SELECT
-         l.family_group_key,
-         l.link_id,
-         l.media_id,
-         l.entity_type,
-         l.entity_id,
-         l.usage_type,
-         a.file_id,
-         l.label,
-         l.description,
-         l.photo_date,
-         l.is_primary,
-         l.sort_order,
-         COALESCE(NULLIF(TRIM(l.media_metadata), ''), a.media_metadata) AS media_metadata,
-         l.created_at
-       FROM media_links l
-       INNER JOIN media_assets a
-         ON TRIM(a.media_id) = TRIM(l.media_id)
-       WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
-         AND LOWER(TRIM(l.entity_type)) = :entityType
-         AND TRIM(l.entity_id) = :entityId
-         ${usageClause}
-       ORDER BY
-         CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
-         TO_NUMBER(NVL(NULLIF(TRIM(l.sort_order), ''), '0')),
-         l.created_at,
-         l.link_id`,
-      usageType
-        ? { familyGroupKey, entityType, entityId, usageType }
-        : { familyGroupKey, entityType, entityId },
+         a.attribute_id,
+         a.entity_type,
+         a.entity_id,
+         a.attribute_type,
+         a.attribute_type_category,
+         a.attribute_date,
+         a.attribute_detail,
+         a.attribute_notes,
+         a.end_date,
+         a.created_at,
+         a.updated_at
+       FROM attributes a
+       INNER JOIN person_family_groups pfg
+         ON TRIM(pfg.person_id) = TRIM(a.entity_id)
+       WHERE LOWER(TRIM(pfg.family_group_key)) = :familyGroupKey
+         AND (${enabledExpr("pfg.is_enabled")} OR TRIM(NVL(pfg.is_enabled, '')) = '')
+         AND LOWER(TRIM(a.entity_type)) = 'person'
+         AND LOWER(TRIM(a.attribute_type)) IN ('photo', 'video', 'audio', 'media')
+       ORDER BY a.attribute_id`,
+      { familyGroupKey: normalizedFamilyGroupKey },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];
     return rows.map((row) => ({
-      familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
-      linkId: fromDbValue(row.LINK_ID),
-      mediaId: fromDbValue(row.MEDIA_ID),
+      attributeId: fromDbValue(row.ATTRIBUTE_ID),
       entityType: fromDbValue(row.ENTITY_TYPE),
       entityId: fromDbValue(row.ENTITY_ID),
-      usageType: fromDbValue(row.USAGE_TYPE),
-      fileId: fromDbValue(row.FILE_ID),
-      label: fromDbValue(row.LABEL),
-      description: fromDbValue(row.DESCRIPTION),
-      photoDate: fromDbValue(row.PHOTO_DATE),
-      isPrimary: fromDbValue(row.IS_PRIMARY).trim().toLowerCase() === "true",
-      sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
-      mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+      attributeType: fromDbValue(row.ATTRIBUTE_TYPE),
+      attributeTypeCategory: fromDbValue(row.ATTRIBUTE_TYPE_CATEGORY),
+      attributeDate: fromDbValue(row.ATTRIBUTE_DATE),
+      attributeDetail: fromDbValue(row.ATTRIBUTE_DETAIL),
+      attributeNotes: fromDbValue(row.ATTRIBUTE_NOTES),
+      endDate: fromDbValue(row.END_DATE),
       createdAt: fromDbValue(row.CREATED_AT),
+      updatedAt: fromDbValue(row.UPDATED_AT),
     }));
+  });
+}
+
+export async function getOciPersonMediaAttributeRowsForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciPersonMediaAttributeRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         a.attribute_id,
+         a.entity_type,
+         a.entity_id,
+         a.attribute_type,
+         a.attribute_type_category,
+         a.attribute_date,
+         a.attribute_detail,
+         a.attribute_notes,
+         a.end_date,
+         a.created_at,
+         a.updated_at
+       FROM attributes a
+       INNER JOIN person_family_groups pfg
+         ON TRIM(pfg.person_id) = TRIM(a.entity_id)
+       WHERE LOWER(TRIM(pfg.family_group_key)) = :familyGroupKey
+         AND (${enabledExpr("pfg.is_enabled")} OR TRIM(NVL(pfg.is_enabled, '')) = '')
+         AND LOWER(TRIM(a.entity_type)) = 'person'
+         AND LOWER(TRIM(a.attribute_type)) IN ('photo', 'video', 'audio', 'media')
+         AND TRIM(a.attribute_detail) = :fileId
+       ORDER BY a.attribute_id`,
+      { familyGroupKey, fileId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      attributeId: fromDbValue(row.ATTRIBUTE_ID),
+      entityType: fromDbValue(row.ENTITY_TYPE),
+      entityId: fromDbValue(row.ENTITY_ID),
+      attributeType: fromDbValue(row.ATTRIBUTE_TYPE),
+      attributeTypeCategory: fromDbValue(row.ATTRIBUTE_TYPE_CATEGORY),
+      attributeDate: fromDbValue(row.ATTRIBUTE_DATE),
+      attributeDetail: fromDbValue(row.ATTRIBUTE_DETAIL),
+      attributeNotes: fromDbValue(row.ATTRIBUTE_NOTES),
+      endDate: fromDbValue(row.END_DATE),
+      createdAt: fromDbValue(row.CREATED_AT),
+      updatedAt: fromDbValue(row.UPDATED_AT),
+    }));
+  });
+}
+
+export async function updateOciMediaLinksForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+  label: string;
+  description: string;
+  photoDate: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return 0;
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `UPDATE media_links l
+       SET label = :label,
+           description = :description,
+           photo_date = :photoDate
+       WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
+         AND EXISTS (
+           SELECT 1
+           FROM media_assets a
+           WHERE TRIM(a.media_id) = TRIM(l.media_id)
+             AND TRIM(a.file_id) = :fileId
+         )`,
+      {
+        familyGroupKey,
+        fileId,
+        label: input.label.trim(),
+        description: input.description.trim(),
+        photoDate: input.photoDate.trim(),
+      },
+      { autoCommit: true },
+    );
+    return result.rowsAffected ?? 0;
   });
 }
 
