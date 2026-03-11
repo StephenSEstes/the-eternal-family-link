@@ -26,6 +26,8 @@ type PersonItem = {
   familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
 };
 
+type PersonSeed = PersonItem;
+
 type PeopleDirectoryProps = {
   tenantKey: string;
   canManage: boolean;
@@ -95,6 +97,7 @@ export function PeopleDirectory({
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<DirectoryMode>("people");
   const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [selectedPersonOverride, setSelectedPersonOverride] = useState<PersonSeed | null>(null);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [returnHouseholdId, setReturnHouseholdId] = useState("");
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
@@ -135,8 +138,18 @@ export function PeopleDirectory({
       .filter((item) => (normalized ? item.searchBlob.includes(normalized) : true));
   }, [households, peopleById, query]);
   const selectedPerson = useMemo(
-    () => people.find((item) => item.personId === selectedPersonId) ?? null,
-    [people, selectedPersonId],
+    () => {
+      const person = people.find((item) => item.personId === selectedPersonId) ?? null;
+      const override =
+        selectedPersonOverride && selectedPersonOverride.personId === selectedPersonId
+          ? selectedPersonOverride
+          : null;
+      if (person && override) {
+        return { ...person, ...override };
+      }
+      return override ?? person;
+    },
+    [people, selectedPersonId, selectedPersonOverride],
   );
 
   return (
@@ -327,6 +340,7 @@ export function PeopleDirectory({
         households={households}
         onClose={() => {
           setSelectedPersonId("");
+          setSelectedPersonOverride(null);
           if (returnHouseholdId) {
             setSelectedHouseholdId(returnHouseholdId);
             setReturnHouseholdId("");
@@ -341,9 +355,19 @@ export function PeopleDirectory({
         householdId={selectedHouseholdId}
         onClose={() => setSelectedHouseholdId("")}
         onSaved={() => router.refresh()}
-        onEditPerson={(personId) => {
+        onEditPerson={(personId, personSeed) => {
           setReturnHouseholdId(selectedHouseholdId);
           setSelectedHouseholdId("");
+          setSelectedPersonOverride(
+            personSeed
+              ? {
+                  ...personSeed,
+                  birthDate: personSeed.birthDate ?? "",
+                  gender: personSeed.gender ?? "unspecified",
+                  photoFileId: personSeed.photoFileId ?? "",
+                }
+              : null,
+          );
           setSelectedPersonId(personId);
         }}
       />

@@ -16,6 +16,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11
+- `Change`: Fixed the household child-to-person handoff so a newly added child opens with fresh family-group relationship data in the person modal instead of showing stale `undeclared` state from the outer page.
+- `Type`: UI | API
+- `Why`: Root cause was that the household modal refreshed its own child list after add, but the person modal still opened from stale page-level people data. The household detail API also returned only minimal child rows, so the handoff had no fresh relationship-type payload to use immediately.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+- `Data Changes`: No schema change. The household detail payload now includes a fuller child person summary for immediate modal handoff.
+- `Verify`:
+  - Add a child from `Household -> Children -> Add Child`.
+  - Open that child immediately from the household child list.
+  - Confirm the person modal shows the current family relationship instead of stale `undeclared`.
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
+- `Date`: 2026-03-11
 - `Change`: Fixed person-save relationship building so children can inherit family-group membership from a direct/founder parent plus in-law spouse, and changed the standalone `Add Person` form to use a native birthdate picker instead of a plain text field.
 - `Type`: UI | API
 - `Why`: Root cause for the save failure was that the relationship builder required every selected parent to already be `founder` or `direct`, and it did not propagate parent family-group memberships to the child on the normal person-save path. Root cause for the birthday issue was a stale UI control in the standalone add-person card; newer spouse/child flows already used native date inputs.

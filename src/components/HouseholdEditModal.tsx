@@ -40,7 +40,20 @@ type HouseholdAttribute = {
 type ChildSummary = {
   personId: string;
   displayName: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  maidenName?: string;
+  nickName?: string;
   birthDate: string;
+  gender: "male" | "female" | "unspecified";
+  photoFileId?: string;
+  phones?: string;
+  email?: string;
+  address?: string;
+  hobbies?: string;
+  notes?: string;
+  familyGroupRelationshipType?: "founder" | "direct" | "in_law" | "undeclared";
 };
 
 type HouseholdPhoto = {
@@ -80,7 +93,7 @@ type Props = {
   householdId: string;
   onClose: () => void;
   onSaved: () => void;
-  onEditPerson?: (personId: string) => void;
+  onEditPerson?: (personId: string, personSeed?: ChildSummary) => void;
 };
 
 type TabKey = "info" | "children" | "pictures";
@@ -575,8 +588,25 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
       ? getPhotoProxyPath(spouseHeadshotFileId, tenantKey)
       : "/WeddingAvatar1.png";
 
-  const openPersonDetail = (personId: string) => {
+  const openPersonDetail = (child: ChildSummary) => {
+    if (!child.personId) return;
+    if (onEditPerson) {
+      onClose();
+      onEditPerson(child.personId, child);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.location.href = `/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(child.personId)}`;
+    }
+  };
+
+  const openPersonDetailById = (personId: string) => {
     if (!personId) return;
+    const child = children.find((item) => item.personId === personId);
+    if (child) {
+      openPersonDetail(child);
+      return;
+    }
     if (onEditPerson) {
       onClose();
       onEditPerson(personId);
@@ -650,11 +680,11 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                                 className="person-card album-card"
                                 role="button"
                                 tabIndex={0}
-                                onClick={() => openPersonDetail(item.personId)}
+                                onClick={() => openPersonDetailById(item.personId)}
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter" || event.key === " ") {
                                     event.preventDefault();
-                                    openPersonDetail(item.personId);
+                                    openPersonDetailById(item.personId);
                                   }
                                 }}
                               >
@@ -799,7 +829,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                                   padding: 0,
                                   minHeight: 0,
                                 }}
-                                onClick={() => openPersonDetail(child.personId)}
+                                onClick={() => openPersonDetail(child)}
                               >
                                 <img
                                   src={

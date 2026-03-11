@@ -290,7 +290,20 @@ export async function GET(_: Request, { params }: RouteProps) {
       return {
         personId: childId,
         displayName: person?.displayName || childId,
+        firstName: person?.firstName || "",
+        middleName: person?.middleName || "",
+        lastName: person?.lastName || "",
+        maidenName: person?.maidenName || "",
+        nickName: person?.nickName || "",
         birthDate: person?.birthDate || "",
+        gender: person?.gender || "unspecified",
+        photoFileId: person?.photoFileId || "",
+        phones: person?.phones || "",
+        email: person?.email || "",
+        address: person?.address || "",
+        hobbies: person?.hobbies || "",
+        notes: person?.notes || "",
+        familyGroupRelationshipType: person?.familyGroupRelationshipType || "undeclared",
       };
     });
     const householdPhotos: HouseholdPhotoLink[] = (await getOciMediaLinksForEntity({
