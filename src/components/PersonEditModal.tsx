@@ -194,6 +194,18 @@ function computeYearsSince(value?: string) {
   return years >= 0 ? String(years) : "";
 }
 
+function isAtLeastAge(value: string | undefined, minYears = 19) {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  const now = new Date();
+  let years = now.getFullYear() - parsed.getFullYear();
+  const beforeBirthday =
+    now.getMonth() < parsed.getMonth() ||
+    (now.getMonth() === parsed.getMonth() && now.getDate() < parsed.getDate());
+  if (beforeBirthday) years -= 1;
+  return years >= minYears;
+}
+
 function parseMediaMetadata(raw?: string) {
   const text = (raw ?? "").trim();
   if (!text) return null;
@@ -1133,24 +1145,36 @@ export function PersonEditModal({
     return "";
   }, [isFounderPerson, isInLawPerson, isUndeclaredPerson]);
   const currentPersonCanAnchorMarriage = isFounderPerson || parentIds.length > 0;
+  const currentPersonCanHaveSpouse = isAtLeastAge(childBirthDate, 19);
   const spouseOptions = useMemo(
     () => {
+      if (!currentPersonCanHaveSpouse) {
+        return [] as typeof personOptions;
+      }
       const base = personOptions.filter((option) => {
         const marriedTo = spouseByPersonId.get(option.personId);
         const validAnchorMatch =
           currentPersonCanAnchorMarriage || isAnchorFamilyGroupRelationshipType(option.familyGroupRelationshipType);
-        return (!marriedTo || marriedTo === person?.personId) && validAnchorMatch;
+        const isParent = option.personId === parent1Id || option.personId === parent2Id;
+        const isOldEnough = isAtLeastAge(option.birthDate, 19);
+        return (!marriedTo || marriedTo === person?.personId) && validAnchorMatch && !isParent && isOldEnough;
       });
       if (spouseId && !base.some((option) => option.personId === spouseId)) {
         const selected =
           personOptions.find((option) => option.personId === spouseId) ?? localPeople.find((option) => option.personId === spouseId);
-        if (selected && selected.personId !== person?.personId) {
+        if (
+          selected &&
+          selected.personId !== person?.personId &&
+          selected.personId !== parent1Id &&
+          selected.personId !== parent2Id &&
+          isAtLeastAge(selected.birthDate, 19)
+        ) {
           return [selected, ...base];
         }
       }
       return base;
     },
-    [currentPersonCanAnchorMarriage, localPeople, person?.personId, personOptions, spouseByPersonId, spouseId],
+    [currentPersonCanAnchorMarriage, currentPersonCanHaveSpouse, localPeople, parent1Id, parent2Id, person?.personId, personOptions, spouseByPersonId, spouseId],
   );
   const hasVisibleSpouseSelection = useMemo(
     () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
@@ -2034,9 +2058,6 @@ export function PersonEditModal({
                                 setParent1Id(next);
                                 setFamilyTouched(true);
                                 const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                                if (spouse) {
-                                  setSpouseId(spouse);
-                                }
                                 if (spouse && spouse !== person.personId && spouse !== next) {
                                   setParent2Id(spouse);
                                 }
@@ -2058,9 +2079,6 @@ export function PersonEditModal({
                                 setParent2Id(next);
                                 setFamilyTouched(true);
                                 const spouse = next ? spouseByPersonId.get(next) ?? "" : "";
-                                if (spouse) {
-                                  setSpouseId(spouse);
-                                }
                                 if (spouse && spouse !== person.personId && spouse !== next) {
                                   setParent1Id(spouse);
                                 }
@@ -2082,31 +2100,44 @@ export function PersonEditModal({
                           As an in-law your parents are not visible in this family view. To see or select your parents, change to the family group where you are direct.
                         </p>
                       )}
-                      <div style={{ flex: 1, minWidth: 180 }}>
-                        <label className="label">Spouse</label>
-                        <select className="input" value={spouseId} onChange={(e) => {
-                          const nextValue = e.target.value;
-                          if (nextValue === ADD_NEW_SPOUSE_OPTION) {
-                            if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
+                      {currentPersonCanHaveSpouse ? (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <label className="label">Spouse</label>
+                          <select className="input" value={spouseId} onChange={(e) => {
+                            const nextValue = e.target.value;
+                            if (nextValue === ADD_NEW_SPOUSE_OPTION) {
+                              if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
+                                return;
+                              }
+                              setShowAddSpouse(true);
+                              setNewSpouseGender(oppositeGender(gender));
+                              setStatus("");
                               return;
                             }
-                            setShowAddSpouse(true);
-                            setNewSpouseGender(oppositeGender(gender));
-                            setStatus("");
-                            return;
-                          }
-                          setSpouseId(nextValue);
-                          setFamilyTouched(true);
-                        }}>
-                          <option value="">None</option>
-                          {spouseOptions.map((option) => (
-                            <option key={`sp-${option.personId}`} value={option.personId}>{option.displayName}</option>
-                          ))}
-                          {isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
-                            <option value={ADD_NEW_SPOUSE_OPTION}>+ Add Person</option>
-                          ) : null}
-                        </select>
-                      </div>
+                            if (nextValue && (nextValue === parent1Id || nextValue === parent2Id)) {
+                              setStatus("A parent cannot also be selected as spouse.");
+                              return;
+                            }
+                            setSpouseId(nextValue);
+                            setFamilyTouched(true);
+                          }}>
+                            <option value="">None</option>
+                            {spouseOptions.map((option) => (
+                              <option key={`sp-${option.personId}`} value={option.personId}>{option.displayName}</option>
+                            ))}
+                            {isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
+                              <option value={ADD_NEW_SPOUSE_OPTION}>+ Add Person</option>
+                            ) : null}
+                          </select>
+                        </div>
+                      ) : (
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                          <label className="label">Spouse</label>
+                          <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                            Spouse links are not available before age 19.
+                          </p>
+                        </div>
+                      )}
                       {gender === "female" && spouseId ? (
                         <div style={{ flex: 1, minWidth: 180 }}>
                           <label className="label">Maiden Name</label>

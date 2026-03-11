@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-11: Tightened spouse eligibility so spouse links require both people to be at least 19 and parents cannot be selected as spouse. See `docs/change-summary.md`.
 - 2026-03-11: Fixed the household child -> person modal handoff so a newly added child opens with the current family relationship instead of stale `undeclared` state. See `docs/change-summary.md`.
 - 2026-03-11: Fixed person-save family inheritance for direct + in-law parents and changed the standalone Add Person birthday field to a native date picker. See `docs/change-summary.md`.
 - 2026-03-10: Added `Import Story with AI` on person Notes so story text can become reviewed canonical attribute drafts, saved one at a time through the existing attribute modal. See `docs/change-summary.md`.

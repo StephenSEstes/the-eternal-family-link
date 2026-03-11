@@ -105,6 +105,33 @@ function parseEnabledMembership(value: string) {
   return normalized === "true" || normalized === "yes" || normalized === "1";
 }
 
+function parseDate(value?: string) {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isAtLeastAge(value: string | undefined, minYears = 19) {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  const now = new Date();
+  let years = now.getFullYear() - parsed.getFullYear();
+  const beforeBirthday =
+    now.getMonth() < parsed.getMonth() ||
+    (now.getMonth() === parsed.getMonth() && now.getDate() < parsed.getDate());
+  if (beforeBirthday) years -= 1;
+  return years >= minYears;
+}
+
 function toMembershipLike(record: Record<string, string>) {
   return {
     personId: readField(record, "person_id"),
@@ -254,13 +281,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const people = await getTableRecords("People", normalizedTenantKey);
     const personFamilyRows = await getTableRecords("PersonFamilyGroups").catch(() => []);
     const existingRelationshipsLike = existing.map((row) => toRelationshipLike(row.data));
-    const peopleById = new Map<string, { gender: string; lastName: string }>();
+    const peopleById = new Map<string, { gender: string; lastName: string; birthDate: string }>();
     for (const row of people) {
       const personId = readField(row.data, "person_id", "id");
       if (!personId) continue;
       peopleById.set(personId, {
         gender: readField(row.data, "gender"),
         lastName: readField(row.data, "last_name"),
+        birthDate: readField(row.data, "birth_date"),
       });
     }
     const enabledGroupsByPerson = new Map<string, Set<string>>();
@@ -341,6 +369,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         {
           error: "invalid_spouse_placement",
           message: "A spouse link in this family group must connect to a founder or direct member.",
+          spouseId,
+        },
+        { status: 409 },
+      );
+    }
+    if (spouseId && parentIds.includes(spouseId)) {
+      return NextResponse.json(
+        {
+          error: "invalid_spouse_parent_overlap",
+          message: "A parent cannot also be selected as spouse.",
+          spouseId,
+        },
+        { status: 409 },
+      );
+    }
+    const currentPersonBirthDate = peopleById.get(parsed.data.personId)?.birthDate ?? "";
+    const spouseBirthDate = spouseId ? peopleById.get(spouseId)?.birthDate ?? "" : "";
+    if (spouseId && (!isAtLeastAge(currentPersonBirthDate, 19) || !isAtLeastAge(spouseBirthDate, 19))) {
+      return NextResponse.json(
+        {
+          error: "invalid_spouse_age",
+          message: "Spouse links require both people to be at least 19 years old.",
           spouseId,
         },
         { status: 409 },

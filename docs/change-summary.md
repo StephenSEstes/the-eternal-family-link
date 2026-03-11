@@ -16,6 +16,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11
+- `Change`: Tightened spouse eligibility rules so spouse options are hidden for people under 19, parent records cannot be selected as spouse, and the relationship-save API rejects those invalid spouse links.
+- `Type`: UI | API
+- `Why`: Root cause was incomplete spouse validation. The family UI allowed underage spouse options and could auto-fill a parent’s spouse into the current person’s spouse field, while the backend did not block underage or parent/spouse overlap saves.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+- `Data Changes`: No schema change. New spouse saves now require both people to be at least 19 and not overlap with selected parents.
+- `Verify`:
+  - Open a person under 19 and confirm the spouse selector is replaced by guidance text.
+  - Confirm parent selections no longer make a parent appear as spouse.
+  - Confirm saving a spouse link where either person is under 19 returns a 409 if attempted through the API.
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
+- `Date`: 2026-03-11
 - `Change`: Fixed the household child-to-person handoff so a newly added child opens with fresh family-group relationship data in the person modal instead of showing stale `undeclared` state from the outer page.
 - `Type`: UI | API
 - `Why`: Root cause was that the household modal refreshed its own child list after add, but the person modal still opened from stale page-level people data. The household detail API also returned only minimal child rows, so the handoff had no fresh relationship-type payload to use immediately.
