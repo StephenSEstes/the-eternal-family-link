@@ -207,7 +207,7 @@ export function TreeGraph({
   const levelsSorted = Array.from(grouped.keys()).sort((a, b) => a - b);
   const orderedByLevel = new Map<number, PersonNode[]>();
   levelsSorted.forEach((level) => {
-    const sorted = (grouped.get(level) ?? []).slice().sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const sorted = (grouped.get(level) ?? []).slice().sort(comparePeopleForTreeOrder);
     const ordered: PersonNode[] = [];
     const seen = new Set<string>();
     sorted.forEach((node) => {
@@ -292,7 +292,14 @@ export function TreeGraph({
     const centerX = (left.x + right.x) / 2;
     const sortedChildIds = childIds
       .slice()
-      .sort((a, b) => (nodeMap.get(a)?.displayName ?? a).localeCompare(nodeMap.get(b)?.displayName ?? b));
+      .sort((a, b) => {
+        const leftNode = nodeMap.get(a);
+        const rightNode = nodeMap.get(b);
+        if (leftNode && rightNode) {
+          return comparePeopleForTreeOrder(leftNode, rightNode);
+        }
+        return a.localeCompare(b);
+      });
     const spacing = NODE_CARD_WIDTH + 26;
     const start = centerX - ((sortedChildIds.length - 1) * spacing) / 2;
     sortedChildIds.forEach((childId, index) => {
@@ -470,6 +477,24 @@ export function TreeGraph({
       return `${match[2]}-${match[3]}`;
     }
     return "";
+  };
+
+  const parseBirthSortValue = (value?: string) => {
+    const raw = (value ?? "").trim();
+    if (!raw) {
+      return Number.NaN;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+  };
+
+  const comparePeopleForTreeOrder = (left: PersonNode, right: PersonNode) => {
+    const leftBirth = parseBirthSortValue(left.birthDate);
+    const rightBirth = parseBirthSortValue(right.birthDate);
+    if (Number.isFinite(leftBirth) && Number.isFinite(rightBirth) && leftBirth !== rightBirth) {
+      return leftBirth - rightBirth;
+    }
+    return left.displayName.localeCompare(right.displayName);
   };
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));

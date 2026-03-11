@@ -92,6 +92,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Family Tree sibling ordering now places older siblings to the left when birthdates are available, with the prior name sort used only as a fallback.
+- `Type`: UI
+- `Why`: Root cause was that `TreeGraph` ordered both row layout and child clusters alphabetically by `displayName`, so siblings appeared by name instead of by age.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In Family Tree, confirm siblings with known birthdates render oldest on the left and youngest on the right.
+  - Confirm siblings with equal or missing birthdates still render in a stable order.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11
