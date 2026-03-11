@@ -1,6 +1,19 @@
 export type AttributeEntityType = "person" | "household";
 export type AttributeCategory = "descriptor" | "event";
 
+export type AttributeDraftPrefill = {
+  attributeKind: AttributeCategory;
+  attributeType: string;
+  attributeTypeCategory?: string;
+  attributeDate?: string;
+  endDate?: string;
+  dateIsEstimated?: boolean;
+  estimatedTo?: "month" | "year" | "";
+  label?: string;
+  attributeDetail?: string;
+  attributeNotes?: string;
+};
+
 export type AttributeRecord = {
   attributeId: string;
   entityType: AttributeEntityType;

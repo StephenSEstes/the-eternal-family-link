@@ -7,6 +7,7 @@ import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import type { AiStoryImportProposal } from "@/lib/ai/story-import-types";
 import {
   matchesCanonicalMediaFileId,
   toPersonMediaAttributes,
@@ -643,6 +644,12 @@ export function PersonEditModal({
   const [address, setAddress] = useState("");
   const [hobbies, setHobbies] = useState("");
   const [notes, setNotes] = useState("");
+  const [showStoryImportModal, setShowStoryImportModal] = useState(false);
+  const [storyImportText, setStoryImportText] = useState("");
+  const [storyImportBusy, setStoryImportBusy] = useState(false);
+  const [storyImportStatus, setStoryImportStatus] = useState("");
+  const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
+  const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
   const [parent1Id, setParent1Id] = useState("");
   const [parent2Id, setParent2Id] = useState("");
   const [spouseId, setSpouseId] = useState("");
@@ -780,6 +787,16 @@ export function PersonEditModal({
     }
     return { label: "Timeline", initialTypeKey: "life_event", initialTypeCategory: "", addTitle: "Add Event" };
   }, [attributeLaunchSource]);
+  const currentStoryImportDraft = useMemo(
+    () => storyImportDrafts[storyImportDraftIndex] ?? null,
+    [storyImportDraftIndex, storyImportDrafts],
+  );
+  const storyImportDraftTitle = useMemo(() => {
+    if (!currentStoryImportDraft) {
+      return attributeLaunchMeta.addTitle;
+    }
+    return `Review AI Draft ${storyImportDraftIndex + 1} of ${storyImportDrafts.length}`;
+  }, [attributeLaunchMeta.addTitle, currentStoryImportDraft, storyImportDraftIndex, storyImportDrafts.length]);
 
   useEffect(() => {
     setLocalPeople(people);
@@ -833,6 +850,68 @@ export function PersonEditModal({
     setAttributes(toPersonMediaAttributes(canonicalAttributes));
   };
 
+  const clearStoryImportQueue = () => {
+    setStoryImportDrafts([]);
+    setStoryImportDraftIndex(0);
+  };
+
+  const openStoryImportModal = () => {
+    setStoryImportText(notes.trim() || person?.notes || "");
+    setStoryImportStatus("");
+    setShowStoryImportModal(true);
+  };
+
+  const cancelStoryImportQueue = (message = "") => {
+    clearStoryImportQueue();
+    setShowAttributeAddModal(false);
+    setSelectedAboutAttributeId("");
+    if (message) {
+      setStatus(message);
+    }
+  };
+
+  const generateStoryImportDrafts = async () => {
+    if (!person?.personId) return;
+    const sourceText = storyImportText.trim();
+    if (!sourceText) {
+      setStoryImportStatus("Story text is required.");
+      return;
+    }
+
+    setStoryImportBusy(true);
+    setStoryImportStatus("Generating drafts...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/story-import`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceText }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStoryImportBusy(false);
+      setStoryImportStatus(String(body?.message || body?.error || `Story import failed (${res.status}).`).slice(0, 220));
+      return;
+    }
+
+    const proposals = Array.isArray(body?.proposals) ? (body.proposals as AiStoryImportProposal[]) : [];
+    setStoryImportBusy(false);
+    if (proposals.length === 0) {
+      setStoryImportStatus("AI did not find any supported attributes to propose from that story text.");
+      return;
+    }
+
+    setStoryImportStatus("");
+    setShowStoryImportModal(false);
+    setSelectedAboutAttributeId("");
+    setAttributeLaunchSource("stories");
+    setStoryImportDrafts(proposals);
+    setStoryImportDraftIndex(0);
+    setShowAttributeAddModal(true);
+    setStatus(`AI prepared ${proposals.length} attribute drafts. Review and save them one at a time.`);
+  };
+
   useEffect(() => {
     if (!open || !person) {
       setShowAttributeAddModal(false);
@@ -858,6 +937,10 @@ export function PersonEditModal({
     setAddress(person.address || "");
     setHobbies(person.hobbies || "");
     setNotes(person.notes || "");
+    setShowStoryImportModal(false);
+    setStoryImportText(person.notes || "");
+    setStoryImportStatus("");
+    clearStoryImportQueue();
     const initialParent1Id = parentSelection.motherId;
     const initialParent2Id = parentSelection.fatherId;
     setParent1Id(initialParent1Id);
@@ -2052,7 +2135,18 @@ export function PersonEditModal({
               </div>
 
               <div className="card field-span-2">
-                <h4 className="ui-section-title">Notes</h4>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.55rem" }}>
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Notes</h4>
+                  {canManage ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={openStoryImportModal}
+                    >
+                      Import Story with AI
+                    </button>
+                  ) : null}
+                </div>
                 <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
               </div>
             </div>
@@ -2285,20 +2379,44 @@ export function PersonEditModal({
             entityType="person"
             entityId={person.personId}
             entityLabel={displayName || person.displayName}
-            modalSubtitle={aboutLabel}
-            initialTypeKey={attributeLaunchMeta.initialTypeKey}
-            initialTypeCategory={attributeLaunchMeta.initialTypeCategory}
-            initialEditAttributeId={selectedAboutAttributeId}
+            modalSubtitle={currentStoryImportDraft ? `${aboutLabel} · AI Story Import` : aboutLabel}
+            initialTypeKey={currentStoryImportDraft?.attributeType || attributeLaunchMeta.initialTypeKey}
+            initialTypeCategory={currentStoryImportDraft?.attributeTypeCategory || attributeLaunchMeta.initialTypeCategory}
+            initialDraft={currentStoryImportDraft}
+            initialDraftKey={currentStoryImportDraft ? `${currentStoryImportDraft.proposalId}:${storyImportDraftIndex}` : ""}
+            initialEditAttributeId={currentStoryImportDraft ? "" : selectedAboutAttributeId}
             startInAddMode
-            addModalTitle={attributeLaunchMeta.addTitle}
-            launchSourceLabel={attributeLaunchMeta.label}
+            closeAfterAddSave={!currentStoryImportDraft}
+            addModalTitle={storyImportDraftTitle}
+            launchSourceLabel={currentStoryImportDraft ? "AI Story Import" : attributeLaunchMeta.label}
             onClose={() => {
+              if (currentStoryImportDraft) {
+                const remaining = storyImportDrafts.length - storyImportDraftIndex;
+                cancelStoryImportQueue(
+                  remaining > 1
+                    ? `AI story import stopped. ${remaining} proposals were not saved.`
+                    : "AI story import stopped. The current proposal was not saved.",
+                );
+                return;
+              }
               setShowAttributeAddModal(false);
               setSelectedAboutAttributeId("");
             }}
             onSaved={() => {
               void loadPersonAttributeState(person.personId);
               onSaved();
+              if (currentStoryImportDraft) {
+                const nextIndex = storyImportDraftIndex + 1;
+                if (nextIndex < storyImportDrafts.length) {
+                  setStoryImportDraftIndex(nextIndex);
+                  setStatus(`Saved AI draft ${storyImportDraftIndex + 1} of ${storyImportDrafts.length}. Review the next proposal.`);
+                  return;
+                }
+                clearStoryImportQueue();
+                setShowAttributeAddModal(false);
+                setSelectedAboutAttributeId("");
+                setStatus(`Saved all ${storyImportDrafts.length} AI-generated attribute drafts.`);
+              }
             }}
           />
         ) : null}
@@ -2556,6 +2674,60 @@ export function PersonEditModal({
                   className="button secondary tap-button"
                   disabled={creatingSpouse}
                   onClick={() => setShowAddSpouse(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showStoryImportModal ? (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 145, display: "grid", placeItems: "center", padding: "1rem" }}
+            onClick={() => {
+              if (!storyImportBusy) {
+                setShowStoryImportModal(false);
+                setStoryImportStatus("");
+              }
+            }}
+          >
+            <div
+              className="card"
+              style={{ width: "min(760px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h4 style={{ marginTop: 0 }}>Import Story with AI</h4>
+              <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
+                Paste a life story, vignette, or notes. AI will propose canonical attributes, events, and stories. Nothing is saved until you review each proposal.
+              </p>
+              <label className="label">Story Text</label>
+              <textarea
+                className="textarea"
+                value={storyImportText}
+                onChange={(event) => setStoryImportText(event.target.value)}
+                placeholder="Paste a life story, biography, or story excerpt here."
+                style={{ minHeight: "18rem" }}
+                disabled={storyImportBusy}
+              />
+              {storyImportStatus ? <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>{storyImportStatus}</p> : null}
+              <div className="settings-chip-list" style={{ marginTop: "0.9rem" }}>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  disabled={storyImportBusy}
+                  onClick={() => void generateStoryImportDrafts()}
+                >
+                  {storyImportBusy ? "Generating..." : "Generate Drafts"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={storyImportBusy}
+                  onClick={() => {
+                    setShowStoryImportModal(false);
+                    setStoryImportStatus("");
+                  }}
                 >
                   Cancel
                 </button>

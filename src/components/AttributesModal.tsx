@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import type { AttributeCategory, AttributeEntityType } from "@/lib/attributes/types";
+import type { AttributeCategory, AttributeDraftPrefill, AttributeEntityType } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import {
   defaultAttributeDefinitions,
@@ -234,8 +234,11 @@ export function AttributesModal({
   modalSubtitle = "Attributes",
   initialTypeKey,
   initialTypeCategory,
+  initialDraft = null,
+  initialDraftKey = "",
   initialEditAttributeId = "",
   startInAddMode = false,
+  closeAfterAddSave = true,
   addModalTitle = "Add Attribute",
   launchSourceLabel = "",
   onClose,
@@ -249,8 +252,11 @@ export function AttributesModal({
   modalSubtitle?: string;
   initialTypeKey?: string;
   initialTypeCategory?: string;
+  initialDraft?: AttributeDraftPrefill | null;
+  initialDraftKey?: string;
   initialEditAttributeId?: string;
   startInAddMode?: boolean;
+  closeAfterAddSave?: boolean;
   addModalTitle?: string;
   launchSourceLabel?: string;
   onClose: () => void;
@@ -440,6 +446,16 @@ export function AttributesModal({
   }, [initialEditAttributeId, items, open, startInAddMode]);
 
   useEffect(() => {
+    if (!open || !startInAddMode || !initialDraft) return;
+    resetEditor();
+    loadEditorFromDraft(initialDraft);
+    setAddModalOpen(true);
+    setDrawerEditMode(false);
+    setSelectedAttributeId("");
+    setStatus("");
+  }, [initialDraft, initialDraftKey, open, startInAddMode]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const readDebugMode = () => {
       const value = window.localStorage.getItem("efl_debug_mode");
@@ -526,6 +542,20 @@ export function AttributesModal({
     setNotes(getSafeAttributeValueText(item.attributeNotes || item.notes));
   };
 
+  const loadEditorFromDraft = (draft: AttributeDraftPrefill) => {
+    setEditingId("");
+    setCategory(draft.attributeKind);
+    setTypeKey(normalizeTypeKey(draft.attributeType));
+    setAttributeTypeCategory(getSafeAttributeValueText(draft.attributeTypeCategory));
+    setDateIsEstimated(Boolean(draft.dateIsEstimated));
+    setEstimatedTo((draft.estimatedTo as "" | "month" | "year") || "");
+    setLabel(getSafeAttributeValueText(draft.label));
+    setValueText(getSafeAttributeValueText(draft.attributeDetail));
+    setDateStart(getSafeAttributeValueText(draft.attributeDate));
+    setDateEnd(getSafeAttributeValueText(draft.endDate));
+    setNotes(getSafeAttributeValueText(draft.attributeNotes));
+  };
+
   const validateEditor = () => {
     const normalizedType = normalizeTypeKey(typeKey);
     if (!normalizedType) return "Type is required.";
@@ -591,13 +621,13 @@ export function AttributesModal({
       resetEditor();
       setSelectedAttributeId("");
       setDrawerEditMode(false);
-      if (startInAddMode) {
+      if (startInAddMode && closeAfterAddSave) {
         onClose();
       }
     } else if (savedFromAddModal) {
       setAddModalOpen(false);
       resetEditor();
-      if (startInAddMode) {
+      if (startInAddMode && closeAfterAddSave) {
         onClose();
       }
     }

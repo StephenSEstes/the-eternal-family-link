@@ -13,6 +13,35 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-10 (reviewed AI story import from person notes)
+
+- `Change`: Added `Import Story with AI` to the person Notes panel, plus a new tenant/person-scoped AI route that turns story text into canonical attribute drafts and opens each draft in the existing attribute modal for user review and save one at a time.
+- `Type`: UI | API
+- `Why`: The approved design change was to add AI-assisted story import without changing existing attribute save/retrieval flows. Root cause was that the app only had AI Help and no structured, review-first path to turn narrative text into canonical person attributes.
+- `Files`:
+  - `src/lib/ai/openai.ts`
+  - `src/lib/ai/story-import.ts`
+  - `src/lib/ai/story-import-types.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-import/route.ts`
+  - `src/lib/attributes/types.ts`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `README.md`
+  - `docs/deploy-runbook.md`
+- `Data Changes`: None. AI story import only generates drafts; approved saves still use the existing canonical attribute APIs and `Attributes` table.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit` passes.
+  - Person -> Notes shows `Import Story with AI`.
+  - Submitting story text produces zero or more proposed drafts without auto-saving data.
+  - Each proposed draft opens in the normal attribute modal and saves only after user approval.
+  - Closing the review sequence stops the remaining drafts without creating them.
+- `Rollback Notes`: Revert this change and redeploy.
+- `Design Decision Change`: Updated the AI decision so Help stays read-only while story import is allowed as a separate reviewed workflow.
+
 ## 2026-03-10 (person modal family switch route sync)
 
 - `Change`: Fixed the person modal Family switch so selecting a different family group performs a real app navigation instead of only updating modal-local state.

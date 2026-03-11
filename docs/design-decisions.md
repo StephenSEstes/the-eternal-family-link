@@ -124,12 +124,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Impact`: Added an `Invites` table, admin invite generation in Settings, a public `/invite/[token]` acceptance path, and invite-time access snapshots for consistent acceptance behavior. Local-capable invites now generate a temporary password at invite creation and include it in the copied share message.
 - `Follow-up`: If outbound email is added later, send the existing invite URL/message from the same invite records instead of creating a parallel mail-only workflow.
 
-- `Area`: AI product help
-- `Decision`: Use a server-side OpenAI-backed Help assistant that is grounded on a curated local product guide, exposed through a tenant-scoped API/page, and limited to answering how to use the current app. It does not write data or send outbound messages.
-- `Reason`: The app needs practical user guidance, but ungrounded model answers would invent screens or features and create support noise. A server-side grounded help flow keeps the API key off the client, constrains answers to current product behavior, and fits the existing tenant/session model.
-- `Alternatives Considered`: Static help pages only; client-side OpenAI calls; a broader AI agent that can modify data.
-- `Impact`: Added server-only OpenAI helpers, `/api/t/[tenantKey]/ai/help`, Help pages in root and tenant routes, Help navigation/home entry points, and optional OpenAI environment variables.
-- `Follow-up`: If interview-based data entry or AI email drafting is added later, keep those as separate reviewed workflows instead of expanding Help into a write-capable agent.
+- `Area`: AI product help and reviewed story import
+- `Decision`: Keep AI Help as a server-side OpenAI-backed assistant grounded on a curated local product guide and limited to usage questions. Separately, allow a reviewed AI story-import workflow from a person’s Notes panel that proposes canonical attribute drafts, one at a time, in the existing attribute modal. No AI path auto-saves data; the user must approve each proposal before it uses the normal save flow.
+- `Reason`: The app needs grounded usage help and also benefits from narrative-to-attribute extraction, but those are different risk levels. Help should stay non-mutating. Story import is acceptable only as a draft-generation workflow that preserves explicit user review and the existing canonical attribute write path.
+- `Alternatives Considered`: Static help pages only; client-side OpenAI calls; a broader AI agent that can modify or save family data automatically.
+- `Impact`: Keeps `/api/t/[tenantKey]/ai/help` read-only, adds a separate tenant/person-scoped AI story-import API and Notes-panel launch button, reuses `AttributesModal` for sequential proposal review, and adds optional `OPENAI_STORY_IMPORT_MODEL`.
+- `Follow-up`: If interview-based data entry or AI email drafting is added later, keep those as separate reviewed workflows too, and continue to require explicit human approval before any data write or outbound send.
 
 - `Area`: Household media modeling
 - `Decision`: Use `MediaAssets` + `MediaLinks` as the only household gallery model, while keeping `Households.wedding_photo_file_id` as the direct household avatar pointer.
