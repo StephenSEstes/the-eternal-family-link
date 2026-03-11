@@ -67,6 +67,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Disabled people page caching so People tab and Family Tree always read the latest person/household data and stay consistent after edits.
+- `Type`: UI | API
+- `Why`: People page used a 20s cache, so recent display-name changes in the tree could show differently in the People tab until the cache expired.
+- `Files`:
+  - `src/app/people/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Rename a person in the tree or People tab; reopening in either view shows the same updated display name immediately.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

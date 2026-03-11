@@ -7,7 +7,8 @@ import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/data/runtime";
 import { getOrLoadWithTtl } from "@/lib/server/route-cache";
 
-const PEOPLE_ROUTE_CACHE_TTL_MS = 20_000;
+// Disable caching so person edits reflect immediately across tree and people views.
+const PEOPLE_ROUTE_CACHE_TTL_MS = 0;
 
 async function loadPeoplePageBundle(tenantKey: string) {
   return getOrLoadWithTtl(`people_page_bundle:${tenantKey}`, PEOPLE_ROUTE_CACHE_TTL_MS, async () => {
