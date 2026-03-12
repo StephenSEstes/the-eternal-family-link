@@ -4,6 +4,7 @@ type GraphControlsProps = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
+  onClearFocus?: () => void;
 };
 
 function PlusIcon() {
@@ -30,9 +31,22 @@ function FitIcon() {
   );
 }
 
-export function GraphControls({ onZoomIn, onZoomOut, onFit }: GraphControlsProps) {
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+export function GraphControls({ onZoomIn, onZoomOut, onFit, onClearFocus }: GraphControlsProps) {
   return (
     <div className="tree-control-cluster">
+      {onClearFocus ? (
+        <button type="button" className="tree-control-btn" onClick={onClearFocus} aria-label="Clear focus mode">
+          <ClearIcon />
+        </button>
+      ) : null}
       <button type="button" className="tree-control-btn" onClick={onZoomIn} aria-label="Zoom in">
         <PlusIcon />
       </button>

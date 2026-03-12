@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (tree soft focus mode)
+
+- `Date`: 2026-03-12
+- `Change`: Added a soft-focus mode to Family Tree. Clicking a household or person now fades unrelated branches, keeps close relatives at full opacity, and animates the graph to center/magnify the selected family block with the selected household/person near the top. A focused person/household opens on the second click, and a new clear-focus control restores the full-tree view.
+- `Type`: UI
+- `Why`: Root cause was a `code gap`: the tree already had pan/zoom/selection primitives, but no focus-state model tying selection to transform, opacity, and neighborhood emphasis. Without that shared focus state, the graph could only show the full tree or open edit modals, not guide attention to one family block.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/components/familyTree/PersonNodeCard.tsx`
+  - `src/components/familyTree/GraphControls.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Click a household cluster once: unrelated branches fade, the household and its children become the visual focus, and the graph animates that block into the main viewport.
+  - Click a married person once: the graph focuses that person’s household and children rather than only the single node.
+  - Click the same person/household again: the existing person or household edit modal opens.
+  - Use the new clear-focus control to return to the full tree.
+- `Rollback Notes`: Revert the tree focus UI changes together; do not keep the new click-selection contract without the matching opacity/transform behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (divorce flow + one-parent households)
 
 - `Date`: 2026-03-12

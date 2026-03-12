@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-12: Added soft focus mode to Family Tree so clicking a household/person fades unrelated branches, auto-centers and magnifies the selected family block, and uses a second click to open the existing edit panel. See `docs/change-summary.md`.
 - 2026-03-12: Added direct-family `Div` spouse handling, broadened `Households` to valid one-parent/two-parent runtime behavior without a schema migration, preserved direct-member households on divorce, and renamed the Notes action to `Import Story with AI (testing)`. See `docs/change-summary.md`.
 
 

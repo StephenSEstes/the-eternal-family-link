@@ -837,6 +837,10 @@ main {
   z-index: 1;
 }
 
+.tree-map-layer.is-animating {
+  transition: transform 280ms ease;
+}
+
 .tree-lines {
   position: absolute;
   top: 0;
@@ -895,6 +899,14 @@ main {
 .tree-node-card-wrap {
   position: absolute;
   transform: translate(-50%, -50%);
+}
+
+.tree-node-card-wrap.tree-focus-selected {
+  z-index: 4;
+}
+
+.tree-node-card-wrap.tree-focus-related {
+  z-index: 3;
 }
 
 .tree-person-card {
@@ -976,6 +988,16 @@ main {
   vector-effect: non-scaling-stroke;
   cursor: pointer;
   pointer-events: all;
+}
+
+.tree-spouse-cluster.is-focused {
+  stroke: color-mix(in oklab, var(--accent) 82%, #ffffff 18%);
+  stroke-width: 2.4;
+  filter: drop-shadow(0 10px 18px color-mix(in oklab, var(--accent) 28%, transparent 72%));
+}
+
+.tree-family-label.is-focused {
+  fill: color-mix(in oklab, var(--accent) 88%, #1f2937 12%);
 }
 
 .tree-control-cluster {

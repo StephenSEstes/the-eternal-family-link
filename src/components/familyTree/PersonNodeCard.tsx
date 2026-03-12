@@ -5,6 +5,9 @@ type PersonNodeCardProps = {
   displayName: string;
   secondaryText?: string;
   avatarUrl: string;
+  isSelected?: boolean;
+  isDimmed?: boolean;
+  onSelectPerson: (personId: string) => void;
   onOpenPerson: (personId: string) => void;
 };
 
@@ -13,22 +16,37 @@ export function PersonNodeCard({
   displayName,
   secondaryText,
   avatarUrl,
+  isSelected = false,
+  isDimmed = false,
+  onSelectPerson,
   onOpenPerson,
 }: PersonNodeCardProps) {
   return (
     <div
       role="button"
       tabIndex={0}
-      className="tree-person-card"
+      className={`tree-person-card${isSelected ? " is-selected" : ""}${isDimmed ? " is-dimmed" : ""}`}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
-        onOpenPerson(personId);
+        if (isSelected) {
+          onOpenPerson(personId);
+          return;
+        }
+        onSelectPerson(personId);
       }}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
+        if (event.key === "Enter") {
           event.preventDefault();
-          onOpenPerson(personId);
+          if (isSelected) {
+            onOpenPerson(personId);
+            return;
+          }
+          onSelectPerson(personId);
+        }
+        if (event.key === " ") {
+          event.preventDefault();
+          onSelectPerson(personId);
         }
       }}
       aria-label={`Open ${displayName}`}

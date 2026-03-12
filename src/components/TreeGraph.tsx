@@ -49,6 +49,11 @@ type TreeGraphProps = {
   households?: HouseholdLink[];
 };
 
+type FocusTarget =
+  | { kind: "person"; personId: string }
+  | { kind: "household"; householdId: string }
+  | null;
+
 export function TreeGraph({
   tenantKey,
   canManage,
@@ -70,6 +75,7 @@ export function TreeGraph({
   const spousePairIds = new Set<string>();
   const spousePairMeta = new Map<string, { leftId: string; rightId: string; label: string }>();
   const householdMetaById = new Map<string, { householdId: string; memberIds: string[]; label: string }>();
+  const householdIdByMemberId = new Map<string, string>();
   const pairHouseholdIdByPairKey = new Map<string, string>();
   const parentEdges = edges.filter((edge) => edge.label.trim().toLowerCase() === "parent");
 
@@ -92,6 +98,7 @@ export function TreeGraph({
       return;
     }
     if (!rightId) {
+      householdIdByMemberId.set(leftId, unit.id);
       householdMetaById.set(unit.id, {
         householdId: unit.id,
         memberIds: [leftId],
@@ -101,6 +108,8 @@ export function TreeGraph({
     }
     partnerMap.set(leftId, rightId);
     partnerMap.set(rightId, leftId);
+    householdIdByMemberId.set(leftId, unit.id);
+    householdIdByMemberId.set(rightId, unit.id);
     const pairKey = [leftId, rightId].sort().join("::");
     spousePairIds.add(pairKey);
     spousePairMeta.set(pairKey, { leftId, rightId, label: unit.label?.trim() || unit.id?.trim() || "" });
@@ -177,6 +186,12 @@ export function TreeGraph({
     if (!parentHouseholdIdByChildId.has(connector.childId)) {
       parentHouseholdIdByChildId.set(connector.childId, connector.householdId);
     }
+  });
+  const childrenByHouseholdId = new Map<string, string[]>();
+  familyChildConnectors.forEach((connector) => {
+    const bucket = childrenByHouseholdId.get(connector.householdId) ?? [];
+    bucket.push(connector.childId);
+    childrenByHouseholdId.set(connector.householdId, bucket);
   });
 
   const levels = new Map<string, number>();
@@ -338,12 +353,6 @@ export function TreeGraph({
   });
 
   // Nudge child nodes to center beneath the midpoint of their parent household cluster.
-  const childrenByHouseholdId = new Map<string, string[]>();
-  for (const connector of familyChildConnectors) {
-    const bucket = childrenByHouseholdId.get(connector.householdId) ?? [];
-    bucket.push(connector.childId);
-    childrenByHouseholdId.set(connector.householdId, bucket);
-  }
   const desiredChildX = new Map<string, number>();
   childrenByHouseholdId.forEach((childIds, householdId) => {
     const household = householdMetaById.get(householdId);
@@ -600,10 +609,13 @@ export function TreeGraph({
     midpointX: number;
     midpointY: number;
   } | null>(null);
+  const animationTimeoutRef = useRef<number | null>(null);
 
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [animateViewport, setAnimateViewport] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
   const [editPersonId, setEditPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const scaleRef = useRef(scale);
@@ -616,6 +628,14 @@ export function TreeGraph({
   useEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current !== null) {
+        window.clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const toMonthDay = (value?: string) => {
     const raw = (value ?? "").trim();
@@ -739,6 +759,270 @@ export function TreeGraph({
     return memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
   }
 
+  function expandBounds(
+    current:
+      | {
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      }
+      | null,
+    next:
+      | {
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      }
+      | null,
+  ) {
+    if (!next) {
+      return current;
+    }
+    if (!current) {
+      return { ...next };
+    }
+    return {
+      minX: Math.min(current.minX, next.minX),
+      maxX: Math.max(current.maxX, next.maxX),
+      minY: Math.min(current.minY, next.minY),
+      maxY: Math.max(current.maxY, next.maxY),
+    };
+  }
+
+  function getPersonBounds(personId: string) {
+    const pos = positions.get(personId);
+    if (!pos) {
+      return null;
+    }
+    return {
+      minX: pos.x - NODE_HALF_WIDTH,
+      maxX: pos.x + NODE_HALF_WIDTH,
+      minY: pos.y - NODE_HALF_HEIGHT,
+      maxY: pos.y + NODE_HALF_HEIGHT,
+    };
+  }
+
+  function getHouseholdBounds(householdId: string) {
+    const household = householdMetaById.get(householdId);
+    if (!household) {
+      return null;
+    }
+    if (household.memberIds.length === 1) {
+      const personBounds = getPersonBounds(household.memberIds[0] ?? "");
+      if (!personBounds) {
+        return null;
+      }
+      return {
+        minX: personBounds.minX - 16,
+        maxX: personBounds.maxX + 16,
+        minY: personBounds.minY - 26,
+        maxY: personBounds.maxY + 26,
+      };
+    }
+    const [leftId, rightId] = household.memberIds;
+    const left = positions.get(leftId ?? "");
+    const right = positions.get(rightId ?? "");
+    if (!left || !right) {
+      return null;
+    }
+    const midX = (left.x + right.x) / 2;
+    const midY = (left.y + right.y) / 2;
+    const distance = Math.hypot(left.x - right.x, left.y - right.y);
+    const halfWidth = Math.max(96, distance / 2 + NODE_HALF_WIDTH + 12);
+    const halfHeight = NODE_HALF_HEIGHT + 26;
+    return {
+      minX: midX - halfWidth,
+      maxX: midX + halfWidth,
+      minY: midY - halfHeight,
+      maxY: midY + halfHeight,
+    };
+  }
+
+  const focusContext = (() => {
+    if (!focusTarget) {
+      return null;
+    }
+
+    const emphasizedPersonIds = new Set<string>();
+    const emphasizedHouseholdIds = new Set<string>();
+    const selectedPersonIds = new Set<string>();
+    const selectedHouseholdIds = new Set<string>();
+    let bounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+    let alignTopY = 0;
+
+    const addPerson = (personId: string, includeInBounds = false) => {
+      const normalizedPersonId = personId.trim();
+      if (!normalizedPersonId) {
+        return;
+      }
+      emphasizedPersonIds.add(normalizedPersonId);
+      if (includeInBounds) {
+        bounds = expandBounds(bounds, getPersonBounds(normalizedPersonId));
+      }
+    };
+
+    const addHousehold = (householdId: string, includeInBounds = false) => {
+      const normalizedHouseholdId = householdId.trim();
+      if (!normalizedHouseholdId) {
+        return;
+      }
+      emphasizedHouseholdIds.add(normalizedHouseholdId);
+      householdMetaById.get(normalizedHouseholdId)?.memberIds.forEach((personId) => addPerson(personId));
+      if (includeInBounds) {
+        bounds = expandBounds(bounds, getHouseholdBounds(normalizedHouseholdId));
+      }
+    };
+
+    const populateHouseholdFocus = (rootHouseholdId: string, highlightedPersonId = "") => {
+      const rootBounds = getHouseholdBounds(rootHouseholdId);
+      if (!rootBounds) {
+        return false;
+      }
+      alignTopY = rootBounds.minY;
+      addHousehold(rootHouseholdId, true);
+      selectedHouseholdIds.add(rootHouseholdId);
+
+      const rootMembers = householdMetaById.get(rootHouseholdId)?.memberIds ?? [];
+      if (highlightedPersonId) {
+        selectedPersonIds.add(highlightedPersonId);
+      } else {
+        rootMembers.forEach((personId) => selectedPersonIds.add(personId));
+      }
+
+      rootMembers.forEach((personId) => {
+        const parentHouseholdId = parentHouseholdIdByChildId.get(personId) ?? "";
+        if (parentHouseholdId) {
+          addHousehold(parentHouseholdId);
+          return;
+        }
+        Array.from(parentIdsByChild.get(personId) ?? []).forEach((parentId) => addPerson(parentId));
+      });
+
+      const childIds = childrenByHouseholdId.get(rootHouseholdId) ?? [];
+      childIds.forEach((childId) => {
+        addPerson(childId);
+        const childHouseholdId = householdIdByMemberId.get(childId) ?? "";
+        if (childHouseholdId && childHouseholdId !== rootHouseholdId) {
+          addHousehold(childHouseholdId, true);
+          return;
+        }
+        addPerson(childId, true);
+      });
+
+      return true;
+    };
+
+    if (focusTarget.kind === "household") {
+      if (!populateHouseholdFocus(focusTarget.householdId)) {
+        return null;
+      }
+    } else {
+      const selectedPersonId = focusTarget.personId;
+      const personHouseholdId = householdIdByMemberId.get(selectedPersonId) ?? "";
+      if (personHouseholdId) {
+        if (!populateHouseholdFocus(personHouseholdId, selectedPersonId)) {
+          return null;
+        }
+      } else {
+        const rootPersonBounds = getPersonBounds(selectedPersonId);
+        if (!rootPersonBounds) {
+          return null;
+        }
+        alignTopY = rootPersonBounds.minY;
+        addPerson(selectedPersonId, true);
+        selectedPersonIds.add(selectedPersonId);
+
+        const parentHouseholdId = parentHouseholdIdByChildId.get(selectedPersonId) ?? "";
+        if (parentHouseholdId) {
+          addHousehold(parentHouseholdId);
+        } else {
+          Array.from(parentIdsByChild.get(selectedPersonId) ?? []).forEach((parentId) => addPerson(parentId));
+        }
+
+        const spouseId = partnerMap.get(selectedPersonId) ?? "";
+        if (spouseId) {
+          addPerson(spouseId);
+          const spouseHouseholdId = householdIdByMemberId.get(spouseId) ?? "";
+          if (spouseHouseholdId) {
+            addHousehold(spouseHouseholdId);
+          }
+        }
+
+        const childIds = Array.from(childIdsByParent.get(selectedPersonId) ?? []);
+        childIds.forEach((childId) => {
+          addPerson(childId);
+          const childHouseholdId = householdIdByMemberId.get(childId) ?? "";
+          if (childHouseholdId) {
+            addHousehold(childHouseholdId, true);
+            return;
+          }
+          addPerson(childId, true);
+        });
+      }
+    }
+
+    if (!bounds) {
+      if (focusTarget.kind === "household") {
+        bounds = getHouseholdBounds(focusTarget.householdId);
+      } else {
+        bounds = getPersonBounds(focusTarget.personId);
+      }
+    }
+    if (!bounds) {
+      return null;
+    }
+
+    const emphasizedEdgeIds = new Set<string>();
+    edges.forEach((edge) => {
+      const relationshipType = edge.label.trim().toLowerCase();
+      if (relationshipType === "family") {
+        const pairKey = [edge.fromPersonId, edge.toPersonId].sort().join("::");
+        const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
+        if (
+          (householdId && emphasizedHouseholdIds.has(householdId)) ||
+          (emphasizedPersonIds.has(edge.fromPersonId) && emphasizedPersonIds.has(edge.toPersonId))
+        ) {
+          emphasizedEdgeIds.add(edge.id);
+        }
+        return;
+      }
+      if (emphasizedPersonIds.has(edge.fromPersonId) && emphasizedPersonIds.has(edge.toPersonId)) {
+        emphasizedEdgeIds.add(edge.id);
+      }
+    });
+
+    const emphasizedConnectorKeys = new Set(
+      familyChildConnectors
+        .filter(
+          (connector) =>
+            emphasizedHouseholdIds.has(connector.householdId) && emphasizedPersonIds.has(connector.childId),
+        )
+        .map((connector) => `${connector.householdId}::${connector.childId}`),
+    );
+
+    return {
+      emphasizedPersonIds,
+      emphasizedHouseholdIds,
+      selectedPersonIds,
+      selectedHouseholdIds,
+      emphasizedEdgeIds,
+      emphasizedConnectorKeys,
+      bounds,
+      alignTopY,
+    };
+  })();
+  const focusBounds = focusContext?.bounds ?? null;
+  const focusAlignTopY = focusContext?.alignTopY ?? 0;
+  const focusMinX = focusBounds?.minX ?? Number.NaN;
+  const focusMaxX = focusBounds?.maxX ?? Number.NaN;
+  const focusMinY = focusBounds?.minY ?? Number.NaN;
+  const focusMaxY = focusBounds?.maxY ?? Number.NaN;
+  const focusTargetKind = focusTarget?.kind ?? "";
+  const focusedPersonId = focusTarget?.kind === "person" ? focusTarget.personId : "";
+  const focusedHouseholdId = focusTarget?.kind === "household" ? focusTarget.householdId : "";
+
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
 
@@ -749,6 +1033,36 @@ export function TreeGraph({
 
   const clampScale = useCallback((value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)), []);
 
+  const stopViewportAnimation = useCallback(() => {
+    if (animationTimeoutRef.current !== null) {
+      window.clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
+    setAnimateViewport(false);
+  }, []);
+
+  const applyViewport = useCallback(
+    (nextScale: number, nextOffset: { x: number; y: number }, animate = false) => {
+      scaleRef.current = nextScale;
+      offsetRef.current = nextOffset;
+      setScale(nextScale);
+      setOffset(nextOffset);
+      if (!animate) {
+        stopViewportAnimation();
+        return;
+      }
+      setAnimateViewport(true);
+      if (animationTimeoutRef.current !== null) {
+        window.clearTimeout(animationTimeoutRef.current);
+      }
+      animationTimeoutRef.current = window.setTimeout(() => {
+        setAnimateViewport(false);
+        animationTimeoutRef.current = null;
+      }, 320);
+    },
+    [stopViewportAnimation],
+  );
+
   const fitToView = useCallback(() => {
     const el = viewportRef.current;
     if (!el) {
@@ -758,13 +1072,50 @@ export function TreeGraph({
     const fitScale = clampScale(Math.min(rect.width / canvasWidth, rect.height / canvasHeight) * 0.94);
     const nextX = (rect.width - canvasWidth * fitScale) / 2;
     const nextY = (rect.height - canvasHeight * fitScale) / 2;
-    setScale(fitScale);
-    setOffset({ x: nextX, y: nextY });
-  }, [canvasHeight, canvasWidth, clampScale]);
+    applyViewport(fitScale, { x: nextX, y: nextY }, true);
+  }, [applyViewport, canvasHeight, canvasWidth, clampScale]);
+
+  const focusToBounds = useCallback(
+    (bounds: { minX: number; maxX: number; minY: number; maxY: number }, alignTopY: number) => {
+      const el = viewportRef.current;
+      if (!el) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const sidePadding = Math.min(96, rect.width * 0.1);
+      const topPadding = Math.min(108, rect.height * 0.16);
+      const bottomPadding = Math.min(54, rect.height * 0.08);
+      const focusWidth = Math.max(bounds.maxX - bounds.minX, NODE_CARD_WIDTH * 2);
+      const focusHeight = Math.max(bounds.maxY - bounds.minY, NODE_HALF_HEIGHT * 3);
+      const availableWidth = Math.max(140, rect.width - sidePadding * 2);
+      const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding);
+      const nextScale = clampScale(Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98);
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const nextX = rect.width / 2 - centerX * nextScale;
+      const nextY = topPadding - alignTopY * nextScale;
+      applyViewport(nextScale, { x: nextX, y: nextY }, true);
+    },
+    [applyViewport, clampScale],
+  );
 
   useEffect(() => {
+    if (Number.isFinite(focusMinX) && Number.isFinite(focusMaxX) && Number.isFinite(focusMinY) && Number.isFinite(focusMaxY)) {
+      focusToBounds({ minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY }, focusAlignTopY);
+      return;
+    }
     fitToView();
-  }, [fitToView]);
+  }, [
+    fitToView,
+    focusAlignTopY,
+    focusMaxX,
+    focusMaxY,
+    focusMinX,
+    focusMinY,
+    focusedHouseholdId,
+    focusedPersonId,
+    focusTargetKind,
+    focusToBounds,
+  ]);
 
   useEffect(() => {
     const target = viewportRef.current;
@@ -777,6 +1128,10 @@ export function TreeGraph({
         window.cancelAnimationFrame(frame);
       }
       frame = window.requestAnimationFrame(() => {
+        if (Number.isFinite(focusMinX) && Number.isFinite(focusMaxX) && Number.isFinite(focusMinY) && Number.isFinite(focusMaxY)) {
+          focusToBounds({ minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY }, focusAlignTopY);
+          return;
+        }
         fitToView();
       });
     });
@@ -787,7 +1142,18 @@ export function TreeGraph({
       }
       observer.disconnect();
     };
-  }, [fitToView]);
+  }, [
+    fitToView,
+    focusAlignTopY,
+    focusMaxX,
+    focusMaxY,
+    focusMinX,
+    focusMinY,
+    focusedHouseholdId,
+    focusedPersonId,
+    focusTargetKind,
+    focusToBounds,
+  ]);
 
   const zoomAtPoint = useCallback(
     (clientX: number, clientY: number, factor: number) => {
@@ -805,13 +1171,16 @@ export function TreeGraph({
       const pointY = clientY - rect.top;
       const worldX = (pointX - offset.x) / scale;
       const worldY = (pointY - offset.y) / scale;
-      setScale(nextScale);
-      setOffset({
-        x: pointX - worldX * nextScale,
-        y: pointY - worldY * nextScale,
-      });
+      applyViewport(
+        nextScale,
+        {
+          x: pointX - worldX * nextScale,
+          y: pointY - worldY * nextScale,
+        },
+        false,
+      );
     },
-    [clampScale, offset.x, offset.y, scale],
+    [applyViewport, clampScale, offset.x, offset.y, scale],
   );
 
   const zoomFromCenter = useCallback(
@@ -908,6 +1277,64 @@ export function TreeGraph({
     return lines;
   };
 
+  const clearFocus = useCallback(() => {
+    setFocusTarget(null);
+    fitToView();
+  }, [fitToView]);
+
+  const openHouseholdEditor = useCallback((householdId: string) => {
+    if (!householdId) {
+      return;
+    }
+    setFocusTarget({ kind: "household", householdId });
+    setSelectedHouseholdId(householdId);
+  }, []);
+
+  const handleHouseholdSelect = useCallback(
+    (householdId: string) => {
+      if (!householdId) {
+        return;
+      }
+      const isSelected = focusTarget?.kind === "household" && focusTarget.householdId === householdId;
+      if (isSelected && canManage) {
+        openHouseholdEditor(householdId);
+        return;
+      }
+      setFocusTarget({ kind: "household", householdId });
+    },
+    [canManage, focusTarget, openHouseholdEditor],
+  );
+
+  const handlePersonSelect = useCallback(
+    (personId: string) => {
+      if (!personId) {
+        return;
+      }
+      const isSelected = focusTarget?.kind === "person" && focusTarget.personId === personId;
+      if (isSelected) {
+        setEditPersonId(personId);
+        return;
+      }
+      setFocusTarget({ kind: "person", personId });
+    },
+    [focusTarget],
+  );
+
+  const isDimmedPerson = (personId: string) =>
+    Boolean(focusContext) && !focusContext?.emphasizedPersonIds.has(personId);
+  const isSelectedPerson = (personId: string) =>
+    Boolean(focusContext?.selectedPersonIds.has(personId));
+  const isRelatedPerson = (personId: string) =>
+    Boolean(focusContext?.emphasizedPersonIds.has(personId)) && !isSelectedPerson(personId);
+  const isDimmedHousehold = (householdId: string) =>
+    Boolean(focusContext) && !focusContext?.emphasizedHouseholdIds.has(householdId);
+  const isSelectedHousehold = (householdId: string) =>
+    Boolean(focusContext?.selectedHouseholdIds.has(householdId));
+  const isDimmedEdge = (edgeId: string) =>
+    Boolean(focusContext) && !focusContext?.emphasizedEdgeIds.has(edgeId);
+  const isDimmedConnector = (householdId: string, childId: string) =>
+    Boolean(focusContext) && !focusContext?.emphasizedConnectorKeys.has(`${householdId}::${childId}`);
+
   return (
     <div
       ref={viewportRef}
@@ -916,6 +1343,7 @@ export function TreeGraph({
         if (event.pointerType !== "touch" && event.button !== 0) {
           return;
         }
+        stopViewportAnimation();
         if (event.pointerType === "touch") {
           touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -1013,7 +1441,7 @@ export function TreeGraph({
     >
       <div className="tree-cloud-overlay" />
       <div
-        className="tree-map-layer"
+        className={`tree-map-layer${animateViewport ? " is-animating" : ""}`}
         style={{
           width: `${canvasWidth}px`,
           height: `${canvasHeight}px`,
@@ -1045,8 +1473,16 @@ export function TreeGraph({
           const halfHeight = NODE_HALF_HEIGHT + 26;
           const labelLines = label ? wrapHouseholdLabel(label) : [];
 
+          const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
+          const dimmed = householdId ? isDimmedHousehold(householdId) : Boolean(focusContext);
+          const selected = householdId ? isSelectedHousehold(householdId) : false;
+
           return (
-            <g key={`cluster-${pairKey}`} className="tree-household-group">
+            <g
+              key={`cluster-${pairKey}`}
+              className={`tree-household-group${selected ? " is-selected" : ""}`}
+              style={{ opacity: dimmed ? 0.15 : 1 }}
+            >
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
               <rect
                 x={midX - halfWidth}
@@ -1055,21 +1491,14 @@ export function TreeGraph({
                 height={halfHeight * 2}
                 rx={22}
                 ry={22}
-                className="tree-spouse-cluster"
+                className={`tree-spouse-cluster${selected ? " is-focused" : ""}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (!canManage) {
-                    return;
-                  }
-                  const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
-                  const unit = households.find((item) => item.id === householdId);
-                  if (unit) {
-                    setSelectedHouseholdId(unit.id);
-                  }
+                  handleHouseholdSelect(householdId);
                 }}
               />
               {labelLines.length > 0 ? (
-                <text x={midX} y={midY - halfHeight + 14} className="tree-family-label">
+                <text x={midX} y={midY - halfHeight + 14} className={`tree-family-label${selected ? " is-focused" : ""}`}>
                   {labelLines.map((line, index) => (
                     <tspan key={`${pairKey}-label-${index}`} x={midX} dy={index === 0 ? 0 : 12}>
                       {line}
@@ -1086,11 +1515,7 @@ export function TreeGraph({
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
-                    const unit = households.find((item) => item.id === householdId);
-                    if (unit) {
-                      setSelectedHouseholdId(unit.id);
-                    }
+                    openHouseholdEditor(householdId);
                   }}
                 />
               ) : null}
@@ -1108,8 +1533,14 @@ export function TreeGraph({
             const halfWidth = NODE_HALF_WIDTH + 16;
             const halfHeight = NODE_HALF_HEIGHT + 26;
             const labelLines = household.label ? wrapHouseholdLabel(household.label) : [];
+            const dimmed = isDimmedHousehold(household.householdId);
+            const selected = isSelectedHousehold(household.householdId);
             return (
-              <g key={`cluster-single-${household.householdId}`} className="tree-household-group">
+              <g
+                key={`cluster-single-${household.householdId}`}
+                className={`tree-household-group${selected ? " is-selected" : ""}`}
+                style={{ opacity: dimmed ? 0.15 : 1 }}
+              >
                 <rect
                   x={pos.x - halfWidth}
                   y={pos.y - halfHeight}
@@ -1117,17 +1548,14 @@ export function TreeGraph({
                   height={halfHeight * 2}
                   rx={22}
                   ry={22}
-                  className="tree-spouse-cluster"
+                  className={`tree-spouse-cluster${selected ? " is-focused" : ""}`}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (!canManage) {
-                      return;
-                    }
-                    setSelectedHouseholdId(household.householdId);
+                    handleHouseholdSelect(household.householdId);
                   }}
                 />
                 {labelLines.length > 0 ? (
-                  <text x={pos.x} y={pos.y - halfHeight + 14} className="tree-family-label">
+                  <text x={pos.x} y={pos.y - halfHeight + 14} className={`tree-family-label${selected ? " is-focused" : ""}`}>
                     {labelLines.map((line, index) => (
                       <tspan key={`${household.householdId}-label-${index}`} x={pos.x} dy={index === 0 ? 0 : 12}>
                         {line}
@@ -1144,7 +1572,7 @@ export function TreeGraph({
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
-                      setSelectedHouseholdId(household.householdId);
+                      openHouseholdEditor(household.householdId);
                     }}
                   />
                 ) : null}
@@ -1164,8 +1592,9 @@ export function TreeGraph({
           const midY = (from.y + to.y) / 2;
           const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
           const isParentEdge = edge.label.trim().toLowerCase() === "parent";
+          const dimmed = isDimmedEdge(edge.id);
           return (
-            <g key={edge.id}>
+            <g key={edge.id} style={{ opacity: dimmed ? 0.15 : 1 }}>
               <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
               {!isFamilyEdge && !isParentEdge ? (
                 <text x={midX} y={midY} className="tree-line-label">
@@ -1191,6 +1620,7 @@ export function TreeGraph({
           const midY = memberPositions.reduce((sum, pos) => sum + pos.y, 0) / memberPositions.length;
           const startY = midY + NODE_HALF_HEIGHT + 16;
           const endY = child.y - NODE_HALF_HEIGHT;
+          const dimmed = isDimmedConnector(connector.householdId, connector.childId);
           return (
             <line
               key={`family-child-${connector.householdId}-${connector.childId}`}
@@ -1199,6 +1629,7 @@ export function TreeGraph({
               x2={child.x}
               y2={endY}
               className="tree-line"
+              style={{ opacity: dimmed ? 0.15 : 1 }}
             />
           );
         })}
@@ -1214,21 +1645,31 @@ export function TreeGraph({
         return (
           <div
             key={node.personId}
-            className="tree-node-card-wrap"
-            style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+            className={`tree-node-card-wrap${isSelectedPerson(node.personId) ? " tree-focus-selected" : ""}${isRelatedPerson(node.personId) ? " tree-focus-related" : ""}`}
+            style={{ left: `${pos.x}px`, top: `${pos.y}px`, opacity: isDimmedPerson(node.personId) ? 0.16 : 1 }}
           >
             <PersonNodeCard
               personId={node.personId}
               displayName={firstNameOnly}
               secondaryText={secondaryText}
               avatarUrl={getAvatarUrl(node)}
-              onOpenPerson={(personId) => setEditPersonId(personId)}
+              isSelected={isSelectedPerson(node.personId)}
+              onSelectPerson={handlePersonSelect}
+              onOpenPerson={(personId) => {
+                setFocusTarget({ kind: "person", personId });
+                setEditPersonId(personId);
+              }}
             />
           </div>
         );
       })}
       </div>
-      <GraphControls onZoomIn={() => zoomFromCenter(1.15)} onZoomOut={() => zoomFromCenter(0.87)} onFit={fitToView} />
+      <GraphControls
+        onZoomIn={() => zoomFromCenter(1.15)}
+        onZoomOut={() => zoomFromCenter(0.87)}
+        onFit={fitToView}
+        onClearFocus={focusTarget ? clearFocus : undefined}
+      />
       <PersonEditModal
         open={Boolean(editPerson)}
         tenantKey={tenantKey}
@@ -1240,7 +1681,7 @@ export function TreeGraph({
         households={households}
         onClose={() => setEditPersonId("")}
         onSaved={() => router.refresh()}
-        onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
+        onEditHousehold={(householdId) => openHouseholdEditor(householdId)}
       />
       <HouseholdEditModal
         open={Boolean(selectedHouseholdId)}
