@@ -1734,6 +1734,7 @@ export function SettingsClient({
     () => (selectedDirectoryPersonId ? localUsers.filter((item) => item.personId === selectedDirectoryPersonId) : []),
     [selectedDirectoryPersonId, localUsers],
   );
+  const selectedInviteLocalUser = selectedPersonLocalUsers.find((item) => item.username.trim()) ?? null;
   const selectedDirectoryPerson = useMemo(
     () => familyPeople.find((item) => item.personId === selectedDirectoryPersonId) ?? null,
     [familyPeople, selectedDirectoryPersonId],
@@ -2476,9 +2477,16 @@ export function SettingsClient({
                           Create one shareable invite for {selectedDirectoryPerson.displayName}. The link can handle Google sign-in, local sign-in, or both, depending on the mode you choose.
                         </p>
                         {inviteAuthMode !== "google" ? (
-                          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                            Local-capable invites now generate a username and temporary password and include them in the suggested message below.
-                          </p>
+                          <>
+                            <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                              Local-capable invites now generate a username and temporary password and include them in the suggested message below.
+                            </p>
+                            {selectedInviteLocalUser ? (
+                              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                                This person already has local sign-in. Re-inviting will reuse the current username below and generate a fresh temporary password. If you need a different username, change it on the Manage tab first.
+                              </p>
+                            ) : null}
+                          </>
                         ) : null}
                         <label className="label">Invite Email</label>
                         <input
@@ -2507,13 +2515,14 @@ export function SettingsClient({
                           <option value="ADMIN">ADMIN</option>
                         </select>
 
-                        <label className="label">Suggested Local Username</label>
+                        <label className="label">{selectedInviteLocalUser ? "Current Local Username" : "Suggested Local Username"}</label>
                         <input
                           className="input"
                           autoComplete="off"
                           value={inviteLocalUsername}
                           onChange={(e) => setInviteLocalUsername(e.target.value)}
-                          placeholder="optional username suggestion"
+                          placeholder={selectedInviteLocalUser ? "" : "optional username suggestion"}
+                          readOnly={Boolean(selectedInviteLocalUser)}
                         />
 
                         <label className="label">Expires In Days</label>
@@ -2534,6 +2543,7 @@ export function SettingsClient({
                             Create and Send Email
                           </button>
                         </div>
+                        {inviteStatus ? <p style={{ marginTop: "0.75rem" }}>{inviteStatus}</p> : null}
 
                         {inviteResult ? (
                           <div className="card" style={{ marginTop: "0.75rem" }}>
@@ -2812,7 +2822,6 @@ export function SettingsClient({
         {auditStatusMessage ? <p>{auditStatusMessage}</p> : null}
         {policyStatus ? <p>{policyStatus}</p> : null}
         {localUserStatus ? <p>{localUserStatus}</p> : null}
-        {inviteStatus ? <p>{inviteStatus}</p> : null}
         </section>
       ) : null}
 

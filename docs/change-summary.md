@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (allow same-person local re-invites + move invite status into modal)
+
+- `Date`: 2026-03-12
+- `Change`: Allowed Admin -> Manage User -> Invite to create/send a fresh invite for a person who already has local sign-in by reusing that existing local username instead of treating it as a conflict, and moved invite status/error messaging into the active invite panel so failures are visible where the action happens.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. The invite creation path called `ensureLocalUsernameAvailable(...)`, and that helper threw even when the matching local username already belonged to the same person, so admins could not resend local-capable invites to existing local users like Catherine Peterson. Separately, the invite flow wrote status to `inviteStatus`, but that status only rendered on the underlying Settings page, which made handled errors appear behind the active Manage User modal.
+- `Files`:
+  - `src/lib/invite/store.ts`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In `Admin -> Users & Access -> Manage User -> Invite`, creating or sending an invite for Catherine Peterson no longer fails with `This person already has local sign-in...`.
+  - The invite reuses Catherine's current local username instead of renaming it from the invite screen.
+  - Invite failures/status updates now render inside the active Invite tab instead of only on the page behind the modal.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the invite local-username resolution change and the invite-tab status rendering together; otherwise the server/UI behavior will diverge again.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (fix local-user lookup predicate + ignore local access aliases for Google access)
 
 - `Date`: 2026-03-12

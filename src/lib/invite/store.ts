@@ -347,18 +347,40 @@ async function provisionLocalMemberships(invite: InviteRecord, localEmail: strin
   }
 }
 
-async function ensureLocalUsernameAvailable(invite: InviteRecord, username: string) {
-  for (const family of invite.familyGroups) {
-    const localUsers = await getLocalUsers(family.tenantKey);
-    const conflict = localUsers.find((user) => user.username === username && user.personId !== invite.personId);
-    if (conflict) {
-      throw new Error(`Username "${username}" is already used in ${family.tenantName}.`);
-    }
-    const existing = localUsers.find((user) => user.username === username && user.personId === invite.personId);
+async function resolveInviteLocalUsername(
+  personId: string,
+  familyGroups: InviteFamilyGroupGrant[],
+  preferredUsername: string,
+) {
+  const familyLocalUsers = await Promise.all(
+    familyGroups.map(async (family) => ({
+      family,
+      localUsers: await getLocalUsers(family.tenantKey),
+    })),
+  );
+
+  let existingUsername = "";
+  for (const { localUsers } of familyLocalUsers) {
+    const existing = localUsers.find((user) => user.personId === personId && user.username.trim());
     if (existing) {
-      throw new Error(`This person already has local sign-in as "${username}". Use Manage User to reset the password instead of creating a new local invite.`);
+      existingUsername = existing.username;
+      break;
     }
   }
+
+  const resolvedUsername = existingUsername || preferredUsername;
+  if (!resolvedUsername) {
+    throw new Error("Local sign-in requires a username.");
+  }
+
+  for (const { family, localUsers } of familyLocalUsers) {
+    const conflict = localUsers.find((user) => user.username === resolvedUsername && user.personId !== personId);
+    if (conflict) {
+      throw new Error(`Username "${resolvedUsername}" is already used in ${family.tenantName}.`);
+    }
+  }
+
+  return resolvedUsername;
 }
 
 async function updateInviteRecord(
@@ -438,9 +460,13 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
   const tokenHash = hashInviteToken(token);
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + Math.max(1, input.expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
-  const localUsername = normalizeUsername(input.localUsername ?? "") || suggestLocalUsername(person);
+  const requestedLocalUsername = normalizeUsername(input.localUsername ?? "") || suggestLocalUsername(person);
   const localTemporaryPassword =
     input.authMode !== "google" ? await buildTemporaryInvitePassword(familyGroups[0]?.tenantKey ?? input.sourceTenantKey) : "";
+  const localUsername =
+    input.authMode !== "google"
+      ? await resolveInviteLocalUsername(input.personId, familyGroups, requestedLocalUsername)
+      : requestedLocalUsername;
 
   const record: InviteRecord = {
     inviteId,
@@ -461,10 +487,6 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
     createdByEmail: normalizeEmail(input.createdByEmail),
     createdByPersonId: input.createdByPersonId.trim(),
   };
-
-  if (record.authMode !== "google") {
-    await ensureLocalUsernameAvailable(record, record.localUsername);
-  }
 
   await createTableRecord("Invites", {
     invite_id: record.inviteId,
