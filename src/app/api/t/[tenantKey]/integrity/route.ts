@@ -150,6 +150,28 @@ function scoreUserAccessRow(data: Record<string, string>) {
   return score;
 }
 
+function isTempEmailLike(value: string) {
+  return /@temp\.org$/i.test(value.trim());
+}
+
+function scoreUserFamilyGroupRow(
+  data: Record<string, string>,
+  preferredEmail: string,
+  personId: string,
+) {
+  const userEmail = readField(data, "user_email").toLowerCase();
+  let score = 0;
+  if (userEmail) score += 1;
+  if (parseBool(readField(data, "is_enabled"))) score += 2;
+  if (readField(data, "family_group_name")) score += 1;
+  if (normalize(readField(data, "role")) === "admin") score += 1;
+  if (preferredEmail && userEmail === preferredEmail) score += 8;
+  if (!preferredEmail && userEmail === `${personId}@local`) score += 8;
+  if (userEmail && !isTempEmailLike(userEmail)) score += 2;
+  if (isTempEmailLike(userEmail)) score -= 4;
+  return score;
+}
+
 async function deleteRowsByNumber(tableName: string, rowNumbers: number[]) {
   if (rowNumbers.length === 0) {
     return 0;
@@ -1108,6 +1130,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
 
   let deletedDuplicateUserAccessRows = 0;
   let deletedOrphanUserFamilyGroupRows = 0;
+  let deletedDuplicateUserFamilyGroupRows = 0;
   const duplicateUserAccessRowNumbers: number[] = [];
   for (const rows of before.userAccessByPerson.values()) {
     if (rows.length <= 1) {
@@ -1136,6 +1159,31 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     .map((row) => row.rowNumber);
   if (orphanUserFamilyGroupRowNumbers.length > 0) {
     deletedOrphanUserFamilyGroupRows = await deleteRowsByNumber("UserFamilyGroups", orphanUserFamilyGroupRowNumbers);
+  }
+
+  const duplicateUserFamilyGroupRowNumbers: number[] = [];
+  for (const [personId, rows] of before.linkByPerson.entries()) {
+    if (rows.length <= 1) {
+      continue;
+    }
+    const preferredAccess =
+      [...(before.userAccessByPerson.get(personId) ?? [])].sort(
+        (a, b) => scoreUserAccessRow(b.data) - scoreUserAccessRow(a.data),
+      )[0] ?? null;
+    const preferredEmail = readField(preferredAccess?.data ?? {}, "user_email").toLowerCase();
+    const ranked = [...rows].sort((a, b) => {
+      const scoreA = scoreUserFamilyGroupRow(a.data, preferredEmail, personId);
+      const scoreB = scoreUserFamilyGroupRow(b.data, preferredEmail, personId);
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+      return a.rowNumber - b.rowNumber;
+    });
+    const [, ...duplicates] = ranked;
+    duplicateUserFamilyGroupRowNumbers.push(...duplicates.map((row) => row.rowNumber));
+  }
+  if (duplicateUserFamilyGroupRowNumbers.length > 0) {
+    deletedDuplicateUserFamilyGroupRows = await deleteRowsByNumber("UserFamilyGroups", duplicateUserFamilyGroupRowNumbers);
   }
 
   let createdMissingLinks = 0;
@@ -1342,6 +1390,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
     repaired: {
       deletedDuplicateUserAccessRows,
       deletedOrphanUserFamilyGroupRows,
+      deletedDuplicateUserFamilyGroupRows,
       createdMissingLinks,
       repairedSpouseFamilyMembershipRows,
       repairedSpouseHouseholdRows,

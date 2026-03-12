@@ -2371,10 +2371,18 @@ export function SettingsClient({
                                         role,
                                       });
                                       if (!roleOk) return;
-                                      await patchLocalUser(activeUsername, {
+                                      const enabledOk = await patchLocalUser(activeUsername, {
                                         action: "set_enabled",
                                         isEnabled: true,
                                       });
+                                      if (!enabledOk) return;
+                                      if (localPassword.trim()) {
+                                        const passwordOk = await patchLocalUser(activeUsername, {
+                                          action: "reset_password",
+                                          password: localPassword,
+                                        });
+                                        if (!passwordOk) return;
+                                      }
                                     }
                                   } else {
                                     if (!localUsername.trim() || !localPassword.trim()) {
@@ -2393,6 +2401,7 @@ export function SettingsClient({
                                 }
 
                                 setLocalUserStatus("User updated.");
+                                setLocalPassword("");
                                 await loadTenantAdminData(selectedTenantKey);
                                 router.refresh();
                               })()

@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-12: Centered parent households over their child block in Family Tree, repaired Brent Estes's duplicate SnowEstes `UserFamilyGroups` link, taught integrity repair to dedupe duplicate family-access links, and made Manage User -> Update User apply entered local passwords for existing local users. See `docs/change-summary.md`.
+
 - 2026-03-12: Fixed Manage User -> Invite defaults so local-only users no longer open on `Google only`, and invite email/local username are recalculated from the selected person’s current access/profile data instead of stale modal state. See `docs/change-summary.md`.
 - 2026-03-12: Fixed local-only Add User so it now creates the missing family-scoped access row, repaired the hidden Catherine Peterson and Lydia Lundquist `UserFamilyGroups` links in `snowestes`, and made Invite default to `People.email` when no Google access email exists. See `docs/change-summary.md`.
 - 2026-03-12: Added optional direct Gmail invite sending so Admin -> Invite can either create a copyable invite or create and send the same generated message by email, with separate delivery status/audit results. See `docs/change-summary.md`.

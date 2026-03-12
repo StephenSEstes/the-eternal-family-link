@@ -530,6 +530,64 @@ export function TreeGraph({
     }
   });
 
+  // Re-center each parent household over its final child block after sibling grouping has settled.
+  levelsSorted
+    .slice()
+    .sort((a, b) => b - a)
+    .forEach((level) => {
+      const row = orderedByLevel.get(level) ?? [];
+      if (row.length === 0) {
+        return;
+      }
+
+      const rowPersonIds = new Set(row.map((node) => node.personId));
+      const consumed = new Set<string>();
+      const units: Array<{ ids: string[]; desiredCenterX: number; unitWidth: number }> = [];
+
+      for (const node of row) {
+        if (consumed.has(node.personId)) {
+          continue;
+        }
+        const partnerId = partnerMap.get(node.personId);
+        const hasPartnerInRow = Boolean(partnerId && rowPersonIds.has(partnerId) && !consumed.has(partnerId));
+        const unitIds = hasPartnerInRow && partnerId ? getOrderedUnitIds(node.personId, partnerId) : [node.personId];
+        unitIds.forEach((personId) => consumed.add(personId));
+
+        const householdId = getUnitHouseholdId(unitIds);
+        const childCenters = (householdId ? childrenByHouseholdId.get(householdId) ?? [] : [])
+          .map((childId) => positions.get(childId)?.x ?? Number.NaN)
+          .filter((value) => Number.isFinite(value));
+        const currentCenterX = getUnitCurrentCenterX(unitIds, positions);
+        const desiredCenterX =
+          childCenters.length > 0
+            ? childCenters.reduce((sum, value) => sum + value, 0) / childCenters.length
+            : currentCenterX;
+
+        units.push({
+          ids: unitIds,
+          desiredCenterX,
+          unitWidth: unitIds.length === 2 ? NODE_CARD_WIDTH * 2 + SPOUSE_GAP : NODE_CARD_WIDTH,
+        });
+      }
+
+      if (
+        units.length === 0 ||
+        units.every((unit) => Math.abs(unit.desiredCenterX - getUnitCurrentCenterX(unit.ids, positions)) < 0.5)
+      ) {
+        return;
+      }
+
+      let lastRightEdge = Number.NEGATIVE_INFINITY;
+      units.forEach((unit) => {
+        const minCenterX = Number.isFinite(lastRightEdge)
+          ? lastRightEdge + NON_SPOUSE_GAP + unit.unitWidth / 2
+          : unit.desiredCenterX;
+        const nextCenterX = Math.max(unit.desiredCenterX, minCenterX);
+        setUnitCenterX(unit.ids, nextCenterX, positions);
+        lastRightEdge = nextCenterX + unit.unitWidth / 2;
+      });
+    });
+
   // Normalize layout bounds after spouse/child nudges so clusters are never clipped by stale base width/height.
   const layoutPadding = 28;
   let minX = Number.POSITIVE_INFINITY;
@@ -757,6 +815,55 @@ export function TreeGraph({
       return fallbackCenterX;
     }
     return memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
+  }
+
+  function getUnitHouseholdId(unitIds: string[]) {
+    if (unitIds.length === 0) {
+      return "";
+    }
+    if (unitIds.length === 1) {
+      return householdIdByMemberId.get(unitIds[0] ?? "") ?? "";
+    }
+    const pairKey = unitIds.slice().sort().join("::");
+    return pairHouseholdIdByPairKey.get(pairKey) ?? "";
+  }
+
+  function getUnitCurrentCenterX(
+    unitIds: string[],
+    currentPositions: Map<string, { x: number; y: number }>,
+  ) {
+    const centers = unitIds
+      .map((personId) => currentPositions.get(personId)?.x ?? Number.NaN)
+      .filter((value) => Number.isFinite(value));
+    if (centers.length === 0) {
+      return 0;
+    }
+    return centers.reduce((sum, value) => sum + value, 0) / centers.length;
+  }
+
+  function setUnitCenterX(
+    unitIds: string[],
+    centerX: number,
+    currentPositions: Map<string, { x: number; y: number }>,
+  ) {
+    if (unitIds.length === 2) {
+      const halfSpan = (NODE_CARD_WIDTH + SPOUSE_GAP) / 2;
+      const leftPos = currentPositions.get(unitIds[0]);
+      const rightPos = currentPositions.get(unitIds[1]);
+      if (leftPos) {
+        currentPositions.set(unitIds[0], { x: centerX - halfSpan, y: leftPos.y });
+      }
+      if (rightPos) {
+        currentPositions.set(unitIds[1], { x: centerX + halfSpan, y: rightPos.y });
+      }
+      return;
+    }
+
+    const onlyId = unitIds[0] ?? "";
+    const pos = currentPositions.get(onlyId);
+    if (pos) {
+      currentPositions.set(onlyId, { x: centerX, y: pos.y });
+    }
   }
 
   function expandBounds(

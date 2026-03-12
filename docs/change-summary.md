@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (tree parent centering + user-family dedupe + local password apply)
+
+- `Date`: 2026-03-12
+- `Change`: Centered parent households over their child block in Family Tree, taught integrity repair to remove duplicate `UserFamilyGroups` rows per person/family, repaired the live duplicate SnowEstes Brent link in OCI, and made Manage User -> Update User apply an entered local password for existing local users instead of ignoring it.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a `mixed issue`. The tree layout only nudged children under parents and never ran the inverse centering pass for parent households. SnowEstes had one real duplicate `UserFamilyGroups` row for Brent Estes (`p-c0efc168`), and the integrity repair path reported that condition but did not remediate it. Separately, the Manage User screen accepted a local password while updating an existing local user, but the `Update User` action only renamed/enabled/updated role and never sent `reset_password`, so password entry in that flow had no effect.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: Deleted the stale SnowEstes `UserFamilyGroups` row for `Brent Estes (p-c0efc168)` with `user_email = brenton.estes.TEMP@TEMP.org`, leaving the active `brent.estes@gmail.com` link as the single family-scoped access row.
+- `Verify`:
+  - In Family Tree, parent households sit centered over their final child block instead of children merely centering under the previous parent position.
+  - Running integrity check/repair in `snowestes` no longer reports duplicate `UserFamilyGroups` for Brent, and future duplicate-person/family links are repairable by the integrity repair route.
+  - In Manage User for an existing local user such as Catherine Peterson, changing the username and entering a new password through `Update User` applies both changes in one pass.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the tree centering pass, the integrity duplicate-link repair addition, and the Manage User password-apply change together; if you also want to restore the previous SnowEstes duplicate warning, reinsert only Brent's deleted stale `UserFamilyGroups` row.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (invite defaults follow current access)
 
 - `Date`: 2026-03-12
