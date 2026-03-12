@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-12: Fixed the Oracle local-user username predicate so rename/reset flows can actually find local users again, and stopped treating `@local` family-link aliases as Google access emails in Manage User. See `docs/change-summary.md`.
 - 2026-03-12: Decoded local-user route usernames before lookup/update so Manage User can rename or reset local accounts whose current usernames contain spaces, including Catherine Peterson. See `docs/change-summary.md`.
 - 2026-03-12: Centered parent households over their child block in Family Tree, repaired Brent Estes's duplicate SnowEstes `UserFamilyGroups` link, taught integrity repair to dedupe duplicate family-access links, and made Manage User -> Update User apply entered local passwords for existing local users. See `docs/change-summary.md`.
 

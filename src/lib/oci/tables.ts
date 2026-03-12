@@ -388,6 +388,10 @@ function fromDbValue(value: unknown) {
   return value == null ? "" : String(value);
 }
 
+function isLocalAliasEmail(value: string) {
+  return value.trim().toLowerCase().endsWith("@local");
+}
+
 async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
   const pool = await getPool();
   const connection = (await pool.getConnection()) as OciConnection;
@@ -1037,7 +1041,7 @@ export async function getOciTenantUserAccessRows(tenantKey: string): Promise<Oci
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];
     return rows.map((row) => ({
-      userEmail: fromDbValue(row.USER_EMAIL),
+      userEmail: isLocalAliasEmail(fromDbValue(row.USER_EMAIL)) ? "" : fromDbValue(row.USER_EMAIL),
       isEnabled: fromDbValue(row.IS_ENABLED) === "1",
       role: fromDbValue(row.ROLE),
       personId: fromDbValue(row.PERSON_ID),
@@ -1289,8 +1293,7 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
        WHERE LOWER(TRIM(l.family_group_key)) = :tenantKey
          AND ${enabledExpr("l.is_enabled")}
          AND ${enabledExpr("u.local_access")}
-         AND TRIM(NVL(u.username, '')) IS NOT NULL
-         AND TRIM(NVL(u.username, '')) <> ''
+         AND LENGTH(TRIM(NVL(u.username, ' '))) > 0
        ORDER BY LOWER(TRIM(u.username))`,
       { tenantKey: normalized },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }

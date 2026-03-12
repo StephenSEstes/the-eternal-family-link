@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (fix local-user lookup predicate + ignore local access aliases for Google access)
+
+- `Date`: 2026-03-12
+- `Change`: Fixed the OCI tenant-local-user query so usernames are no longer filtered out by an Oracle-empty-string comparison, and stopped surfacing `@local` family-link aliases as Google/user-access emails in the admin access snapshot/runtime list.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The tenant-local-user query used `TRIM(NVL(u.username, '')) <> ''`, but Oracle treats `''` as `NULL`, so that predicate filtered out valid local users and caused rename/reset flows to report `Local user not found.` even when the `UserAccess` row existed. Separately, local-only users carried `UserFamilyGroups.user_email = <person_id>@local`, and admin access shaping treated that placeholder as a real Google/user-access email, causing the Manage User flow to post an invalid email to `/user-access`.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/admin-snapshot/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - The corrected SnowEstes local-user SQL returns `6` rows, including `Catherine Peterson (p-44b30ff9)`, where the broken predicate returned `0`.
+  - Renaming Catherine's local username no longer fails with `rename_failed: Local user not found.`
+  - Manage User no longer treats `p-44b30ff9@local` as a Google access email or posts it to `/user-access`.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the tenant-local-user predicate change and the `@local` email filtering together; otherwise rename/reset flows and admin Google-access behavior will diverge again.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (decode local-user route usernames)
 
 - `Date`: 2026-03-12

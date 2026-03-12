@@ -55,6 +55,10 @@ function toRole(value: string | undefined): AppRole {
   return normalize(value) === "admin" ? "ADMIN" : "USER";
 }
 
+function isLocalAliasEmail(value: string | undefined) {
+  return normalize(value).endsWith("@local");
+}
+
 function buildIndex(headers: string[]) {
   const map = new Map<string, number>();
   headers.forEach((header, index) => {
@@ -227,11 +231,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       }
       seenAccessPeople.add(personId);
       const userRow = userAccessByPerson.get(personId);
-      const userEmail = (
-        (userRow ? readCell(userRow, userAccessIdx, "user_email") : "") || readCell(row, userFamilyIdx, "user_email")
-      )
-        .trim()
-        .toLowerCase();
+      const directUserEmail = userRow ? readCell(userRow, userAccessIdx, "user_email").trim().toLowerCase() : "";
+      const linkUserEmail = readCell(row, userFamilyIdx, "user_email").trim().toLowerCase();
+      const userEmail = (directUserEmail || (isLocalAliasEmail(linkUserEmail) ? "" : linkUserEmail)).trim().toLowerCase();
       const googleEnabled = userRow ? parseBool(readCell(userRow, userAccessIdx, "google_access")) : false;
       accessItems.push({
         userEmail,
