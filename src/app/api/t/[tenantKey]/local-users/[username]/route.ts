@@ -15,11 +15,20 @@ const patchSchema = z
   })
   .strict();
 
+function decodeRouteUsername(username: string) {
+  try {
+    return decodeURIComponent(username);
+  } catch {
+    return username;
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ tenantKey: string; username: string }> },
 ) {
   const { tenantKey, username } = await params;
+  const decodedUsername = decodeRouteUsername(username);
   const resolved = await requireTenantAdmin(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
@@ -30,13 +39,13 @@ export async function PATCH(
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existingUser = await getLocalUserByUsername(resolved.tenant.tenantKey, username);
+  const existingUser = await getLocalUserByUsername(resolved.tenant.tenantKey, decodedUsername);
 
   if (parsed.data.action === "set_enabled") {
     if (parsed.data.isEnabled === undefined) {
       return NextResponse.json({ error: "invalid_payload", message: "isEnabled required" }, { status: 400 });
     }
-    await patchLocalUser(resolved.tenant.tenantKey, username, { isEnabled: parsed.data.isEnabled });
+    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { isEnabled: parsed.data.isEnabled });
     if (existingUser) {
       await appendSessionAuditLog(resolved.session, {
         action: "UPDATE",
@@ -51,7 +60,7 @@ export async function PATCH(
   }
 
   if (parsed.data.action === "unlock") {
-    await patchLocalUser(resolved.tenant.tenantKey, username, {
+    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
       failedAttempts: 0,
       lockedUntil: "",
     });
@@ -72,7 +81,7 @@ export async function PATCH(
     if (!parsed.data.role) {
       return NextResponse.json({ error: "invalid_payload", message: "role required" }, { status: 400 });
     }
-    await patchLocalUser(resolved.tenant.tenantKey, username, { role: parsed.data.role });
+    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { role: parsed.data.role });
     if (existingUser) {
       await appendSessionAuditLog(resolved.session, {
         action: "UPDATE",
@@ -91,7 +100,7 @@ export async function PATCH(
       return NextResponse.json({ error: "invalid_payload", message: "nextUsername required" }, { status: 400 });
     }
     try {
-      await renameLocalUser(resolved.tenant.tenantKey, username, parsed.data.nextUsername);
+      await renameLocalUser(resolved.tenant.tenantKey, decodedUsername, parsed.data.nextUsername);
       if (existingUser) {
         await appendSessionAuditLog(resolved.session, {
           action: "UPDATE",
@@ -99,7 +108,7 @@ export async function PATCH(
           entityId: existingUser.personId,
           familyGroupKey: resolved.tenant.tenantKey,
           status: "SUCCESS",
-          details: `Renamed local username from ${username.trim().toLowerCase()} to ${parsed.data.nextUsername.trim().toLowerCase()}.`,
+          details: `Renamed local username from ${decodedUsername.trim().toLowerCase()} to ${parsed.data.nextUsername.trim().toLowerCase()}.`,
         });
       }
       return NextResponse.json({ ok: true });
@@ -119,7 +128,7 @@ export async function PATCH(
   if (complexityError) {
     return NextResponse.json({ error: "password_policy_failed", message: complexityError }, { status: 400 });
   }
-  await patchLocalUser(resolved.tenant.tenantKey, username, {
+  await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
     password: parsed.data.password,
     failedAttempts: 0,
     lockedUntil: "",
@@ -143,13 +152,14 @@ export async function DELETE(
   { params }: { params: Promise<{ tenantKey: string; username: string }> },
 ) {
   const { tenantKey, username } = await params;
+  const decodedUsername = decodeRouteUsername(username);
   const resolved = await requireTenantAdmin(tenantKey);
   if ("error" in resolved) {
     return resolved.error;
   }
 
-  const existingUser = await getLocalUserByUsername(resolved.tenant.tenantKey, username);
-  const deleted = await deleteLocalUser(resolved.tenant.tenantKey, username);
+  const existingUser = await getLocalUserByUsername(resolved.tenant.tenantKey, decodedUsername);
+  const deleted = await deleteLocalUser(resolved.tenant.tenantKey, decodedUsername);
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -157,10 +167,10 @@ export async function DELETE(
   await appendSessionAuditLog(resolved.session, {
     action: "DELETE",
     entityType: "LOCAL_USER",
-    entityId: existingUser?.personId ?? username.trim().toLowerCase(),
+    entityId: existingUser?.personId ?? decodedUsername.trim().toLowerCase(),
     familyGroupKey: resolved.tenant.tenantKey,
     status: "SUCCESS",
-    details: `Deleted local access for username=${username.trim().toLowerCase()}.`,
+    details: `Deleted local access for username=${decodedUsername.trim().toLowerCase()}.`,
   });
 
   return NextResponse.json({ ok: true });

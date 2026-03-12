@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (decode local-user route usernames)
+
+- `Date`: 2026-03-12
+- `Change`: Decoded the `[username]` route parameter in local-user PATCH/DELETE handlers before lookup, rename, password reset, role update, enable/disable, and delete operations.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. Existing local-user API routes used the raw path segment value for usernames, so usernames containing spaces could arrive percent-encoded (for example `catherine%20peterson`) and fail lookup in `getLocalUserByUsername` / `renameLocalUser`, producing `rename_failed: Local user not found.` even though the `UserAccess` row existed and direct OCI updates matched by `person_id`.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/local-users/[username]/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - In Manage User for Catherine Peterson, renaming the local username from `catherine peterson` to `cathy` succeeds instead of returning `rename_failed`.
+  - Existing usernames containing spaces can be renamed, password-reset, enabled/disabled, or deleted through the same route path.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the route-username decoding helper and the PATCH/DELETE handler substitutions together so all local-user actions keep using the raw route param behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (tree parent centering + user-family dedupe + local password apply)
 
 - `Date`: 2026-03-12
