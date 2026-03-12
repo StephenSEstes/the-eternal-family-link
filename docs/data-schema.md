@@ -125,10 +125,10 @@ This section is a quick reference for the three data areas that drive profile/me
   - `husband_person_id`
   - `wife_person_id`
 - Purpose:
-  - Couple/household pairing records.
+  - Household records for one-parent or two-parent family units.
 - Logical index/key:
   - Unique: `household_id`
-  - Recommended uniqueness rule: (`family_group_key`, sorted pair of `husband_person_id` + `wife_person_id`)
+  - Recommended uniqueness rule: (`family_group_key`, sorted set of present parent person IDs, allowing either one or two parents)
 
 ## UserAccess
 
@@ -333,7 +333,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - Canonical global relationship ID:
   - `<from_person_id>-<to_person_id>-<rel_type>`
 - `household_id`:
-  - Household/couple ID (currently generated from family key + sorted couple pair in write paths).
+  - Household ID generated from family key plus either the sorted parent pair or the deterministic `single|person_id` form for one-parent households.
 - `attribute_id`:
   - Unique attribute row ID (often generated from family/person/type/value or timestamp strategy, depending on flow).
 - `family_group_key`:
@@ -356,7 +356,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `Relationships.from_person_id` and `Relationships.to_person_id` -> `People.person_id`
   - Family views filter edges by membership of both endpoint people
 - Households:
-  - `Households.husband_person_id` and `Households.wife_person_id` -> `People.person_id`
+  - `Households.husband_person_id` and/or `Households.wife_person_id` -> `People.person_id`
   - Family views filter by `Households.family_group_key`
 - Attributes and dates:
   - `Attributes.entity_type/entity_id` -> (`People.person_id` or `Households.household_id`)

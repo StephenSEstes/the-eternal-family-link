@@ -151,3 +151,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep `in_law` as a single boolean flag on membership; store `in_law` on `Attributes`; derive everything only at read time with no persisted family-group relationship type.
 - `Impact`: `PersonFamilyGroups.family_group_relationship_type` is now the canonical family-group classification field. Relationship save and integrity repair reconcile non-founder types centrally, generic/person attribute routes continue rejecting legacy `in_law` attribute writes, people UI exposes `Needs Placement` for `undeclared`, and founder assignment/removal is an admin-only operation.
 - `Follow-up`: If step-parent or other relationship-role concepts are added later, keep them on relationship edges or household logic rather than expanding `family_group_relationship_type` beyond membership classification.
+
+## 2026-03-12
+
+- `Area`: Household runtime model
+- `Decision`: Keep `Households.husband_person_id` / `wife_person_id` as the schema columns, but treat a household as a valid one-parent or two-parent unit at runtime. A one-parent household stores the single parent in the gender-appropriate column and leaves the other parent column blank.
+- `Reason`: Divorce and single-parent household flows need to preserve the direct family member's household, children, media, and notes without introducing a second household system or a schema migration.
+- `Alternatives Considered`: Keep households couple-only and delete the direct member household on divorce; add a second single-parent-household table; fake a second spouse/person value to satisfy couple-only code paths.
+- `Impact`: Tree rendering, household detail/edit, child-add, integrity repair, and relationship-builder flows must all treat one-parent households as first-class valid records. `married_date` remains meaningful only for two-parent households and is cleared when converting a couple household into a one-parent household.
+- `Follow-up`: Keep provisioning/import/admin tooling aligned to the one-or-two-parent rule and revisit neutral parent-role labeling only if the product later moves away from the current husband/wife schema column names.

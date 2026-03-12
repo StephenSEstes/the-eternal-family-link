@@ -275,7 +275,7 @@ export async function GET(_: Request, { params }: RouteProps) {
         relType: normalize(row.data.rel_type),
       }))
       .filter((row) => row.relType === "parent");
-    const parentSet = new Set([household.dto.husbandPersonId, household.dto.wifePersonId]);
+    const parentSet = new Set([household.dto.husbandPersonId, household.dto.wifePersonId].filter(Boolean));
     const childIds = Array.from(
       new Set(
         parentLinks

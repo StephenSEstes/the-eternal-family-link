@@ -21,3 +21,4 @@ Latest alignment note:
 - 2026-03-10: Household gallery media uses only `MediaAssets` + `MediaLinks`; `Households.wedding_photo_file_id` remains the direct household avatar pointer.
 - 2026-03-10: Any signed-in family-group user can edit shared family data (people, households, relationships, attributes, media); admin remains limited to invites, access/security/audit/integrity, and family-group administration.
 - 2026-03-10: `PersonFamilyGroups.family_group_relationship_type` is the canonical family-group classification field with `founder`, `direct`, `in_law`, and `undeclared`; `founder` is admin-managed and other values are system-reconciled from membership + relationship state.
+- 2026-03-12: `Households` now represent one-parent or two-parent family units in the existing `husband_person_id` / `wife_person_id` model; divorce converts or creates a valid one-parent household instead of deleting the direct member household.

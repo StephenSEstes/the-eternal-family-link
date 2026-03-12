@@ -43,7 +43,9 @@ export async function loadTreePageData(tenantKey: string): Promise<TreePageData>
       (rel) => peopleInFamily.has(rel.fromPersonId) && peopleInFamily.has(rel.toPersonId),
     );
     const households = allHouseholds.filter(
-      (unit) => peopleInFamily.has(unit.partner1PersonId) && peopleInFamily.has(unit.partner2PersonId),
+      (unit) =>
+        peopleInFamily.has(unit.partner1PersonId) &&
+        (!unit.partner2PersonId || peopleInFamily.has(unit.partner2PersonId)),
     );
     const data = { people, relationships, households };
     treePageDataCache.set(cacheKey, { data, expiresAt: Date.now() + TREE_PAGE_CACHE_TTL_MS });

@@ -69,6 +69,8 @@ export function TreeGraph({
   const partnerMap = new Map<string, string>();
   const spousePairIds = new Set<string>();
   const spousePairMeta = new Map<string, { leftId: string; rightId: string; label: string }>();
+  const householdMetaById = new Map<string, { householdId: string; memberIds: string[]; label: string }>();
+  const pairHouseholdIdByPairKey = new Map<string, string>();
   const parentEdges = edges.filter((edge) => edge.label.trim().toLowerCase() === "parent");
 
   const parentIdsByChild = new Map<string, Set<string>>();
@@ -86,7 +88,15 @@ export function TreeGraph({
   households.forEach((unit) => {
     const leftId = unit.partner1PersonId;
     const rightId = unit.partner2PersonId;
-    if (!leftId || !rightId) {
+    if (!leftId && !rightId) {
+      return;
+    }
+    if (!rightId) {
+      householdMetaById.set(unit.id, {
+        householdId: unit.id,
+        memberIds: [leftId],
+        label: unit.label?.trim() || unit.id?.trim() || "",
+      });
       return;
     }
     partnerMap.set(leftId, rightId);
@@ -94,6 +104,12 @@ export function TreeGraph({
     const pairKey = [leftId, rightId].sort().join("::");
     spousePairIds.add(pairKey);
     spousePairMeta.set(pairKey, { leftId, rightId, label: unit.label?.trim() || unit.id?.trim() || "" });
+    pairHouseholdIdByPairKey.set(pairKey, unit.id);
+    householdMetaById.set(unit.id, {
+      householdId: unit.id,
+      memberIds: [leftId, rightId],
+      label: unit.label?.trim() || unit.id?.trim() || "",
+    });
   });
 
   edges.forEach((edge) => {
@@ -114,46 +130,52 @@ export function TreeGraph({
   });
 
   const hiddenParentEdgeIds = new Set<string>();
-  const familyChildConnectors: Array<{ pairKey: string; childId: string }> = [];
+  const familyChildConnectors: Array<{ householdId: string; childId: string }> = [];
   parentIdsByChild.forEach((parentIds, childId) => {
     const parentList = Array.from(parentIds);
-    if (parentList.length < 2) {
-      return;
-    }
-
-    let matchedPairKey = "";
-    let matchedParentIds: [string, string] | null = null;
-    for (let i = 0; i < parentList.length && !matchedPairKey; i += 1) {
-      for (let j = i + 1; j < parentList.length; j += 1) {
-        const candidatePair = [parentList[i], parentList[j]] as [string, string];
-        const pairKey = candidatePair.slice().sort().join("::");
-        if (spousePairIds.has(pairKey)) {
-          matchedPairKey = pairKey;
-          matchedParentIds = candidatePair;
-          break;
+    let matchedHouseholdId = "";
+    let matchedParentIds: string[] = [];
+    if (parentList.length >= 2) {
+      for (let i = 0; i < parentList.length && !matchedHouseholdId; i += 1) {
+        for (let j = i + 1; j < parentList.length; j += 1) {
+          const candidatePair = [parentList[i], parentList[j]] as [string, string];
+          const pairKey = candidatePair.slice().sort().join("::");
+          if (spousePairIds.has(pairKey)) {
+            matchedHouseholdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
+            matchedParentIds = candidatePair;
+            break;
+          }
         }
       }
     }
-
-    if (!matchedPairKey || !matchedParentIds) {
+    if (!matchedHouseholdId) {
+      const singleHousehold = Array.from(householdMetaById.values()).find(
+        (item) => item.memberIds.length === 1 && parentList.includes(item.memberIds[0] ?? ""),
+      );
+      if (singleHousehold) {
+        matchedHouseholdId = singleHousehold.householdId;
+        matchedParentIds = singleHousehold.memberIds.slice();
+      }
+    }
+    if (!matchedHouseholdId || matchedParentIds.length === 0) {
       return;
     }
 
-    familyChildConnectors.push({ pairKey: matchedPairKey, childId });
+    familyChildConnectors.push({ householdId: matchedHouseholdId, childId });
     edges.forEach((edge) => {
       const isParent = edge.label.trim().toLowerCase() === "parent";
       if (!isParent || edge.toPersonId !== childId) {
         return;
       }
-      if (edge.fromPersonId === matchedParentIds[0] || edge.fromPersonId === matchedParentIds[1]) {
+      if (matchedParentIds.includes(edge.fromPersonId)) {
         hiddenParentEdgeIds.add(edge.id);
       }
     });
   });
-  const parentPairKeyByChildId = new Map<string, string>();
+  const parentHouseholdIdByChildId = new Map<string, string>();
   familyChildConnectors.forEach((connector) => {
-    if (!parentPairKeyByChildId.has(connector.childId)) {
-      parentPairKeyByChildId.set(connector.childId, connector.pairKey);
+    if (!parentHouseholdIdByChildId.has(connector.childId)) {
+      parentHouseholdIdByChildId.set(connector.childId, connector.householdId);
     }
   });
 
@@ -316,24 +338,25 @@ export function TreeGraph({
   });
 
   // Nudge child nodes to center beneath the midpoint of their parent household cluster.
-  const childrenByPairKey = new Map<string, string[]>();
+  const childrenByHouseholdId = new Map<string, string[]>();
   for (const connector of familyChildConnectors) {
-    const bucket = childrenByPairKey.get(connector.pairKey) ?? [];
+    const bucket = childrenByHouseholdId.get(connector.householdId) ?? [];
     bucket.push(connector.childId);
-    childrenByPairKey.set(connector.pairKey, bucket);
+    childrenByHouseholdId.set(connector.householdId, bucket);
   }
   const desiredChildX = new Map<string, number>();
-  childrenByPairKey.forEach((childIds, pairKey) => {
-    const pair = spousePairMeta.get(pairKey);
-    if (!pair) {
+  childrenByHouseholdId.forEach((childIds, householdId) => {
+    const household = householdMetaById.get(householdId);
+    if (!household) {
       return;
     }
-    const left = positions.get(pair.leftId);
-    const right = positions.get(pair.rightId);
-    if (!left || !right) {
+    const memberPositions = household.memberIds
+      .map((personId) => positions.get(personId))
+      .filter((pos): pos is { x: number; y: number } => Boolean(pos));
+    if (memberPositions.length === 0) {
       return;
     }
-    const centerX = (left.x + right.x) / 2;
+    const centerX = memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
     const sortedChildIds = childIds
       .slice()
       .sort((a, b) => {
@@ -528,6 +551,21 @@ export function TreeGraph({
     minY = Math.min(minY, midY - halfHeight);
     maxY = Math.max(maxY, midY + halfHeight);
   });
+  householdMetaById.forEach((household) => {
+    if (household.memberIds.length !== 1) {
+      return;
+    }
+    const personPos = positions.get(household.memberIds[0] ?? "");
+    if (!personPos) {
+      return;
+    }
+    const halfWidth = NODE_HALF_WIDTH + 16;
+    const halfHeight = NODE_HALF_HEIGHT + 26;
+    minX = Math.min(minX, personPos.x - halfWidth);
+    maxX = Math.max(maxX, personPos.x + halfWidth);
+    minY = Math.min(minY, personPos.y - halfHeight);
+    maxY = Math.max(maxY, personPos.y + halfHeight);
+  });
 
   if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
     minX = 0;
@@ -669,12 +707,12 @@ export function TreeGraph({
 
   function getSiblingBlockKey(unitIds: string[]) {
     const directChildId =
-      unitIds.find((personId) => parentPairKeyByChildId.has(personId) && isDirectLineTreePerson(nodeMap.get(personId))) ??
-      unitIds.find((personId) => parentPairKeyByChildId.has(personId));
+      unitIds.find((personId) => parentHouseholdIdByChildId.has(personId) && isDirectLineTreePerson(nodeMap.get(personId))) ??
+      unitIds.find((personId) => parentHouseholdIdByChildId.has(personId));
     if (directChildId) {
-      const pairKey = parentPairKeyByChildId.get(directChildId) ?? "";
-      if (pairKey) {
-        return `pair:${pairKey}`;
+      const householdId = parentHouseholdIdByChildId.get(directChildId) ?? "";
+      if (householdId) {
+        return `household:${householdId}`;
       }
     }
     return `unit:${unitIds.join("::")}`;
@@ -685,19 +723,20 @@ export function TreeGraph({
     fallbackCenterX: number,
     currentPositions: Map<string, { x: number; y: number }>,
   ) {
-    if (!blockKey.startsWith("pair:")) {
+    if (!blockKey.startsWith("household:")) {
       return fallbackCenterX;
     }
-    const pair = spousePairMeta.get(blockKey.slice(5));
-    if (!pair) {
+    const household = householdMetaById.get(blockKey.slice(10));
+    if (!household) {
       return fallbackCenterX;
     }
-    const left = currentPositions.get(pair.leftId);
-    const right = currentPositions.get(pair.rightId);
-    if (!left || !right) {
+    const memberPositions = household.memberIds
+      .map((personId) => currentPositions.get(personId))
+      .filter((pos): pos is { x: number; y: number } => Boolean(pos));
+    if (memberPositions.length === 0) {
       return fallbackCenterX;
     }
-    return (left.x + right.x) / 2;
+    return memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
   }
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));
@@ -1022,11 +1061,8 @@ export function TreeGraph({
                   if (!canManage) {
                     return;
                   }
-                  const unit = households.find((item) => {
-                    const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
-                    const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
-                    return matchForward || matchReverse;
-                  });
+                  const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
+                  const unit = households.find((item) => item.id === householdId);
                   if (unit) {
                     setSelectedHouseholdId(unit.id);
                   }
@@ -1050,11 +1086,8 @@ export function TreeGraph({
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    const unit = households.find((item) => {
-                      const matchForward = item.partner1PersonId === leftId && item.partner2PersonId === rightId;
-                      const matchReverse = item.partner1PersonId === rightId && item.partner2PersonId === leftId;
-                      return matchForward || matchReverse;
-                    });
+                    const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
+                    const unit = households.find((item) => item.id === householdId);
                     if (unit) {
                       setSelectedHouseholdId(unit.id);
                     }
@@ -1064,6 +1097,60 @@ export function TreeGraph({
             </g>
           );
         })}
+        {Array.from(householdMetaById.values())
+          .filter((household) => household.memberIds.length === 1)
+          .map((household) => {
+            const personId = household.memberIds[0] ?? "";
+            const pos = positions.get(personId);
+            if (!pos) {
+              return null;
+            }
+            const halfWidth = NODE_HALF_WIDTH + 16;
+            const halfHeight = NODE_HALF_HEIGHT + 26;
+            const labelLines = household.label ? wrapHouseholdLabel(household.label) : [];
+            return (
+              <g key={`cluster-single-${household.householdId}`} className="tree-household-group">
+                <rect
+                  x={pos.x - halfWidth}
+                  y={pos.y - halfHeight}
+                  width={halfWidth * 2}
+                  height={halfHeight * 2}
+                  rx={22}
+                  ry={22}
+                  className="tree-spouse-cluster"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!canManage) {
+                      return;
+                    }
+                    setSelectedHouseholdId(household.householdId);
+                  }}
+                />
+                {labelLines.length > 0 ? (
+                  <text x={pos.x} y={pos.y - halfHeight + 14} className="tree-family-label">
+                    {labelLines.map((line, index) => (
+                      <tspan key={`${household.householdId}-label-${index}`} x={pos.x} dy={index === 0 ? 0 : 12}>
+                        {line}
+                      </tspan>
+                    ))}
+                  </text>
+                ) : null}
+                {canManage ? (
+                  <circle
+                    cx={pos.x + halfWidth - 18}
+                    cy={pos.y - halfHeight + 18}
+                    r={7}
+                    className="tree-household-action-dot"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedHouseholdId(household.householdId);
+                    }}
+                  />
+                ) : null}
+              </g>
+            );
+          })}
         {edges.map((edge) => {
           if (hiddenParentEdgeIds.has(edge.id)) {
             return null;
@@ -1089,23 +1176,24 @@ export function TreeGraph({
           );
         })}
         {familyChildConnectors.map((connector) => {
-          const pair = spousePairMeta.get(connector.pairKey);
-          if (!pair) {
+          const household = householdMetaById.get(connector.householdId);
+          if (!household) {
             return null;
           }
-          const a = positions.get(pair.leftId);
-          const b = positions.get(pair.rightId);
           const child = positions.get(connector.childId);
-          if (!a || !b || !child) {
+          const memberPositions = household.memberIds
+            .map((personId) => positions.get(personId))
+            .filter((pos): pos is { x: number; y: number } => Boolean(pos));
+          if (memberPositions.length === 0 || !child) {
             return null;
           }
-          const midX = (a.x + b.x) / 2;
-          const midY = (a.y + b.y) / 2;
+          const midX = memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
+          const midY = memberPositions.reduce((sum, pos) => sum + pos.y, 0) / memberPositions.length;
           const startY = midY + NODE_HALF_HEIGHT + 16;
           const endY = child.y - NODE_HALF_HEIGHT;
           return (
             <line
-              key={`family-child-${connector.pairKey}-${connector.childId}`}
+              key={`family-child-${connector.householdId}-${connector.childId}`}
               x1={midX}
               y1={startY}
               x2={child.x}

@@ -54,8 +54,12 @@ function buildRelationshipId(sourceRow: Record<string, string>) {
 function buildHouseholdId(tenantKey: string, sourceRow: Record<string, string>) {
   const husbandPersonId = (sourceRow.husband_person_id ?? "").trim();
   const wifePersonId = (sourceRow.wife_person_id ?? "").trim();
-  if (!husbandPersonId || !wifePersonId) return "";
-  const pair = [husbandPersonId, wifePersonId].sort().join("|");
+  const memberIds = [husbandPersonId, wifePersonId].filter(Boolean);
+  if (memberIds.length === 0) return "";
+  if (memberIds.length === 1) {
+    return buildEntityId("h", `${tenantKey}|single|${memberIds[0]}`);
+  }
+  const pair = memberIds.sort().join("|");
   return buildEntityId("h", `${tenantKey}|${pair}`);
 }
 

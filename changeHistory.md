@@ -7,6 +7,9 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-12: Added direct-family `Div` spouse handling, broadened `Households` to valid one-parent/two-parent runtime behavior without a schema migration, preserved direct-member households on divorce, and renamed the Notes action to `Import Story with AI (testing)`. See `docs/change-summary.md`.
+
+
 - 2026-03-11: Family Tree now keeps each household’s children as a contiguous sibling block, preventing adjacent sibling groups from interleaving in the same generation. See `docs/change-summary.md`.
 - 2026-03-11: Fixed spouse-save household creation for the current family group and repaired 6 missing household rows, restoring household labels and edit clicks in the tree. See `docs/change-summary.md`.
 - 2026-03-11: Family Tree household branches now order by the direct parent’s age, and married children stay grouped beneath their parent household while household children remain in birth order. See `docs/change-summary.md`.

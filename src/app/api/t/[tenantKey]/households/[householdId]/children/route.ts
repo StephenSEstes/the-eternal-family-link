@@ -87,9 +87,13 @@ export async function POST(request: Request, { params }: RouteProps) {
   if (!household) {
     return NextResponse.json({ error: "household_not_found" }, { status: 404 });
   }
-  const fatherPersonId = readCell(household.data, "husband_person_id");
-  const motherPersonId = readCell(household.data, "wife_person_id");
-  if (!fatherPersonId || !motherPersonId) {
+  const parentIds = Array.from(
+    new Set([
+      readCell(household.data, "husband_person_id"),
+      readCell(household.data, "wife_person_id"),
+    ].filter(Boolean)),
+  );
+  if (parentIds.length === 0) {
     return NextResponse.json({ error: "invalid_household", message: "Household is missing parent links." }, { status: 400 });
   }
 
@@ -127,15 +131,16 @@ export async function POST(request: Request, { params }: RouteProps) {
   }
 
   await ensurePersonFamilyGroupMembership(personId, resolved.tenant.tenantKey, true);
-  await upsertParent(fatherPersonId, personId);
-  await upsertParent(motherPersonId, personId);
+  for (const parentPersonId of parentIds) {
+    await upsertParent(parentPersonId, personId);
+  }
 
-  const parentIds = new Set([fatherPersonId, motherPersonId]);
+  const parentIdSet = new Set(parentIds);
   const personFamilyRows = await getTableRecords("PersonFamilyGroups").catch(() => []);
   const inheritedFamilyKeys = new Set<string>();
   for (const row of personFamilyRows) {
     const rowPersonId = readCell(row.data, "person_id");
-    if (!parentIds.has(rowPersonId)) {
+    if (!parentIdSet.has(rowPersonId)) {
       continue;
     }
     if (!isEnabledLike(readCell(row.data, "is_enabled"))) {
@@ -163,7 +168,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   );
   const parentUserGroupRows = userGroupRows.filter((row) => {
     const rowPersonId = readCell(row.data, "person_id");
-    return parentIds.has(rowPersonId) && isEnabledLike(readCell(row.data, "is_enabled"));
+    return parentIdSet.has(rowPersonId) && isEnabledLike(readCell(row.data, "is_enabled"));
   });
 
   for (const row of parentUserGroupRows) {

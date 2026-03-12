@@ -99,6 +99,27 @@ function resolveHouseholdRoles(
   return { husband: sorted[0], wife: sorted[1] };
 }
 
+function getHouseholdOccupants(record: Record<string, string>) {
+  const husband = normalize(readField(record, "husband_person_id"));
+  const wife = normalize(readField(record, "wife_person_id"));
+  return {
+    husband,
+    wife,
+    memberIds: [husband, wife].filter(Boolean),
+  };
+}
+
+function householdOccupancyKey(memberIds: string[]) {
+  const normalizedIds = Array.from(new Set(memberIds.map((value) => normalize(value)).filter(Boolean))).sort();
+  if (normalizedIds.length === 0 || normalizedIds.length > 2) {
+    return "";
+  }
+  if (normalizedIds.length === 1) {
+    return `single|${normalizedIds[0]}`;
+  }
+  return normalizedIds.join("|");
+}
+
 function pushFinding(
   findings: IntegrityFinding[],
   severity: IntegritySeverity,
@@ -856,36 +877,41 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
 
     let updatedHouseholds = 0;
     let deletedHouseholds = 0;
-    const existingNonSourcePairs = new Set<string>();
+    const existingNonSourceHouseholds = new Set<string>();
     for (const row of householdRows) {
-      const husband = normalize(readField(row.data, "husband_person_id"));
-      const wife = normalize(readField(row.data, "wife_person_id"));
+      const { memberIds } = getHouseholdOccupants(row.data);
       const familyKey = normalize(readField(row.data, "family_group_key"));
-      if (husband === sourcePersonId || wife === sourcePersonId) continue;
-      if (!husband || !wife) continue;
-      existingNonSourcePairs.add(`${familyKey}|${[husband, wife].sort().join("|")}`);
+      if (memberIds.includes(sourcePersonId)) continue;
+      const occupancyKey = householdOccupancyKey(memberIds);
+      if (!familyKey || !occupancyKey) continue;
+      existingNonSourceHouseholds.add(`${familyKey}|${occupancyKey}`);
     }
-    const newPairsFromSource = new Set<string>();
+    const newHouseholdsFromSource = new Set<string>();
     for (const row of householdRows) {
       const householdId = readField(row.data, "household_id");
-      const husband = normalize(readField(row.data, "husband_person_id"));
-      const wife = normalize(readField(row.data, "wife_person_id"));
+      const { husband, wife, memberIds } = getHouseholdOccupants(row.data);
       const familyKey = normalize(readField(row.data, "family_group_key"));
-      if (!householdId || (husband !== sourcePersonId && wife !== sourcePersonId)) {
+      if (!householdId || !memberIds.includes(sourcePersonId)) {
         continue;
       }
       const nextHusband = husband === sourcePersonId ? targetPersonId : husband;
       const nextWife = wife === sourcePersonId ? targetPersonId : wife;
-      if (!nextHusband || !nextWife || nextHusband === nextWife) {
+      const nextMemberIds = [nextHusband, nextWife].filter(Boolean);
+      if (nextMemberIds.length === 0 || new Set(nextMemberIds).size !== nextMemberIds.length) {
         if (await deleteTableRows("Households", [row.rowNumber])) deletedHouseholds += 1;
         continue;
       }
-      const pairKey = `${familyKey}|${[nextHusband, nextWife].sort().join("|")}`;
-      if (existingNonSourcePairs.has(pairKey) || newPairsFromSource.has(pairKey)) {
+      const occupancyKey = householdOccupancyKey(nextMemberIds);
+      if (!occupancyKey) {
         if (await deleteTableRows("Households", [row.rowNumber])) deletedHouseholds += 1;
         continue;
       }
-      newPairsFromSource.add(pairKey);
+      const scopedOccupancyKey = `${familyKey}|${occupancyKey}`;
+      if (existingNonSourceHouseholds.has(scopedOccupancyKey) || newHouseholdsFromSource.has(scopedOccupancyKey)) {
+        if (await deleteTableRows("Households", [row.rowNumber])) deletedHouseholds += 1;
+        continue;
+      }
+      newHouseholdsFromSource.add(scopedOccupancyKey);
       const updated = await updateTableRecordById(
         "Households",
         householdId,
@@ -1196,16 +1222,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ tenantKey
   const occupiedPartnersByGroup = new Map<string, Map<string, string>>();
   for (const row of before.householdsRows) {
     const familyKey = normalize(readField(row.data, "family_group_key"));
-    const husband = normalize(readField(row.data, "husband_person_id"));
-    const wife = normalize(readField(row.data, "wife_person_id"));
-    if (!familyKey || !husband || !wife) continue;
-    const pairKey = [husband, wife].sort().join("|");
-    const pairs = householdPairByGroup.get(familyKey) ?? new Set<string>();
-    pairs.add(pairKey);
-    householdPairByGroup.set(familyKey, pairs);
+    const { memberIds } = getHouseholdOccupants(row.data);
+    const occupancyKey = householdOccupancyKey(memberIds);
+    if (!familyKey || !occupancyKey) continue;
+    if (memberIds.length === 2) {
+      const pairs = householdPairByGroup.get(familyKey) ?? new Set<string>();
+      pairs.add(occupancyKey);
+      householdPairByGroup.set(familyKey, pairs);
+    }
     const occupants = occupiedPartnersByGroup.get(familyKey) ?? new Map<string, string>();
-    occupants.set(husband, pairKey);
-    occupants.set(wife, pairKey);
+    memberIds.forEach((personId) => occupants.set(personId, occupancyKey));
     occupiedPartnersByGroup.set(familyKey, occupants);
   }
   for (const pair of spousePairs.values()) {

@@ -13,6 +13,39 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (divorce flow + one-parent households)
+
+- `Date`: 2026-03-12
+- `Change`: Added a direct-family `Div` spouse action, changed divorce/save handling to convert or create a one-parent household for the direct family member, broadened household/tree/child/integrity flows to treat one-parent households as valid, and relabeled the Notes action to `Import Story with AI (testing)`.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a `design + code` mismatch: the app modeled households as couple-only in core runtime paths, so a divorce flow that needed to preserve the direct family member's household would have deleted or broken household behavior. Leaving integrity and household-linked cleanup couple-only would also have reintroduced drift after a valid divorce.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+  - `src/app/api/t/[tenantKey]/households/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/app/api/t/[tenantKey]/import/csv/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/TreeGraph.tsx`
+  - `src/lib/google/family.ts`
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: No DDL/schema migration. Divorce now removes spouse/family edges, disables the removed spouse's family access in affected groups when they become undeclared there, clears household-synced marriage attributes for the former couple household, and preserves or creates the direct member's one-parent household.
+- `Verify`:
+  - In Person -> Family for a direct/founder member with a spouse, selecting `Div` and saving removes the spouse link, keeps a clickable household for the direct member, and still allows Household -> Children actions.
+  - In Tree and People, one-parent households display a label and open the household editor on click.
+  - Integrity repair no longer treats valid one-parent households as broken or deletes them during duplicate-merge/spouse-household repair paths.
+  - CSV household import can generate a deterministic household ID when only one parent column is populated.
+  - The Notes panel button/help text now reads `Import Story with AI (testing)`.
+- `Rollback Notes`: Revert the runtime/docs changes together; do not leave the relationship-builder divorce path deployed without the one-parent household readers.
+- `Design Decision Change`: Yes. `Households` are now a one-or-two-parent runtime model in the existing schema; see `docs/design-decisions.md`, `designchoices.md`, and `docs/data-schema.md`.
+
 ## 2026-03-11 (tree sibling blocks stay contiguous)
 
 - `Date`: 2026-03-11

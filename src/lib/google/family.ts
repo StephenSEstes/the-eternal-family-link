@@ -39,10 +39,13 @@ export async function getHouseholds(tenantKey: string): Promise<HouseholdRecord[
   for (let idx = 0; idx < rows.length; idx += 1) {
     const data = rows[idx]?.data ?? {};
     const householdId = readCell(data, "household_id", "id") || `fu-${idx + 2}`;
-    const partner1PersonId = readCell(data, "husband_person_id");
-    const partner2PersonId = readCell(data, "wife_person_id");
-    if (!partner1PersonId || !partner2PersonId) continue;
-    if (!allowedPersonIds.has(partner1PersonId) || !allowedPersonIds.has(partner2PersonId)) continue;
+    const husbandPersonId = readCell(data, "husband_person_id");
+    const wifePersonId = readCell(data, "wife_person_id");
+    const candidateIds = [husbandPersonId, wifePersonId].filter(Boolean);
+    if (candidateIds.length === 0) continue;
+    if (!candidateIds.every((personId) => allowedPersonIds.has(personId))) continue;
+    const partner1PersonId = husbandPersonId || wifePersonId;
+    const partner2PersonId = husbandPersonId && wifePersonId ? wifePersonId : "";
 
     const incoming: HouseholdRecord = {
       id: householdId,

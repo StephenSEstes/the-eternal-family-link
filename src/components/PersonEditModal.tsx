@@ -108,6 +108,7 @@ function normalizeFamilyGroupKey(value?: string) {
 type TabKey = "contact" | "attributes" | "photos";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 const ADD_NEW_SPOUSE_OPTION = "__add_new_spouse__";
+const DIVORCE_SPOUSE_OPTION = "__divorce_spouse__";
 type DraftMeta = {
   label: string;
   description: string;
@@ -669,6 +670,7 @@ export function PersonEditModal({
   const [parent1Id, setParent1Id] = useState("");
   const [parent2Id, setParent2Id] = useState("");
   const [spouseId, setSpouseId] = useState("");
+  const [divorceSpouseId, setDivorceSpouseId] = useState("");
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [familyTouched, setFamilyTouched] = useState(false);
@@ -772,6 +774,9 @@ export function PersonEditModal({
   const spouseByPersonId = useMemo(() => {
     const map = new Map<string, string>();
     contextHouseholds.forEach((unit) => {
+      if (!unit.partner1PersonId || !unit.partner2PersonId) {
+        return;
+      }
       map.set(unit.partner1PersonId, unit.partner2PersonId);
       map.set(unit.partner2PersonId, unit.partner1PersonId);
     });
@@ -972,6 +977,7 @@ export function PersonEditModal({
       initialSpouseId = spouseByRelationshipId;
       setSpouseId(initialSpouseId);
     }
+    setDivorceSpouseId("");
     initialFamilyRef.current = {
       parent1Id: normalizeId(initialParent1Id),
       parent2Id: normalizeId(initialParent2Id),
@@ -1146,8 +1152,8 @@ export function PersonEditModal({
     });
   }, [aboutAttributes]);
   const displayedFamilyGroupRelationshipType = useMemo<FamilyGroupRelationshipType>(() => {
-    if (storedFamilyGroupRelationshipType === "founder") {
-      return "founder";
+    if (storedFamilyGroupRelationshipType === "founder" || storedFamilyGroupRelationshipType === "direct") {
+      return storedFamilyGroupRelationshipType;
     }
     if (!familyTouched) {
       return storedFamilyGroupRelationshipType;
@@ -1214,11 +1220,17 @@ export function PersonEditModal({
     () => Boolean(spouseId && spouseOptions.some((option) => option.personId === spouseId)),
     [spouseId, spouseOptions],
   );
+  const spouseSelectValue = divorceSpouseId ? DIVORCE_SPOUSE_OPTION : spouseId;
+  const canRequestDivorce = Boolean(
+    isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) &&
+      (divorceSpouseId || spouseId || initialFamilyRef.current.spouseId),
+  );
   const selectedSpouseName = useMemo(() => {
-    if (!spouseId) return "-";
-    const spouse = localPeople.find((item) => item.personId === spouseId);
+    const selectedId = divorceSpouseId || spouseId;
+    if (!selectedId) return "-";
+    const spouse = localPeople.find((item) => item.personId === selectedId);
     return spouse?.displayName || "-";
-  }, [localPeople, spouseId]);
+  }, [divorceSpouseId, localPeople, spouseId]);
   const marriedSummaryText = useMemo(() => {
     if (!spouseId || selectedSpouseName === "-") return "coming";
     const parts = [selectedSpouseName];
@@ -1719,14 +1731,15 @@ export function PersonEditModal({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personId: person.personId,
-              parentIds: [parent1Id, parent2Id].filter(Boolean),
-              childIds,
-              spouseId: createdPersonId,
-              familyChanged: true,
-            }),
-          },
+              body: JSON.stringify({
+                personId: person.personId,
+                parentIds: [parent1Id, parent2Id].filter(Boolean),
+                childIds,
+                spouseId: createdPersonId,
+                spouseAction: "link",
+                familyChanged: true,
+              }),
+            },
         );
         relationSaved = relationshipRes.ok;
         if (!relationshipRes.ok) {
@@ -1754,6 +1767,7 @@ export function PersonEditModal({
       });
       pendingCreatedSpouseIdRef.current = createdPersonId;
       setSpouseId(createdPersonId);
+      setDivorceSpouseId("");
       setFamilyTouched(true);
       setShowAddSpouse(false);
       if (relationSaved) {
@@ -2147,7 +2161,7 @@ export function PersonEditModal({
                       {currentPersonCanHaveSpouse ? (
                         <div style={{ flex: 1, minWidth: 180 }}>
                           <label className="label">Spouse</label>
-                          <select className="input" value={spouseId} onChange={(e) => {
+                          <select className="input" value={spouseSelectValue} onChange={(e) => {
                             const nextValue = e.target.value;
                             if (nextValue === ADD_NEW_SPOUSE_OPTION) {
                               if (!isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType)) {
@@ -2158,17 +2172,34 @@ export function PersonEditModal({
                               setStatus("");
                               return;
                             }
+                            if (nextValue === DIVORCE_SPOUSE_OPTION) {
+                              const currentSpouseId = spouseId || initialFamilyRef.current.spouseId;
+                              if (!currentSpouseId) {
+                                return;
+                              }
+                              setDivorceSpouseId(currentSpouseId);
+                              setSpouseId("");
+                              setFamilyTouched(true);
+                              setStatus("Divorce selected. Save to remove the spouse, disable their access, and keep this household with the direct family member.");
+                              return;
+                            }
                             if (nextValue && (nextValue === parent1Id || nextValue === parent2Id)) {
                               setStatus("A parent cannot also be selected as spouse.");
                               return;
                             }
+                            setDivorceSpouseId("");
                             setSpouseId(nextValue);
                             setFamilyTouched(true);
                           }}>
-                            <option value="">None</option>
+                            {!canRequestDivorce ? (
+                              <option value="">None</option>
+                            ) : null}
                             {spouseOptions.map((option) => (
                               <option key={`sp-${option.personId}`} value={option.personId}>{option.displayName}</option>
                             ))}
+                            {canRequestDivorce ? (
+                              <option value={DIVORCE_SPOUSE_OPTION}>Div</option>
+                            ) : null}
                             {isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
                               <option value={ADD_NEW_SPOUSE_OPTION}>+ Add Person</option>
                             ) : null}
@@ -2189,10 +2220,17 @@ export function PersonEditModal({
                         </div>
                       ) : null}
                     </div>
-                    {!hasVisibleSpouseSelection && !isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
+                      {!hasVisibleSpouseSelection && !isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
+                        <div style={{ marginTop: "0.75rem" }}>
+                          <p className="page-subtitle" style={{ margin: "0.45rem 0 0" }}>
+                            Add or connect this person to a direct parent first, or choose an existing direct/founder spouse.
+                          </p>
+                        </div>
+                      ) : null}
+                    {divorceSpouseId ? (
                       <div style={{ marginTop: "0.75rem" }}>
                         <p className="page-subtitle" style={{ margin: "0.45rem 0 0" }}>
-                          Add or connect this person to a direct parent first, or choose an existing direct/founder spouse.
+                          Divorce is pending. Save to remove {selectedSpouseName} from this family, disable their access if no other family links remain, and keep this household with the direct family member.
                         </p>
                       </div>
                     ) : null}
@@ -2218,7 +2256,7 @@ export function PersonEditModal({
                       className="button secondary tap-button"
                       onClick={openStoryImportModal}
                     >
-                      Import Story with AI
+                      Import Story with AI (testing)
                     </button>
                   ) : null}
                 </div>
@@ -2789,7 +2827,7 @@ export function PersonEditModal({
               style={{ width: "min(760px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
               onClick={(event) => event.stopPropagation()}
             >
-              <h4 style={{ marginTop: 0 }}>Import Story with AI</h4>
+              <h4 style={{ marginTop: 0 }}>Import Story with AI (testing)</h4>
               <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
                 Paste a life story, vignette, or notes. AI will propose canonical attributes, events, and stories. Nothing is saved until you review each proposal.
               </p>
@@ -2884,7 +2922,8 @@ export function PersonEditModal({
                         personId: person.personId,
                         parentIds: [parent1Id, parent2Id].filter(Boolean),
                         childIds,
-                        spouseId,
+                        spouseId: divorceSpouseId || spouseId,
+                        spouseAction: divorceSpouseId ? "divorce" : "link",
                         familyChanged: true,
                       }),
                     },

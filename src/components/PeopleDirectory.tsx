@@ -123,10 +123,11 @@ export function PeopleDirectory({
       .map((household) => {
         const partner1 = peopleById.get(household.partner1PersonId);
         const partner2 = peopleById.get(household.partner2PersonId);
-        const partner1Name = partner1?.displayName || "Unknown";
-        const partner2Name = partner2?.displayName || "Unknown";
-        const label = household.label?.trim() || `${partner1Name} + ${partner2Name}`;
-        const searchBlob = `${label} ${partner1Name} ${partner2Name} ${household.id}`.toLowerCase();
+        const partner1Name = partner1?.displayName || (household.partner1PersonId ? "Unknown" : "");
+        const partner2Name = partner2?.displayName || (household.partner2PersonId ? "Unknown" : "");
+        const householdPeople = [partner1Name, partner2Name].filter(Boolean);
+        const label = household.label?.trim() || householdPeople.join(" + ") || household.id;
+        const searchBlob = `${label} ${householdPeople.join(" ")} ${household.id}`.toLowerCase();
         return {
           id: household.id,
           label,
@@ -317,12 +318,16 @@ export function PeopleDirectory({
               </div>
               <div className="person-card-content">
                 <h3>{household.label}</h3>
-                <p className="person-meta-row">
-                  <span>{household.partner1Name}</span>
-                </p>
-                <p className="person-meta-row">
-                  <span>{household.partner2Name}</span>
-                </p>
+                {household.partner1Name ? (
+                  <p className="person-meta-row">
+                    <span>{household.partner1Name}</span>
+                  </p>
+                ) : null}
+                {household.partner2Name ? (
+                  <p className="person-meta-row">
+                    <span>{household.partner2Name}</span>
+                  </p>
+                ) : null}
               </div>
             </article>
           ))}

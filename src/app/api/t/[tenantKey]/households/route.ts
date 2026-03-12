@@ -43,8 +43,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       if (!householdId) continue;
       const husbandPersonId = readCell(row.data, "husband_person_id");
       const wifePersonId = readCell(row.data, "wife_person_id");
-      if (!husbandPersonId || !wifePersonId) continue;
-      if (!allowedPersonIds.has(husbandPersonId) || !allowedPersonIds.has(wifePersonId)) continue;
+      const candidateIds = [husbandPersonId, wifePersonId].filter(Boolean);
+      if (candidateIds.length === 0) continue;
+      if (!candidateIds.every((personId) => allowedPersonIds.has(personId))) continue;
       const incoming = {
         householdId,
         label: readCell(row.data, "label", "family_label", "family_name"),

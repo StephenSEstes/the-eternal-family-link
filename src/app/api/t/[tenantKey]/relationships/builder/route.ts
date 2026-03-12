@@ -9,6 +9,7 @@ import {
   deleteTableRows,
   ensurePersonFamilyGroupMembership,
   getTableRecords,
+  updateTableRecordById,
 } from "@/lib/data/runtime";
 import {
   deriveExpectedFamilyGroupRelationshipTypes,
@@ -19,14 +20,18 @@ import {
   toRelationshipLike,
 } from "@/lib/family-group/relationship-type";
 import { hasTenantAccess, normalizeTenantRouteKey } from "@/lib/family-group/context";
+import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
 
 const payloadSchema = z.object({
   personId: z.string().trim().min(1),
   parentIds: z.array(z.string().trim().min(1)).default([]),
   childIds: z.array(z.string().trim().min(1)).default([]),
   spouseId: z.string().trim().optional().default(""),
+  spouseAction: z.enum(["link", "divorce"]).optional().default("link"),
   familyChanged: z.boolean().optional().default(true),
 });
+
+const MARRIAGE_SYNC_NOTE_PREFIX = "[system] household_marriage_sync:";
 
 function makeRelId(fromPersonId: string, toPersonId: string, relType: string) {
   return buildEntityId("rel", `${fromPersonId}|${toPersonId}|${relType}`);
@@ -74,6 +79,10 @@ function makeFamilyUnitId(tenantKey: string, personA: string, personB: string) {
   return buildEntityId("h", `${tenantKey}|${pair}`);
 }
 
+function makeSingleParentFamilyUnitId(tenantKey: string, personId: string) {
+  return buildEntityId("h", `${tenantKey}|single|${personId}`.toLowerCase());
+}
+
 function normalizeNamePart(value: string) {
   const cleaned = value.trim().replace(/[^a-zA-Z\s'-]/g, " ").replace(/\s+/g, " ");
   if (!cleaned) return "";
@@ -97,6 +106,28 @@ function buildHouseholdLabel(wifeLastName: string, husbandLastName: string) {
     return `${husband} Family`;
   }
   return "Family";
+}
+
+function removeEnabledGroup(
+  enabledGroupsByPerson: Map<string, Set<string>>,
+  personId: string,
+  familyGroupKey: string,
+) {
+  const normalizedPersonId = personId.trim();
+  const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
+  if (!normalizedPersonId || !normalizedFamilyGroupKey) {
+    return;
+  }
+  const current = enabledGroupsByPerson.get(normalizedPersonId);
+  if (!current) {
+    return;
+  }
+  current.delete(normalizedFamilyGroupKey);
+  if (current.size === 0) {
+    enabledGroupsByPerson.delete(normalizedPersonId);
+    return;
+  }
+  enabledGroupsByPerson.set(normalizedPersonId, current);
 }
 
 function parseEnabledMembership(value: string) {
@@ -238,6 +269,160 @@ async function createFamilyUnit(
   await createTableRecord("Households", payload, tenantKey);
 }
 
+function resolveSingleParentHouseholdRoles(
+  personId: string,
+  peopleById: Map<string, { gender: string; lastName: string }>,
+) {
+  const gender = (peopleById.get(personId)?.gender ?? "").trim().toLowerCase();
+  if (gender === "female") {
+    return { husbandPersonId: "", wifePersonId: personId };
+  }
+  return { husbandPersonId: personId, wifePersonId: "" };
+}
+
+function buildSingleParentHouseholdPayload(
+  tenantKey: string,
+  householdId: string,
+  personId: string,
+  peopleById: Map<string, { gender: string; lastName: string }>,
+  existing?: Record<string, string>,
+) {
+  const roles = resolveSingleParentHouseholdRoles(personId, peopleById);
+  const personLastName = (peopleById.get(personId)?.lastName ?? "").trim();
+  return {
+    family_group_key: tenantKey,
+    household_id: householdId,
+    husband_person_id: roles.husbandPersonId,
+    wife_person_id: roles.wifePersonId,
+    label: existing && readField(existing, "label") ? readField(existing, "label") : buildHouseholdLabel(personLastName, ""),
+    notes: existing ? readField(existing, "notes") : "",
+    wedding_photo_file_id: existing ? readField(existing, "wedding_photo_file_id") : "",
+    married_date: "",
+    address: existing ? readField(existing, "address") : "",
+    city: existing ? readField(existing, "city") : "",
+    state: existing ? readField(existing, "state") : "",
+    zip: existing ? readField(existing, "zip") : "",
+  };
+}
+
+function getHouseholdOccupants(record: Record<string, string>) {
+  const husbandPersonId = readField(record, "husband_person_id");
+  const wifePersonId = readField(record, "wife_person_id");
+  const memberIds = [husbandPersonId, wifePersonId].filter(Boolean);
+  return {
+    husbandPersonId,
+    wifePersonId,
+    memberIds,
+  };
+}
+
+function isHouseholdMatchForPair(record: Record<string, string>, personA: string, personB: string) {
+  const { memberIds } = getHouseholdOccupants(record);
+  if (memberIds.length !== 2) {
+    return false;
+  }
+  const normalizedPair = [personA.trim(), personB.trim()].filter(Boolean).sort().join("|");
+  return memberIds.slice().sort().join("|") === normalizedPair;
+}
+
+function isSingleParentHouseholdForPerson(record: Record<string, string>, personId: string) {
+  const { memberIds } = getHouseholdOccupants(record);
+  return memberIds.length === 1 && memberIds[0] === personId.trim();
+}
+
+function mergeHouseholdPayload(
+  target: Record<string, string>,
+  source: Record<string, string>,
+) {
+  return {
+    label: readField(target, "label") || readField(source, "label"),
+    notes: readField(target, "notes") || readField(source, "notes"),
+    wedding_photo_file_id: readField(target, "wedding_photo_file_id") || readField(source, "wedding_photo_file_id"),
+    address: readField(target, "address") || readField(source, "address"),
+    city: readField(target, "city") || readField(source, "city"),
+    state: readField(target, "state") || readField(source, "state"),
+    zip: readField(target, "zip") || readField(source, "zip"),
+  };
+}
+
+async function moveHouseholdLinkedRows(
+  tenantKey: string,
+  sourceHouseholdId: string,
+  targetHouseholdId: string,
+) {
+  if (!sourceHouseholdId.trim() || !targetHouseholdId.trim() || sourceHouseholdId === targetHouseholdId) {
+    return;
+  }
+  const [attributeRows, mediaLinkRows] = await Promise.all([
+    getTableRecords("Attributes", tenantKey).catch(() => []),
+    getTableRecords("MediaLinks", tenantKey).catch(() => []),
+  ]);
+
+  for (const row of attributeRows) {
+    const attributeId = readField(row.data, "attribute_id");
+    if (!attributeId) {
+      continue;
+    }
+    if (readField(row.data, "entity_type").trim().toLowerCase() !== "household") {
+      continue;
+    }
+    if (readField(row.data, "entity_id") !== sourceHouseholdId) {
+      continue;
+    }
+    await updateTableRecordById("Attributes", attributeId, { entity_id: targetHouseholdId }, "attribute_id", tenantKey);
+  }
+
+  for (const row of mediaLinkRows) {
+    const linkId = readField(row.data, "link_id", "id");
+    if (!linkId) {
+      continue;
+    }
+    if (readField(row.data, "entity_type").trim().toLowerCase() !== "household") {
+      continue;
+    }
+    if (readField(row.data, "entity_id") !== sourceHouseholdId) {
+      continue;
+    }
+    await updateTableRecordById("MediaLinks", linkId, { entity_id: targetHouseholdId }, "link_id", tenantKey);
+  }
+}
+
+async function deleteSyncedHouseholdMarriageAttributes(
+  tenantKey: string,
+  householdIds: string[],
+) {
+  const markers = new Set(
+    householdIds
+      .map((householdId) => householdId.trim())
+      .filter(Boolean)
+      .map((householdId) => `${MARRIAGE_SYNC_NOTE_PREFIX}${householdId}`),
+  );
+  if (markers.size === 0) {
+    return;
+  }
+  const attributeRows = await getTableRecords("Attributes", tenantKey).catch(() => []);
+  for (const row of attributeRows) {
+    const attributeId = readField(row.data, "attribute_id");
+    if (!attributeId) {
+      continue;
+    }
+    if (readField(row.data, "entity_type").toLowerCase() !== "person") {
+      continue;
+    }
+    if (readField(row.data, "attribute_type").toLowerCase() !== "family_relationship") {
+      continue;
+    }
+    if (readField(row.data, "attribute_type_category").toLowerCase() !== "married") {
+      continue;
+    }
+    const notes = readField(row.data, "attribute_notes", "notes");
+    if (!markers.has(notes)) {
+      continue;
+    }
+    await deleteTableRecordById("Attributes", attributeId, "attribute_id", tenantKey);
+  }
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
   const session = await getAppSession();
   if (!session?.user?.email) {
@@ -260,12 +445,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     parentCount: parsed.data.parentIds.length,
     childCount: parsed.data.childIds.length,
     spouseId: parsed.data.spouseId ?? "",
+    spouseAction: parsed.data.spouseAction,
     familyChanged: parsed.data.familyChanged,
   };
   try {
     debugContext.phase = "prepare";
     const parentIds = Array.from(new Set(parsed.data.parentIds.filter((id) => id !== parsed.data.personId)));
     const childIds = Array.from(new Set(parsed.data.childIds.filter((id) => id !== parsed.data.personId)));
+    const spouseAction = parsed.data.spouseAction === "divorce" ? "divorce" : "link";
     const spouseId = parsed.data.spouseId && parsed.data.spouseId !== parsed.data.personId ? parsed.data.spouseId : "";
     if (!parsed.data.familyChanged) {
       return NextResponse.json({
@@ -275,11 +462,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         personId: parsed.data.personId,
       });
     }
+    if (spouseAction === "divorce" && !spouseId) {
+      return NextResponse.json(
+        {
+          error: "invalid_divorce_target",
+          message: "Divorce requires the current spouse ID.",
+        },
+        { status: 400 },
+      );
+    }
 
     debugContext.phase = "load_relationships";
     const existing = await getTableRecords("Relationships", normalizedTenantKey);
     const people = await getTableRecords("People", normalizedTenantKey);
     const personFamilyRows = await getTableRecords("PersonFamilyGroups").catch(() => []);
+    const userFamilyRows = await getTableRecords("UserFamilyGroups").catch(() => []);
     const existingRelationshipsLike = existing.map((row) => toRelationshipLike(row.data));
     const peopleById = new Map<string, { gender: string; lastName: string; birthDate: string }>();
     for (const row of people) {
@@ -300,6 +497,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         continue;
       }
       addEnabledGroup(enabledGroupsByPerson, personId, familyGroupKey);
+    }
+    const enabledUserFamilyGroupsByPerson = new Map<string, Set<string>>();
+    for (const row of userFamilyRows) {
+      const personId = readField(row.data, "person_id");
+      const familyGroupKey = readField(row.data, "family_group_key", "tenant_key");
+      const isEnabled = parseEnabledMembership(readField(row.data, "is_enabled"));
+      if (!personId || !familyGroupKey || !isEnabled) {
+        continue;
+      }
+      addEnabledGroup(enabledUserFamilyGroupsByPerson, personId, familyGroupKey);
     }
     const currentRelationshipTypes = deriveExpectedFamilyGroupRelationshipTypes({
       familyGroupKey: normalizedTenantKey,
@@ -361,6 +568,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     const nextPersonWillBeAnchor =
       isFounderFamilyGroupRelationshipType(currentPersonRelationshipType) || parentIds.length > 0;
     if (
+      spouseAction !== "divorce" &&
       spouseId &&
       !nextPersonWillBeAnchor &&
       !isAnchorFamilyGroupRelationshipType(currentRelationshipTypes.get(spouseId))
@@ -374,7 +582,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         { status: 409 },
       );
     }
-    if (spouseId && parentIds.includes(spouseId)) {
+    if (spouseAction !== "divorce" && spouseId && parentIds.includes(spouseId)) {
       return NextResponse.json(
         {
           error: "invalid_spouse_parent_overlap",
@@ -386,7 +594,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     }
     const currentPersonBirthDate = peopleById.get(parsed.data.personId)?.birthDate ?? "";
     const spouseBirthDate = spouseId ? peopleById.get(spouseId)?.birthDate ?? "" : "";
-    if (spouseId && (!isAtLeastAge(currentPersonBirthDate, 19) || !isAtLeastAge(spouseBirthDate, 19))) {
+    if (
+      spouseAction !== "divorce" &&
+      spouseId &&
+      (!isAtLeastAge(currentPersonBirthDate, 19) || !isAtLeastAge(spouseBirthDate, 19))
+    ) {
       return NextResponse.json(
         {
           error: "invalid_spouse_age",
@@ -491,6 +703,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         continue;
       }
       const isDesired =
+        spouseAction !== "divorce" &&
         spouseId &&
         ((fromPersonId === parsed.data.personId && toPersonId === spouseId) ||
           (toPersonId === parsed.data.personId && fromPersonId === spouseId));
@@ -503,7 +716,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     if (spouseRelationshipRowNumbersToDelete.length > 0) {
       await deleteTableRows("Relationships", spouseRelationshipRowNumbersToDelete, normalizedTenantKey);
     }
-    if (spouseId) {
+    if (spouseAction !== "divorce" && spouseId) {
       const desiredSpouseEdges = [
         relationPayload(normalizedTenantKey, parsed.data.personId, spouseId, "spouse"),
         relationPayload(normalizedTenantKey, spouseId, parsed.data.personId, "spouse"),
@@ -522,18 +735,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
     debugContext.phase = "load_households";
     const households = await getTableRecords("Households", normalizedTenantKey);
-    const spouseConflict = spouseId
+    const spouseConflict = spouseAction !== "divorce" && spouseId
       ? households.find((row) => {
-          const partner1 = readField(row.data, "husband_person_id");
-          const partner2 = readField(row.data, "wife_person_id");
+          const { memberIds } = getHouseholdOccupants(row.data);
           const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
           if (rowTenantKey !== normalizedTenantKey) {
             return false;
           }
-          if (partner1 !== spouseId && partner2 !== spouseId) {
+          if (!memberIds.includes(spouseId) || memberIds.length < 2) {
             return false;
           }
-          return partner1 !== parsed.data.personId && partner2 !== parsed.data.personId;
+          return !memberIds.includes(parsed.data.personId);
         })
       : null;
 
@@ -551,49 +763,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       );
     }
 
-    debugContext.phase = "prune_households";
-    for (const row of households) {
-      const unitId = readField(row.data, "household_id");
-      const partner1 = readField(row.data, "husband_person_id");
-      const partner2 = readField(row.data, "wife_person_id");
-      const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || normalizedTenantKey;
-      if (!unitId || rowTenantKey !== normalizedTenantKey) {
-        continue;
-      }
-      if (partner1 !== parsed.data.personId && partner2 !== parsed.data.personId) {
-        continue;
-      }
-      if (
-        spouseId &&
-        ((partner1 === parsed.data.personId && partner2 === spouseId) ||
-          (partner2 === parsed.data.personId && partner1 === spouseId))
-      ) {
-        continue;
-      }
-      await deleteTableRecordById("Households", unitId, "household_id", normalizedTenantKey);
-    }
-
     debugContext.phase = "upsert_household";
     const propagationFamilyGroups = new Set<string>([normalizedTenantKey]);
+    const discoveredParentIds = new Set<string>(parentIds);
+    for (const row of existing) {
+      const relType = readField(row.data, "rel_type").toLowerCase();
+      const fromPersonId = readField(row.data, "from_person_id");
+      const toPersonId = readField(row.data, "to_person_id");
+      if (relType === "parent" && toPersonId === parsed.data.personId && fromPersonId) {
+        discoveredParentIds.add(fromPersonId);
+      }
+    }
+    for (const parentId of discoveredParentIds) {
+      const parentGroups = enabledGroupsByPerson.get(parentId);
+      if (!parentGroups) continue;
+      parentGroups.forEach((groupKey) => propagationFamilyGroups.add(groupKey));
+    }
+    const personGroups = enabledGroupsByPerson.get(parsed.data.personId);
+    if (personGroups) {
+      personGroups.forEach((groupKey) => propagationFamilyGroups.add(groupKey));
+    }
     if (spouseId) {
-      const discoveredParentIds = new Set<string>(parentIds);
-      for (const row of existing) {
-        const relType = readField(row.data, "rel_type").toLowerCase();
-        const fromPersonId = readField(row.data, "from_person_id");
-        const toPersonId = readField(row.data, "to_person_id");
-        if (relType === "parent" && toPersonId === parsed.data.personId && fromPersonId) {
-          discoveredParentIds.add(fromPersonId);
-        }
+      const spouseGroups = enabledGroupsByPerson.get(spouseId);
+      if (spouseGroups) {
+        spouseGroups.forEach((groupKey) => propagationFamilyGroups.add(groupKey));
       }
-      for (const parentId of discoveredParentIds) {
-        const parentGroups = enabledGroupsByPerson.get(parentId);
-        if (!parentGroups) continue;
-        parentGroups.forEach((groupKey) => propagationFamilyGroups.add(groupKey));
-      }
-      const personGroups = enabledGroupsByPerson.get(parsed.data.personId);
-      if (personGroups) {
-        personGroups.forEach((groupKey) => propagationFamilyGroups.add(groupKey));
-      }
+    }
+    if (spouseAction !== "divorce" && spouseId) {
       for (const familyGroupKey of propagationFamilyGroups) {
         await ensurePersonFamilyGroupMembership(parsed.data.personId, familyGroupKey, true);
         await ensurePersonFamilyGroupMembership(spouseId, familyGroupKey, true);
@@ -601,66 +797,169 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
         addEnabledGroup(enabledGroupsByPerson, spouseId, familyGroupKey);
       }
     }
-    if (spouseId) {
-      const sortedPropagationGroups = Array.from(propagationFamilyGroups).sort((left, right) => {
-        if (left === normalizedTenantKey && right !== normalizedTenantKey) return -1;
-        if (right === normalizedTenantKey && left !== normalizedTenantKey) return 1;
-        return left.localeCompare(right);
-      });
+    const sortedPropagationGroups = Array.from(propagationFamilyGroups).sort((left, right) => {
+      if (left === normalizedTenantKey && right !== normalizedTenantKey) return -1;
+      if (right === normalizedTenantKey && left !== normalizedTenantKey) return 1;
+      return left.localeCompare(right);
+    });
+    const spouseAccessDisabledGroups = new Set<string>();
+    if (!spouseId) {
       for (const familyGroupKey of sortedPropagationGroups) {
         const scopedHouseholds = await getTableRecords("Households", familyGroupKey).catch(() => []);
-        const spouseConflict = scopedHouseholds.find((row) => {
-          const partner1 = readField(row.data, "husband_person_id");
-          const partner2 = readField(row.data, "wife_person_id");
-          const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || familyGroupKey;
-          if (rowTenantKey.toLowerCase() !== familyGroupKey) {
-            return false;
+        const removedHouseholdIds: string[] = [];
+        for (const row of scopedHouseholds) {
+          const unitId = readField(row.data, "household_id");
+          const rowTenantKey = (readField(row.data, "family_group_key", "tenant_key") || familyGroupKey).toLowerCase();
+          if (!unitId || rowTenantKey !== familyGroupKey) {
+            continue;
           }
-          if (partner1 !== spouseId && partner2 !== spouseId) {
-            return false;
+          if (!getHouseholdOccupants(row.data).memberIds.includes(parsed.data.personId)) {
+            continue;
           }
-          return partner1 !== parsed.data.personId && partner2 !== parsed.data.personId;
+          removedHouseholdIds.push(unitId);
+          await deleteTableRecordById("Households", unitId, "household_id", familyGroupKey);
+        }
+        await deleteSyncedHouseholdMarriageAttributes(familyGroupKey, removedHouseholdIds);
+      }
+    } else {
+      for (const familyGroupKey of sortedPropagationGroups) {
+        const scopedHouseholds = await getTableRecords("Households", familyGroupKey).catch(() => []);
+        const rowsForGroup = scopedHouseholds.filter((row) => {
+          const rowTenantKey = (readField(row.data, "family_group_key", "tenant_key") || familyGroupKey).toLowerCase();
+          return rowTenantKey === familyGroupKey;
         });
-        if (spouseConflict) {
+        if (spouseAction !== "divorce") {
+          const spouseConflictInGroup = rowsForGroup.find((row) => {
+            const { memberIds } = getHouseholdOccupants(row.data);
+            if (!memberIds.includes(spouseId) || memberIds.length < 2) {
+              return false;
+            }
+            return !memberIds.includes(parsed.data.personId);
+          });
+          if (spouseConflictInGroup) {
+            continue;
+          }
+
+          for (const row of rowsForGroup) {
+            const unitId = readField(row.data, "household_id");
+            const { memberIds } = getHouseholdOccupants(row.data);
+            if (!unitId || !memberIds.includes(parsed.data.personId)) {
+              continue;
+            }
+            if (isHouseholdMatchForPair(row.data, parsed.data.personId, spouseId)) {
+              continue;
+            }
+            await deleteTableRecordById("Households", unitId, "household_id", familyGroupKey);
+          }
+
+          const hasDesiredUnit = rowsForGroup.some((row) =>
+            isHouseholdMatchForPair(row.data, parsed.data.personId, spouseId),
+          );
+          if (!hasDesiredUnit) {
+            await createFamilyUnit(familyGroupKey, parsed.data.personId, spouseId, peopleById);
+          }
           continue;
         }
 
-        for (const row of scopedHouseholds) {
-          const unitId = readField(row.data, "household_id");
-          const partner1 = readField(row.data, "husband_person_id");
-          const partner2 = readField(row.data, "wife_person_id");
-          const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || familyGroupKey;
-          if (!unitId || rowTenantKey.toLowerCase() !== familyGroupKey) {
-            continue;
+        const directPersonEnabled = (enabledGroupsByPerson.get(parsed.data.personId) ?? new Set<string>()).has(familyGroupKey);
+        const pairRows = rowsForGroup.filter((row) => isHouseholdMatchForPair(row.data, parsed.data.personId, spouseId));
+        await deleteSyncedHouseholdMarriageAttributes(
+          familyGroupKey,
+          pairRows.map((row) => readField(row.data, "household_id")).filter(Boolean),
+        );
+        let targetSingleRow = rowsForGroup.find((row) => isSingleParentHouseholdForPerson(row.data, parsed.data.personId)) ?? null;
+        let targetHouseholdId = targetSingleRow ? readField(targetSingleRow.data, "household_id") : "";
+
+        if (directPersonEnabled) {
+          if (targetSingleRow) {
+            for (const row of pairRows) {
+              const sourceHouseholdId = readField(row.data, "household_id");
+              if (!sourceHouseholdId || sourceHouseholdId === targetHouseholdId) {
+                continue;
+              }
+              const mergedPayload = mergeHouseholdPayload(targetSingleRow.data, row.data);
+              await updateTableRecordById("Households", targetHouseholdId, mergedPayload, "household_id", familyGroupKey);
+              await moveHouseholdLinkedRows(familyGroupKey, sourceHouseholdId, targetHouseholdId);
+              await deleteTableRecordById("Households", sourceHouseholdId, "household_id", familyGroupKey);
+              targetSingleRow = { ...targetSingleRow, data: { ...targetSingleRow.data, ...mergedPayload } };
+            }
+          } else if (pairRows.length > 0) {
+            const [firstPairRow, ...extraPairRows] = pairRows;
+            targetHouseholdId = readField(firstPairRow.data, "household_id");
+            const payload = buildSingleParentHouseholdPayload(
+              familyGroupKey,
+              targetHouseholdId,
+              parsed.data.personId,
+              peopleById,
+              firstPairRow.data,
+            );
+            await updateTableRecordById("Households", targetHouseholdId, payload, "household_id", familyGroupKey);
+            targetSingleRow = { ...firstPairRow, data: { ...firstPairRow.data, ...payload } };
+            for (const row of extraPairRows) {
+              const sourceHouseholdId = readField(row.data, "household_id");
+              if (!sourceHouseholdId || sourceHouseholdId === targetHouseholdId) {
+                continue;
+              }
+              await moveHouseholdLinkedRows(familyGroupKey, sourceHouseholdId, targetHouseholdId);
+              await deleteTableRecordById("Households", sourceHouseholdId, "household_id", familyGroupKey);
+            }
+          } else {
+            targetHouseholdId = makeSingleParentFamilyUnitId(familyGroupKey, parsed.data.personId);
+            const existingTarget = rowsForGroup.find((row) => readField(row.data, "household_id") === targetHouseholdId);
+            const payload = buildSingleParentHouseholdPayload(
+              familyGroupKey,
+              targetHouseholdId,
+              parsed.data.personId,
+              peopleById,
+              existingTarget?.data,
+            );
+            if (existingTarget) {
+              await updateTableRecordById("Households", targetHouseholdId, payload, "household_id", familyGroupKey);
+            } else {
+              await createTableRecord("Households", payload, familyGroupKey);
+            }
           }
-          if (partner1 !== parsed.data.personId && partner2 !== parsed.data.personId) {
-            continue;
+        } else {
+          for (const row of pairRows) {
+            const sourceHouseholdId = readField(row.data, "household_id");
+            if (!sourceHouseholdId) {
+              continue;
+            }
+            await deleteTableRecordById("Households", sourceHouseholdId, "household_id", familyGroupKey);
           }
-          if (
-            (partner1 === parsed.data.personId && partner2 === spouseId) ||
-            (partner2 === parsed.data.personId && partner1 === spouseId)
-          ) {
-            continue;
-          }
-          await deleteTableRecordById("Households", unitId, "household_id", familyGroupKey);
         }
 
-        const hasDesiredUnit = scopedHouseholds.some((row) => {
-          const unitId = readField(row.data, "household_id");
-          const partner1 = readField(row.data, "husband_person_id");
-          const partner2 = readField(row.data, "wife_person_id");
-          const rowTenantKey = readField(row.data, "family_group_key", "tenant_key") || familyGroupKey;
-          return (
-            Boolean(unitId) &&
-            rowTenantKey.toLowerCase() === familyGroupKey &&
-            ((partner1 === parsed.data.personId && partner2 === spouseId) ||
-              (partner2 === parsed.data.personId && partner1 === spouseId))
-          );
+        const relationshipsForGroup = await getTableRecords("Relationships", familyGroupKey).catch(() => []);
+        const expectedTypes = deriveExpectedFamilyGroupRelationshipTypes({
+          familyGroupKey,
+          relationships: relationshipsForGroup.map((row) => toRelationshipLike(row.data)),
+          memberships: personFamilyRows.map((row) => toMembershipLike(row.data)),
         });
-        if (!hasDesiredUnit) {
-          await createFamilyUnit(familyGroupKey, parsed.data.personId, spouseId, peopleById);
+        if ((enabledGroupsByPerson.get(spouseId) ?? new Set<string>()).has(familyGroupKey) && expectedTypes.get(spouseId) === "undeclared") {
+          await ensurePersonFamilyGroupMembership(spouseId, familyGroupKey, false);
+          removeEnabledGroup(enabledGroupsByPerson, spouseId, familyGroupKey);
+          spouseAccessDisabledGroups.add(familyGroupKey);
+          const existingUserFamilyRow = userFamilyRows.find(
+            (row) =>
+              readField(row.data, "person_id") === spouseId &&
+              (readField(row.data, "family_group_key", "tenant_key") || "").trim().toLowerCase() === familyGroupKey,
+          );
+          if (existingUserFamilyRow) {
+            await upsertOciUserFamilyGroupAccess({
+              userEmail: readField(existingUserFamilyRow.data, "user_email").toLowerCase(),
+              tenantKey: familyGroupKey,
+              tenantName: readField(existingUserFamilyRow.data, "family_group_name") || familyGroupKey,
+              role: readField(existingUserFamilyRow.data, "role") || "USER",
+              personId: spouseId,
+              isEnabled: false,
+            });
+            removeEnabledGroup(enabledUserFamilyGroupsByPerson, spouseId, familyGroupKey);
+          }
         }
       }
+    }
+    if (spouseAction === "divorce" && spouseId && (enabledUserFamilyGroupsByPerson.get(spouseId)?.size ?? 0) === 0) {
+      await updateTableRecordById("UserAccess", spouseId, { is_enabled: "FALSE" }, "person_id");
     }
 
     debugContext.phase = "reconcile_relationship_types";
@@ -707,6 +1006,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       if (!groups) continue;
       groups.forEach((groupKey) => affectedFamilyGroups.add(groupKey));
     }
+    spouseAccessDisabledGroups.forEach((groupKey) => affectedFamilyGroups.add(groupKey));
     for (const familyGroupKey of affectedFamilyGroups) {
       await reconcileFamilyGroupRelationshipTypes(familyGroupKey);
     }
@@ -717,7 +1017,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       personId: parsed.data.personId,
       parentCount: parentIds.length,
       childCount: childIds.length,
-      spouseId: spouseId || null,
+      spouseId: spouseAction === "divorce" ? null : spouseId || null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unexpected_error";

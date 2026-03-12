@@ -542,7 +542,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
             })),
         ].slice(0, 10);
 
-  const husbandTile = household
+  const husbandTile = household?.husbandPersonId
     ? availablePeople.find((item) => item.personId === household.husbandPersonId) ?? {
         personId: household.husbandPersonId,
         displayName: household.husbandName || "Husband",
@@ -550,7 +550,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         photoFileId: "",
       }
     : null;
-  const wifeTile = household
+  const wifeTile = household?.wifePersonId
     ? availablePeople.find((item) => item.personId === household.wifePersonId) ?? {
         personId: household.wifePersonId,
         displayName: household.wifeName || "Wife",
@@ -558,6 +558,8 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         photoFileId: "",
       }
     : null;
+  const householdParentSummary = [household?.wifeName, household?.husbandName].filter(Boolean).join(" | ") || "-";
+  const householdHeading = husbandTile && wifeTile ? "Marriage" : "Household";
   const spouseHeadshotFileId = wifeTile?.photoFileId || husbandTile?.photoFileId || "";
   const sortedHouseholdTimeline = householdAttributes
     .filter((item) => {
@@ -639,7 +641,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
             <div>
               <h3 className="person-modal-title">{household?.label || "Household"}</h3>
               <p className="person-modal-meta">
-                Mother: {household?.wifeName || "-"} | Father: {household?.husbandName || "-"}
+                {householdParentSummary}
               </p>
               <p className="person-modal-meta">Household ID: {householdId}</p>
             </div>
@@ -662,7 +664,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               <>
                 <div className="person-section-grid">
                   <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "260px" }}>
-                    <h4 className="ui-section-title">Marriage</h4>
+                    <h4 className="ui-section-title">{householdHeading}</h4>
                     <label className="label">Household Label</label>
                     <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Household name" />
                     {(husbandTile || wifeTile) ? (
@@ -694,7 +696,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                                 <div className="person-card-content">
                                   <h3>{item.displayName}</h3>
                                   <p className="person-meta-row">
-                                    <span>{item.gender === "female" ? "Wife" : "Husband"}</span>
+                                    <span>{item.gender === "female" ? "Mother" : "Father"}</span>
                                   </p>
                                 </div>
                               </article>
@@ -702,13 +704,17 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           })}
                       </div>
                     ) : null}
-                    <label className="label">Married Date</label>
-                    <input
-                      className="input"
-                      type="date"
-                      value={marriedDate}
-                      onChange={(e) => setMarriedDate(e.target.value)}
-                    />
+                    {husbandTile && wifeTile ? (
+                      <>
+                        <label className="label">Married Date</label>
+                        <input
+                          className="input"
+                          type="date"
+                          value={marriedDate}
+                          onChange={(e) => setMarriedDate(e.target.value)}
+                        />
+                      </>
+                    ) : null}
                   </div>
 
                   <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "260px" }}>

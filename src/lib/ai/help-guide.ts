@@ -43,7 +43,7 @@ People
 Attributes and stories
 - Attributes are the main way to record facts, descriptors, events, and stories.
 - Story or memory content should be entered as an attribute or event on a person or household.
-- A person Notes panel includes "Import Story with AI", which reads pasted story text and proposes canonical person attributes, events, and stories for review.
+- A person Notes panel includes "Import Story with AI (testing)", which reads pasted story text and proposes canonical person attributes, events, and stories for review.
 - AI story import does not save anything automatically. Each proposal opens in the normal attribute modal and must be reviewed and saved by the user.
 - Media can be attached to attributes.
 - A dedicated story-first memory workflow is still planned, but the current live AI path is reviewed attribute/story import from the person Notes panel.
