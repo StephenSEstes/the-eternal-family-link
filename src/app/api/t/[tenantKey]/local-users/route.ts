@@ -2,7 +2,9 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getLocalUsers, getTenantSecurityPolicy, upsertLocalUser } from "@/lib/auth/local-users";
+import { getTenantConfig } from "@/lib/data/runtime";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
+import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
 import { validatePasswordComplexity } from "@/lib/security/password";
 
 const createUserSchema = z.object({
@@ -54,10 +56,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     return NextResponse.json({ error: "password_policy_failed", message: complexityError }, { status: 400 });
   }
 
+  const normalizedUsername = parsed.data.username.trim().toLowerCase();
+  const tenantConfig = await getTenantConfig(resolved.tenant.tenantKey);
+
   await upsertLocalUser({
     tenantKey: resolved.tenant.tenantKey,
-    username: parsed.data.username,
+    username: normalizedUsername,
     password: parsed.data.password,
+    role: parsed.data.role,
+    personId: parsed.data.personId,
+    isEnabled: parsed.data.isEnabled ?? true,
+  });
+  await upsertOciUserFamilyGroupAccess({
+    userEmail: `${parsed.data.personId.trim()}@local`,
+    tenantKey: resolved.tenant.tenantKey,
+    tenantName: tenantConfig.tenantName,
     role: parsed.data.role,
     personId: parsed.data.personId,
     isEnabled: parsed.data.isEnabled ?? true,
@@ -69,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     entityId: parsed.data.personId,
     familyGroupKey: resolved.tenant.tenantKey,
     status: "SUCCESS",
-    details: `Created local access username=${parsed.data.username.trim().toLowerCase()}, enabled=${String(parsed.data.isEnabled ?? true)}, role=${parsed.data.role}.`,
+    details: `Created local access username=${normalizedUsername}, enabled=${String(parsed.data.isEnabled ?? true)}, role=${parsed.data.role}.`,
   });
 
   return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey });

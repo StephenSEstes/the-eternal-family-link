@@ -26,6 +26,7 @@ type LocalUserItem = {
 type PersonItem = {
   personId: string;
   displayName: string;
+  email: string;
 };
 
 type SecurityPolicy = {
@@ -170,6 +171,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       peopleById.set(personId, {
         personId,
         displayName: readCell(row, peopleIdx, "display_name").trim() || personId,
+        email: readCell(row, peopleIdx, "email").trim(),
       });
     }
 
@@ -190,7 +192,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ tenantKey:
       }
     }
     const people = Array.from(enabledPersonIds)
-      .map((personId) => peopleById.get(personId) ?? { personId, displayName: personId })
+      .map((personId) => peopleById.get(personId) ?? { personId, displayName: personId, email: "" })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     const userAccessIdx = buildIndex(userAccessMatrix.headers);

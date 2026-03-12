@@ -50,7 +50,11 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             isEnabled: item.isEnabled,
             lastLoginAt: item.lastLoginAt,
           }))}
-          people={people.map((person) => ({ personId: person.personId, displayName: person.displayName }))}
+          people={people.map((person) => ({
+            personId: person.personId,
+            displayName: person.displayName,
+            email: person.email,
+          }))}
           allPeople={allPeople.map((person) => ({
             personId: person.personId,
             displayName: person.displayName,

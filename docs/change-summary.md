@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (local-only user family-link repair + invite email fallback)
+
+- `Date`: 2026-03-12
+- `Change`: Fixed local-only Add User so it now creates the matching family-scoped `UserFamilyGroups` link, repaired the two affected `snowestes` rows in OCI, and changed the Invite form to fall back to `People.email` when the person has no existing Google access email.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a `mixed issue`. The Add User local-only path wrote `UserAccess` but skipped `UserFamilyGroups`, while the Users & Access directory is built from family-scoped access rows. That left valid local-only users invisible in the directory. Separately, the invite form only prefilled from existing Google access and ignored a person's profile email when no Google access row existed.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/local-users/route.ts`
+  - `src/app/api/t/[tenantKey]/admin-snapshot/route.ts`
+  - `src/app/t/[tenantKey]/settings/page.tsx`
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: Repaired missing `UserFamilyGroups` rows for `Catherine Peterson (p-44b30ff9)` and `Lydia Lundquist (p-77e5a587)` in `snowestes`, using stable local-only `user_email` aliases (`<person_id>@local`) and the current family config name.
+- `Verify`:
+  - In `snowestes`, Catherine Peterson and Lydia Lundquist now appear in Admin -> Users & Access -> User Directory.
+  - Creating a local-only user from Add User now produces both `UserAccess` and `UserFamilyGroups` rows for the selected family group.
+  - In Manage User -> Invite, if no Google access email exists, the Invite Email field defaults to the person's `People.email` value when present.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the local-user route, admin snapshot/settings payload changes, and manually remove only the repaired `UserFamilyGroups` rows if you intentionally want to restore the broken state.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (direct Gmail invite sending)
 
 - `Date`: 2026-03-12

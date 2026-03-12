@@ -136,7 +136,7 @@ type SettingsClientProps = {
   tenantName: string;
   tenantOptions: TenantOption[];
   accessItems: AccessItem[];
-  people: { personId: string; displayName: string }[];
+  people: { personId: string; displayName: string; email: string }[];
   allPeople: { personId: string; displayName: string; middleName: string; gender: "male" | "female" | "unspecified" }[];
 };
 
@@ -209,7 +209,7 @@ const DEFAULT_POLICY: SecurityPolicy = {
 function buildDirectoryPeople(
   accessItems: AccessItem[],
   localUsers: LocalUserItem[],
-  people: { personId: string; displayName: string }[],
+  people: { personId: string; displayName: string; email: string }[],
 ) {
   const peopleNameById = new Map(
     people
@@ -417,7 +417,7 @@ export function SettingsClient({
   });
   const [adminLoadStatus, setAdminLoadStatus] = useState("");
   const [existingPeopleOptions, setExistingPeopleOptions] = useState<ExistingPersonOption[]>([]);
-  const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string }[]>(people);
+  const [familyPeople, setFamilyPeople] = useState<{ personId: string; displayName: string; email: string }[]>(people);
   const [familyAccessRows, setFamilyAccessRows] = useState<FamilyAccessRow[]>([]);
   const [familyAccessStatus, setFamilyAccessStatus] = useState("");
   const [directoryPeople, setDirectoryPeople] = useState<{ personId: string; displayName: string }[]>(
@@ -548,8 +548,8 @@ export function SettingsClient({
     const nextLocalUsers: LocalUserItem[] = Array.isArray(snapshotRes.body?.localUsers)
       ? (snapshotRes.body.localUsers as LocalUserItem[])
       : [];
-    const nextPeople: { personId: string; displayName: string }[] = Array.isArray(snapshotRes.body?.people)
-      ? (snapshotRes.body.people as { personId: string; displayName: string }[])
+    const nextPeople: { personId: string; displayName: string; email: string }[] = Array.isArray(snapshotRes.body?.people)
+      ? (snapshotRes.body.people as { personId: string; displayName: string; email: string }[])
       : [];
     const nextPolicy =
       snapshotRes.body?.policy && typeof snapshotRes.body.policy === "object"
@@ -1651,6 +1651,7 @@ export function SettingsClient({
 
     const personGoogle = (googleAccessByPersonId.get(nextPersonId) ?? []).filter((entry) => entry.userEmail.trim());
     const personLocal = localAccessByPersonId.get(nextPersonId) ?? [];
+    const selected = familyPeople.find((person) => person.personId === nextPersonId);
 
     const firstGoogle = personGoogle[0];
     if (firstGoogle) {
@@ -1663,7 +1664,7 @@ export function SettingsClient({
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
-      setInviteEmail("");
+      setInviteEmail(selected?.email?.trim() ?? "");
       setInviteRole("USER");
     }
 
@@ -1680,7 +1681,6 @@ export function SettingsClient({
       setLocalRole("USER");
       setLocalEnabled(true);
       setSelectedLocalUsername("");
-      const selected = familyPeople.find((person) => person.personId === nextPersonId);
       setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
     }
   };
@@ -1767,6 +1767,7 @@ export function SettingsClient({
     }
 
     const firstGoogle = selectedPersonGoogleAccess[0];
+    const selected = familyPeople.find((person) => person.personId === personId);
     if (firstGoogle) {
       setUserEmail(firstGoogle.userEmail);
       setRole(firstGoogle.role);
@@ -1777,7 +1778,7 @@ export function SettingsClient({
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
-      setInviteEmail("");
+      setInviteEmail(selected?.email?.trim() ?? "");
       if (!firstLocal) {
         setInviteRole("USER");
       }
