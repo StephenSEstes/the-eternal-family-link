@@ -33,6 +33,12 @@ export type InvitePresentation = {
   sessionEmailMatches: boolean;
 };
 
+export type InviteEmailDeliveryResult = {
+  attempted: boolean;
+  sent: boolean;
+  errorMessage: string;
+};
+
 export type CreatedInvitePayload = {
   invite: InvitePresentation;
   inviteUrl: string;

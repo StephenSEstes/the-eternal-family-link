@@ -5,6 +5,10 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().min(1),
+  GMAIL_SENDER_EMAIL: z.string().trim().email().optional(),
+  GMAIL_OAUTH_CLIENT_ID: z.string().trim().min(1).optional(),
+  GMAIL_OAUTH_CLIENT_SECRET: z.string().trim().min(1).optional(),
+  GMAIL_REFRESH_TOKEN: z.string().trim().min(1).optional(),
   PHOTOS_FOLDER_ID: z.string().min(1),
   VIEWER_PIN: z.string().min(1),
 });

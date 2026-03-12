@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
-import type { InvitePresentation } from "@/lib/invite/types";
+import type { InviteEmailDeliveryResult, InvitePresentation } from "@/lib/invite/types";
 
 type AccessItem = {
   userEmail: string;
@@ -180,6 +180,7 @@ type InviteCreationResult = {
   invite: InvitePresentation;
   inviteUrl: string;
   inviteMessage: string;
+  emailDelivery?: InviteEmailDeliveryResult;
 };
 
 type FamilyAccessRow = {
@@ -1588,7 +1589,7 @@ export function SettingsClient({
     }
   };
 
-  const createPersonInvite = async () => {
+  const createPersonInvite = async (sendEmail = false) => {
     if (!selectedDirectoryPersonId) {
       setInviteStatus("Select a person before creating an invite.");
       return;
@@ -1598,7 +1599,7 @@ export function SettingsClient({
       return;
     }
 
-    setInviteStatus("Creating invite...");
+    setInviteStatus(sendEmail ? "Creating invite and sending email..." : "Creating invite...");
     setInviteResult(null);
     const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/invites`, {
       method: "POST",
@@ -1610,6 +1611,7 @@ export function SettingsClient({
         role: inviteRole,
         localUsername: inviteLocalUsername,
         expiresInDays: inviteExpiresInDays,
+        sendEmail,
       }),
     });
     const body = await res.json().catch(() => null);
@@ -1622,7 +1624,19 @@ export function SettingsClient({
       invite: body.invite as InvitePresentation,
       inviteUrl: String(body.inviteUrl ?? ""),
       inviteMessage: String(body.inviteMessage ?? ""),
+      emailDelivery: body.emailDelivery as InviteEmailDeliveryResult | undefined,
     });
+    const emailDelivery = body.emailDelivery as InviteEmailDeliveryResult | undefined;
+    if (sendEmail) {
+      if (emailDelivery?.sent) {
+        setInviteStatus("Invite created and email sent.");
+      } else if (emailDelivery?.errorMessage) {
+        setInviteStatus(`Invite created, but email send failed: ${emailDelivery.errorMessage}`);
+      } else {
+        setInviteStatus("Invite created, but email send failed. You can still copy the invite below.");
+      }
+      return;
+    }
     setInviteStatus("Invite ready to copy and send.");
   };
 
@@ -2479,14 +2493,30 @@ export function SettingsClient({
                           onChange={(e) => setInviteExpiresInDays(Number.parseInt(e.target.value || "14", 10) || 14)}
                         />
 
-                        <button type="button" className="button tap-button" onClick={createPersonInvite}>Create Invite</button>
+                        <div className="settings-chip-list">
+                          <button type="button" className="button tap-button" onClick={() => void createPersonInvite(false)}>
+                            Create Invite
+                          </button>
+                          <button type="button" className="button secondary tap-button" onClick={() => void createPersonInvite(true)}>
+                            Create and Send Email
+                          </button>
+                        </div>
 
                         {inviteResult ? (
                           <div className="card" style={{ marginTop: "0.75rem" }}>
-                            <h4 style={{ marginTop: 0 }}>Invite Ready</h4>
+                            <h4 style={{ marginTop: 0 }}>Invite Created</h4>
                             <p className="page-subtitle" style={{ marginTop: 0 }}>
-                              Share the link directly, or copy the full message block for email or text.
+                              {inviteResult.emailDelivery?.attempted
+                                ? inviteResult.emailDelivery.sent
+                                  ? "The email was sent. You can still copy the link or full message below."
+                                  : "The invite was created, but the email did not send. You can still copy the link or full message below."
+                                : "Share the link directly, or copy the full message block for email or text."}
                             </p>
+                            {inviteResult.emailDelivery?.attempted && !inviteResult.emailDelivery.sent && inviteResult.emailDelivery.errorMessage ? (
+                              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                                Email send error: {inviteResult.emailDelivery.errorMessage}
+                              </p>
+                            ) : null}
                             {inviteResult.invite.authMode !== "google" ? (
                               <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
                                 The suggested message includes the generated local username and temporary password. That password is only shown in the copied message for this invite creation.

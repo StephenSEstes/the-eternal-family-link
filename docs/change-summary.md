@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (direct Gmail invite sending)
+
+- `Date`: 2026-03-12
+- `Change`: Added optional direct invite email sending through Gmail OAuth while preserving the existing copy/share invite flow.
+- `Type`: UI | API | Infra
+- `Why`: Root cause was a `code gap`: the app already created person-bound invites, URLs, and full invite messages, but the route/UI stopped at manual copy/share and had no outbound mail transport. The minimal safe fix was to reuse the existing invite payload and add an optional send step instead of replacing the invite workflow.
+- `Files`:
+  - `src/lib/env.ts`
+  - `src/lib/google/gmail.ts`
+  - `src/lib/invite/types.ts`
+  - `src/app/api/t/[tenantKey]/invites/route.ts`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/ai/help-guide.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - In Admin -> Users & Access -> User Directory -> Manage User -> Invite, `Create Invite` still returns a copyable link/message without attempting delivery.
+  - `Create and Send Email` creates the invite record and sends the same generated invite message to the invited email when Gmail sender env vars are configured.
+  - If Gmail delivery fails, the invite is still created, the copyable link/message is shown, and the UI reports that email delivery failed.
+  - Audit log includes the invite creation event and a separate `SEND_EMAIL` success/failure event.
+- `Rollback Notes`: Revert the Gmail helper, invite route/UI wiring, and help text together so the app returns cleanly to copy/share-only behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (tree soft focus mode)
 
 - `Date`: 2026-03-12

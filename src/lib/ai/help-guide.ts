@@ -90,8 +90,8 @@ Invites
 - Invite creation is person-bound. The invited person should already exist in the database.
 - The invite snapshots that person's family-group access at invite time.
 - If local sign-in is allowed, invite creation pre-provisions the local username/password and includes the temporary password in the generated share message.
-- Admin currently copies the generated invite link or message and sends it manually.
-- The app does not yet send outbound invite email directly.
+- Admin can still copy the generated invite link or message manually.
+- If outbound Gmail is configured, Invite also supports "Create and Send Email", which sends the same generated invite message directly.
 
 Permissions
 - Signed-in family-group users can edit shared family data in regular app areas, including people, households, relationships, attributes, and media.
