@@ -207,22 +207,60 @@ export function TreeGraph({
   const levelsSorted = Array.from(grouped.keys()).sort((a, b) => a - b);
   const orderedByLevel = new Map<number, PersonNode[]>();
   levelsSorted.forEach((level) => {
-    const sorted = (grouped.get(level) ?? []).slice().sort(comparePeopleForTreeOrder);
-    const ordered: PersonNode[] = [];
+    const rowNodes = (grouped.get(level) ?? []).slice();
+    const rowPersonIds = new Set(rowNodes.map((node) => node.personId));
+    const rowUnits: Array<{ ids: string[]; sortPerson: PersonNode }> = [];
     const seen = new Set<string>();
-    sorted.forEach((node) => {
+    rowNodes.forEach((node) => {
       if (seen.has(node.personId)) {
         return;
       }
-      ordered.push(node);
-      seen.add(node.personId);
       const partnerId = partnerMap.get(node.personId);
-      const partner = partnerId ? nodeMap.get(partnerId) : undefined;
-      if (partner && (levels.get(partner.personId) ?? 0) === level && !seen.has(partner.personId)) {
-        ordered.push(partner);
-        seen.add(partner.personId);
+      const hasPartnerInRow = Boolean(partnerId && rowPersonIds.has(partnerId) && !seen.has(partnerId));
+      if (hasPartnerInRow && partnerId) {
+        const partner = nodeMap.get(partnerId);
+        if (partner) {
+          rowUnits.push({
+            ids: getOrderedUnitIds(node.personId, partnerId),
+            sortPerson: getBranchAnchorPerson(node, partner),
+          });
+          seen.add(node.personId);
+          seen.add(partnerId);
+          return;
+        }
       }
+      rowUnits.push({
+        ids: [node.personId],
+        sortPerson: getBranchAnchorPerson(node),
+      });
+      seen.add(node.personId);
     });
+    const ordered: PersonNode[] = [];
+    rowUnits
+      .slice()
+      .sort((left, right) => {
+        const byAnchor = comparePeopleForTreeOrder(left.sortPerson, right.sortPerson);
+        if (byAnchor !== 0) {
+          return byAnchor;
+        }
+        const leftLead = nodeMap.get(left.ids[0]);
+        const rightLead = nodeMap.get(right.ids[0]);
+        if (leftLead && rightLead) {
+          const byLead = comparePeopleForTreeOrder(leftLead, rightLead);
+          if (byLead !== 0) {
+            return byLead;
+          }
+        }
+        return left.ids.join("::").localeCompare(right.ids.join("::"));
+      })
+      .forEach((unit) => {
+        unit.ids.forEach((personId) => {
+          const person = nodeMap.get(personId);
+          if (person) {
+            ordered.push(person);
+          }
+        });
+      });
     orderedByLevel.set(level, ordered);
   });
 
@@ -329,17 +367,17 @@ export function TreeGraph({
       if (hasPartnerInRow && partnerId) {
         const leftId = node.personId;
         const rightId = partnerId;
-        const leftPos = positions.get(leftId);
-        const rightPos = positions.get(rightId);
+        const unitIds = getOrderedUnitIds(leftId, rightId);
+        const leftPos = positions.get(unitIds[0]);
+        const rightPos = positions.get(unitIds[1]);
         if (!leftPos || !rightPos) {
           consumed.add(leftId);
+          consumed.add(rightId);
           continue;
         }
-        const leftPreferred = desiredChildX.get(leftId) ?? leftPos.x;
-        const rightPreferred = desiredChildX.get(rightId) ?? rightPos.x;
         units.push({
-          ids: [leftId, rightId],
-          preferredCenterX: (leftPreferred + rightPreferred) / 2,
+          ids: unitIds,
+          preferredCenterX: getUnitPreferredCenterX(unitIds, desiredChildX, positions),
           unitWidth: NODE_CARD_WIDTH * 2 + SPOUSE_GAP,
         });
         consumed.add(leftId);
@@ -495,6 +533,67 @@ export function TreeGraph({
       return leftBirth - rightBirth;
     }
     return left.displayName.localeCompare(right.displayName);
+  }
+
+  function isDirectLineTreePerson(person?: PersonNode) {
+    const relationshipType = person?.familyGroupRelationshipType ?? "";
+    return relationshipType === "founder" || relationshipType === "direct";
+  }
+
+  function getBranchAnchorPerson(...people: Array<PersonNode | undefined>) {
+    const present = people.filter((person): person is PersonNode => Boolean(person));
+    if (present.length === 0) {
+      throw new Error("Tree branch anchor requires at least one person.");
+    }
+    const directLinePeople = present.filter((person) => isDirectLineTreePerson(person));
+    const candidates = directLinePeople.length > 0 ? directLinePeople : present;
+    return candidates.slice().sort(comparePeopleForTreeOrder)[0] ?? present[0];
+  }
+
+  function getOrderedUnitIds(firstId: string, secondId?: string) {
+    if (!secondId) {
+      return [firstId];
+    }
+    const pairKey = [firstId, secondId].sort().join("::");
+    const pair = spousePairMeta.get(pairKey);
+    if (pair) {
+      return [pair.leftId, pair.rightId];
+    }
+    const first = nodeMap.get(firstId);
+    const second = nodeMap.get(secondId);
+    if (first && second && comparePeopleForTreeOrder(first, second) > 0) {
+      return [secondId, firstId];
+    }
+    return [firstId, secondId];
+  }
+
+  function getUnitPreferredCenterX(
+    unitIds: string[],
+    desiredCenters: Map<string, number>,
+    currentPositions: Map<string, { x: number; y: number }>,
+  ) {
+    const desiredAnchorId =
+      unitIds.find((personId) => desiredCenters.has(personId) && isDirectLineTreePerson(nodeMap.get(personId))) ??
+      unitIds.find((personId) => desiredCenters.has(personId));
+    if (desiredAnchorId) {
+      const desiredX = desiredCenters.get(desiredAnchorId) ?? Number.NaN;
+      if (Number.isFinite(desiredX)) {
+        if (unitIds.length === 1) {
+          return desiredX;
+        }
+        const halfSpan = (NODE_CARD_WIDTH + SPOUSE_GAP) / 2;
+        return desiredAnchorId === unitIds[0] ? desiredX + halfSpan : desiredX - halfSpan;
+      }
+    }
+
+    const currentCenters = unitIds
+      .map((personId) => currentPositions.get(personId)?.x ?? Number.NaN)
+      .filter((value) => Number.isFinite(value));
+    if (currentCenters.length > 0) {
+      return currentCenters.reduce((sum, value) => sum + value, 0) / currentCenters.length;
+    }
+
+    return 0;
   }
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));

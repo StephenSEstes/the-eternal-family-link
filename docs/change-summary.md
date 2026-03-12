@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-11 (tree household branch ordering by direct parent)
+
+- `Date`: 2026-03-11
+- `Change`: Family Tree household branches now sort left-to-right by the direct-line parent’s age, and married children stay grouped under their parent household while children within each household continue to render in birth order.
+- `Type`: UI
+- `Why`: Root cause was a `TreeGraph` layout bug: each generation row was sorted person-by-person before spouses were paired, and the child-branch centering pass averaged couple positions. That let an in-law spouse skew a household’s branch order and pull a married child household away from the direct parent’s sibling slot.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In Family Tree, confirm sibling households render oldest direct sibling on the left and youngest on the right, even when spouses are older/younger than the direct sibling.
+  - Confirm a married child household stays grouped beneath that child’s parents rather than shifting based on spouse placement.
+  - Confirm children within the same household still render oldest to youngest.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-11 (tree household edit + spouse maiden capture)
 
 - `Date`: 2026-03-11
