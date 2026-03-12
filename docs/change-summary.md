@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-11 (tree sibling blocks stay contiguous)
+
+- `Date`: 2026-03-11
+- `Change`: Family Tree now treats each parent household’s children as an uninterruptible sibling block, ordered by the direct parent household first and by child birth date within that block.
+- `Type`: UI
+- `Why`: Root cause was a `TreeGraph` layout bug: after computing child target slots, the row-packing pass sorted and placed child units individually. That preserved birth order within each household, but it still allowed adjacent sibling groups to interleave by midpoint, which is why Drake Peterson could land between Amy Estes and Eliza Estes in `snowestes`.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In `snowestes`, the Stephen/Elizabeth children render as one contiguous block and the Catherine/Venn children render as the next block, without interleaving.
+  - Within each sibling block, children still render oldest to youngest.
+  - Married child households stay attached to the correct sibling block rather than breaking the group apart.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-11 (repair missing spouse households)
+
+- `Date`: 2026-03-11
+- `Change`: Fixed spouse-save household creation so the current family group now gets its `Households` row when a spouse link is created, and repaired the existing missing household rows in OCI.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a `relationships/builder` bug: after saving `family` relationships, the household-create loop filtered out the current family group and only recreated households for propagated secondary groups. The tree could still draw the spouse cluster from the relationship edge, but with no backing household row it had no label and no household ID to open.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/relationships/builder/route.ts`
+- `Data Changes`: Inserted 6 missing `Households` rows to match existing `family` relationship pairs (`snowestes`: 1, `meldrumclark`: 5) using the canonical household ID and spouse-role/label rules.
+- `Verify`:
+  - OCI verification query for `family` relationship pairs without matching `Households` rows now returns `0`.
+  - In Tree view, the previously broken household cluster opens the household panel on click and shows its household label.
+  - Creating a new spouse household produces both the relationship edges and the household row in the current family group.
+- `Rollback Notes`: Revert the route change and manually delete the repaired household rows only if you intentionally want to restore the broken state.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-11 (tree household branch ordering by direct parent)
 
 - `Date`: 2026-03-11

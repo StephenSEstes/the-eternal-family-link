@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-11: Family Tree now keeps each household’s children as a contiguous sibling block, preventing adjacent sibling groups from interleaving in the same generation. See `docs/change-summary.md`.
+- 2026-03-11: Fixed spouse-save household creation for the current family group and repaired 6 missing household rows, restoring household labels and edit clicks in the tree. See `docs/change-summary.md`.
 - 2026-03-11: Family Tree household branches now order by the direct parent’s age, and married children stay grouped beneath their parent household while household children remain in birth order. See `docs/change-summary.md`.
 - 2026-03-11: Enabled household edit dots in Family Tree (pointer events fixed) and added a maiden-name field to the Add Spouse dialog that only appears for female spouses. See `docs/change-summary.md`.
 - 2026-03-11: Household saves no longer fail with `ORA-14411` when background DDL contention occurs; household schema compatibility checks now skip transient contention. See `docs/change-summary.md`.

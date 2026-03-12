@@ -602,14 +602,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       }
     }
     if (spouseId) {
-      const sortedPropagationGroups = Array.from(propagationFamilyGroups).filter(
-        (familyGroupKey) => familyGroupKey !== normalizedTenantKey,
-      );
+      const sortedPropagationGroups = Array.from(propagationFamilyGroups).sort((left, right) => {
+        if (left === normalizedTenantKey && right !== normalizedTenantKey) return -1;
+        if (right === normalizedTenantKey && left !== normalizedTenantKey) return 1;
+        return left.localeCompare(right);
+      });
       for (const familyGroupKey of sortedPropagationGroups) {
-        const scopedHouseholds =
-          familyGroupKey === normalizedTenantKey
-            ? households
-            : await getTableRecords("Households", familyGroupKey).catch(() => []);
+        const scopedHouseholds = await getTableRecords("Households", familyGroupKey).catch(() => []);
         const spouseConflict = scopedHouseholds.find((row) => {
           const partner1 = readField(row.data, "husband_person_id");
           const partner2 = readField(row.data, "wife_person_id");

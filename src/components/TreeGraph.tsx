@@ -150,6 +150,12 @@ export function TreeGraph({
       }
     });
   });
+  const parentPairKeyByChildId = new Map<string, string>();
+  familyChildConnectors.forEach((connector) => {
+    if (!parentPairKeyByChildId.has(connector.childId)) {
+      parentPairKeyByChildId.set(connector.childId, connector.pairKey);
+    }
+  });
 
   const levels = new Map<string, number>();
   nodes.forEach((node) => levels.set(node.personId, 0));
@@ -357,7 +363,13 @@ export function TreeGraph({
 
     const rowPersonIds = new Set(row.map((node) => node.personId));
     const consumed = new Set<string>();
-    const units: Array<{ ids: string[]; preferredCenterX: number; unitWidth: number }> = [];
+    const units: Array<{
+      ids: string[];
+      preferredCenterX: number;
+      unitWidth: number;
+      sortPerson: PersonNode;
+      siblingBlockKey: string;
+    }> = [];
     for (const node of row) {
       if (consumed.has(node.personId)) {
         continue;
@@ -375,10 +387,13 @@ export function TreeGraph({
           consumed.add(rightId);
           continue;
         }
+        const unitPeople = unitIds.map((personId) => nodeMap.get(personId)).filter((person): person is PersonNode => Boolean(person));
         units.push({
           ids: unitIds,
           preferredCenterX: getUnitPreferredCenterX(unitIds, desiredChildX, positions),
           unitWidth: NODE_CARD_WIDTH * 2 + SPOUSE_GAP,
+          sortPerson: getBranchAnchorPerson(...unitPeople),
+          siblingBlockKey: getSiblingBlockKey(unitIds),
         });
         consumed.add(leftId);
         consumed.add(rightId);
@@ -394,36 +409,92 @@ export function TreeGraph({
         ids: [node.personId],
         preferredCenterX: desiredChildX.get(node.personId) ?? pos.x,
         unitWidth: NODE_CARD_WIDTH,
+        sortPerson: node,
+        siblingBlockKey: getSiblingBlockKey([node.personId]),
       });
       consumed.add(node.personId);
     }
 
-    const sortedUnits = units.slice().sort((a, b) => a.preferredCenterX - b.preferredCenterX);
-    let lastRightEdge = Number.NEGATIVE_INFINITY;
-    for (const unit of sortedUnits) {
-      const unitHalf = unit.unitWidth / 2;
-      const minCenter = Number.isFinite(lastRightEdge)
-        ? lastRightEdge + NON_SPOUSE_GAP + unitHalf
-        : unit.preferredCenterX;
-      const centerX = Math.max(unit.preferredCenterX, minCenter);
-      if (unit.ids.length === 2) {
-        const halfSpan = (NODE_CARD_WIDTH + SPOUSE_GAP) / 2;
-        const leftPos = positions.get(unit.ids[0]);
-        const rightPos = positions.get(unit.ids[1]);
-        if (leftPos) {
-          positions.set(unit.ids[0], { x: centerX - halfSpan, y: leftPos.y });
-        }
-        if (rightPos) {
-          positions.set(unit.ids[1], { x: centerX + halfSpan, y: rightPos.y });
-        }
-      } else {
-        const onlyId = unit.ids[0];
-        const pos = positions.get(onlyId);
-        if (pos) {
-          positions.set(onlyId, { x: centerX, y: pos.y });
-        }
+    const siblingBlocks = new Map<
+      string,
+      { key: string; preferredCenterX: number; sortPerson: PersonNode; units: typeof units }
+    >();
+    units.forEach((unit) => {
+      const existing = siblingBlocks.get(unit.siblingBlockKey);
+      if (!existing) {
+        siblingBlocks.set(unit.siblingBlockKey, {
+          key: unit.siblingBlockKey,
+          preferredCenterX: getSiblingBlockPreferredCenterX(unit.siblingBlockKey, unit.preferredCenterX, positions),
+          sortPerson: unit.sortPerson,
+          units: [unit],
+        });
+        return;
       }
-      lastRightEdge = centerX + unitHalf;
+      existing.units.push(unit);
+      if (comparePeopleForTreeOrder(unit.sortPerson, existing.sortPerson) < 0) {
+        existing.sortPerson = unit.sortPerson;
+      }
+    });
+
+    const sortedBlocks = Array.from(siblingBlocks.values())
+      .map((block) => {
+        const blockUnits = block.units.slice().sort((left, right) => {
+          const bySortPerson = comparePeopleForTreeOrder(left.sortPerson, right.sortPerson);
+          if (bySortPerson !== 0) {
+            return bySortPerson;
+          }
+          return left.ids.join("::").localeCompare(right.ids.join("::"));
+        });
+        const blockWidth = blockUnits.reduce((total, unit, index) => {
+          return total + unit.unitWidth + (index > 0 ? NON_SPOUSE_GAP : 0);
+        }, 0);
+        return {
+          ...block,
+          units: blockUnits,
+          blockWidth,
+        };
+      })
+      .sort((left, right) => {
+        if (left.preferredCenterX !== right.preferredCenterX) {
+          return left.preferredCenterX - right.preferredCenterX;
+        }
+        const bySortPerson = comparePeopleForTreeOrder(left.sortPerson, right.sortPerson);
+        if (bySortPerson !== 0) {
+          return bySortPerson;
+        }
+        return left.key.localeCompare(right.key);
+      });
+
+    let lastRightEdge = Number.NEGATIVE_INFINITY;
+    for (const block of sortedBlocks) {
+      const blockHalf = block.blockWidth / 2;
+      const minCenter = Number.isFinite(lastRightEdge)
+        ? lastRightEdge + NON_SPOUSE_GAP + blockHalf
+        : block.preferredCenterX;
+      const blockCenterX = Math.max(block.preferredCenterX, minCenter);
+      let nextUnitCenterX = blockCenterX - blockHalf;
+      block.units.forEach((unit) => {
+        nextUnitCenterX += unit.unitWidth / 2;
+        if (unit.ids.length === 2) {
+          const halfSpan = (NODE_CARD_WIDTH + SPOUSE_GAP) / 2;
+          const leftPos = positions.get(unit.ids[0]);
+          const rightPos = positions.get(unit.ids[1]);
+          if (leftPos) {
+            positions.set(unit.ids[0], { x: nextUnitCenterX - halfSpan, y: leftPos.y });
+          }
+          if (rightPos) {
+            positions.set(unit.ids[1], { x: nextUnitCenterX + halfSpan, y: rightPos.y });
+          }
+        } else {
+          const onlyId = unit.ids[0];
+          const pos = positions.get(onlyId);
+          if (pos) {
+            positions.set(onlyId, { x: nextUnitCenterX, y: pos.y });
+          }
+        }
+        nextUnitCenterX += unit.unitWidth / 2 + NON_SPOUSE_GAP;
+      });
+      lastRightEdge = blockCenterX + blockHalf;
     }
   });
 
@@ -594,6 +665,39 @@ export function TreeGraph({
     }
 
     return 0;
+  }
+
+  function getSiblingBlockKey(unitIds: string[]) {
+    const directChildId =
+      unitIds.find((personId) => parentPairKeyByChildId.has(personId) && isDirectLineTreePerson(nodeMap.get(personId))) ??
+      unitIds.find((personId) => parentPairKeyByChildId.has(personId));
+    if (directChildId) {
+      const pairKey = parentPairKeyByChildId.get(directChildId) ?? "";
+      if (pairKey) {
+        return `pair:${pairKey}`;
+      }
+    }
+    return `unit:${unitIds.join("::")}`;
+  }
+
+  function getSiblingBlockPreferredCenterX(
+    blockKey: string,
+    fallbackCenterX: number,
+    currentPositions: Map<string, { x: number; y: number }>,
+  ) {
+    if (!blockKey.startsWith("pair:")) {
+      return fallbackCenterX;
+    }
+    const pair = spousePairMeta.get(blockKey.slice(5));
+    if (!pair) {
+      return fallbackCenterX;
+    }
+    const left = currentPositions.get(pair.leftId);
+    const right = currentPositions.get(pair.rightId);
+    if (!left || !right) {
+      return fallbackCenterX;
+    }
+    return (left.x + right.x) / 2;
   }
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));
