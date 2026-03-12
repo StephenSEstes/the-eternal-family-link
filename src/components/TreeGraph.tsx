@@ -479,23 +479,23 @@ export function TreeGraph({
     return "";
   };
 
-  const parseBirthSortValue = (value?: string) => {
+  function parseBirthSortValue(value?: string) {
     const raw = (value ?? "").trim();
     if (!raw) {
       return Number.NaN;
     }
     const parsed = Date.parse(raw);
     return Number.isFinite(parsed) ? parsed : Number.NaN;
-  };
+  }
 
-  const comparePeopleForTreeOrder = (left: PersonNode, right: PersonNode) => {
+  function comparePeopleForTreeOrder(left: PersonNode, right: PersonNode) {
     const leftBirth = parseBirthSortValue(left.birthDate);
     const rightBirth = parseBirthSortValue(right.birthDate);
     if (Number.isFinite(leftBirth) && Number.isFinite(rightBirth) && leftBirth !== rightBirth) {
       return leftBirth - rightBirth;
     }
     return left.displayName.localeCompare(right.displayName);
-  };
+  }
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;

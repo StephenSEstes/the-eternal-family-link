@@ -105,6 +105,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Fixed the production Tree page crash introduced by the sibling-order change by converting the new tree-order helpers to hoisted function declarations.
+- `Type`: UI
+- `Why`: Root cause was a temporal-dead-zone bug in `TreeGraph`: the sibling sort called `comparePeopleForTreeOrder` before that helper was initialized, which produced `ReferenceError: Cannot access ... before initialization` in the deployed bundle.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening `/tree` no longer throws the client-side initialization exception.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

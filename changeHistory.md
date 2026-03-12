@@ -14,6 +14,7 @@ This file is a quick release-log entry point.
 - 2026-03-11: Disabled People page caching so People tab and Family Tree stay in sync on display-name edits. See `docs/change-summary.md`.
 - 2026-03-11: Family Tree now opens the person modal with the canonical stored `display_name` instead of rebuilding it from `first_name + last_name`, fixing Brent/Brenton-style mismatches. See `docs/change-summary.md`.
 - 2026-03-11: Family Tree sibling order now prefers birthdate so older siblings render on the left, with name ordering only as fallback. See `docs/change-summary.md`.
+- 2026-03-11: Fixed the production Tree crash from the sibling-order change by hoisting the new tree-order helpers so they are initialized before first use. See `docs/change-summary.md`.
 - 2026-03-11: Tightened spouse eligibility so spouse links require both people to be at least 19 and parents cannot be selected as spouse. See `docs/change-summary.md`.
 - 2026-03-11: Fixed the household child -> person modal handoff so a newly added child opens with the current family relationship instead of stale `undeclared` state. See `docs/change-summary.md`.
 - 2026-03-11: Fixed person-save family inheritance for direct + in-law parents and changed the standalone Add Person birthday field to a native date picker. See `docs/change-summary.md`.
