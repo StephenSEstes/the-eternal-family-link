@@ -153,12 +153,32 @@ export async function GET(_: Request, { params }: TenantPersonRouteProps) {
     return resolved.error;
   }
 
-  const person = await getPersonById(personId, resolved.tenant.tenantKey);
+  const [person, personFamilyRows] = await Promise.all([
+    getPersonById(personId, resolved.tenant.tenantKey),
+    getTableRecords("PersonFamilyGroups").catch(() => []),
+  ]);
   if (!person) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, person });
+  const enabledFamilyGroupKeys = Array.from(
+    new Set(
+      personFamilyRows
+        .filter(
+          (row) =>
+            (row.data.person_id ?? "").trim() === personId &&
+            isEnabledLike(row.data.is_enabled),
+        )
+        .map((row) => normalize(row.data.family_group_key))
+        .filter(Boolean),
+    ),
+  );
+
+  return NextResponse.json({
+    tenantKey: resolved.tenant.tenantKey,
+    person,
+    enabledFamilyGroupKeys,
+  });
 }
 
 export async function POST(request: Request, { params }: TenantPersonRouteProps) {

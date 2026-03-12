@@ -118,6 +118,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+- `Date`: 2026-03-11
+- `Change`: Family-section family-group switching now uses the current person’s enabled `PersonFamilyGroups` memberships, so an in-law cannot switch families unless that person is actually linked to another family group.
+- `Type`: UI | API
+- `Why`: Root cause was that the modal switcher was gated by the signed-in user’s accessible family groups instead of the viewed person’s linked family memberships. That exposed family switching on in-law records even when the person only belonged to the current family group.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open an in-law person who belongs only to the current family group; the Family section no longer allows switching families.
+  - Open a person with enabled memberships in multiple family groups; the Family section switcher shows only those linked family groups.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-10 (reviewed AI story import from person notes)
 
 - `Date`: 2026-03-11

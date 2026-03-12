@@ -101,6 +101,10 @@ type FamilyGroupOption = {
   role: "ADMIN" | "USER";
 };
 
+function normalizeFamilyGroupKey(value?: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 type TabKey = "contact" | "attributes" | "photos";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 const ADD_NEW_SPOUSE_OPTION = "__add_new_spouse__";
@@ -695,6 +699,7 @@ export function PersonEditModal({
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
   const [selectedAboutAttributeId, setSelectedAboutAttributeId] = useState("");
   const [familyGroupOptions, setFamilyGroupOptions] = useState<FamilyGroupOption[]>([]);
+  const [personEnabledFamilyGroupKeys, setPersonEnabledFamilyGroupKeys] = useState<string[]>([]);
   const [familySwitchBusy, setFamilySwitchBusy] = useState(false);
   const [activeTenantKey, setActiveTenantKey] = useState(tenantKey);
   const [contextEdges, setContextEdges] = useState<GraphEdge[]>(edges);
@@ -997,6 +1002,7 @@ export function PersonEditModal({
     setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
     pendingCreatedSpouseIdRef.current = "";
     setStatus("");
+    setPersonEnabledFamilyGroupKeys([normalizeFamilyGroupKey(tenantKey)]);
     setStoredFamilyGroupRelationshipType(
       normalizeFamilyGroupRelationshipType(
         peopleById.get(person.personId)?.familyGroupRelationshipType ?? person.familyGroupRelationshipType,
@@ -1017,6 +1023,32 @@ export function PersonEditModal({
       setFamilyGroupOptions(list.filter((item) => item.key && item.name));
     })();
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !person?.personId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
+        { cache: "no-store" },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok || cancelled) {
+        return;
+      }
+      const keys = Array.isArray(body?.enabledFamilyGroupKeys)
+        ? (body.enabledFamilyGroupKeys as string[]).map((item) => normalizeFamilyGroupKey(item)).filter(Boolean)
+        : [];
+      const normalizedActiveKey = normalizeFamilyGroupKey(activeTenantKey);
+      const nextKeys = Array.from(new Set([normalizedActiveKey, ...keys]));
+      setPersonEnabledFamilyGroupKeys(nextKeys);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenantKey, open, person?.personId]);
 
   const personOptions = localPeople.filter((item) => item.personId !== person?.personId);
   const childBirthDate = birthDate || person?.birthDate;
@@ -1198,6 +1230,11 @@ export function PersonEditModal({
     () => localPeople.filter((item) => normalizeFamilyGroupRelationshipType(item.familyGroupRelationshipType) === "founder").length,
     [localPeople],
   );
+  const linkedFamilyGroupOptions = useMemo(() => {
+    const allowedKeys = new Set(personEnabledFamilyGroupKeys.map((item) => normalizeFamilyGroupKey(item)));
+    return familyGroupOptions.filter((option) => allowedKeys.has(normalizeFamilyGroupKey(option.key)));
+  }, [familyGroupOptions, personEnabledFamilyGroupKeys]);
+  const canSwitchPersonFamilyGroup = linkedFamilyGroupOptions.length > 1;
   const applyLocalFamilyGroupRelationshipType = (personId: string, nextType: FamilyGroupRelationshipType) => {
     setLocalPeople((current) =>
       current.map((item) =>
@@ -1963,7 +2000,7 @@ export function PersonEditModal({
                     {formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
                   </span>
                 </div>
-                {familyGroupOptions.length > 1 ? (
+                {canSwitchPersonFamilyGroup ? (
                   <div style={{ marginBottom: "0.75rem" }}>
                     <select
                       className="input"
@@ -2038,13 +2075,17 @@ export function PersonEditModal({
                         })()
                       }
                     >
-                      {familyGroupOptions.map((option) => (
+                      {linkedFamilyGroupOptions.map((option) => (
                         <option key={option.key} value={option.key}>
                           {option.name}
                         </option>
                       ))}
                     </select>
                   </div>
+                ) : isInLawPerson && familyGroupOptions.length > 1 ? (
+                  <p className="page-subtitle" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+                    This in-law is not linked to another family group, so family-group switching is unavailable here.
+                  </p>
                 ) : null}
                 {canManage ? (
                   <>
