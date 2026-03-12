@@ -275,6 +275,35 @@ function suggestInviteUsername(displayName: string) {
   return normalized.length >= 3 ? normalized : "";
 }
 
+function defaultInviteAuthMode(
+  googleAccess: AccessItem[],
+  localAccess: LocalUserItem[],
+): "google" | "local" | "either" {
+  const hasEnabledGoogle = googleAccess.some((entry) => entry.isEnabled && entry.userEmail.trim());
+  const hasEnabledLocal = localAccess.some((entry) => entry.isEnabled && entry.username.trim());
+  if (hasEnabledGoogle && hasEnabledLocal) {
+    return "either";
+  }
+  if (hasEnabledGoogle) {
+    return "google";
+  }
+  return "local";
+}
+
+function defaultInviteEmail(
+  selectedPerson: { personId: string; displayName: string; email: string } | null,
+  googleAccess: AccessItem[],
+) {
+  return googleAccess.find((entry) => entry.userEmail.trim())?.userEmail.trim() ?? selectedPerson?.email?.trim() ?? "";
+}
+
+function defaultInviteLocalUsername(
+  selectedPerson: { personId: string; displayName: string; email: string } | null,
+  localAccess: LocalUserItem[],
+) {
+  return localAccess.find((entry) => entry.username.trim())?.username.trim() ?? (selectedPerson ? suggestInviteUsername(selectedPerson.displayName) : "");
+}
+
 function formatAuditTimestamp(value: string) {
   const raw = value.trim();
   if (!raw) {
@@ -405,7 +434,6 @@ export function SettingsClient({
   const [duplicateMergeStatus, setDuplicateMergeStatus] = useState("");
   const adminLoadSeq = useRef(0);
   const adminLoadAbortRef = useRef<AbortController | null>(null);
-  const managedPersonSyncRef = useRef("");
   const auditFiltersRef = useRef({
     actorEmail: "",
     actorPersonId: "",
@@ -1652,21 +1680,24 @@ export function SettingsClient({
     const personGoogle = (googleAccessByPersonId.get(nextPersonId) ?? []).filter((entry) => entry.userEmail.trim());
     const personLocal = localAccessByPersonId.get(nextPersonId) ?? [];
     const selected = familyPeople.find((person) => person.personId === nextPersonId);
+    const nextInviteEmail = defaultInviteEmail(selected ?? null, personGoogle);
+    const nextInviteLocalUsername = defaultInviteLocalUsername(selected ?? null, personLocal);
+    const nextInviteAuthMode = defaultInviteAuthMode(personGoogle, personLocal);
 
     const firstGoogle = personGoogle[0];
     if (firstGoogle) {
       setUserEmail(firstGoogle.userEmail);
       setRole(firstGoogle.role);
       setIsEnabled(firstGoogle.isEnabled);
-      setInviteEmail(firstGoogle.userEmail);
       setInviteRole(firstGoogle.role);
     } else {
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
-      setInviteEmail(selected?.email?.trim() ?? "");
       setInviteRole("USER");
     }
+    setInviteEmail(nextInviteEmail);
+    setInviteAuthMode(nextInviteAuthMode);
 
     const firstLocal = personLocal[0];
     if (firstLocal) {
@@ -1674,15 +1705,14 @@ export function SettingsClient({
       setLocalRole(firstLocal.role);
       setLocalEnabled(firstLocal.isEnabled);
       setSelectedLocalUsername(firstLocal.username);
-      setInviteLocalUsername(firstLocal.username);
       setInviteRole(firstLocal.role);
     } else {
       setLocalUsername("");
       setLocalRole("USER");
       setLocalEnabled(true);
       setSelectedLocalUsername("");
-      setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
     }
+    setInviteLocalUsername(nextInviteLocalUsername);
   };
 
   const closeManageUserModal = () => {
@@ -1741,48 +1771,41 @@ export function SettingsClient({
   useEffect(() => {
     const personId = selectedDirectoryPersonId.trim();
     if (!personId) {
-      managedPersonSyncRef.current = "";
       return;
     }
-    if (managedPersonSyncRef.current === personId) {
-      return;
-    }
-    managedPersonSyncRef.current = personId;
 
+    const selected = familyPeople.find((person) => person.personId === personId) ?? null;
     const firstLocal = selectedPersonLocalUsers[0];
     if (firstLocal) {
       setLocalUsername(firstLocal.username);
       setLocalRole(firstLocal.role);
       setLocalEnabled(firstLocal.isEnabled);
       setSelectedLocalUsername(firstLocal.username);
-      setInviteLocalUsername(firstLocal.username);
       setInviteRole(firstLocal.role);
     } else {
       setLocalUsername("");
       setLocalRole("USER");
       setLocalEnabled(true);
       setSelectedLocalUsername("");
-      const selected = familyPeople.find((person) => person.personId === personId);
-      setInviteLocalUsername(selected ? suggestInviteUsername(selected.displayName) : "");
     }
+    setInviteLocalUsername(defaultInviteLocalUsername(selected, selectedPersonLocalUsers));
 
     const firstGoogle = selectedPersonGoogleAccess[0];
-    const selected = familyPeople.find((person) => person.personId === personId);
     if (firstGoogle) {
       setUserEmail(firstGoogle.userEmail);
       setRole(firstGoogle.role);
       setIsEnabled(firstGoogle.isEnabled);
-      setInviteEmail(firstGoogle.userEmail);
       setInviteRole(firstGoogle.role);
     } else {
       setUserEmail("");
       setRole("USER");
       setIsEnabled(false);
-      setInviteEmail(selected?.email?.trim() ?? "");
       if (!firstLocal) {
         setInviteRole("USER");
       }
     }
+    setInviteEmail(defaultInviteEmail(selected, selectedPersonGoogleAccess));
+    setInviteAuthMode(defaultInviteAuthMode(selectedPersonGoogleAccess, selectedPersonLocalUsers));
   }, [familyPeople, selectedDirectoryPersonId, selectedPersonGoogleAccess, selectedPersonLocalUsers]);
   const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
   const importMemberCandidates = existingPeopleOptions.filter(

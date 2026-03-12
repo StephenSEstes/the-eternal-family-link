@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (invite defaults follow current access)
+
+- `Date`: 2026-03-12
+- `Change`: Updated the Manage User -> Invite defaults so sign-in path follows the selected person’s enabled access setup (`local`, `google`, or `either`), and local username / invite email are recalculated from the selected person instead of stale modal state.
+- `Type`: UI
+- `Why`: Root cause was a `code issue` in `SettingsClient`: the invite modal initialized `inviteAuthMode` to `google` once and never re-derived it from the selected person’s current access rows, while invite email/local-username state could remain from a previous person or default. That made local-only users like Catherine Peterson open with `Google only` and the wrong suggested local username.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open Manage User -> Invite for a local-only user with no enabled Google access; `Sign-In Path` defaults to `Local only`.
+  - Open Manage User -> Invite for a user with enabled Google and local access; `Sign-In Path` defaults to `Google or Local`.
+  - Open Catherine Peterson; `Invite Email` falls back to `People.email` when present and `Suggested Local Username` reflects Catherine’s current local username or a Catherine-based suggestion, not a prior person’s username.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the invite-default helper/state changes in `SettingsClient` together so the modal does not partially keep the new invite-email fallback without the matching auth-mode/local-username reset behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (local-only user family-link repair + invite email fallback)
 
 - `Date`: 2026-03-12
