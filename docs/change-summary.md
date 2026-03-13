@@ -49,6 +49,43 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the `src/lib/auth/options.ts` change to restore the old one-family local-login session behavior.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (AI Help local access troubleshooting note)
+
+- `Date`: 2026-03-13
+- `Change`: Added grounded AI Help guidance for the local-sign-in `missing tenant access` recovery path, including full sign-out/sign-in refresh and `/api/debug/tenant-access` as a session-access check.
+- `Type`: UI
+- `Why`: Root cause was a `code/content issue`. The AI Help guide described local sign-in and family-group switching, but it did not cover the real support case where a stale local session token is missing one of the person's valid family-group accesses. Without that note, Help could not reliably steer users to the correct recovery step.
+- `Files`:
+  - `src/lib/ai/help-guide.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - AI Help can explain that a local user seeing `missing tenant access` should sign out fully and sign in again to refresh local family-group access.
+  - AI Help can mention `/api/debug/tenant-access` as the session-level access check.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `src/lib/ai/help-guide.ts` change to remove the added troubleshooting guidance.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-13 (home birthdays across accessible families + return-to-home person close)
+
+- `Date`: 2026-03-13
+- `Change`: Home birthdays now aggregate people across all family groups the signed-in user can access, while preferring the currently selected family-group route when available, and person profiles opened from Home now close back to the source route instead of always returning to People.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. Both Home pages loaded birthdays only from `getPeople(activeTenantKey)`, so the birthday section was limited to one family group. Separately, birthday chips opened the person route without any source context, and `PersonProfileRouteClient` always closed back to `peopleHref`, which forced Home-opened profiles back to the People screen.
+- `Files`:
+  - `src/lib/home/birthdays.ts`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/components/home/BirthdaysSection.tsx`
+  - `src/components/PersonProfileRouteClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Home birthdays include people from all family groups the current user can access, without duplicate chips for the same `person_id`.
+  - Clicking a birthday chip prefers the currently selected family-group route when that person exists there.
+  - Closing a person profile opened from Home returns to Home instead of the People screen.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the Home birthday loader, birthday-chip link, and person-profile return-path changes together so Home navigation and person close behavior stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (home birthdays + calendar shell + tree navigator polish)
 
 - `Date`: 2026-03-13

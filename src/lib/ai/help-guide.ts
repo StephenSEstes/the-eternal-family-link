@@ -30,6 +30,8 @@ Sign in and install
 - If an invite allows local sign-in, the generated invite message includes the local username and a temporary password.
 - The account modal behind the user-avatar icon includes Install App for supported browsers.
 - On iPhone or iPad, installation uses Safari Share -> Add to Home Screen guidance.
+- If a local user sees "missing tenant access" for a family group they should be able to use, first sign out fully and sign in again so the local session refreshes its family-group access list.
+- /api/debug/tenant-access can be used to confirm which family groups the current signed-in session can access.
 
 Home
 - Home gives quick-access tiles for major areas.

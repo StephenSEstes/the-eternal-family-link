@@ -2,8 +2,8 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { BirthdaysSection } from "@/components/home/BirthdaysSection";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
-import { getPeople } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/family-group/context";
+import { loadHomeBirthdayPeople } from "@/lib/home/birthdays";
 
 function resolveWelcomeName(
   sessionName: string,
@@ -25,9 +25,9 @@ function getTodayIso() {
 
 export default async function HomePage() {
   const { session, tenant } = await requireFamilyGroupSession();
-  const people = await getPeople(tenant.tenantKey);
   const basePath = getTenantBasePath(tenant.tenantKey);
-  const currentPerson = people.find((person) => person.personId === tenant.personId) ?? null;
+  const { activePeople, birthdayPeople } = await loadHomeBirthdayPeople(session.user?.tenantAccesses ?? [], tenant.tenantKey);
+  const currentPerson = activePeople.find((person) => person.personId === tenant.personId) ?? null;
   const welcomeName = resolveWelcomeName(session.user?.name ?? "", currentPerson);
   const tiles = [
     { href: `${basePath}/people`, title: "People", subtitle: "View and update profiles" },
@@ -48,14 +48,9 @@ export default async function HomePage() {
           <BirthdaysSection
             tenantKey={tenant.tenantKey}
             basePath={basePath}
+            returnToPath={basePath || "/"}
             todayIso={getTodayIso()}
-            people={people.map((person) => ({
-              personId: person.personId,
-              displayName: person.displayName,
-              birthDate: person.birthDate,
-              gender: person.gender,
-              photoFileId: person.photoFileId,
-            }))}
+            people={birthdayPeople}
           />
 
           <section className="tile-grid">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
 
@@ -49,6 +49,14 @@ type Props = {
   peopleHref: string;
 };
 
+function resolveReturnHref(rawValue: string | null, fallbackHref: string) {
+  const candidate = (rawValue ?? "").trim();
+  if (!candidate.startsWith("/") || candidate.startsWith("//")) {
+    return fallbackHref;
+  }
+  return candidate;
+}
+
 export function PersonProfileRouteClient({
   tenantKey,
   canManage,
@@ -60,7 +68,14 @@ export function PersonProfileRouteClient({
   peopleHref,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const returnHref = resolveReturnHref(searchParams.get("returnTo"), peopleHref);
+  const buildPersonHref = (personId: string) => {
+    const encodedPersonId = encodeURIComponent(personId);
+    const encodedReturnTo = encodeURIComponent(returnHref);
+    return `${peopleHref}/${encodedPersonId}?returnTo=${encodedReturnTo}`;
+  };
 
   return (
     <>
@@ -73,7 +88,7 @@ export function PersonProfileRouteClient({
         people={people}
         edges={edges}
         households={households}
-        onClose={() => router.push(peopleHref)}
+        onClose={() => router.push(returnHref)}
         onSaved={() => router.refresh()}
         onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}
       />
@@ -86,7 +101,7 @@ export function PersonProfileRouteClient({
         onEditPerson={(nextPersonId) => {
           setSelectedHouseholdId("");
           if (nextPersonId && nextPersonId !== person.personId) {
-            router.push(`${peopleHref}/${encodeURIComponent(nextPersonId)}`);
+            router.push(buildPersonHref(nextPersonId));
           }
         }}
       />

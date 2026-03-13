@@ -12,6 +12,7 @@ type BirthdayPerson = {
   birthDate: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
+  personBasePath?: string;
 };
 
 type BirthdayMatch = {
@@ -23,6 +24,7 @@ type BirthdayMatch = {
 type BirthdaysSectionProps = {
   tenantKey: string;
   basePath: string;
+  returnToPath: string;
   todayIso: string;
   people: BirthdayPerson[];
 };
@@ -95,9 +97,11 @@ function formatBirthDate(value: string) {
   });
 }
 
-function buildPersonHref(basePath: string, personId: string) {
+function buildPersonHref(basePath: string, personId: string, returnToPath: string) {
   const encodedPersonId = encodeURIComponent(personId);
-  return `${basePath || ""}/people/${encodedPersonId}`;
+  const routeBase = basePath || "";
+  const encodedReturnTo = encodeURIComponent(returnToPath || "/");
+  return `${routeBase}/people/${encodedPersonId}?returnTo=${encodedReturnTo}`;
 }
 
 function getAvatarUrl(person: BirthdayPerson, tenantKey: string) {
@@ -107,7 +111,7 @@ function getAvatarUrl(person: BirthdayPerson, tenantKey: string) {
   return person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
 
-export function BirthdaysSection({ tenantKey, basePath, todayIso, people }: BirthdaysSectionProps) {
+export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, people }: BirthdaysSectionProps) {
   const [range, setRange] = useState<BirthdayRange>("today");
   const today = useMemo(() => {
     const parsed = parseIsoDate(todayIso);
@@ -171,7 +175,7 @@ export function BirthdaysSection({ tenantKey, basePath, todayIso, people }: Birt
         {matches.map((item) => (
           <Link
             key={`${range}-${item.person.personId}`}
-            href={buildPersonHref(basePath, item.person.personId)}
+            href={buildPersonHref(item.person.personBasePath ?? basePath, item.person.personId, returnToPath)}
             prefetch={false}
             className="birthday-chip"
           >
