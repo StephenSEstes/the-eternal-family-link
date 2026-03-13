@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (tree focus panel no longer blocks route commit)
+
+- `Date`: 2026-03-13
+- `Change`: Stabilized Family Tree focus recentering so top-level navigation can complete immediately even while the tree focus panel is open.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. `TreeGraph` rebuilt `focusPanelData` as a new object on every render, `focusToBounds` depended on that unstable object, and the focus-centering effects kept reapplying the same viewport state while the panel was open. Header navigation clicks started the Home route fetch successfully, but the route transition did not commit until closing the focus panel stopped that recenter loop.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open Family Tree and open the focus panel.
+  - Click a top-level navigation item like `Home`.
+  - The app should navigate immediately without requiring the focus-panel `X`.
+  - Family Tree focus centering should still work when selecting people and households.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `TreeGraph.tsx` change to restore the prior focus-centering behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (tree mobile bottom navigator + responsive focus spacing)
 
 - `Date`: 2026-03-13

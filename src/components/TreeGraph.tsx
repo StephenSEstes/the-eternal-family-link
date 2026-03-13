@@ -1241,6 +1241,7 @@ export function TreeGraph({
       ? `household:${focusTarget.householdId}`
       : `person:${focusTarget.personId}`
     : "";
+  const hasFocusPanel = Boolean(focusPanelData);
 
   useEffect(() => {
     setFocusPanelGroup("default");
@@ -1507,6 +1508,15 @@ export function TreeGraph({
 
   const applyViewport = useCallback(
     (nextScale: number, nextOffset: { x: number; y: number }, animate = false) => {
+      const sameScale = Math.abs(scaleRef.current - nextScale) < 0.0001;
+      const sameOffsetX = Math.abs(offsetRef.current.x - nextOffset.x) < 0.5;
+      const sameOffsetY = Math.abs(offsetRef.current.y - nextOffset.y) < 0.5;
+      if (sameScale && sameOffsetX && sameOffsetY) {
+        if (!animate) {
+          stopViewportAnimation();
+        }
+        return;
+      }
       scaleRef.current = nextScale;
       offsetRef.current = nextOffset;
       setScale(nextScale);
@@ -1583,11 +1593,11 @@ export function TreeGraph({
       const sidePadding = Math.min(96, rect.width * 0.1);
       const topPadding = Math.min(108, rect.height * 0.16);
       const bottomPadding = Math.min(54, rect.height * 0.08);
-      const reservedTop = focusPanelData && isMobile ? Math.min(82, rect.height * 0.12) : 0;
-      const reservedBottom = focusPanelData && isMobile ? Math.min(214, rect.height * 0.34) : 0;
+      const reservedTop = hasFocusPanel && isMobile ? Math.min(82, rect.height * 0.12) : 0;
+      const reservedBottom = hasFocusPanel && isMobile ? Math.min(214, rect.height * 0.34) : 0;
       const focusWidth = Math.max(bounds.maxX - bounds.minX, NODE_CARD_WIDTH * 2);
       const focusHeight = Math.max(bounds.maxY - bounds.minY, NODE_HALF_HEIGHT * 3);
-      const reservedRight = focusPanelData && !isMobile ? Math.min(304, rect.width * 0.3) : 0;
+      const reservedRight = hasFocusPanel && !isMobile ? Math.min(304, rect.width * 0.3) : 0;
       const availableWidth = Math.max(140, rect.width - sidePadding * 2 - reservedRight);
       const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding - reservedTop - reservedBottom);
       const contextScale = Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98;
@@ -1603,7 +1613,7 @@ export function TreeGraph({
       const nextY = topPadding + reservedTop - (anchorBounds?.minY ?? alignTopY) * nextScale;
       applyViewport(nextScale, { x: nextX, y: nextY }, true);
     },
-    [applyViewport, clampScale, focusPanelData],
+    [applyViewport, clampScale, hasFocusPanel],
   );
 
   useEffect(() => {
