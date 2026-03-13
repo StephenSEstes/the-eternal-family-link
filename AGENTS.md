@@ -14,6 +14,11 @@
 - Do not change code to compensate for bad data unless explicitly approved.
 - When data is the issue, provide exact row/column-level remediation steps.
 
+## OCI Direct Access
+- For any direct OCI query or repair script, use the same wallet decoding and connection pattern as `src/lib/oci/tables.ts`.
+- Do not hand-roll wallet extraction differently; this repo stores wallet files in env payload form and expects the same base64 decode logic the app uses.
+- When diagnosing live OCI data, prefer reusing the app's connection assumptions first before writing ad hoc scripts.
+
 ## Minimal Safe Change
 - Apply the smallest change that resolves the confirmed root cause.
 - Avoid broad refactors while resolving active incidents.

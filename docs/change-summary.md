@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (household add-child 500 repair + SnowEstes child membership cleanup)
+
+- `Date`: 2026-03-13
+- `Change`: Fixed Household -> Children -> Add Child so it no longer attempts to create `UserFamilyGroups` rows for children who do not yet have login access, and repaired the partially created SnowEstes child memberships that were left `undeclared` after that server-side failure.
+- `Type`: API | Data
+- `Why`: Root cause was a `mixed issue`. The child-create route correctly inserted the child `People` row, parent `Relationships`, and `PersonFamilyGroups` membership, but then tried to clone parent `UserFamilyGroups` access for the child using `user_email: \"\"`. Oracle treats the blank string as `NULL`, and `USER_FAMILY_GROUPS.USER_EMAIL` is `NOT NULL`, so the route failed with `500` after the earlier writes had already succeeded. That is why the Add Child panel stayed open even though the child row and parent relationship were already present.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: Repaired 4 SnowEstes child membership rows (`Annie Pickett`, `Brooke Estes Miller`, `Lindsey Estes`, `Mandy Bird`) from `family_group_relationship_type = undeclared` to `direct` after confirming each had a direct parent in `snowestes`. No schema change.
+- `Verify`:
+  - Before repair, SnowEstes had 4 enabled child memberships stuck at `undeclared` despite having direct parents; after the targeted repair query, that list is empty.
+  - `Annie Pickett` remains present as the created child row and now has `PersonFamilyGroups.family_group_relationship_type = direct` in `snowestes`.
+  - New child saves no longer attempt to insert `UserFamilyGroups` rows for non-login children.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the child-create route change. If rolling back the code after deploy, do not revert the corrected SnowEstes membership data.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (household add-child maiden name + clear missing-field validation)
 
 - `Date`: 2026-03-12

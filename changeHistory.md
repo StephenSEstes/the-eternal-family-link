@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Fixed Household Add Child server-side 500s by stopping child creation from writing invalid blank-email `UserFamilyGroups` rows, and repaired the 4 partially created SnowEstes children that were left `undeclared` after the old failure path. See `docs/change-summary.md`.
 - 2026-03-12: Household Add Child now shows maiden name only for female children older than 19, closes and refreshes the child list after a successful save, and reports missing required child fields clearly. See `docs/change-summary.md`.
 - 2026-03-12: Family Tree now opens in a focused branch view, collapses unrelated branches instead of merely dimming them, and adds side-panel navigation for parents, spouse, siblings, and children. See `docs/change-summary.md`.
 - 2026-03-12: Invite creation now allows re-sending a local-capable invite for someone who already has local sign-in by reusing the current username, and invite errors/status now show inside the active Invite panel instead of behind it. See `docs/change-summary.md`.

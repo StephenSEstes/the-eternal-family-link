@@ -161,34 +161,6 @@ export async function POST(request: Request, { params }: RouteProps) {
     await ensurePersonFamilyGroupMembership(personId, familyGroupKey, true);
   }
 
-  const userGroupRows = await getTableRecords("UserFamilyGroups").catch(() => []);
-  const existingChildUserGroupKeys = new Set(
-    userGroupRows
-      .filter((row) => readCell(row.data, "person_id") === personId)
-      .map((row) => normalize(readCell(row.data, "family_group_key", "tenant_key")))
-      .filter(Boolean),
-  );
-  const parentUserGroupRows = userGroupRows.filter((row) => {
-    const rowPersonId = readCell(row.data, "person_id");
-    return parentIdSet.has(rowPersonId) && isEnabledLike(readCell(row.data, "is_enabled"));
-  });
-
-  for (const row of parentUserGroupRows) {
-    const familyGroupKey = normalize(readCell(row.data, "family_group_key", "tenant_key"));
-    if (!familyGroupKey || existingChildUserGroupKeys.has(familyGroupKey)) {
-      continue;
-    }
-    await createTableRecord("UserFamilyGroups", {
-      user_email: "",
-      family_group_key: familyGroupKey,
-      family_group_name: readCell(row.data, "family_group_name") || familyGroupKey,
-      role: "USER",
-      person_id: personId,
-      is_enabled: "TRUE",
-    });
-    existingChildUserGroupKeys.add(familyGroupKey);
-  }
-
   for (const familyGroupKey of inheritedFamilyKeys) {
     await reconcileFamilyGroupRelationshipTypes(familyGroupKey);
   }
