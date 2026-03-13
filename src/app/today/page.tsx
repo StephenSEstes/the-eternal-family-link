@@ -1,10 +1,13 @@
 import { AppHeader } from "@/components/AppHeader";
+import { CalendarPageClient } from "@/components/calendar/CalendarPageClient";
 import { requireSession } from "@/lib/auth/session";
 
 export default async function TodayPage() {
   await requireSession();
 
-  const date = new Date().toLocaleDateString(undefined, {
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const date = now.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -15,14 +18,15 @@ export default async function TodayPage() {
     <>
       <AppHeader />
       <main className="section">
-        <h1 className="page-title">Today</h1>
-        <p className="page-subtitle">{date}</p>
+        <div className="calendar-page-head">
+          <div>
+            <h1 className="page-title">Calendar</h1>
+            <p className="page-subtitle">{date}</p>
+          </div>
+          <span className="calendar-progress-pill">in progress</span>
+        </div>
 
-        <section className="card">
-          <p style={{ margin: 0, fontSize: "1.1rem" }}>
-            Today view is a placeholder in MVP. Add reminders, birthdays, and memory prompts next.
-          </p>
-        </section>
+        <CalendarPageClient todayIso={todayIso} />
       </main>
     </>
   );

@@ -1551,7 +1551,7 @@ export function TreeGraph({
     }
     return Boolean(
       target.closest(
-        ".tree-person-card, .tree-focus-panel, .tree-search-card, .tree-control-cluster, .tree-spouse-cluster, .tree-household-action-dot",
+        ".tree-person-card, .tree-focus-panel, .tree-search-card, .tree-control-cluster, .tree-household-group, .tree-spouse-cluster, .tree-family-label, .tree-household-action-dot",
       ),
     );
   }, []);
@@ -2073,7 +2073,15 @@ export function TreeGraph({
           const selected = householdId ? isSelectedHousehold(householdId) : false;
 
           return (
-            <g key={`cluster-${pairKey}`} className={`tree-household-group${selected ? " is-selected" : ""}`}>
+            <g
+              key={`cluster-${pairKey}`}
+              className={`tree-household-group${selected ? " is-selected" : ""}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleHouseholdSelect(householdId);
+              }}
+            >
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
               <rect
                 x={midX - halfWidth}
@@ -2083,10 +2091,6 @@ export function TreeGraph({
                 rx={22}
                 ry={22}
                 className={`tree-spouse-cluster${selected ? " is-focused" : ""}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleHouseholdSelect(householdId);
-                }}
               />
               {labelLines.length > 0 ? (
                 <text x={midX} y={midY - halfHeight + 14} className={`tree-family-label${selected ? " is-focused" : ""}`}>
@@ -2129,7 +2133,15 @@ export function TreeGraph({
             const labelLines = household.label ? wrapHouseholdLabel(household.label) : [];
             const selected = isSelectedHousehold(household.householdId);
             return (
-              <g key={`cluster-single-${household.householdId}`} className={`tree-household-group${selected ? " is-selected" : ""}`}>
+              <g
+                key={`cluster-single-${household.householdId}`}
+                className={`tree-household-group${selected ? " is-selected" : ""}`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleHouseholdSelect(household.householdId);
+                }}
+              >
                 <rect
                   x={pos.x - halfWidth}
                   y={pos.y - halfHeight}
@@ -2138,10 +2150,6 @@ export function TreeGraph({
                   rx={22}
                   ry={22}
                   className={`tree-spouse-cluster${selected ? " is-focused" : ""}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleHouseholdSelect(household.householdId);
-                  }}
                 />
                 {labelLines.length > 0 ? (
                   <text x={pos.x} y={pos.y - halfHeight + 14} className={`tree-family-label${selected ? " is-focused" : ""}`}>
@@ -2307,7 +2315,6 @@ export function TreeGraph({
           childrenList={focusPanelData.childrenList}
           hasParents={Boolean(focusPanelData.parentTarget)}
           getAvatarUrl={getAvatarUrl}
-          onActivateDefault={showDefaultGroup}
           onActivateParents={navigateToParents}
           onActivateSpouses={showSpouseGroup}
           onActivateSiblings={showSiblingGroup}

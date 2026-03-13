@@ -13,6 +13,35 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (home birthdays + calendar shell + tree navigator polish)
+
+- `Date`: 2026-03-13
+- `Change`: Removed the old Home horoscope card, added a Birthday section with `Today` / `This week` / `This Month` selectors and clickable birthday chips, renamed `Today` navigation/tile labels to `Calendar`, replaced the placeholder Today pages with an in-progress month calendar shell (month arrows + year selector), removed the tree navigator `Current` chip, kept `Parents / Spouse / Siblings / Children` on one row, and made the full household cluster area clickable in the tree.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. Home and Today were still wired to older placeholder surfaces (`HoroscopeCard` and Today placeholder text) instead of the newer birthday/calendar workflow, while the tree focus panel still exposed an extra `Current` action and only the household rect itself handled clicks. That left the requested Home/Calendar experience missing and made the household interaction feel smaller than the visual household target.
+- `Files`:
+  - `src/components/home/BirthdaysSection.tsx`
+  - `src/components/calendar/CalendarPageClient.tsx`
+  - `src/components/familyTree/FocusPanel.tsx`
+  - `src/components/TreeGraph.tsx`
+  - `src/components/HeaderNav.tsx`
+  - `src/app/page.tsx`
+  - `src/app/today/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/t/[tenantKey]/today/page.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Home no longer shows the horoscope card.
+  - Home shows a `Birthdays` section with range selectors and clickable birthday chips that open the person detail route.
+  - Header navigation shows `Calendar` immediately after `Home`.
+  - `/today` and `/t/[tenantKey]/today` both show `Calendar`, an `in progress` badge, month arrows, and a year selector.
+  - Tree navigator no longer shows `Current`, and the four remaining actions stay on one row.
+  - Clicking anywhere on a visible household cluster/label in the tree focuses that household.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the Home/Calendar/tree UI changes together so the navigation labels, home tiles, and shared birthday/calendar components stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (tree focus navigator compact redesign)
 
 - `Date`: 2026-03-13

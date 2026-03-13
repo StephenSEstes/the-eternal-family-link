@@ -442,6 +442,12 @@ main {
   margin-top: 1.2rem;
 }
 
+.home-stack {
+  display: grid;
+  gap: 1.2rem;
+  margin-top: 1.2rem;
+}
+
 .tile {
   display: block;
   border: 3px solid var(--accent);
@@ -901,6 +907,10 @@ main {
   filter: drop-shadow(0 4px 10px color-mix(in oklab, var(--accent) 22%, transparent 78%));
 }
 
+.tree-household-group {
+  cursor: pointer;
+}
+
 .tree-household-group:hover .tree-family-label {
   fill: color-mix(in oklab, var(--accent) 78%, #1f2937 22%);
 }
@@ -1185,12 +1195,13 @@ main {
 }
 
 .tree-focus-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
 }
 
 .tree-focus-action-chip {
+  width: 100%;
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
   background: #fff;
@@ -1198,6 +1209,7 @@ main {
   font-size: 0.76rem;
   font-weight: 700;
   padding: 0.38rem 0.62rem;
+  white-space: nowrap;
 }
 
 .tree-focus-action-chip.is-active {
@@ -1284,12 +1296,239 @@ main {
 
   .tree-focus-action-chip {
     font-size: 0.72rem;
-    padding: 0.34rem 0.56rem;
+    padding: 0.34rem 0.32rem;
   }
 
   .tree-focus-chip-list {
     max-height: 112px;
   }
+}
+
+.birthdays-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.birthdays-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.birthdays-range-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.birthday-range-chip {
+  min-height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.4rem 0.72rem;
+  cursor: pointer;
+}
+
+.birthday-range-chip.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.birthday-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.birthday-chip {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: min(100%, 290px);
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 0.38rem 0.48rem 0.38rem 0.38rem;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+}
+
+.birthday-chip:hover {
+  border-color: #cbd5e1;
+  background: #fff;
+}
+
+.birthday-chip-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.birthday-chip-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.birthday-chip-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.birthday-chip-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.birthday-chip-age {
+  border-radius: 999px;
+  background: #e5eefc;
+  color: #1e3a8a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.22rem 0.5rem;
+  white-space: nowrap;
+}
+
+.birthday-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.calendar-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.calendar-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  text-transform: lowercase;
+}
+
+.calendar-card {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 0.95rem;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.calendar-nav-button {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calendar-nav-button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.calendar-month-label {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.calendar-year-picker {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.calendar-year-select {
+  min-width: 110px;
+  margin-bottom: 0;
+  padding-right: 2rem;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.calendar-weekday {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.calendar-day-cell {
+  min-height: 92px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 0.6rem;
+}
+
+.calendar-day-cell.is-outside {
+  background: #f8fafc;
+  color: #9ca3af;
+}
+
+.calendar-day-cell.is-today {
+  border-color: #111827;
+  box-shadow: inset 0 0 0 1px #111827;
+}
+
+.calendar-day-number {
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 @keyframes treeSheetUp {
@@ -1531,6 +1770,23 @@ main {
   .album-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.5rem;
+  }
+
+  .birthday-chip {
+    min-width: 100%;
+  }
+
+  .calendar-weekdays {
+    gap: 0.3rem;
+  }
+
+  .calendar-grid {
+    gap: 0.3rem;
+  }
+
+  .calendar-day-cell {
+    min-height: 72px;
+    padding: 0.45rem;
   }
 }
 

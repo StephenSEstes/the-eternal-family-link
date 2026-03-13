@@ -117,6 +117,12 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       icon: <HomeIcon />,
     },
     {
+      label: "Calendar",
+      href: `${basePath}/today`,
+      match: (path) => path.startsWith(`${basePath}/today`),
+      icon: <TodayIcon />,
+    },
+    {
       label: "People",
       href: `${basePath}/people`,
       match: (path) => path.startsWith(`${basePath}/people`),
@@ -127,12 +133,6 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       href: `${basePath}/tree`,
       match: (path) => path.startsWith(`${basePath}/tree`),
       icon: <TreeIcon />,
-    },
-    {
-      label: "Today",
-      href: `${basePath}/today`,
-      match: (path) => path.startsWith(`${basePath}/today`),
-      icon: <TodayIcon />,
     },
     {
       label: "Games",

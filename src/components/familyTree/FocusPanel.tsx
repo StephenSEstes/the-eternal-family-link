@@ -20,7 +20,6 @@ type FocusPanelProps = {
   childrenList: FocusPerson[];
   hasParents: boolean;
   getAvatarUrl: (person: FocusPerson) => string;
-  onActivateDefault: () => void;
   onActivateParents: () => void;
   onActivateSpouses: () => void;
   onActivateSiblings: () => void;
@@ -52,7 +51,6 @@ export function FocusPanel({
   childrenList,
   hasParents,
   getAvatarUrl,
-  onActivateDefault,
   onActivateParents,
   onActivateSpouses,
   onActivateSiblings,
@@ -77,7 +75,7 @@ export function FocusPanel({
         <img className="tree-focus-avatar-compact" src={getAvatarUrl(selectedPerson)} alt={selectedPerson.displayName} />
         <div className="tree-focus-header-copy">
           <h3>{selectedPerson.displayName}</h3>
-          {metaBits.length > 0 ? <p>{metaBits.join(" • ")}</p> : null}
+          {metaBits.length > 0 ? <p>{metaBits.join(" - ")}</p> : null}
         </div>
         <button type="button" className="tree-focus-close" onClick={onClose} aria-label="Close focus mode">
           X
@@ -85,13 +83,6 @@ export function FocusPanel({
       </div>
 
       <div className="tree-focus-actions" aria-label="Focus navigation">
-        <button
-          type="button"
-          className={`tree-focus-action-chip${activeGroup === "default" ? " is-active" : ""}`}
-          onClick={onActivateDefault}
-        >
-          Current
-        </button>
         <button
           type="button"
           className="tree-focus-action-chip"

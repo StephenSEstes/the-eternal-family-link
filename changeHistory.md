@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Home now shows Birthday range chips instead of the horoscope card, `Today` is relabeled `Calendar`, `/today` now renders an in-progress month calendar shell, and the tree focus panel now removes `Current` while making full household clusters clickable. See `docs/change-summary.md`.
 - 2026-03-13: Fixed Family Tree pointer capture so the top app navigation stays usable, added selection-aware child spacing under selected households/children, and animated the internal tree layout changes instead of snapping them. See `docs/change-summary.md`.
 - 2026-03-13: Family Tree focus now anchors scaling on the selected person/household so it stays centered and large, and the compact focus panel now stretches responsively across mobile widths with scrollable chips. See `docs/change-summary.md`.
 - 2026-03-13: Redesigned the Family Tree focus navigator into a compact chip panel, made `Parents`/`Siblings` drive graph navigation directly, added an in-graph search card at the lower left, and shifted focused branches left so the navigator stops covering them. See `docs/change-summary.md`.
