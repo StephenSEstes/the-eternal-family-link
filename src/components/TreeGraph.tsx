@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
+import { FocusPanel } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
 
@@ -668,6 +669,7 @@ export function TreeGraph({
     midpointY: number;
   } | null>(null);
   const animationTimeoutRef = useRef<number | null>(null);
+  const initializedTenantFocusRef = useRef("");
 
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -947,6 +949,53 @@ export function TreeGraph({
     };
   }
 
+  const defaultFocusTarget = (() => {
+    const topLevel = levelsSorted[0];
+    if (topLevel === undefined) {
+      return null;
+    }
+    const row = orderedByLevel.get(topLevel) ?? [];
+    if (row.length === 0) {
+      return null;
+    }
+    const rowPersonIds = new Set(row.map((node) => node.personId));
+    const seen = new Set<string>();
+    for (const node of row) {
+      if (seen.has(node.personId)) {
+        continue;
+      }
+      const partnerId = partnerMap.get(node.personId) ?? "";
+      const hasPartnerInRow = Boolean(partnerId && rowPersonIds.has(partnerId) && !seen.has(partnerId));
+      if (hasPartnerInRow && partnerId) {
+        const unitIds = getOrderedUnitIds(node.personId, partnerId);
+        unitIds.forEach((personId) => seen.add(personId));
+        const householdId = getUnitHouseholdId(unitIds);
+        if (householdId) {
+          const householdMembers = unitIds
+            .map((personId) => nodeMap.get(personId))
+            .filter((person): person is PersonNode => Boolean(person));
+          const anchor = getBranchAnchorPerson(...householdMembers);
+          return { kind: "person", personId: anchor.personId } satisfies FocusTarget;
+        }
+        const left = nodeMap.get(unitIds[0] ?? "");
+        const right = nodeMap.get(unitIds[1] ?? "");
+        const anchor = getBranchAnchorPerson(left, right);
+        return { kind: "person", personId: anchor.personId } satisfies FocusTarget;
+      }
+      seen.add(node.personId);
+      return { kind: "person", personId: node.personId } satisfies FocusTarget;
+    }
+    return null;
+  })();
+
+  useEffect(() => {
+    if (initializedTenantFocusRef.current === tenantKey) {
+      return;
+    }
+    initializedTenantFocusRef.current = tenantKey;
+    setFocusTarget(defaultFocusTarget);
+  }, [defaultFocusTarget, tenantKey]);
+
   const focusContext = (() => {
     if (!focusTarget) {
       return null;
@@ -1132,6 +1181,84 @@ export function TreeGraph({
 
   const peopleById = new Map(nodes.map((node) => [node.personId, node]));
   const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
+  const focusPanelData = (() => {
+    if (!focusContext || !focusTarget) {
+      return null;
+    }
+
+    const collectPeople = (personIds: string[]) => {
+      const seen = new Set<string>();
+      return personIds
+        .map((personId) => personId.trim())
+        .filter((personId) => {
+          if (!personId || seen.has(personId)) {
+            return false;
+          }
+          seen.add(personId);
+          return true;
+        })
+        .map((personId) => peopleById.get(personId))
+        .filter((person): person is PersonNode => Boolean(person))
+        .sort(comparePeopleForTreeOrder);
+    };
+
+    let selectedPersonId = "";
+    let spouseIds: string[] = [];
+    let childIds: string[] = [];
+
+    if (focusTarget.kind === "household") {
+      const household = householdMetaById.get(focusTarget.householdId);
+      const householdPeople = (household?.memberIds ?? [])
+        .map((personId) => peopleById.get(personId))
+        .filter((person): person is PersonNode => Boolean(person));
+      if (!household || householdPeople.length === 0) {
+        return null;
+      }
+      selectedPersonId = getBranchAnchorPerson(...householdPeople).personId;
+      spouseIds = household.memberIds.filter((personId) => personId !== selectedPersonId);
+      childIds = childrenByHouseholdId.get(focusTarget.householdId) ?? [];
+    } else {
+      selectedPersonId = focusTarget.personId;
+      const personHouseholdId = householdIdByMemberId.get(selectedPersonId) ?? "";
+      if (personHouseholdId) {
+        spouseIds = (householdMetaById.get(personHouseholdId)?.memberIds ?? []).filter((personId) => personId !== selectedPersonId);
+        childIds = childrenByHouseholdId.get(personHouseholdId) ?? [];
+      } else {
+        const spouseId = partnerMap.get(selectedPersonId) ?? "";
+        spouseIds = spouseId ? [spouseId] : [];
+        childIds = Array.from(childIdsByParent.get(selectedPersonId) ?? []);
+      }
+    }
+
+    const selectedPerson = peopleById.get(selectedPersonId) ?? null;
+    if (!selectedPerson) {
+      return null;
+    }
+
+    const parentHouseholdId = parentHouseholdIdByChildId.get(selectedPersonId) ?? "";
+    const parentIds = parentHouseholdId
+      ? householdMetaById.get(parentHouseholdId)?.memberIds ?? []
+      : Array.from(parentIdsByChild.get(selectedPersonId) ?? []);
+    const siblingIds = parentHouseholdId
+      ? (childrenByHouseholdId.get(parentHouseholdId) ?? []).filter((personId) => personId !== selectedPersonId)
+      : [];
+
+    const hiddenPeopleCount = Math.max(0, nodes.length - focusContext.emphasizedPersonIds.size);
+    const hiddenHouseholdCount = Math.max(0, householdMetaById.size - focusContext.emphasizedHouseholdIds.size);
+    let summaryText = "Focused branch view.";
+    if (hiddenPeopleCount > 0 || hiddenHouseholdCount > 0) {
+      summaryText = `Collapsed ${hiddenPeopleCount} other people and ${hiddenHouseholdCount} other households.`;
+    }
+
+    return {
+      selectedPerson,
+      parents: collectPeople(parentIds.filter((personId) => personId !== selectedPersonId)),
+      spouses: collectPeople(spouseIds),
+      siblings: collectPeople(siblingIds.filter((personId) => !spouseIds.includes(personId))),
+      childrenList: collectPeople(childIds.filter((personId) => personId !== selectedPersonId)),
+      summaryText,
+    };
+  })();
 
   const getAvatarUrl = useCallback(
     (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
@@ -1427,20 +1554,27 @@ export function TreeGraph({
     [focusTarget],
   );
 
-  const isDimmedPerson = (personId: string) =>
-    Boolean(focusContext) && !focusContext?.emphasizedPersonIds.has(personId);
+  const shouldRenderPerson = (personId: string) =>
+    !focusContext || focusContext.emphasizedPersonIds.has(personId);
+  const shouldRenderHousehold = (householdId: string, memberIds: string[]) => {
+    if (!focusContext) {
+      return true;
+    }
+    if (householdId && focusContext.emphasizedHouseholdIds.has(householdId)) {
+      return true;
+    }
+    return memberIds.every((personId) => focusContext.emphasizedPersonIds.has(personId));
+  };
+  const shouldRenderEdge = (edgeId: string) =>
+    !focusContext || focusContext.emphasizedEdgeIds.has(edgeId);
+  const shouldRenderConnector = (householdId: string, childId: string) =>
+    !focusContext || focusContext.emphasizedConnectorKeys.has(`${householdId}::${childId}`);
   const isSelectedPerson = (personId: string) =>
     Boolean(focusContext?.selectedPersonIds.has(personId));
   const isRelatedPerson = (personId: string) =>
     Boolean(focusContext?.emphasizedPersonIds.has(personId)) && !isSelectedPerson(personId);
-  const isDimmedHousehold = (householdId: string) =>
-    Boolean(focusContext) && !focusContext?.emphasizedHouseholdIds.has(householdId);
   const isSelectedHousehold = (householdId: string) =>
     Boolean(focusContext?.selectedHouseholdIds.has(householdId));
-  const isDimmedEdge = (edgeId: string) =>
-    Boolean(focusContext) && !focusContext?.emphasizedEdgeIds.has(edgeId);
-  const isDimmedConnector = (householdId: string, childId: string) =>
-    Boolean(focusContext) && !focusContext?.emphasizedConnectorKeys.has(`${householdId}::${childId}`);
 
   return (
     <div
@@ -1581,15 +1715,13 @@ export function TreeGraph({
           const labelLines = label ? wrapHouseholdLabel(label) : [];
 
           const householdId = pairHouseholdIdByPairKey.get(pairKey) ?? "";
-          const dimmed = householdId ? isDimmedHousehold(householdId) : Boolean(focusContext);
+          if (!shouldRenderHousehold(householdId, [leftId, rightId])) {
+            return null;
+          }
           const selected = householdId ? isSelectedHousehold(householdId) : false;
 
           return (
-            <g
-              key={`cluster-${pairKey}`}
-              className={`tree-household-group${selected ? " is-selected" : ""}`}
-              style={{ opacity: dimmed ? 0.15 : 1 }}
-            >
+            <g key={`cluster-${pairKey}`} className={`tree-household-group${selected ? " is-selected" : ""}`}>
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tree-line" />
               <rect
                 x={midX - halfWidth}
@@ -1637,17 +1769,15 @@ export function TreeGraph({
             if (!pos) {
               return null;
             }
+            if (!shouldRenderHousehold(household.householdId, household.memberIds)) {
+              return null;
+            }
             const halfWidth = NODE_HALF_WIDTH + 16;
             const halfHeight = NODE_HALF_HEIGHT + 26;
             const labelLines = household.label ? wrapHouseholdLabel(household.label) : [];
-            const dimmed = isDimmedHousehold(household.householdId);
             const selected = isSelectedHousehold(household.householdId);
             return (
-              <g
-                key={`cluster-single-${household.householdId}`}
-                className={`tree-household-group${selected ? " is-selected" : ""}`}
-                style={{ opacity: dimmed ? 0.15 : 1 }}
-              >
+              <g key={`cluster-single-${household.householdId}`} className={`tree-household-group${selected ? " is-selected" : ""}`}>
                 <rect
                   x={pos.x - halfWidth}
                   y={pos.y - halfHeight}
@@ -1690,6 +1820,9 @@ export function TreeGraph({
           if (hiddenParentEdgeIds.has(edge.id)) {
             return null;
           }
+          if (!shouldRenderEdge(edge.id)) {
+            return null;
+          }
           const from = positions.get(edge.fromPersonId);
           const to = positions.get(edge.toPersonId);
           if (!from || !to) {
@@ -1699,9 +1832,8 @@ export function TreeGraph({
           const midY = (from.y + to.y) / 2;
           const isFamilyEdge = edge.label.trim().toLowerCase() === "family";
           const isParentEdge = edge.label.trim().toLowerCase() === "parent";
-          const dimmed = isDimmedEdge(edge.id);
           return (
-            <g key={edge.id} style={{ opacity: dimmed ? 0.15 : 1 }}>
+            <g key={edge.id}>
               <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="tree-line" />
               {!isFamilyEdge && !isParentEdge ? (
                 <text x={midX} y={midY} className="tree-line-label">
@@ -1716,6 +1848,9 @@ export function TreeGraph({
           if (!household) {
             return null;
           }
+          if (!shouldRenderConnector(connector.householdId, connector.childId)) {
+            return null;
+          }
           const child = positions.get(connector.childId);
           const memberPositions = household.memberIds
             .map((personId) => positions.get(personId))
@@ -1727,7 +1862,6 @@ export function TreeGraph({
           const midY = memberPositions.reduce((sum, pos) => sum + pos.y, 0) / memberPositions.length;
           const startY = midY + NODE_HALF_HEIGHT + 16;
           const endY = child.y - NODE_HALF_HEIGHT;
-          const dimmed = isDimmedConnector(connector.householdId, connector.childId);
           return (
             <line
               key={`family-child-${connector.householdId}-${connector.childId}`}
@@ -1736,13 +1870,15 @@ export function TreeGraph({
               x2={child.x}
               y2={endY}
               className="tree-line"
-              style={{ opacity: dimmed ? 0.15 : 1 }}
             />
           );
         })}
       </svg>
 
       {nodes.map((node) => {
+        if (!shouldRenderPerson(node.personId)) {
+          return null;
+        }
         const pos = positions.get(node.personId);
         if (!pos) {
           return null;
@@ -1753,7 +1889,7 @@ export function TreeGraph({
           <div
             key={node.personId}
             className={`tree-node-card-wrap${isSelectedPerson(node.personId) ? " tree-focus-selected" : ""}${isRelatedPerson(node.personId) ? " tree-focus-related" : ""}`}
-            style={{ left: `${pos.x}px`, top: `${pos.y}px`, opacity: isDimmedPerson(node.personId) ? 0.16 : 1 }}
+            style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
           >
             <PersonNodeCard
               personId={node.personId}
@@ -1761,6 +1897,7 @@ export function TreeGraph({
               secondaryText={secondaryText}
               avatarUrl={getAvatarUrl(node)}
               isSelected={isSelectedPerson(node.personId)}
+              isDimmed={false}
               onSelectPerson={handlePersonSelect}
               onOpenPerson={(personId) => {
                 setFocusTarget({ kind: "person", personId });
@@ -1777,6 +1914,19 @@ export function TreeGraph({
         onFit={fitToView}
         onClearFocus={focusTarget ? clearFocus : undefined}
       />
+      {focusPanelData ? (
+        <FocusPanel
+          selectedPerson={focusPanelData.selectedPerson}
+          parents={focusPanelData.parents}
+          spouses={focusPanelData.spouses}
+          siblings={focusPanelData.siblings}
+          childrenList={focusPanelData.childrenList}
+          summaryText={focusPanelData.summaryText}
+          getAvatarUrl={getAvatarUrl}
+          onSelectPerson={(personId) => setFocusTarget({ kind: "person", personId })}
+          onClose={clearFocus}
+        />
+      ) : null}
       <PersonEditModal
         open={Boolean(editPerson)}
         tenantKey={tenantKey}

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-12: Family Tree now opens in a focused branch view, collapses unrelated branches instead of merely dimming them, and adds side-panel navigation for parents, spouse, siblings, and children. See `docs/change-summary.md`.
 - 2026-03-12: Invite creation now allows re-sending a local-capable invite for someone who already has local sign-in by reusing the current username, and invite errors/status now show inside the active Invite panel instead of behind it. See `docs/change-summary.md`.
 - 2026-03-12: Fixed the Oracle local-user username predicate so rename/reset flows can actually find local users again, and stopped treating `@local` family-link aliases as Google access emails in Manage User. See `docs/change-summary.md`.
 - 2026-03-12: Decoded local-user route usernames before lookup/update so Manage User can rename or reset local accounts whose current usernames contain spaces, including Catherine Peterson. See `docs/change-summary.md`.

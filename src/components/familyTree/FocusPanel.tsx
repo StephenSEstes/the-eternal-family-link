@@ -14,17 +14,20 @@ type FocusPanelProps = {
   selectedPerson: FocusPerson;
   parents: FocusPerson[];
   spouses: FocusPerson[];
+  siblings: FocusPerson[];
   childrenList: FocusPerson[];
+  summaryText?: string;
   getAvatarUrl: (person: FocusPerson) => string;
   onSelectPerson: (personId: string) => void;
   onClose: () => void;
 };
 
-type TabKey = "parents" | "spouse" | "children";
+type TabKey = "parents" | "spouse" | "siblings" | "children";
 
 function tabLabel(tab: TabKey) {
   if (tab === "parents") return "Parents";
   if (tab === "spouse") return "Spouse";
+  if (tab === "siblings") return "Siblings";
   return "Children";
 }
 
@@ -41,7 +44,9 @@ export function FocusPanel({
   selectedPerson,
   parents,
   spouses,
+  siblings,
   childrenList,
+  summaryText = "",
   getAvatarUrl,
   onSelectPerson,
   onClose,
@@ -55,8 +60,9 @@ export function FocusPanel({
   const activeList = useMemo(() => {
     if (activeTab === "parents") return parents;
     if (activeTab === "spouse") return spouses;
+    if (activeTab === "siblings") return siblings;
     return childrenList;
-  }, [activeTab, childrenList, parents, spouses]);
+  }, [activeTab, childrenList, parents, siblings, spouses]);
 
   return (
     <aside className="tree-focus-panel" onPointerDown={(event) => event.stopPropagation()}>
@@ -68,10 +74,11 @@ export function FocusPanel({
         <img className="tree-focus-avatar" src={getAvatarUrl(selectedPerson)} alt={selectedPerson.displayName} />
         <h3>{selectedPerson.displayName}</h3>
         {lifespanLabel(selectedPerson) ? <p>{lifespanLabel(selectedPerson)}</p> : null}
+        {summaryText ? <p>{summaryText}</p> : null}
       </div>
 
       <div className="tree-focus-tabs" role="tablist" aria-label="Relationships">
-        {(["parents", "spouse", "children"] as TabKey[]).map((tab) => (
+        {(["parents", "spouse", "siblings", "children"] as TabKey[]).map((tab) => (
           <button
             key={tab}
             type="button"

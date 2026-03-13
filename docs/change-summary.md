@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (focused branch default + collapsed tree navigation)
+
+- `Date`: 2026-03-12
+- `Change`: Changed Family Tree focus mode from dim-only to a true focused-branch view: the tree now opens focused on a default branch, renders only the selected branch instead of the entire faded graph, and adds a side focus panel for parents, spouse, siblings, and children navigation plus collapsed-branch counts.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The existing tree focus model only lowered opacity on unrelated households, lines, and people, but it still rendered the full graph at full layout width. That meant the tree stayed too wide and visually dense even after selecting a person or household. The existing `FocusPanel` component was also present in the repo but not wired into `TreeGraph`, so there was no lightweight way to move through nearby relatives without reopening the full panoramic tree.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/components/familyTree/FocusPanel.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Opening the Family Tree now starts in a focused branch view instead of the full-width panoramic tree.
+  - When a person or household is focused, unrelated branches are not rendered; the selected branch fills most of the graph area.
+  - The focus panel shows parents, spouse, siblings, and children and recentering on one of those relatives updates the focused branch.
+  - `Show Full Tree` is still available through the clear-focus control.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `TreeGraph`, `FocusPanel`, and focus-panel CSS changes together so the tree returns to the prior dim-only soft-focus behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (allow same-person local re-invites + move invite status into modal)
 
 - `Date`: 2026-03-12
