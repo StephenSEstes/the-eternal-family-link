@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
-import { FocusPanel } from "@/components/familyTree/FocusPanel";
+import { FocusPanel, type FocusPanelGroup } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
 
@@ -54,6 +54,18 @@ type FocusTarget =
   | { kind: "person"; personId: string }
   | { kind: "household"; householdId: string }
   | null;
+
+type FocusNavigationData = {
+  selectedPerson: PersonNode;
+  selectedHouseholdId: string;
+  selectedHouseholdLabel: string;
+  currentPeople: PersonNode[];
+  parents: PersonNode[];
+  parentTarget: FocusTarget;
+  spouses: PersonNode[];
+  siblings: PersonNode[];
+  childrenList: PersonNode[];
+};
 
 export function TreeGraph({
   tenantKey,
@@ -676,10 +688,13 @@ export function TreeGraph({
   const [isPanning, setIsPanning] = useState(false);
   const [animateViewport, setAnimateViewport] = useState(false);
   const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
+  const [focusPanelGroup, setFocusPanelGroup] = useState<FocusPanelGroup>("default");
+  const [treeSearchQuery, setTreeSearchQuery] = useState("");
   const [editPersonId, setEditPersonId] = useState("");
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
+  const deferredTreeSearchQuery = useDeferredValue(treeSearchQuery.trim().toLowerCase());
 
   useEffect(() => {
     scaleRef.current = scale;
@@ -996,8 +1011,109 @@ export function TreeGraph({
     setFocusTarget(defaultFocusTarget);
   }, [defaultFocusTarget, tenantKey]);
 
-  const focusContext = (() => {
+  const peopleById = new Map(nodes.map((node) => [node.personId, node]));
+  const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
+
+  const collectPeople = (personIds: string[]) => {
+    const seen = new Set<string>();
+    return personIds
+      .map((personId) => personId.trim())
+      .filter((personId) => {
+        if (!personId || seen.has(personId)) {
+          return false;
+        }
+        seen.add(personId);
+        return true;
+      })
+      .map((personId) => peopleById.get(personId))
+      .filter((person): person is PersonNode => Boolean(person))
+      .sort(comparePeopleForTreeOrder);
+  };
+
+  const focusPanelData: FocusNavigationData | null = (() => {
     if (!focusTarget) {
+      return null;
+    }
+
+    let selectedPersonId = "";
+    let selectedHouseholdId = "";
+    let spouseIds: string[] = [];
+    let childIds: string[] = [];
+
+    if (focusTarget.kind === "household") {
+      const household = householdMetaById.get(focusTarget.householdId);
+      const householdPeople = (household?.memberIds ?? [])
+        .map((personId) => peopleById.get(personId))
+        .filter((person): person is PersonNode => Boolean(person));
+      if (!household || householdPeople.length === 0) {
+        return null;
+      }
+      selectedPersonId = getBranchAnchorPerson(...householdPeople).personId;
+      selectedHouseholdId = household.householdId;
+      spouseIds = household.memberIds.filter((personId) => personId !== selectedPersonId);
+      childIds = childrenByHouseholdId.get(household.householdId) ?? [];
+    } else {
+      selectedPersonId = focusTarget.personId;
+      selectedHouseholdId = householdIdByMemberId.get(selectedPersonId) ?? "";
+      if (selectedHouseholdId) {
+        spouseIds = (householdMetaById.get(selectedHouseholdId)?.memberIds ?? []).filter((personId) => personId !== selectedPersonId);
+        childIds = childrenByHouseholdId.get(selectedHouseholdId) ?? [];
+      } else {
+        const spouseId = partnerMap.get(selectedPersonId) ?? "";
+        spouseIds = spouseId ? [spouseId] : [];
+        childIds = Array.from(childIdsByParent.get(selectedPersonId) ?? []);
+      }
+    }
+
+    const selectedPerson = peopleById.get(selectedPersonId) ?? null;
+    if (!selectedPerson) {
+      return null;
+    }
+
+    const parentHouseholdId = parentHouseholdIdByChildId.get(selectedPersonId) ?? "";
+    const parentIds = parentHouseholdId
+      ? householdMetaById.get(parentHouseholdId)?.memberIds ?? []
+      : Array.from(parentIdsByChild.get(selectedPersonId) ?? []);
+    const parents = collectPeople(parentIds.filter((personId) => personId !== selectedPersonId));
+    const siblings = collectPeople(
+      parentHouseholdId
+        ? (childrenByHouseholdId.get(parentHouseholdId) ?? []).filter((personId) => personId !== selectedPersonId)
+        : [],
+    ).filter((person) => !spouseIds.includes(person.personId));
+
+    return {
+      selectedPerson,
+      selectedHouseholdId,
+      selectedHouseholdLabel: selectedHouseholdId ? householdMetaById.get(selectedHouseholdId)?.label ?? "" : "",
+      currentPeople: collectPeople(
+        selectedHouseholdId
+          ? householdMetaById.get(selectedHouseholdId)?.memberIds ?? [selectedPersonId]
+          : [selectedPersonId, ...spouseIds],
+      ),
+      parents,
+      parentTarget: parentHouseholdId
+        ? ({ kind: "household", householdId: parentHouseholdId } satisfies FocusTarget)
+        : parents.length > 0
+          ? ({ kind: "person", personId: getBranchAnchorPerson(...parents).personId } satisfies FocusTarget)
+          : null,
+      spouses: collectPeople(spouseIds),
+      siblings,
+      childrenList: collectPeople(childIds.filter((personId) => personId !== selectedPersonId)),
+    };
+  })();
+
+  const focusTargetKey = focusTarget
+    ? focusTarget.kind === "household"
+      ? `household:${focusTarget.householdId}`
+      : `person:${focusTarget.personId}`
+    : "";
+
+  useEffect(() => {
+    setFocusPanelGroup("default");
+  }, [focusTargetKey]);
+
+  const focusContext = (() => {
+    if (!focusTarget || !focusPanelData) {
       return null;
     }
 
@@ -1070,8 +1186,36 @@ export function TreeGraph({
       return true;
     };
 
-    if (focusTarget.kind === "household") {
-      if (!populateHouseholdFocus(focusTarget.householdId)) {
+    if (focusPanelGroup === "siblings" && (focusPanelData.siblings.length > 0 || focusPanelData.parentTarget)) {
+      if (focusPanelData.parentTarget?.kind === "household") {
+        const parentBounds = getHouseholdBounds(focusPanelData.parentTarget.householdId);
+        if (parentBounds) {
+          alignTopY = parentBounds.minY;
+        }
+        addHousehold(focusPanelData.parentTarget.householdId, true);
+        selectedHouseholdIds.add(focusPanelData.parentTarget.householdId);
+      } else if (focusPanelData.parentTarget?.kind === "person") {
+        const parentBounds = getPersonBounds(focusPanelData.parentTarget.personId);
+        if (parentBounds) {
+          alignTopY = parentBounds.minY;
+        }
+        addPerson(focusPanelData.parentTarget.personId, true);
+      }
+
+      if (focusPanelData.selectedHouseholdId) {
+        addHousehold(focusPanelData.selectedHouseholdId, true);
+      } else {
+        const selectedBounds = getPersonBounds(focusPanelData.selectedPerson.personId);
+        if (selectedBounds && !alignTopY) {
+          alignTopY = selectedBounds.minY;
+        }
+        addPerson(focusPanelData.selectedPerson.personId, true);
+      }
+      selectedPersonIds.add(focusPanelData.selectedPerson.personId);
+      focusPanelData.currentPeople.forEach((person) => addPerson(person.personId, true));
+      focusPanelData.siblings.forEach((person) => addPerson(person.personId, true));
+    } else if (focusTarget.kind === "household") {
+      if (!populateHouseholdFocus(focusTarget.householdId, focusPanelData.selectedPerson.personId)) {
         return null;
       }
     } else {
@@ -1179,91 +1323,30 @@ export function TreeGraph({
   const focusedPersonId = focusTarget?.kind === "person" ? focusTarget.personId : "";
   const focusedHouseholdId = focusTarget?.kind === "household" ? focusTarget.householdId : "";
 
-  const peopleById = new Map(nodes.map((node) => [node.personId, node]));
-  const editPerson = editPersonId ? peopleById.get(editPersonId) ?? null : null;
-  const focusPanelData = (() => {
-    if (!focusContext || !focusTarget) {
-      return null;
-    }
-
-    const collectPeople = (personIds: string[]) => {
-      const seen = new Set<string>();
-      return personIds
-        .map((personId) => personId.trim())
-        .filter((personId) => {
-          if (!personId || seen.has(personId)) {
-            return false;
-          }
-          seen.add(personId);
-          return true;
-        })
-        .map((personId) => peopleById.get(personId))
-        .filter((person): person is PersonNode => Boolean(person))
-        .sort(comparePeopleForTreeOrder);
-    };
-
-    let selectedPersonId = "";
-    let spouseIds: string[] = [];
-    let childIds: string[] = [];
-
-    if (focusTarget.kind === "household") {
-      const household = householdMetaById.get(focusTarget.householdId);
-      const householdPeople = (household?.memberIds ?? [])
-        .map((personId) => peopleById.get(personId))
-        .filter((person): person is PersonNode => Boolean(person));
-      if (!household || householdPeople.length === 0) {
-        return null;
-      }
-      selectedPersonId = getBranchAnchorPerson(...householdPeople).personId;
-      spouseIds = household.memberIds.filter((personId) => personId !== selectedPersonId);
-      childIds = childrenByHouseholdId.get(focusTarget.householdId) ?? [];
-    } else {
-      selectedPersonId = focusTarget.personId;
-      const personHouseholdId = householdIdByMemberId.get(selectedPersonId) ?? "";
-      if (personHouseholdId) {
-        spouseIds = (householdMetaById.get(personHouseholdId)?.memberIds ?? []).filter((personId) => personId !== selectedPersonId);
-        childIds = childrenByHouseholdId.get(personHouseholdId) ?? [];
-      } else {
-        const spouseId = partnerMap.get(selectedPersonId) ?? "";
-        spouseIds = spouseId ? [spouseId] : [];
-        childIds = Array.from(childIdsByParent.get(selectedPersonId) ?? []);
-      }
-    }
-
-    const selectedPerson = peopleById.get(selectedPersonId) ?? null;
-    if (!selectedPerson) {
-      return null;
-    }
-
-    const parentHouseholdId = parentHouseholdIdByChildId.get(selectedPersonId) ?? "";
-    const parentIds = parentHouseholdId
-      ? householdMetaById.get(parentHouseholdId)?.memberIds ?? []
-      : Array.from(parentIdsByChild.get(selectedPersonId) ?? []);
-    const siblingIds = parentHouseholdId
-      ? (childrenByHouseholdId.get(parentHouseholdId) ?? []).filter((personId) => personId !== selectedPersonId)
-      : [];
-
-    const hiddenPeopleCount = Math.max(0, nodes.length - focusContext.emphasizedPersonIds.size);
-    const hiddenHouseholdCount = Math.max(0, householdMetaById.size - focusContext.emphasizedHouseholdIds.size);
-    let summaryText = "Focused branch view.";
-    if (hiddenPeopleCount > 0 || hiddenHouseholdCount > 0) {
-      summaryText = `Collapsed ${hiddenPeopleCount} other people and ${hiddenHouseholdCount} other households.`;
-    }
-
-    return {
-      selectedPerson,
-      parents: collectPeople(parentIds.filter((personId) => personId !== selectedPersonId)),
-      spouses: collectPeople(spouseIds),
-      siblings: collectPeople(siblingIds.filter((personId) => !spouseIds.includes(personId))),
-      childrenList: collectPeople(childIds.filter((personId) => personId !== selectedPersonId)),
-      summaryText,
-    };
-  })();
-
   const getAvatarUrl = useCallback(
     (person: PersonNode) => (person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png"),
     [],
   );
+  const treeSearchResults = useMemo(() => {
+    if (!deferredTreeSearchQuery) {
+      return [];
+    }
+    return nodes
+      .filter((node) => {
+        const haystack = [
+          node.displayName,
+          node.firstName ?? "",
+          node.middleName ?? "",
+          node.lastName ?? "",
+          node.nickName ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(deferredTreeSearchQuery);
+      })
+      .sort(comparePeopleForTreeOrder)
+      .slice(0, 8);
+  }, [deferredTreeSearchQuery, nodes]);
 
   const clampScale = useCallback((value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value)), []);
 
@@ -1321,15 +1404,17 @@ export function TreeGraph({
       const bottomPadding = Math.min(54, rect.height * 0.08);
       const focusWidth = Math.max(bounds.maxX - bounds.minX, NODE_CARD_WIDTH * 2);
       const focusHeight = Math.max(bounds.maxY - bounds.minY, NODE_HALF_HEIGHT * 3);
-      const availableWidth = Math.max(140, rect.width - sidePadding * 2);
+      const reservedRight = focusPanelData && rect.width > 900 ? Math.min(304, rect.width * 0.3) : 0;
+      const availableWidth = Math.max(140, rect.width - sidePadding * 2 - reservedRight);
       const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding);
       const nextScale = clampScale(Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98);
       const centerX = (bounds.minX + bounds.maxX) / 2;
-      const nextX = rect.width / 2 - centerX * nextScale;
+      const targetCenterX = sidePadding + availableWidth / 2;
+      const nextX = targetCenterX - centerX * nextScale;
       const nextY = topPadding - alignTopY * nextScale;
       applyViewport(nextScale, { x: nextX, y: nextY }, true);
     },
-    [applyViewport, clampScale],
+    [applyViewport, clampScale, focusPanelData],
   );
 
   useEffect(() => {
@@ -1513,6 +1598,7 @@ export function TreeGraph({
 
   const clearFocus = useCallback(() => {
     setFocusTarget(null);
+    setTreeSearchQuery("");
     fitToView();
   }, [fitToView]);
 
@@ -1534,6 +1620,7 @@ export function TreeGraph({
         openHouseholdEditor(householdId);
         return;
       }
+      setTreeSearchQuery("");
       setFocusTarget({ kind: "household", householdId });
     },
     [canManage, focusTarget, openHouseholdEditor],
@@ -1549,10 +1636,43 @@ export function TreeGraph({
         setEditPersonId(personId);
         return;
       }
+      setTreeSearchQuery("");
       setFocusTarget({ kind: "person", personId });
     },
     [focusTarget],
   );
+
+  const handleFocusSearchSelect = useCallback((personId: string) => {
+    if (!personId) {
+      return;
+    }
+    setTreeSearchQuery("");
+    setFocusTarget({ kind: "person", personId });
+  }, []);
+
+  const showDefaultGroup = useCallback(() => {
+    setFocusPanelGroup("default");
+  }, []);
+
+  const showSpouseGroup = useCallback(() => {
+    setFocusPanelGroup("spouses");
+  }, []);
+
+  const showSiblingGroup = useCallback(() => {
+    setFocusPanelGroup("siblings");
+  }, []);
+
+  const showChildrenGroup = useCallback(() => {
+    setFocusPanelGroup("children");
+  }, []);
+
+  const navigateToParents = useCallback(() => {
+    if (!focusPanelData?.parentTarget) {
+      return;
+    }
+    setTreeSearchQuery("");
+    setFocusTarget(focusPanelData.parentTarget);
+  }, [focusPanelData]);
 
   const shouldRenderPerson = (personId: string) =>
     !focusContext || focusContext.emphasizedPersonIds.has(personId);
@@ -1908,6 +2028,36 @@ export function TreeGraph({
         );
       })}
       </div>
+      <div className="tree-search-card" onPointerDown={(event) => event.stopPropagation()}>
+        <input
+          id="tree-search-input"
+          type="search"
+          className="tree-search-input"
+          value={treeSearchQuery}
+          onChange={(event) => setTreeSearchQuery(event.target.value)}
+          placeholder="Find a person"
+          aria-label="Find a person in the family tree"
+        />
+        {deferredTreeSearchQuery ? (
+          <div className="tree-search-results">
+            {treeSearchResults.length > 0 ? (
+              treeSearchResults.map((person) => (
+                <button
+                  key={`tree-search-${person.personId}`}
+                  type="button"
+                  className="tree-search-result"
+                  onClick={() => handleFocusSearchSelect(person.personId)}
+                >
+                  <img src={getAvatarUrl(person)} alt={person.displayName} />
+                  <span>{person.displayName}</span>
+                </button>
+              ))
+            ) : (
+              <p className="tree-search-empty">No matching people.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
       <GraphControls
         onZoomIn={() => zoomFromCenter(1.15)}
         onZoomOut={() => zoomFromCenter(0.87)}
@@ -1917,13 +2067,20 @@ export function TreeGraph({
       {focusPanelData ? (
         <FocusPanel
           selectedPerson={focusPanelData.selectedPerson}
-          parents={focusPanelData.parents}
+          selectedHouseholdLabel={focusPanelData.selectedHouseholdLabel}
+          activeGroup={focusPanelGroup}
+          currentPeople={focusPanelData.currentPeople}
           spouses={focusPanelData.spouses}
           siblings={focusPanelData.siblings}
           childrenList={focusPanelData.childrenList}
-          summaryText={focusPanelData.summaryText}
+          hasParents={Boolean(focusPanelData.parentTarget)}
           getAvatarUrl={getAvatarUrl}
-          onSelectPerson={(personId) => setFocusTarget({ kind: "person", personId })}
+          onActivateDefault={showDefaultGroup}
+          onActivateParents={navigateToParents}
+          onActivateSpouses={showSpouseGroup}
+          onActivateSiblings={showSiblingGroup}
+          onActivateChildren={showChildrenGroup}
+          onSelectPerson={handleFocusSearchSelect}
           onClose={clearFocus}
         />
       ) : null}

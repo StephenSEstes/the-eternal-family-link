@@ -1,6 +1,4 @@
-﻿"use client";
-
-import { useEffect, useMemo, useState } from "react";
+"use client";
 
 type FocusPerson = {
   personId: string;
@@ -10,95 +8,135 @@ type FocusPerson = {
   birthDate?: string;
 };
 
+export type FocusPanelGroup = "default" | "spouses" | "siblings" | "children";
+
 type FocusPanelProps = {
   selectedPerson: FocusPerson;
-  parents: FocusPerson[];
+  selectedHouseholdLabel?: string;
+  activeGroup: FocusPanelGroup;
+  currentPeople: FocusPerson[];
   spouses: FocusPerson[];
   siblings: FocusPerson[];
   childrenList: FocusPerson[];
-  summaryText?: string;
+  hasParents: boolean;
   getAvatarUrl: (person: FocusPerson) => string;
+  onActivateDefault: () => void;
+  onActivateParents: () => void;
+  onActivateSpouses: () => void;
+  onActivateSiblings: () => void;
+  onActivateChildren: () => void;
   onSelectPerson: (personId: string) => void;
   onClose: () => void;
 };
 
-type TabKey = "parents" | "spouse" | "siblings" | "children";
-
-function tabLabel(tab: TabKey) {
-  if (tab === "parents") return "Parents";
-  if (tab === "spouse") return "Spouse";
-  if (tab === "siblings") return "Siblings";
-  return "Children";
-}
-
-function lifespanLabel(person: FocusPerson) {
+function monthDayLabel(person: FocusPerson) {
   const raw = person.birthDate?.trim() ?? "";
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (match) {
-    return `${match[2]}-${match[3]}`;
+  if (!match) {
+    return "";
   }
-  return "";
+  return `${match[2]}-${match[3]}`;
+}
+
+function actionLabel(base: string, count: number) {
+  return count > 0 ? `${base} ${count}` : base;
 }
 
 export function FocusPanel({
   selectedPerson,
-  parents,
+  selectedHouseholdLabel = "",
+  activeGroup,
+  currentPeople,
   spouses,
   siblings,
   childrenList,
-  summaryText = "",
+  hasParents,
   getAvatarUrl,
+  onActivateDefault,
+  onActivateParents,
+  onActivateSpouses,
+  onActivateSiblings,
+  onActivateChildren,
   onSelectPerson,
   onClose,
 }: FocusPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("parents");
-
-  useEffect(() => {
-    setActiveTab("parents");
-  }, [selectedPerson.personId]);
-
-  const activeList = useMemo(() => {
-    if (activeTab === "parents") return parents;
-    if (activeTab === "spouse") return spouses;
-    if (activeTab === "siblings") return siblings;
-    return childrenList;
-  }, [activeTab, childrenList, parents, siblings, spouses]);
+  const peopleChips =
+    activeGroup === "siblings"
+      ? siblings
+      : activeGroup === "children"
+        ? childrenList
+        : activeGroup === "spouses"
+          ? spouses
+          : currentPeople;
+  const birthday = monthDayLabel(selectedPerson);
+  const metaBits = [birthday, selectedHouseholdLabel.trim()].filter(Boolean);
 
   return (
     <aside className="tree-focus-panel" onPointerDown={(event) => event.stopPropagation()}>
-      <button type="button" className="tree-focus-close" onClick={onClose} aria-label="Close focus mode">
-        X
-      </button>
-
-      <div className="tree-focus-header">
-        <img className="tree-focus-avatar" src={getAvatarUrl(selectedPerson)} alt={selectedPerson.displayName} />
-        <h3>{selectedPerson.displayName}</h3>
-        {lifespanLabel(selectedPerson) ? <p>{lifespanLabel(selectedPerson)}</p> : null}
-        {summaryText ? <p>{summaryText}</p> : null}
+      <div className="tree-focus-header-compact">
+        <img className="tree-focus-avatar-compact" src={getAvatarUrl(selectedPerson)} alt={selectedPerson.displayName} />
+        <div className="tree-focus-header-copy">
+          <h3>{selectedPerson.displayName}</h3>
+          {metaBits.length > 0 ? <p>{metaBits.join(" • ")}</p> : null}
+        </div>
+        <button type="button" className="tree-focus-close" onClick={onClose} aria-label="Close focus mode">
+          X
+        </button>
       </div>
 
-      <div className="tree-focus-tabs" role="tablist" aria-label="Relationships">
-        {(["parents", "spouse", "siblings", "children"] as TabKey[]).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            className={`tree-focus-tab ${activeTab === tab ? "is-active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-            aria-selected={activeTab === tab}
-          >
-            {tabLabel(tab)}
-          </button>
-        ))}
+      <div className="tree-focus-actions" aria-label="Focus navigation">
+        <button
+          type="button"
+          className={`tree-focus-action-chip${activeGroup === "default" ? " is-active" : ""}`}
+          onClick={onActivateDefault}
+        >
+          Current
+        </button>
+        <button
+          type="button"
+          className="tree-focus-action-chip"
+          onClick={onActivateParents}
+          disabled={!hasParents}
+          aria-disabled={!hasParents}
+        >
+          Parents
+        </button>
+        <button
+          type="button"
+          className={`tree-focus-action-chip${activeGroup === "spouses" ? " is-active" : ""}`}
+          onClick={onActivateSpouses}
+          disabled={spouses.length === 0}
+          aria-disabled={spouses.length === 0}
+        >
+          {actionLabel("Spouse", spouses.length)}
+        </button>
+        <button
+          type="button"
+          className={`tree-focus-action-chip${activeGroup === "siblings" ? " is-active" : ""}`}
+          onClick={onActivateSiblings}
+          disabled={siblings.length === 0}
+          aria-disabled={siblings.length === 0}
+        >
+          {actionLabel("Siblings", siblings.length)}
+        </button>
+        <button
+          type="button"
+          className={`tree-focus-action-chip${activeGroup === "children" ? " is-active" : ""}`}
+          onClick={onActivateChildren}
+          disabled={childrenList.length === 0}
+          aria-disabled={childrenList.length === 0}
+        >
+          {actionLabel("Children", childrenList.length)}
+        </button>
       </div>
 
-      <div className="tree-focus-list" role="tabpanel">
-        {activeList.length === 0 ? <p className="tree-focus-empty">No related people in this view.</p> : null}
-        {activeList.map((person) => (
+      <div className="tree-focus-chip-list">
+        {peopleChips.length === 0 ? <p className="tree-focus-empty">No people in this view.</p> : null}
+        {peopleChips.map((person) => (
           <button
-            key={`${activeTab}-${person.personId}`}
+            key={`${activeGroup}-${person.personId}`}
             type="button"
-            className="tree-focus-item"
+            className={`tree-focus-person-chip${person.personId === selectedPerson.personId ? " is-selected" : ""}`}
             onClick={() => onSelectPerson(person.personId)}
           >
             <img src={getAvatarUrl(person)} alt={person.displayName} />

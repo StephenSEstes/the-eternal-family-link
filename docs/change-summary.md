@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (tree focus navigator compact redesign)
+
+- `Date`: 2026-03-13
+- `Change`: Reworked the Family Tree focus navigator into a compact chip-based panel, made `Parents` jump directly to the parent branch, made `Siblings` expand the graph to the sibling view with per-sibling chips, added an in-graph person search card at the lower left, and shifted focus centering left to leave room for the navigator.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The existing tree focus panel was a large tabbed side sheet that only changed list filters inside the panel; it did not treat the panel controls as graph navigation, so `Parents`/`Siblings` required extra clicks and the selected branch still centered for the full viewport instead of the usable space beside the panel. The tree also had no in-graph search overlay, so navigation depended too heavily on the oversized panel and repeated panning.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/components/familyTree/FocusPanel.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Clicking `Parents` in the tree navigator recenters directly on the parent branch or parent household.
+  - Clicking `Siblings` pans out to show the sibling view and shows sibling chips; clicking a sibling chip focuses that sibling.
+  - The focus panel header is compact with avatar, name, and birthday/household label instead of the large summary block.
+  - Tree search appears inside the graph at the lower left and focuses the selected person.
+  - Focused branches now sit left of center on desktop so the navigator no longer covers the selected branch.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the tree navigator UI/CSS changes together so the focus behavior and overlay styling stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (household add-child 500 repair + SnowEstes child membership cleanup)
 
 - `Date`: 2026-03-13
