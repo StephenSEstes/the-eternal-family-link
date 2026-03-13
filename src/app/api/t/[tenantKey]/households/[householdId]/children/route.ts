@@ -18,12 +18,13 @@ type RouteProps = {
 };
 
 const childSchema = z.object({
-  first_name: z.string().trim().min(1).max(80),
+  first_name: z.string().trim().min(1, "First name is required.").max(80),
   middle_name: z.string().trim().max(80).optional().default(""),
-  last_name: z.string().trim().min(1).max(80),
+  last_name: z.string().trim().min(1, "Last name is required.").max(80),
+  maiden_name: z.string().trim().max(80).optional().default(""),
   nick_name: z.string().trim().max(80).optional().default(""),
   display_name: z.string().trim().max(140).optional().default(""),
-  birth_date: z.string().trim().min(1).max(64),
+  birth_date: z.string().trim().min(1, "Birthdate is required.").max(64),
   gender: z.enum(["male", "female"]),
   address: z.string().trim().max(400).optional().default(""),
 });
@@ -114,6 +115,7 @@ export async function POST(request: Request, { params }: RouteProps) {
         first_name: parsed.data.first_name,
         middle_name: parsed.data.middle_name,
         last_name: parsed.data.last_name,
+        maiden_name: parsed.data.maiden_name,
         nick_name: parsed.data.nick_name,
         birth_date: parsed.data.birth_date,
         gender: parsed.data.gender,

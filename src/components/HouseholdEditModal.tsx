@@ -188,6 +188,57 @@ function toSortTimestamp(item: HouseholdAttribute) {
   return Number.NaN;
 }
 
+function parseDate(value?: string) {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isOlderThanAge(value: string | undefined, minimumYears: number) {
+  const parsed = parseDate(value);
+  if (!parsed) {
+    return false;
+  }
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - minimumYears);
+  return parsed < cutoff;
+}
+
+function formatAddChildError(status: number, body: unknown) {
+  const payload = (body && typeof body === "object" ? body : null) as
+    | {
+      message?: unknown;
+      error?: unknown;
+      issues?: { formErrors?: unknown[]; fieldErrors?: Record<string, unknown> };
+    }
+    | null;
+  const fieldMessages = Object.values(payload?.issues?.fieldErrors ?? {})
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  if (fieldMessages.length > 0) {
+    return `Cannot save child. ${fieldMessages.join(" ")}`;
+  }
+  const formMessages = Array.isArray(payload?.issues?.formErrors)
+    ? payload.issues.formErrors.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  if (formMessages.length > 0) {
+    return `Cannot save child. ${formMessages.join(" ")}`;
+  }
+  const message =
+    (typeof payload?.message === "string" && payload.message.trim())
+    || (typeof payload?.error === "string" && payload.error.trim().replace(/_/g, " "));
+  return message ? `Add child failed: ${status} ${message}` : `Add child failed: ${status}`;
+}
+
 export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved, onEditPerson }: Props) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -219,6 +270,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [maidenName, setMaidenName] = useState("");
   const [nickName, setNickName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -235,6 +287,19 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [linkQuery, setLinkQuery] = useState("");
   const [associationBusy, setAssociationBusy] = useState(false);
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
+  const canShowChildMaidenName = gender === "female" && isOlderThanAge(birthDate, 19);
+
+  const resetAddChildForm = () => {
+    setFirstName("");
+    setMiddleName("");
+    setLastName("");
+    setMaidenName("");
+    setNickName("");
+    setDisplayName("");
+    setBirthDate("");
+    setGender("");
+    setChildAddress("");
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -245,7 +310,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
       const message = typeof body?.message === "string" ? body.message : "";
       setStatus(`Load failed: ${res.status}${message ? ` ${message}` : ""}${hint ? ` | ${hint}` : ""}`);
       setLoading(false);
-      return;
+      return false;
     }
     const next = body.household as HouseholdSummary;
     setHousehold(next);
@@ -270,6 +335,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setAssociationStatus("");
     setLinkQuery("");
     await refreshHouseholdAttributes();
+    return true;
   };
 
   const refreshHouseholdAttributes = async () => {
@@ -461,13 +527,21 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   };
 
   useEffect(() => {
+    if (canShowChildMaidenName) {
+      return;
+    }
+    if (maidenName) {
+      setMaidenName("");
+    }
+  }, [canShowChildMaidenName, maidenName]);
+
+  useEffect(() => {
     if (!open || !householdId) {
       return;
     }
     setActiveTab("info");
     setAddChildOpen(false);
-    setGender("");
-    setChildAddress("");
+    resetAddChildForm();
     setLinkOptionsLoaded(false);
     setStatus("Loading household...");
     void refresh();
@@ -873,14 +947,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                   className="button secondary tap-button"
                   onClick={() => {
                     if (addChildOpen) {
-                      setFirstName("");
-                      setMiddleName("");
-                      setLastName("");
-                      setNickName("");
-                      setDisplayName("");
-                      setBirthDate("");
-                      setGender("");
-                      setChildAddress("");
+                      resetAddChildForm();
                     }
                     setAddChildOpen((value) => !value);
                   }}
@@ -932,6 +999,12 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                     </select>
+                    {canShowChildMaidenName ? (
+                      <>
+                        <label className="label">Maiden Name (optional)</label>
+                        <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} />
+                      </>
+                    ) : null}
 
                     <button
                       type="button"
@@ -939,15 +1012,17 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                       style={{ marginTop: "0.75rem" }}
                       onClick={() =>
                         void (async () => {
-                          if (!birthDate.trim()) {
-                            setStatus("Birthdate is required before saving child.");
+                          const missingFields = [
+                            !firstName.trim() ? "First Name" : "",
+                            !lastName.trim() ? "Last Name" : "",
+                            !birthDate.trim() ? "Birthdate" : "",
+                            !gender ? "Gender" : "",
+                          ].filter(Boolean);
+                          if (missingFields.length > 0) {
+                            setStatus(`Cannot save child. Missing: ${missingFields.join(", ")}.`);
                             return;
                           }
-                          if (!gender) {
-                            setStatus("Gender is required before saving child.");
-                            return;
-                          }
-                          setStatus("Adding child...");
+                          setStatus("Saving child...");
                           const res = await fetch(
                             `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/children`,
                             {
@@ -959,6 +1034,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                                 last_name: lastName,
                                 nick_name: nickName,
                                 display_name: displayName,
+                                maiden_name: canShowChildMaidenName ? maidenName : "",
                                 birth_date: birthDate,
                                 gender,
                                 address: childAddress,
@@ -967,20 +1043,15 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                           );
                           const body = await res.json().catch(() => null);
                           if (!res.ok) {
-                            setStatus(`Add child failed: ${res.status} ${JSON.stringify(body)}`);
+                            setStatus(formatAddChildError(res.status, body));
                             return;
                           }
-                          setStatus("Child added.");
                           setAddChildOpen(false);
-                          setFirstName("");
-                          setMiddleName("");
-                          setLastName("");
-                          setNickName("");
-                          setDisplayName("");
-                          setBirthDate("");
-                          setGender("");
-                          setChildAddress("");
-                          await refresh();
+                          resetAddChildForm();
+                          const refreshed = await refresh();
+                          if (refreshed) {
+                            setStatus("Child saved.");
+                          }
                           onSaved();
                         })()
                       }

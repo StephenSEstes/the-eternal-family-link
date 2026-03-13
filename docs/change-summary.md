@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-12 (household add-child maiden name + clear missing-field validation)
+
+- `Date`: 2026-03-12
+- `Change`: Updated Household -> Children -> Add Child so the maiden-name field appears only for female children older than 19, successful child saves close the add-child form and refresh the child list, and missing-field/save failures show clear messages instead of raw JSON payloads.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. The add-child form in `HouseholdEditModal` had no maiden-name state or UI gating even though the People model already supported `maiden_name`, and the child-create route ignored that field entirely. Separately, the UI only pre-checked birthdate and gender, then fell back to `JSON.stringify(body)` on save failure, which made missing-field errors hard to understand.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/children/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - In Household -> Children -> Add Child, selecting `Female` with a birthdate older than 19 shows `Maiden Name (optional)`; male children and younger female children do not show it.
+  - Saving a valid child closes the add-child card and refreshes the visible children list.
+  - Missing required fields now show a clear message such as `Cannot save child. Missing: First Name, Last Name, Birthdate, Gender.`
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the child-form UI changes and child-create route update together so the add-child modal and backend schema stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-12 (focused branch default + collapsed tree navigation)
 
 - `Date`: 2026-03-12
