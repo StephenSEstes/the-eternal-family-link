@@ -239,11 +239,15 @@ export const authOptions: NextAuthOptions = {
             personId: string;
           }[];
         };
-        token.role = local.role;
-        token.person_id = local.person_id;
-        token.tenantKey = local.tenantKey;
-        token.tenantName = local.tenantName;
-        token.tenantAccesses = local.tenantAccesses ?? [];
+        const localPersonId = typeof local.person_id === "string" ? local.person_id.trim() : "";
+        const localAccesses = localPersonId ? await getEnabledUserAccessListByPersonId(localPersonId).catch(() => []) : [];
+        const primaryLocalAccess = localAccesses[0];
+
+        token.role = primaryLocalAccess?.role ?? local.role;
+        token.person_id = primaryLocalAccess?.personId ?? local.person_id;
+        token.tenantKey = primaryLocalAccess?.tenantKey ?? local.tenantKey;
+        token.tenantName = primaryLocalAccess?.tenantName ?? local.tenantName;
+        token.tenantAccesses = localAccesses.length > 0 ? localAccesses : local.tenantAccesses ?? [];
         return token;
       }
 

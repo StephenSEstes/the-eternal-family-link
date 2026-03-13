@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Local username/password sign-in now expands the session to all enabled family groups for that person instead of only the family group used on the login form, fixing `missing_tenant_access` on valid secondary family routes. See `docs/change-summary.md`.
 - 2026-03-13: Family Tree mobile layout now uses a taller responsive viewport, docks the focus navigator at the bottom on mobile, repositions the mobile search/controls, and reserves that overlay space when centering the selected branch. See `docs/change-summary.md`.
 - 2026-03-13: Home now greets the logged-in person by nickname/first name, Calendar day cells show clickable birthday chips with age when under 30, and the tree/header layering is hardened so top navigation remains clickable while tree focus navigation is open. See `docs/change-summary.md`.
 - 2026-03-13: Home now shows Birthday range chips instead of the horoscope card, `Today` is relabeled `Calendar`, `/today` now renders an in-progress month calendar shell, and the tree focus panel now removes `Current` while making full household clusters clickable. See `docs/change-summary.md`.

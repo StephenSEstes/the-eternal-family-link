@@ -33,6 +33,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the `TreeGraph.tsx` and `globals.css` changes together so the viewport math and mobile overlay placement stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (local login tenant access expansion)
+
+- `Date`: 2026-03-13
+- `Change`: Fixed local username/password sign-in so the session token expands to all enabled family-group accesses for that person instead of only the family group used on the login form.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The credentials auth path in `next-auth` returned early with `token.tenantAccesses` seeded only from the submitted login family group. Middleware then checked that incomplete token against routes like `/t/meldrumclark/...` and redirected to `missing_tenant_access`, even though the person's `UserFamilyGroups` rows were correct in OCI.
+- `Files`:
+  - `src/lib/auth/options.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - A user with local access to more than one family group can sign in with username/password and then open routes in any enabled family group without `missing_tenant_access`.
+  - `/api/debug/tenant-access` after local sign-in shows all enabled family groups for that person, not just the login family group.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `src/lib/auth/options.ts` change to restore the old one-family local-login session behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (home birthdays + calendar shell + tree navigator polish)
 
 - `Date`: 2026-03-13
