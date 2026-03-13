@@ -620,6 +620,167 @@ export function TreeGraph({
       });
     });
 
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const touchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{
+    distance: number;
+    midpointX: number;
+    midpointY: number;
+  } | null>(null);
+  const animationTimeoutRef = useRef<number | null>(null);
+  const initializedTenantFocusRef = useRef("");
+
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [animateViewport, setAnimateViewport] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
+  const [focusPanelGroup, setFocusPanelGroup] = useState<FocusPanelGroup>("default");
+  const [treeSearchQuery, setTreeSearchQuery] = useState("");
+  const [editPersonId, setEditPersonId] = useState("");
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const scaleRef = useRef(scale);
+  const offsetRef = useRef(offset);
+  const deferredTreeSearchQuery = useDeferredValue(treeSearchQuery.trim().toLowerCase());
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current !== null) {
+        window.clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const selectedPersonIdForLayout = focusTarget?.kind === "person" ? focusTarget.personId.trim() : "";
+  const selectedHouseholdIdForLayout =
+    focusTarget?.kind === "household"
+      ? focusTarget.householdId.trim()
+      : selectedPersonIdForLayout
+        ? householdIdByMemberId.get(selectedPersonIdForLayout) ?? ""
+        : "";
+
+  const layoutChildrenForHousehold = (
+    householdId: string,
+    options: {
+      gap: number;
+      highlightedPersonId?: string;
+      highlightGapBoost?: number;
+    },
+  ) => {
+    const normalizedHouseholdId = householdId.trim();
+    if (!normalizedHouseholdId) {
+      return;
+    }
+    const childIds = childrenByHouseholdId.get(normalizedHouseholdId) ?? [];
+    if (childIds.length === 0) {
+      return;
+    }
+    const household = householdMetaById.get(normalizedHouseholdId);
+    if (!household) {
+      return;
+    }
+    const memberPositions = household.memberIds
+      .map((personId) => positions.get(personId))
+      .filter((pos): pos is { x: number; y: number } => Boolean(pos));
+    if (memberPositions.length === 0) {
+      return;
+    }
+    const centerX = memberPositions.reduce((sum, pos) => sum + pos.x, 0) / memberPositions.length;
+    const seen = new Set<string>();
+    const units = childIds
+      .map((childId) => {
+        const partnerId = partnerMap.get(childId) ?? "";
+        const unitIds = partnerId ? getOrderedUnitIds(childId, partnerId) : [childId];
+        const canonicalUnitKey = unitIds.join("::");
+        if (seen.has(canonicalUnitKey)) {
+          return null;
+        }
+        seen.add(canonicalUnitKey);
+        const anchorPerson = getBranchAnchorPerson(...unitIds.map((personId) => nodeMap.get(personId)));
+        return {
+          ids: unitIds,
+          anchorPerson,
+          unitWidth: unitIds.length === 2 ? NODE_CARD_WIDTH * 2 + SPOUSE_GAP : NODE_CARD_WIDTH,
+          isHighlighted: Boolean(options.highlightedPersonId && unitIds.includes(options.highlightedPersonId)),
+        };
+      })
+      .filter(
+        (
+          unit,
+        ): unit is {
+          ids: string[];
+          anchorPerson: PersonNode;
+          unitWidth: number;
+          isHighlighted: boolean;
+        } => Boolean(unit),
+      )
+      .sort((left, right) => {
+        const byAnchor = comparePeopleForTreeOrder(left.anchorPerson, right.anchorPerson);
+        if (byAnchor !== 0) {
+          return byAnchor;
+        }
+        return left.ids.join("::").localeCompare(right.ids.join("::"));
+      });
+    if (units.length === 0) {
+      return;
+    }
+
+    const gapAfter = (index: number) => {
+      if (index >= units.length - 1) {
+        return 0;
+      }
+      const boost =
+        units[index]?.isHighlighted || units[index + 1]?.isHighlighted ? options.highlightGapBoost ?? 0 : 0;
+      return options.gap + boost;
+    };
+
+    const totalWidth = units.reduce((sum, unit, index) => sum + unit.unitWidth + gapAfter(index), 0);
+    let cursorX = centerX - totalWidth / 2;
+    units.forEach((unit, index) => {
+      const nextCenterX = cursorX + unit.unitWidth / 2;
+      setUnitCenterX(unit.ids, nextCenterX, positions);
+      cursorX += unit.unitWidth + gapAfter(index);
+    });
+  };
+
+  if (selectedHouseholdIdForLayout) {
+    layoutChildrenForHousehold(selectedHouseholdIdForLayout, {
+      gap: 18,
+    });
+  }
+
+  if (selectedPersonIdForLayout) {
+    const parentHouseholdIdForLayout = parentHouseholdIdByChildId.get(selectedPersonIdForLayout) ?? "";
+    if (parentHouseholdIdForLayout) {
+      layoutChildrenForHousehold(parentHouseholdIdForLayout, {
+        gap: 42,
+        highlightedPersonId: selectedPersonIdForLayout,
+        highlightGapBoost: 42,
+      });
+    }
+    const descendantHouseholdId = householdIdByMemberId.get(selectedPersonIdForLayout) ?? "";
+    if (descendantHouseholdId) {
+      layoutChildrenForHousehold(descendantHouseholdId, {
+        gap: 20,
+      });
+    }
+  }
+
   // Normalize layout bounds after spouse/child nudges so clusters are never clipped by stale base width/height.
   const layoutPadding = 28;
   let minX = Number.POSITIVE_INFINITY;
@@ -684,52 +845,6 @@ export function TreeGraph({
       positions.set(personId, { x: pos.x + shiftX, y: pos.y + shiftY });
     });
   }
-
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-  } | null>(null);
-  const touchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchRef = useRef<{
-    distance: number;
-    midpointX: number;
-    midpointY: number;
-  } | null>(null);
-  const animationTimeoutRef = useRef<number | null>(null);
-  const initializedTenantFocusRef = useRef("");
-
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [animateViewport, setAnimateViewport] = useState(false);
-  const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
-  const [focusPanelGroup, setFocusPanelGroup] = useState<FocusPanelGroup>("default");
-  const [treeSearchQuery, setTreeSearchQuery] = useState("");
-  const [editPersonId, setEditPersonId] = useState("");
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
-  const scaleRef = useRef(scale);
-  const offsetRef = useRef(offset);
-  const deferredTreeSearchQuery = useDeferredValue(treeSearchQuery.trim().toLowerCase());
-
-  useEffect(() => {
-    scaleRef.current = scale;
-  }, [scale]);
-
-  useEffect(() => {
-    offsetRef.current = offset;
-  }, [offset]);
-
-  useEffect(() => {
-    return () => {
-      if (animationTimeoutRef.current !== null) {
-        window.clearTimeout(animationTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const toMonthDay = (value?: string) => {
     const raw = (value ?? "").trim();
@@ -1412,6 +1527,35 @@ export function TreeGraph({
     [stopViewportAnimation],
   );
 
+  const resetTreePointerState = useCallback((target?: HTMLDivElement | null, pointerId?: number) => {
+    dragRef.current = null;
+    touchPointersRef.current.clear();
+    pinchRef.current = null;
+    setIsPanning(false);
+    if (target && typeof pointerId === "number" && target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      resetTreePointerState();
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    return () => window.removeEventListener("blur", handleWindowBlur);
+  }, [resetTreePointerState]);
+
+  const shouldIgnorePanStart = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+    return Boolean(
+      target.closest(
+        ".tree-person-card, .tree-focus-panel, .tree-search-card, .tree-control-cluster, .tree-spouse-cluster, .tree-household-action-dot",
+      ),
+    );
+  }, []);
+
   const fitToView = useCallback(() => {
     const el = viewportRef.current;
     if (!el) {
@@ -1783,6 +1927,9 @@ export function TreeGraph({
         if (event.pointerType !== "touch" && event.button !== 0) {
           return;
         }
+        if (shouldIgnorePanStart(event.target)) {
+          return;
+        }
         stopViewportAnimation();
         if (event.pointerType === "touch") {
           touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -1861,6 +2008,9 @@ export function TreeGraph({
         }
       }}
       onPointerCancel={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
         if (event.pointerType === "touch") {
           touchPointersRef.current.delete(event.pointerId);
           if (touchPointersRef.current.size < 2) {
@@ -1877,6 +2027,9 @@ export function TreeGraph({
         }
         dragRef.current = null;
         setIsPanning(false);
+      }}
+      onLostPointerCapture={(event) => {
+        resetTreePointerState(event.currentTarget, event.pointerId);
       }}
     >
       <div className="tree-cloud-overlay" />

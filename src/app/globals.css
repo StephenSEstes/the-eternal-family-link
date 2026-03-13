@@ -851,7 +851,12 @@ main {
 .tree-line {
   stroke: color-mix(in oklab, var(--accent) 65%, #fff 35%);
   stroke-width: 2;
-  transition: opacity 160ms ease;
+  transition:
+    opacity 160ms ease,
+    x1 320ms ease,
+    y1 320ms ease,
+    x2 320ms ease,
+    y2 320ms ease;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
@@ -863,14 +868,22 @@ main {
   vector-effect: non-scaling-stroke;
   cursor: pointer;
   pointer-events: all;
-  transition: fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease;
+  transition:
+    fill 160ms ease,
+    stroke 160ms ease,
+    stroke-width 160ms ease,
+    filter 160ms ease,
+    x 320ms ease,
+    y 320ms ease,
+    width 320ms ease,
+    height 320ms ease;
 }
 
 .tree-line-label {
   font-size: 11px;
   fill: var(--text-muted);
   text-anchor: middle;
-  transition: opacity 160ms ease;
+  transition: opacity 160ms ease, x 320ms ease, y 320ms ease;
 }
 
 .tree-family-label {
@@ -878,7 +891,7 @@ main {
   font-weight: 800;
   fill: color-mix(in oklab, var(--accent) 60%, #1f2937 40%);
   text-anchor: middle;
-  transition: opacity 160ms ease;
+  transition: opacity 160ms ease, fill 160ms ease, x 320ms ease, y 320ms ease;
 }
 
 .tree-household-group:hover .tree-spouse-cluster {
@@ -899,6 +912,7 @@ main {
 .tree-node-card-wrap {
   position: absolute;
   transform: translate(-50%, -50%);
+  transition: left 320ms ease, top 320ms ease;
 }
 
 .tree-node-card-wrap.tree-focus-selected {
@@ -1242,6 +1256,10 @@ main {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tree-household-action-dot {
+  transition: cx 320ms ease, cy 320ms ease, opacity 160ms ease;
 }
 
 @media (max-width: 900px) {

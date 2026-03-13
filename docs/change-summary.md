@@ -52,6 +52,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the viewport anchor-scaling and responsive CSS changes together so focus behavior stays consistent.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (tree interaction capture fix + selection-aware child spacing)
+
+- `Date`: 2026-03-13
+- `Change`: Fixed tree pointer handling so the top app navigation remains usable while the tree navigator is open, added selection-aware child spacing that compacts children under the selected household and expands spacing around a selected child within the sibling row, and animated node/household/connector movement so internal layout changes move together instead of snapping.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The tree surface started pointer capture too broadly, which could leave interaction stuck on the graph instead of allowing normal page navigation. Separately, child-row spacing still used one static layout regardless of selection, so the selected child branch was not visually prioritized and layout changes appeared abrupt.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Top app navigation remains clickable while the tree navigator is visible.
+  - Selecting a parent household keeps that household’s children centered tightly beneath it.
+  - Selecting a child expands spacing around that child within the sibling row while keeping that child’s own branch clearer below.
+  - Internal child/household layout changes animate instead of snapping abruptly.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the tree interaction/layout/CSS changes together so pointer behavior and animated spacing stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (household add-child 500 repair + SnowEstes child membership cleanup)
 
 - `Date`: 2026-03-13
