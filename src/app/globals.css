@@ -1463,6 +1463,34 @@ main {
   gap: 0.95rem;
 }
 
+.calendar-family-filter-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.calendar-family-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  padding: 0.35rem 0.78rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calendar-family-filter-chip.is-active {
+  border-color: color-mix(in oklab, var(--accent) 70%, #fff 30%);
+  background: color-mix(in oklab, var(--accent) 12%, #fff 88%);
+  color: color-mix(in oklab, var(--accent) 82%, #0f172a 18%);
+}
+
 .calendar-toolbar {
   display: flex;
   align-items: center;

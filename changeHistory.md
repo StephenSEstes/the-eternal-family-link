@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Calendar now has family-group filters at the top so users can view one accessible family at a time or `All Families`, while birthday links still prefer the selected family-group route when valid. See `docs/change-summary.md`.
 - 2026-03-13: Home birthdays now aggregate across all accessible family groups, birthday chips prefer the selected family-group route when possible, and profiles opened from Home now close back to Home instead of People. See `docs/change-summary.md`.
 - 2026-03-13: AI Help now includes the local-sign-in `missing tenant access` recovery guidance, including full sign-out/sign-in refresh and `/api/debug/tenant-access` as a session check. See `docs/change-summary.md`.
 - 2026-03-13: Local username/password sign-in now expands the session to all enabled family groups for that person instead of only the family group used on the login form, fixing `missing_tenant_access` on valid secondary family routes. See `docs/change-summary.md`.

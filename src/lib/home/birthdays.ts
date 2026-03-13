@@ -5,42 +5,66 @@ import { getTenantBasePath } from "@/lib/family-group/context";
 
 type TenantAccess = {
   tenantKey: string;
+  tenantName?: string;
 };
 
-export type HomeBirthdayPerson = {
+export type BirthdayFamilyGroupOption = {
+  tenantKey: string;
+  tenantName: string;
+  basePath: string;
+};
+
+export type SharedBirthdayPerson = {
   personId: string;
   displayName: string;
   birthDate: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   personBasePath: string;
+  familyGroupKeys: string[];
 };
 
 function normalizeTenantKey(value?: string) {
   return (value ?? "").trim().toLowerCase();
 }
 
-export async function loadHomeBirthdayPeople(accesses: TenantAccess[], activeTenantKey: string) {
+export async function loadBirthdayPeopleForAccessibleFamilies(accesses: TenantAccess[], activeTenantKey: string) {
   const normalizedActiveTenantKey = normalizeTenantKey(activeTenantKey);
-  const orderedTenantKeys = [
-    normalizedActiveTenantKey,
-    ...accesses.map((entry) => normalizeTenantKey(entry.tenantKey)).filter(Boolean),
-  ].filter((value, index, list) => list.indexOf(value) === index);
+  const orderedFamilyGroups = [
+    {
+      tenantKey: normalizedActiveTenantKey,
+      tenantName: accesses.find((entry) => normalizeTenantKey(entry.tenantKey) === normalizedActiveTenantKey)?.tenantName ?? activeTenantKey,
+    },
+    ...accesses.map((entry) => ({
+      tenantKey: normalizeTenantKey(entry.tenantKey),
+      tenantName: entry.tenantName ?? entry.tenantKey,
+    })),
+  ].filter((entry, index, list) => {
+    if (!entry.tenantKey) {
+      return false;
+    }
+    return list.findIndex((candidate) => candidate.tenantKey === entry.tenantKey) === index;
+  });
 
   const tenantPeopleSets = await Promise.all(
-    orderedTenantKeys.map(async (tenantKey) => ({
-      tenantKey,
-      basePath: getTenantBasePath(tenantKey),
-      people: await getPeople(tenantKey),
+    orderedFamilyGroups.map(async (entry) => ({
+      tenantKey: entry.tenantKey,
+      tenantName: entry.tenantName,
+      basePath: getTenantBasePath(entry.tenantKey),
+      people: await getPeople(entry.tenantKey),
     })),
   );
 
   const activePeople = tenantPeopleSets.find((entry) => entry.tenantKey === normalizedActiveTenantKey)?.people ?? [];
-  const birthdayPeopleById = new Map<string, HomeBirthdayPerson>();
+  const birthdayPeopleById = new Map<string, SharedBirthdayPerson>();
 
   tenantPeopleSets.forEach((entry) => {
     entry.people.forEach((person) => {
-      if (birthdayPeopleById.has(person.personId)) {
+      const existing = birthdayPeopleById.get(person.personId);
+      if (existing) {
+        if (!existing.familyGroupKeys.includes(entry.tenantKey)) {
+          existing.familyGroupKeys.push(entry.tenantKey);
+        }
         return;
       }
       birthdayPeopleById.set(person.personId, {
@@ -49,13 +73,21 @@ export async function loadHomeBirthdayPeople(accesses: TenantAccess[], activeTen
         birthDate: person.birthDate,
         gender: person.gender,
         photoFileId: person.photoFileId,
-        personBasePath: entry.basePath,
+        personBasePath: entry.tenantKey === normalizedActiveTenantKey ? getTenantBasePath(normalizedActiveTenantKey) : entry.basePath,
+        familyGroupKeys: [entry.tenantKey],
       });
     });
   });
 
   return {
     activePeople,
+    familyGroups: tenantPeopleSets.map((entry) => ({
+      tenantKey: entry.tenantKey,
+      tenantName: entry.tenantName,
+      basePath: entry.basePath,
+    })) satisfies BirthdayFamilyGroupOption[],
     birthdayPeople: Array.from(birthdayPeopleById.values()),
   };
 }
+
+export const loadHomeBirthdayPeople = loadBirthdayPeopleForAccessibleFamilies;

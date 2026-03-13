@@ -6,14 +6,23 @@ import { useMemo, useState } from "react";
 type CalendarPageClientProps = {
   todayIso: string;
   basePath: string;
+  returnToPath: string;
+  activeTenantKey: string;
+  familyGroups: Array<{
+    tenantKey: string;
+    tenantName: string;
+  }>;
   birthdayPeople: Array<{
     personId: string;
     displayName: string;
     birthDate: string;
+    personBasePath?: string;
+    familyGroupKeys?: string[];
   }>;
 };
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const ALL_FAMILIES_FILTER = "__all__";
 
 function parseIsoDate(value: string) {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -49,19 +58,46 @@ function buildMonthGrid(monthDate: Date) {
   return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 }
 
-function buildPersonHref(basePath: string, personId: string) {
+function buildPersonHref(basePath: string, personId: string, returnToPath: string) {
   const encodedPersonId = encodeURIComponent(personId);
-  return `${basePath || ""}/people/${encodedPersonId}`;
+  const encodedReturnTo = encodeURIComponent(returnToPath || "/today");
+  return `${basePath || ""}/people/${encodedPersonId}?returnTo=${encodedReturnTo}`;
 }
 
 function getBirthdayAgeLabel(turningAge: number) {
   return turningAge >= 0 && turningAge < 30 ? `Age ${turningAge}` : "";
 }
 
-export function CalendarPageClient({ todayIso, basePath, birthdayPeople }: CalendarPageClientProps) {
+function formatFamilyGroupName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  if (trimmed.includes("-") || trimmed.includes(" ")) return trimmed;
+  if (!/[a-z][A-Z]/.test(trimmed)) return trimmed;
+  return trimmed.replace(/([a-z])([A-Z])/g, "$1-$2");
+}
+
+export function CalendarPageClient({
+  todayIso,
+  basePath,
+  returnToPath,
+  activeTenantKey,
+  familyGroups,
+  birthdayPeople,
+}: CalendarPageClientProps) {
   const today = useMemo(() => parseIsoDate(todayIso) ?? new Date(), [todayIso]);
+  const [selectedFamilyFilter, setSelectedFamilyFilter] = useState<string>(activeTenantKey || ALL_FAMILIES_FILTER);
   const [displayMonth, setDisplayMonth] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0, 0),
+  );
+  const familyFilterOptions = useMemo(
+    () => [
+      { tenantKey: ALL_FAMILIES_FILTER, tenantName: "All Families" },
+      ...familyGroups.map((entry) => ({
+        tenantKey: entry.tenantKey,
+        tenantName: formatFamilyGroupName(entry.tenantName || entry.tenantKey),
+      })),
+    ],
+    [familyGroups],
   );
 
   const yearOptions = useMemo(() => {
@@ -75,8 +111,15 @@ export function CalendarPageClient({ todayIso, basePath, birthdayPeople }: Calen
     year: "numeric",
   });
   const birthdaysByDayKey = useMemo(() => {
-    const result = new Map<string, Array<{ personId: string; displayName: string; ageLabel: string }>>();
+    const result = new Map<string, Array<{ personId: string; displayName: string; ageLabel: string; href: string }>>();
     birthdayPeople.forEach((person) => {
+      const personFamilyGroupKeys = person.familyGroupKeys ?? [];
+      if (
+        selectedFamilyFilter !== ALL_FAMILIES_FILTER &&
+        !personFamilyGroupKeys.includes(selectedFamilyFilter)
+      ) {
+        return;
+      }
       const parsedBirthDate = parseIsoDate(person.birthDate);
       if (!parsedBirthDate) {
         return;
@@ -91,15 +134,29 @@ export function CalendarPageClient({ todayIso, basePath, birthdayPeople }: Calen
         personId: person.personId,
         displayName: person.displayName,
         ageLabel: getBirthdayAgeLabel(occurrence.getFullYear() - parsedBirthDate.getFullYear()),
+        href: buildPersonHref(person.personBasePath ?? basePath, person.personId, returnToPath),
       });
       bucket.sort((left, right) => left.displayName.localeCompare(right.displayName));
       result.set(key, bucket);
     });
     return result;
-  }, [birthdayPeople, displayMonth]);
+  }, [basePath, birthdayPeople, displayMonth, returnToPath, selectedFamilyFilter]);
 
   return (
     <section className="card calendar-card">
+      <div className="calendar-family-filter-row" role="tablist" aria-label="Calendar family filter">
+        {familyFilterOptions.map((option) => (
+          <button
+            key={`calendar-family-filter-${option.tenantKey}`}
+            type="button"
+            className={`calendar-family-filter-chip${selectedFamilyFilter === option.tenantKey ? " is-active" : ""}`}
+            onClick={() => setSelectedFamilyFilter(option.tenantKey)}
+          >
+            {option.tenantName}
+          </button>
+        ))}
+      </div>
+
       <div className="calendar-toolbar">
         <div className="calendar-nav">
           <button
@@ -166,7 +223,7 @@ export function CalendarPageClient({ todayIso, basePath, birthdayPeople }: Calen
                   {dayBirthdays.map((person) => (
                     <Link
                       key={`${dayKey}-${person.personId}`}
-                      href={buildPersonHref(basePath, person.personId)}
+                      href={person.href}
                       prefetch={false}
                       className="calendar-birthday-chip"
                     >

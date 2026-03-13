@@ -86,6 +86,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the Home birthday loader, birthday-chip link, and person-profile return-path changes together so Home navigation and person close behavior stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (calendar family-group filters)
+
+- `Date`: 2026-03-13
+- `Change`: Added family-group filters at the top of Calendar so the user can switch between the current family group, any other accessible family group, or `All Families`, while keeping birthday person links on the currently selected family-group route when that person exists there.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. Calendar loaded birthday people only from the active family group, so there was nothing to filter. The client also had no family-group metadata for each birthday person, which prevented switching between one family and all accessible families without reworking the load shape.
+- `Files`:
+  - `src/lib/home/birthdays.ts`
+  - `src/components/calendar/CalendarPageClient.tsx`
+  - `src/app/today/page.tsx`
+  - `src/app/t/[tenantKey]/today/page.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Calendar shows family-group filter chips above the month controls.
+  - The filters allow the user to view one accessible family group at a time or `All Families`.
+  - Birthday chips in Calendar still open under the selected family-group route when the person belongs to that family, and otherwise fall back to a valid linked family route.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the shared birthday loader, calendar client, and calendar page changes together so filter options and birthday-link routing stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (home birthdays + calendar shell + tree navigator polish)
 
 - `Date`: 2026-03-13
