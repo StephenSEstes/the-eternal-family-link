@@ -1145,6 +1145,7 @@ main {
   z-index: 6;
   padding: 0.7rem;
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0.65rem;
 }
 
@@ -1228,6 +1229,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  min-height: 0;
   max-height: 148px;
   overflow: auto;
 }
@@ -1277,19 +1279,33 @@ main {
 }
 
 @media (max-width: 900px) {
+  .tree-graph-wrap {
+    aspect-ratio: auto;
+    min-height: clamp(420px, 68vh, 720px);
+    height: clamp(420px, 68vh, 720px);
+  }
+
   .tree-search-card {
-    right: 0.5rem;
     left: 0.5rem;
-    bottom: 3.7rem;
+    right: 0.5rem;
+    top: 0.5rem;
+    bottom: auto;
     width: auto;
   }
 
+  .tree-graph-wrap.has-focus-panel .tree-search-card {
+    width: min(280px, calc(100% - 1rem));
+  }
+
   .tree-focus-panel {
-    top: 0.5rem;
+    top: auto;
     left: 0.5rem;
     right: 0.5rem;
+    bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
     width: auto;
     border-radius: 14px;
+    max-height: min(220px, calc(44% - env(safe-area-inset-bottom, 0px)));
+    padding-bottom: calc(0.72rem + env(safe-area-inset-bottom, 0px));
   }
 
   .tree-focus-actions {
@@ -1302,7 +1318,13 @@ main {
   }
 
   .tree-focus-chip-list {
-    max-height: 112px;
+    max-height: none;
+  }
+
+  .tree-control-cluster {
+    top: 0.5rem;
+    right: 0.5rem;
+    bottom: auto;
   }
 }
 

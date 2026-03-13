@@ -1583,11 +1583,13 @@ export function TreeGraph({
       const sidePadding = Math.min(96, rect.width * 0.1);
       const topPadding = Math.min(108, rect.height * 0.16);
       const bottomPadding = Math.min(54, rect.height * 0.08);
+      const reservedTop = focusPanelData && isMobile ? Math.min(82, rect.height * 0.12) : 0;
+      const reservedBottom = focusPanelData && isMobile ? Math.min(214, rect.height * 0.34) : 0;
       const focusWidth = Math.max(bounds.maxX - bounds.minX, NODE_CARD_WIDTH * 2);
       const focusHeight = Math.max(bounds.maxY - bounds.minY, NODE_HALF_HEIGHT * 3);
       const reservedRight = focusPanelData && !isMobile ? Math.min(304, rect.width * 0.3) : 0;
       const availableWidth = Math.max(140, rect.width - sidePadding * 2 - reservedRight);
-      const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding);
+      const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding - reservedTop - reservedBottom);
       const contextScale = Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98;
       const targetBounds = anchorBounds ?? bounds;
       const targetWidth = Math.max(targetBounds.maxX - targetBounds.minX, NODE_CARD_WIDTH);
@@ -1598,7 +1600,7 @@ export function TreeGraph({
       const centerX = (targetBounds.minX + targetBounds.maxX) / 2;
       const targetCenterX = sidePadding + availableWidth / 2;
       const nextX = targetCenterX - centerX * nextScale;
-      const nextY = topPadding - (anchorBounds?.minY ?? alignTopY) * nextScale;
+      const nextY = topPadding + reservedTop - (anchorBounds?.minY ?? alignTopY) * nextScale;
       applyViewport(nextScale, { x: nextX, y: nextY }, true);
     },
     [applyViewport, clampScale, focusPanelData],
@@ -1922,7 +1924,7 @@ export function TreeGraph({
   return (
     <div
       ref={viewportRef}
-      className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}`}
+      className={`tree-graph-wrap tree-map ${isPanning ? "tree-panning" : ""}${focusPanelData ? " has-focus-panel" : ""}`}
       onPointerDown={(event) => {
         if (event.pointerType !== "touch" && event.button !== 0) {
           return;

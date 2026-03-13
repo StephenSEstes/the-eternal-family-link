@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (tree mobile bottom navigator + responsive focus spacing)
+
+- `Date`: 2026-03-13
+- `Change`: Reworked the Family Tree mobile layout so the focus navigator docks at the bottom instead of covering the upper graph, moved the mobile tree search/control overlays out of the same vertical band, and changed focus centering to reserve space for the mobile overlays while keeping the selected person/household centered and large.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The tree container still used a desktop-shaped viewport (`16 / 9` aspect ratio) on phones, the focus panel still rendered as a top overlay, and mobile focus centering did not reserve any space for that overlay. That made the navigator cover too much of the graph and kept the selected branch framed as if the full card height were still usable.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - On mobile widths, the Family Tree container is taller and no longer feels landscape-locked.
+  - When the tree navigator is visible, it docks at the bottom of the tree instead of the top.
+  - Tree search and zoom/fit controls no longer overlap the bottom navigator on mobile.
+  - The selected person or household remains centered and relatively large even with the mobile navigator open.
+  - Top-level app navigation remains reachable while the tree navigator is open on mobile.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `TreeGraph.tsx` and `globals.css` changes together so the viewport math and mobile overlay placement stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (home birthdays + calendar shell + tree navigator polish)
 
 - `Date`: 2026-03-13
