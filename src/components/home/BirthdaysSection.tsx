@@ -112,7 +112,7 @@ function getAvatarUrl(person: BirthdayPerson, tenantKey: string) {
 }
 
 export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, people }: BirthdaysSectionProps) {
-  const [range, setRange] = useState<BirthdayRange>("today");
+  const [range, setRange] = useState<BirthdayRange>("month");
   const today = useMemo(() => {
     const parsed = parseIsoDate(todayIso);
     if (!parsed) {
@@ -188,7 +188,7 @@ export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, 
               <span className="birthday-chip-name">{item.person.displayName}</span>
               <span className="birthday-chip-meta">{formatBirthDate(item.person.birthDate)}</span>
             </span>
-            {item.turningAge !== null ? <span className="birthday-chip-age">Age {item.turningAge}</span> : null}
+            {item.turningAge !== null ? <span className="birthday-chip-age">Turning {item.turningAge}</span> : null}
           </Link>
         ))}
       </div>

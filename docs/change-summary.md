@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (home birthday chip age copy + default range)
+
+- `Date`: 2026-03-13
+- `Change`: Updated the Home `Birthdays` chip age copy from `Age X` to `Turning X`, and changed the default birthday range from `Today` to `This Month`.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The Home birthdays card reused a generic age label even though the section is explicitly about upcoming birthdays, and the initial range defaulted to `Today`, which hid most upcoming birthdays until the user changed filters manually.
+- `Files`:
+  - `src/components/home/BirthdaysSection.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Home -> `Birthdays` opens with `This Month` selected by default.
+  - In Home -> `Birthdays`, people younger than 30 show `Turning X` instead of `Age X`.
+  - People 30 and older still omit the age chip.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `BirthdaysSection.tsx` copy change to restore the old age wording.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (tree focus panel no longer blocks route commit)
 
 - `Date`: 2026-03-13
