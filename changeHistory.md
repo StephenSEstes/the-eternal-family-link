@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Home now greets the logged-in person by nickname/first name, Calendar day cells show clickable birthday chips with age when under 30, and the tree/header layering is hardened so top navigation remains clickable while tree focus navigation is open. See `docs/change-summary.md`.
 - 2026-03-13: Home now shows Birthday range chips instead of the horoscope card, `Today` is relabeled `Calendar`, `/today` now renders an in-progress month calendar shell, and the tree focus panel now removes `Current` while making full household clusters clickable. See `docs/change-summary.md`.
 - 2026-03-13: Fixed Family Tree pointer capture so the top app navigation stays usable, added selection-aware child spacing under selected households/children, and animated the internal tree layout changes instead of snapping them. See `docs/change-summary.md`.
 - 2026-03-13: Family Tree focus now anchors scaling on the selected person/household so it stays centered and large, and the compact focus panel now stretches responsively across mobile widths with scrollable chips. See `docs/change-summary.md`.

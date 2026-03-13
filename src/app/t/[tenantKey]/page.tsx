@@ -9,11 +9,26 @@ type TenantHomeProps = {
   params: Promise<{ tenantKey: string }>;
 };
 
+function resolveWelcomeName(
+  sessionName: string,
+  person: { nickName?: string; firstName?: string; displayName?: string } | null,
+) {
+  const candidate =
+    person?.nickName?.trim() ||
+    person?.firstName?.trim() ||
+    sessionName.trim().split(/\s+/)[0] ||
+    person?.displayName?.trim().split(/\s+/)[0] ||
+    "Family";
+  return candidate;
+}
+
 export default async function TenantHomePage({ params }: TenantHomeProps) {
   const { tenantKey } = await params;
-  const { tenant } = await requireFamilyGroupSession(tenantKey);
+  const { session, tenant } = await requireFamilyGroupSession(tenantKey);
   const basePath = getTenantBasePath(tenant.tenantKey);
   const people = await getPeople(tenant.tenantKey);
+  const currentPerson = people.find((person) => person.personId === tenant.personId) ?? null;
+  const welcomeName = resolveWelcomeName(session.user?.name ?? "", currentPerson);
   const todayIso = (() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -33,7 +48,7 @@ export default async function TenantHomePage({ params }: TenantHomeProps) {
     <>
       <AppHeader tenantKey={tenant.tenantKey} />
       <main className="section">
-        <h1 className="page-title">{tenant.tenantName}</h1>
+        <h1 className="page-title">Welcome, {welcomeName}</h1>
         <p className="page-subtitle">Family group workspace.</p>
         <div className="home-stack">
           <BirthdaysSection

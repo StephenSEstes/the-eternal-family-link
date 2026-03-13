@@ -1,9 +1,13 @@
 import { AppHeader } from "@/components/AppHeader";
 import { CalendarPageClient } from "@/components/calendar/CalendarPageClient";
-import { requireSession } from "@/lib/auth/session";
+import { requireFamilyGroupSession } from "@/lib/auth/session";
+import { getPeople } from "@/lib/data/runtime";
+import { getTenantBasePath } from "@/lib/family-group/context";
 
 export default async function TodayPage() {
-  await requireSession();
+  const { tenant } = await requireFamilyGroupSession();
+  const people = await getPeople(tenant.tenantKey);
+  const basePath = getTenantBasePath(tenant.tenantKey);
 
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -26,7 +30,15 @@ export default async function TodayPage() {
           <span className="calendar-progress-pill">in progress</span>
         </div>
 
-        <CalendarPageClient todayIso={todayIso} />
+        <CalendarPageClient
+          todayIso={todayIso}
+          basePath={basePath}
+          birthdayPeople={people.map((person) => ({
+            personId: person.personId,
+            displayName: person.displayName,
+            birthDate: person.birthDate,
+          }))}
+        />
       </main>
     </>
   );

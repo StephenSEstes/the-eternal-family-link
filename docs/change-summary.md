@@ -42,6 +42,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the Home/Calendar/tree UI changes together so the navigation labels, home tiles, and shared birthday/calendar components stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (calendar birthday chips + welcome title + tree/header hit targets)
+
+- `Date`: 2026-03-13
+- `Change`: Personalized the Home title to `Welcome, {nickname/first name}`, added clickable birthday chips inside Calendar day cells with name plus age when under 30, and hardened the Family Tree/header layering so the sticky top navigation stays clickable while tree focus navigation is open.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The Home screen still used a generic title instead of the logged-in person record, the Calendar shell showed empty day cells even when family birthdays were known, and the tree used transformed overlay layers without isolating its stacking context from the sticky header. That made the top nav unreliable while the tree focus overlay was visible on some layouts.
+- `Files`:
+  - `src/components/calendar/CalendarPageClient.tsx`
+  - `src/app/page.tsx`
+  - `src/app/t/[tenantKey]/page.tsx`
+  - `src/app/today/page.tsx`
+  - `src/app/t/[tenantKey]/today/page.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Home title reads `Welcome, {nickname}` when the logged-in person has a nickname, otherwise falls back to first name.
+  - Calendar day cells now show clickable birthday chips for matching dates, with age shown only when the person is under 30.
+  - Clicking a birthday chip opens that person’s detail route.
+  - Tree top navigation remains clickable while the tree focus navigator is visible.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the Calendar/Home/globals changes together so the shared Calendar props, Home greeting, and tree/header layering stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (tree focus navigator compact redesign)
 
 - `Date`: 2026-03-13

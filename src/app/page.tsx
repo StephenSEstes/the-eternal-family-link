@@ -5,15 +5,30 @@ import { requireFamilyGroupSession } from "@/lib/auth/session";
 import { getPeople } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/family-group/context";
 
+function resolveWelcomeName(
+  sessionName: string,
+  person: { nickName?: string; firstName?: string; displayName?: string } | null,
+) {
+  const candidate =
+    person?.nickName?.trim() ||
+    person?.firstName?.trim() ||
+    sessionName.trim().split(/\s+/)[0] ||
+    person?.displayName?.trim().split(/\s+/)[0] ||
+    "Family";
+  return candidate;
+}
+
 function getTodayIso() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 export default async function HomePage() {
-  const { tenant } = await requireFamilyGroupSession();
+  const { session, tenant } = await requireFamilyGroupSession();
   const people = await getPeople(tenant.tenantKey);
   const basePath = getTenantBasePath(tenant.tenantKey);
+  const currentPerson = people.find((person) => person.personId === tenant.personId) ?? null;
+  const welcomeName = resolveWelcomeName(session.user?.name ?? "", currentPerson);
   const tiles = [
     { href: `${basePath}/people`, title: "People", subtitle: "View and update profiles" },
     { href: `${basePath}/tree`, title: "Family Tree", subtitle: "Relationship map" },
@@ -27,7 +42,7 @@ export default async function HomePage() {
     <>
       <AppHeader />
       <main className="section">
-        <h1 className="page-title">Welcome Home</h1>
+        <h1 className="page-title">Welcome, {welcomeName}</h1>
         <p className="page-subtitle">Quick access for family memory and connection.</p>
         <div className="home-stack">
           <BirthdaysSection

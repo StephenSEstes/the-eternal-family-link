@@ -1,6 +1,8 @@
 import { AppHeader } from "@/components/AppHeader";
 import { CalendarPageClient } from "@/components/calendar/CalendarPageClient";
 import { requireFamilyGroupSession } from "@/lib/auth/session";
+import { getPeople } from "@/lib/data/runtime";
+import { getTenantBasePath } from "@/lib/family-group/context";
 
 type TenantTodayPageProps = {
   params: Promise<{ tenantKey: string }>;
@@ -9,6 +11,8 @@ type TenantTodayPageProps = {
 export default async function TenantTodayPage({ params }: TenantTodayPageProps) {
   const { tenantKey } = await params;
   const { tenant } = await requireFamilyGroupSession(tenantKey);
+  const people = await getPeople(tenant.tenantKey);
+  const basePath = getTenantBasePath(tenant.tenantKey);
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
@@ -30,7 +34,15 @@ export default async function TenantTodayPage({ params }: TenantTodayPageProps) 
           </div>
           <span className="calendar-progress-pill">in progress</span>
         </div>
-        <CalendarPageClient todayIso={todayIso} />
+        <CalendarPageClient
+          todayIso={todayIso}
+          basePath={basePath}
+          birthdayPeople={people.map((person) => ({
+            personId: person.personId,
+            displayName: person.displayName,
+            birthDate: person.birthDate,
+          }))}
+        />
       </main>
     </>
   );

@@ -82,7 +82,7 @@ main {
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 40;
   border-bottom: 1px solid color-mix(in oklab, var(--line) 75%, #fff 25%);
   background: color-mix(in oklab, var(--surface) 92%, #eff8fb 8%);
   backdrop-filter: blur(10px);
@@ -802,6 +802,8 @@ main {
 
 .tree-graph-wrap {
   position: relative;
+  z-index: 0;
+  isolation: isolate;
   width: 100%;
   max-width: 100%;
   aspect-ratio: 16 / 9;
@@ -1514,6 +1516,9 @@ main {
   border-radius: 14px;
   background: #fff;
   padding: 0.6rem;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
 }
 
 .calendar-day-cell.is-outside {
@@ -1529,6 +1534,36 @@ main {
 .calendar-day-number {
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.calendar-day-chip-list {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.calendar-birthday-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #1e3a8a;
+  padding: 0.22rem 0.38rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.calendar-birthday-chip span,
+.calendar-birthday-chip strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-birthday-chip strong {
+  font-size: 0.68rem;
 }
 
 @keyframes treeSheetUp {

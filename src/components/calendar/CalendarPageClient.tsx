@@ -1,9 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type CalendarPageClientProps = {
   todayIso: string;
+  basePath: string;
+  birthdayPeople: Array<{
+    personId: string;
+    displayName: string;
+    birthDate: string;
+  }>;
 };
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -42,7 +49,16 @@ function buildMonthGrid(monthDate: Date) {
   return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 }
 
-export function CalendarPageClient({ todayIso }: CalendarPageClientProps) {
+function buildPersonHref(basePath: string, personId: string) {
+  const encodedPersonId = encodeURIComponent(personId);
+  return `${basePath || ""}/people/${encodedPersonId}`;
+}
+
+function getBirthdayAgeLabel(turningAge: number) {
+  return turningAge >= 0 && turningAge < 30 ? `Age ${turningAge}` : "";
+}
+
+export function CalendarPageClient({ todayIso, basePath, birthdayPeople }: CalendarPageClientProps) {
   const today = useMemo(() => parseIsoDate(todayIso) ?? new Date(), [todayIso]);
   const [displayMonth, setDisplayMonth] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0, 0),
@@ -58,6 +74,29 @@ export function CalendarPageClient({ todayIso }: CalendarPageClientProps) {
     month: "long",
     year: "numeric",
   });
+  const birthdaysByDayKey = useMemo(() => {
+    const result = new Map<string, Array<{ personId: string; displayName: string; ageLabel: string }>>();
+    birthdayPeople.forEach((person) => {
+      const parsedBirthDate = parseIsoDate(person.birthDate);
+      if (!parsedBirthDate) {
+        return;
+      }
+      if (parsedBirthDate.getMonth() !== displayMonth.getMonth()) {
+        return;
+      }
+      const occurrence = new Date(displayMonth.getFullYear(), parsedBirthDate.getMonth(), parsedBirthDate.getDate(), 12, 0, 0, 0);
+      const key = `${occurrence.getFullYear()}-${occurrence.getMonth()}-${occurrence.getDate()}`;
+      const bucket = result.get(key) ?? [];
+      bucket.push({
+        personId: person.personId,
+        displayName: person.displayName,
+        ageLabel: getBirthdayAgeLabel(occurrence.getFullYear() - parsedBirthDate.getFullYear()),
+      });
+      bucket.sort((left, right) => left.displayName.localeCompare(right.displayName));
+      result.set(key, bucket);
+    });
+    return result;
+  }, [birthdayPeople, displayMonth]);
 
   return (
     <section className="card calendar-card">
@@ -112,6 +151,8 @@ export function CalendarPageClient({ todayIso }: CalendarPageClientProps) {
         {gridDates.map((date) => {
           const outsideMonth = date.getMonth() !== displayMonth.getMonth();
           const isToday = isSameDay(date, today);
+          const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+          const dayBirthdays = birthdaysByDayKey.get(dayKey) ?? [];
           return (
             <div
               key={date.toISOString()}
@@ -120,6 +161,21 @@ export function CalendarPageClient({ todayIso }: CalendarPageClientProps) {
               aria-selected={isToday}
             >
               <span className="calendar-day-number">{date.getDate()}</span>
+              {dayBirthdays.length > 0 ? (
+                <div className="calendar-day-chip-list">
+                  {dayBirthdays.map((person) => (
+                    <Link
+                      key={`${dayKey}-${person.personId}`}
+                      href={buildPersonHref(basePath, person.personId)}
+                      prefetch={false}
+                      className="calendar-birthday-chip"
+                    >
+                      <span>{person.displayName}</span>
+                      {person.ageLabel ? <strong>{person.ageLabel}</strong> : null}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
             </div>
           );
         })}
