@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Family Tree focus now anchors scaling on the selected person/household so it stays centered and large, and the compact focus panel now stretches responsively across mobile widths with scrollable chips. See `docs/change-summary.md`.
 - 2026-03-13: Redesigned the Family Tree focus navigator into a compact chip panel, made `Parents`/`Siblings` drive graph navigation directly, added an in-graph search card at the lower left, and shifted focused branches left so the navigator stops covering them. See `docs/change-summary.md`.
 - 2026-03-13: Fixed Household Add Child server-side 500s by stopping child creation from writing invalid blank-email `UserFamilyGroups` rows, and repaired the 4 partially created SnowEstes children that were left `undeclared` after the old failure path. See `docs/change-summary.md`.
 - 2026-03-12: Household Add Child now shows maiden name only for female children older than 19, closes and refreshes the child list after a successful save, and reports missing required child fields clearly. See `docs/change-summary.md`.

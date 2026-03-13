@@ -67,6 +67,25 @@ type FocusNavigationData = {
   childrenList: PersonNode[];
 };
 
+type GraphBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
+type FocusContextData = {
+  emphasizedPersonIds: Set<string>;
+  emphasizedHouseholdIds: Set<string>;
+  selectedPersonIds: Set<string>;
+  selectedHouseholdIds: Set<string>;
+  emphasizedEdgeIds: Set<string>;
+  emphasizedConnectorKeys: Set<string>;
+  bounds: GraphBounds;
+  anchorBounds: GraphBounds | null;
+  alignTopY: number;
+};
+
 export function TreeGraph({
   tenantKey,
   canManage,
@@ -1112,7 +1131,7 @@ export function TreeGraph({
     setFocusPanelGroup("default");
   }, [focusTargetKey]);
 
-  const focusContext = (() => {
+  const focusContext: FocusContextData | null = (() => {
     if (!focusTarget || !focusPanelData) {
       return null;
     }
@@ -1122,6 +1141,7 @@ export function TreeGraph({
     const selectedPersonIds = new Set<string>();
     const selectedHouseholdIds = new Set<string>();
     let bounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+    let anchorBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
     let alignTopY = 0;
 
     const addPerson = (personId: string, includeInBounds = false) => {
@@ -1147,12 +1167,30 @@ export function TreeGraph({
       }
     };
 
-    const populateHouseholdFocus = (rootHouseholdId: string, highlightedPersonId = "") => {
-      const rootBounds = getHouseholdBounds(rootHouseholdId);
-      if (!rootBounds) {
+    const setHouseholdAnchor = (householdId: string) => {
+      const next = getHouseholdBounds(householdId);
+      if (!next) {
         return false;
       }
-      alignTopY = rootBounds.minY;
+      anchorBounds = next;
+      alignTopY = next.minY;
+      return true;
+    };
+
+    const setPersonAnchor = (personId: string) => {
+      const next = getPersonBounds(personId);
+      if (!next) {
+        return false;
+      }
+      anchorBounds = next;
+      alignTopY = next.minY;
+      return true;
+    };
+
+    const populateHouseholdFocus = (rootHouseholdId: string, highlightedPersonId = "") => {
+      if (!setHouseholdAnchor(rootHouseholdId)) {
+        return false;
+      }
       addHousehold(rootHouseholdId, true);
       selectedHouseholdIds.add(rootHouseholdId);
 
@@ -1188,27 +1226,17 @@ export function TreeGraph({
 
     if (focusPanelGroup === "siblings" && (focusPanelData.siblings.length > 0 || focusPanelData.parentTarget)) {
       if (focusPanelData.parentTarget?.kind === "household") {
-        const parentBounds = getHouseholdBounds(focusPanelData.parentTarget.householdId);
-        if (parentBounds) {
-          alignTopY = parentBounds.minY;
-        }
         addHousehold(focusPanelData.parentTarget.householdId, true);
         selectedHouseholdIds.add(focusPanelData.parentTarget.householdId);
       } else if (focusPanelData.parentTarget?.kind === "person") {
-        const parentBounds = getPersonBounds(focusPanelData.parentTarget.personId);
-        if (parentBounds) {
-          alignTopY = parentBounds.minY;
-        }
         addPerson(focusPanelData.parentTarget.personId, true);
       }
 
       if (focusPanelData.selectedHouseholdId) {
+        setHouseholdAnchor(focusPanelData.selectedHouseholdId);
         addHousehold(focusPanelData.selectedHouseholdId, true);
       } else {
-        const selectedBounds = getPersonBounds(focusPanelData.selectedPerson.personId);
-        if (selectedBounds && !alignTopY) {
-          alignTopY = selectedBounds.minY;
-        }
+        setPersonAnchor(focusPanelData.selectedPerson.personId);
         addPerson(focusPanelData.selectedPerson.personId, true);
       }
       selectedPersonIds.add(focusPanelData.selectedPerson.personId);
@@ -1226,11 +1254,9 @@ export function TreeGraph({
           return null;
         }
       } else {
-        const rootPersonBounds = getPersonBounds(selectedPersonId);
-        if (!rootPersonBounds) {
+        if (!setPersonAnchor(selectedPersonId)) {
           return null;
         }
-        alignTopY = rootPersonBounds.minY;
         addPerson(selectedPersonId, true);
         selectedPersonIds.add(selectedPersonId);
 
@@ -1310,15 +1336,21 @@ export function TreeGraph({
       emphasizedEdgeIds,
       emphasizedConnectorKeys,
       bounds,
+      anchorBounds,
       alignTopY,
     };
   })();
   const focusBounds = focusContext?.bounds ?? null;
+  const focusAnchorBounds = focusContext?.anchorBounds ?? null;
   const focusAlignTopY = focusContext?.alignTopY ?? 0;
   const focusMinX = focusBounds?.minX ?? Number.NaN;
   const focusMaxX = focusBounds?.maxX ?? Number.NaN;
   const focusMinY = focusBounds?.minY ?? Number.NaN;
   const focusMaxY = focusBounds?.maxY ?? Number.NaN;
+  const focusAnchorMinX = focusAnchorBounds?.minX ?? Number.NaN;
+  const focusAnchorMaxX = focusAnchorBounds?.maxX ?? Number.NaN;
+  const focusAnchorMinY = focusAnchorBounds?.minY ?? Number.NaN;
+  const focusAnchorMaxY = focusAnchorBounds?.maxY ?? Number.NaN;
   const focusTargetKind = focusTarget?.kind ?? "";
   const focusedPersonId = focusTarget?.kind === "person" ? focusTarget.personId : "";
   const focusedHouseholdId = focusTarget?.kind === "household" ? focusTarget.householdId : "";
@@ -1393,25 +1425,36 @@ export function TreeGraph({
   }, [applyViewport, canvasHeight, canvasWidth, clampScale]);
 
   const focusToBounds = useCallback(
-    (bounds: { minX: number; maxX: number; minY: number; maxY: number }, alignTopY: number) => {
+    (
+      bounds: { minX: number; maxX: number; minY: number; maxY: number },
+      anchorBounds: { minX: number; maxX: number; minY: number; maxY: number } | null,
+      alignTopY: number,
+    ) => {
       const el = viewportRef.current;
       if (!el) {
         return;
       }
       const rect = el.getBoundingClientRect();
+      const isMobile = rect.width <= 900;
       const sidePadding = Math.min(96, rect.width * 0.1);
       const topPadding = Math.min(108, rect.height * 0.16);
       const bottomPadding = Math.min(54, rect.height * 0.08);
       const focusWidth = Math.max(bounds.maxX - bounds.minX, NODE_CARD_WIDTH * 2);
       const focusHeight = Math.max(bounds.maxY - bounds.minY, NODE_HALF_HEIGHT * 3);
-      const reservedRight = focusPanelData && rect.width > 900 ? Math.min(304, rect.width * 0.3) : 0;
+      const reservedRight = focusPanelData && !isMobile ? Math.min(304, rect.width * 0.3) : 0;
       const availableWidth = Math.max(140, rect.width - sidePadding * 2 - reservedRight);
       const availableHeight = Math.max(140, rect.height - topPadding - bottomPadding);
-      const nextScale = clampScale(Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98);
-      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const contextScale = Math.min(availableWidth / focusWidth, availableHeight / focusHeight) * 0.98;
+      const targetBounds = anchorBounds ?? bounds;
+      const targetWidth = Math.max(targetBounds.maxX - targetBounds.minX, NODE_CARD_WIDTH);
+      const targetHeight = Math.max(targetBounds.maxY - targetBounds.minY, NODE_HALF_HEIGHT * 2);
+      const targetScaleWidth = (availableWidth * (isMobile ? 0.34 : 0.26)) / targetWidth;
+      const targetScaleHeight = (availableHeight * (isMobile ? 0.36 : 0.3)) / targetHeight;
+      const nextScale = clampScale(Math.max(contextScale, Math.min(targetScaleWidth, targetScaleHeight)));
+      const centerX = (targetBounds.minX + targetBounds.maxX) / 2;
       const targetCenterX = sidePadding + availableWidth / 2;
       const nextX = targetCenterX - centerX * nextScale;
-      const nextY = topPadding - alignTopY * nextScale;
+      const nextY = topPadding - (anchorBounds?.minY ?? alignTopY) * nextScale;
       applyViewport(nextScale, { x: nextX, y: nextY }, true);
     },
     [applyViewport, clampScale, focusPanelData],
@@ -1419,13 +1462,31 @@ export function TreeGraph({
 
   useEffect(() => {
     if (Number.isFinite(focusMinX) && Number.isFinite(focusMaxX) && Number.isFinite(focusMinY) && Number.isFinite(focusMaxY)) {
-      focusToBounds({ minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY }, focusAlignTopY);
+      focusToBounds(
+        { minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY },
+        Number.isFinite(focusAnchorMinX) &&
+          Number.isFinite(focusAnchorMaxX) &&
+          Number.isFinite(focusAnchorMinY) &&
+          Number.isFinite(focusAnchorMaxY)
+          ? {
+              minX: focusAnchorMinX,
+              maxX: focusAnchorMaxX,
+              minY: focusAnchorMinY,
+              maxY: focusAnchorMaxY,
+            }
+          : null,
+        focusAlignTopY,
+      );
       return;
     }
     fitToView();
   }, [
     fitToView,
     focusAlignTopY,
+    focusAnchorMaxX,
+    focusAnchorMaxY,
+    focusAnchorMinX,
+    focusAnchorMinY,
     focusMaxX,
     focusMaxY,
     focusMinX,
@@ -1448,7 +1509,21 @@ export function TreeGraph({
       }
       frame = window.requestAnimationFrame(() => {
         if (Number.isFinite(focusMinX) && Number.isFinite(focusMaxX) && Number.isFinite(focusMinY) && Number.isFinite(focusMaxY)) {
-          focusToBounds({ minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY }, focusAlignTopY);
+          focusToBounds(
+            { minX: focusMinX, maxX: focusMaxX, minY: focusMinY, maxY: focusMaxY },
+            Number.isFinite(focusAnchorMinX) &&
+              Number.isFinite(focusAnchorMaxX) &&
+              Number.isFinite(focusAnchorMinY) &&
+              Number.isFinite(focusAnchorMaxY)
+              ? {
+                  minX: focusAnchorMinX,
+                  maxX: focusAnchorMaxX,
+                  minY: focusAnchorMinY,
+                  maxY: focusAnchorMaxY,
+                }
+              : null,
+            focusAlignTopY,
+          );
           return;
         }
         fitToView();
@@ -1464,6 +1539,10 @@ export function TreeGraph({
   }, [
     fitToView,
     focusAlignTopY,
+    focusAnchorMaxX,
+    focusAnchorMaxY,
+    focusAnchorMinX,
+    focusAnchorMinY,
     focusMaxX,
     focusMaxY,
     focusMinX,

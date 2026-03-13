@@ -34,6 +34,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the tree navigator UI/CSS changes together so the focus behavior and overlay styling stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (tree selection anchor scaling + mobile focus panel)
+
+- `Date`: 2026-03-13
+- `Change`: Updated Family Tree focus scaling so the selected person or household stays centered and visually large even when the surrounding branch is wider, and made the compact focus panel fully responsive on mobile by letting it span the available width and scroll its chip area.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The focus viewport logic still fit and centered on the entire emphasized branch, so the selected person/household shrank whenever siblings, spouses, or children widened the branch bounds. The compact focus panel also still behaved like a fixed-width desktop card on mobile, which made its layout less responsive than intended.
+- `Files`:
+  - `src/components/TreeGraph.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Selecting a person or household keeps that selected target centered and relatively large even when related branches are also emphasized.
+  - Sibling/children context can extend beyond the immediate viewport without shrinking the selected target to tiny cards.
+  - On mobile widths, the focus panel stretches across the available width and remains usable with scrolling chips.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the viewport anchor-scaling and responsive CSS changes together so focus behavior stays consistent.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (household add-child 500 repair + SnowEstes child membership cleanup)
 
 - `Date`: 2026-03-13

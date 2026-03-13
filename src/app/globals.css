@@ -1200,6 +1200,8 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  max-height: 148px;
+  overflow: auto;
 }
 
 .tree-focus-empty {
@@ -1252,9 +1254,23 @@ main {
 
   .tree-focus-panel {
     top: 0.5rem;
+    left: 0.5rem;
     right: 0.5rem;
-    width: min(280px, calc(100% - 1rem));
+    width: auto;
     border-radius: 14px;
+  }
+
+  .tree-focus-actions {
+    gap: 0.34rem;
+  }
+
+  .tree-focus-action-chip {
+    font-size: 0.72rem;
+    padding: 0.34rem 0.56rem;
+  }
+
+  .tree-focus-chip-list {
+    max-height: 112px;
   }
 }
 
