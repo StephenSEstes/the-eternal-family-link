@@ -32,6 +32,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the `AppHeader`, `PersonEditModal`, and header/person-header CSS changes.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-13 (household add-child defaults + visible validation + spouse dialog spacing)
+
+- `Date`: 2026-03-13
+- `Change`: Household `Add Child` now defaults the child last name from the household father name, shows missing-field and API validation errors directly inside the Add Child card, and the inline Add Spouse dialog now adds top spacing/gap so the `First Name` field is no longer visually crowded under the heading.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The Add Child form reset the last name to blank every time and wrote validation errors into the modal-level status line at the bottom of the household panel, which made missing-field feedback easy to miss. The Add Spouse dialog also used a tight fixed card layout with a pulled-up subtitle, which crowded the first field under the heading.
+- `Files`:
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Opening `Add Child` prefills the `Last Name` with the household father last name when available.
+  - Saving `Add Child` with missing required fields shows a visible in-card message listing the missing fields.
+  - Server-side Add Child validation failures also remain visible in the Add Child card instead of only at the bottom of the household modal.
+  - Opening `+ Add Person` in the spouse flow shows the `First Name` field clearly below the heading/subtitle.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `HouseholdEditModal` and `PersonEditModal` form-layout/status changes.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (invite local membership upsert no longer collides with google row)
 
 - `Date`: 2026-03-13

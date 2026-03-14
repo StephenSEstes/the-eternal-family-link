@@ -2765,11 +2765,11 @@ export function PersonEditModal({
           >
             <div
               className="card"
-              style={{ width: "min(560px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
+              style={{ width: "min(560px, 95vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: "0.55rem", paddingTop: "1.1rem" }}
               onClick={(event) => event.stopPropagation()}
             >
               <h4 style={{ marginTop: 0 }}>Add Person</h4>
-              <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
+              <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 0 }}>
                 Use the spouse dropdown for existing people. This dialog creates a new person and links them as spouse automatically.
               </p>
               <label className="label">First Name</label>
