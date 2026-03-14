@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPeople } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/family-group/context";
+import { getPersonDeathDateMapForTenant } from "@/lib/person/vital-dates-server";
 
 type TenantAccess = {
   tenantKey: string;
@@ -18,6 +19,7 @@ export type SharedBirthdayPerson = {
   personId: string;
   displayName: string;
   birthDate: string;
+  deathDate?: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   personBasePath: string;
@@ -47,12 +49,20 @@ export async function loadBirthdayPeopleForAccessibleFamilies(accesses: TenantAc
   });
 
   const tenantPeopleSets = await Promise.all(
-    orderedFamilyGroups.map(async (entry) => ({
-      tenantKey: entry.tenantKey,
-      tenantName: entry.tenantName,
-      basePath: getTenantBasePath(entry.tenantKey),
-      people: await getPeople(entry.tenantKey),
-    })),
+    orderedFamilyGroups.map(async (entry) => {
+      const people = await getPeople(entry.tenantKey);
+      const deathDatesByPersonId = await getPersonDeathDateMapForTenant(
+        entry.tenantKey,
+        people.map((person) => person.personId),
+      );
+      return {
+        tenantKey: entry.tenantKey,
+        tenantName: entry.tenantName,
+        basePath: getTenantBasePath(entry.tenantKey),
+        people,
+        deathDatesByPersonId,
+      };
+    }),
   );
 
   const activePeople = tenantPeopleSets.find((entry) => entry.tenantKey === normalizedActiveTenantKey)?.people ?? [];
@@ -71,6 +81,7 @@ export async function loadBirthdayPeopleForAccessibleFamilies(accesses: TenantAc
         personId: person.personId,
         displayName: person.displayName,
         birthDate: person.birthDate,
+        deathDate: entry.deathDatesByPersonId.get(person.personId) ?? "",
         gender: person.gender,
         photoFileId: person.photoFileId,
         personBasePath: entry.tenantKey === normalizedActiveTenantKey ? getTenantBasePath(normalizedActiveTenantKey) : entry.basePath,

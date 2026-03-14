@@ -1,7 +1,7 @@
 import type { AttributeCategory } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 
-export const DEFAULT_ATTRIBUTE_DEFINITIONS_VERSION = 2;
+export const DEFAULT_ATTRIBUTE_DEFINITIONS_VERSION = 3;
 
 export const LEGACY_ATTRIBUTE_TYPE_KEY_MAP: Record<string, string> = {
   graduation: "education",
@@ -51,6 +51,7 @@ export function defaultAttributeDefinitions(): AttributeEventDefinitions {
       { categoryKey: "talent", categoryLabel: "Talent", categoryColor: "#fef3c7", description: "", sortOrder: 30, isEnabled: true, kind: "descriptor" },
       { categoryKey: "other", categoryLabel: "Other Attribute", categoryColor: "#e5e7eb", description: "", sortOrder: 40, isEnabled: true, kind: "descriptor" },
       { categoryKey: "birth", categoryLabel: "Birth", categoryColor: "#f3f4f6", description: "", sortOrder: 110, isEnabled: true, kind: "event" },
+      { categoryKey: "death", categoryLabel: "Death", categoryColor: "#e5e7eb", description: "", sortOrder: 115, isEnabled: true, kind: "event" },
       { categoryKey: "education", categoryLabel: "Education", categoryColor: "#dbeafe", description: "", sortOrder: 120, isEnabled: true, kind: "event" },
       { categoryKey: "religious", categoryLabel: "Religious", categoryColor: "#ede9fe", description: "", sortOrder: 130, isEnabled: true, kind: "event" },
       { categoryKey: "accomplishment", categoryLabel: "Accomplishment", categoryColor: "#dcfce7", description: "", sortOrder: 140, isEnabled: true, kind: "event" },

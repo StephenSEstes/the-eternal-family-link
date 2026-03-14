@@ -160,3 +160,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep households couple-only and delete the direct member household on divorce; add a second single-parent-household table; fake a second spouse/person value to satisfy couple-only code paths.
 - `Impact`: Tree rendering, household detail/edit, child-add, integrity repair, and relationship-builder flows must all treat one-parent households as first-class valid records. `married_date` remains meaningful only for two-parent households and is cleared when converting a couple household into a one-parent household.
 - `Follow-up`: Keep provisioning/import/admin tooling aligned to the one-or-two-parent rule and revisit neutral parent-role labeling only if the product later moves away from the current husband/wife schema column names.
+
+## 2026-03-13
+
+- `Area`: Person memorial and death-date modeling
+- `Decision`: Record death as a canonical person event (`Attributes` event type/category `death`) instead of adding a top-level deceased flag or dedicated death column on `People`. UI surfaces may derive memorial state from that event and show quiet `From / To` date presentation when a death date exists.
+- `Reason`: The product needs to support deceased individuals without making death a prominent profile field. Modeling death as an event keeps it aligned with the existing attribute/timeline system, supports estimated dates, and avoids a second person-status model.
+- `Alternatives Considered`: Add `is_deceased` / `death_date` columns to `People`; add a prominent `Deceased` toggle; hide death only inside freeform notes.
+- `Impact`: Attribute Definitions now include a default `Death` event category, person edit/save can synchronize a death-date event, Home birthday chips show `In Mem`, Calendar can display both birth and death anniversaries, and Tree/header date summaries can render lifespan ranges.
+- `Follow-up`: If memorial-specific content grows later, keep it attached to the same `death` event model rather than creating a separate memorial entity type.

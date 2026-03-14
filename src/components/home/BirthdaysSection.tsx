@@ -10,6 +10,7 @@ type BirthdayPerson = {
   personId: string;
   displayName: string;
   birthDate: string;
+  deathDate?: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   personBasePath?: string;
@@ -136,7 +137,12 @@ export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, 
         return {
           person,
           occurrence: nextBirthday.occurrence,
-          turningAge: nextBirthday.turningAge >= 0 && nextBirthday.turningAge < 30 ? nextBirthday.turningAge : null,
+          turningAge:
+            person.deathDate?.trim()
+              ? -1
+              : nextBirthday.turningAge >= 0 && nextBirthday.turningAge < 30
+                ? nextBirthday.turningAge
+                : null,
         } satisfies BirthdayMatch;
       })
       .filter((item): item is BirthdayMatch => Boolean(item))
@@ -188,7 +194,8 @@ export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, 
               <span className="birthday-chip-name">{item.person.displayName}</span>
               <span className="birthday-chip-meta">{formatBirthDate(item.person.birthDate)}</span>
             </span>
-            {item.turningAge !== null ? <span className="birthday-chip-age">Turning {item.turningAge}</span> : null}
+            {item.turningAge === -1 ? <span className="birthday-chip-age">In Mem</span> : null}
+            {item.turningAge !== null && item.turningAge >= 0 ? <span className="birthday-chip-age">Turning {item.turningAge}</span> : null}
           </Link>
         ))}
       </div>

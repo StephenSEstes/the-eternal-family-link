@@ -23,6 +23,11 @@ function isBirthAttributeType(value: string) {
   return normalized === "birth" || normalized === "birthday";
 }
 
+function isDeathAttributeType(value: string) {
+  const normalized = normalize(value);
+  return normalized === "death";
+}
+
 function readCell(row: Record<string, string>, ...keys: string[]) {
   for (const key of keys) {
     const value = row[key];
@@ -322,6 +327,55 @@ export async function upsertPersonBirthAttribute(tenantKey: string, personId: st
     typeKey: "birth",
     valueText: normalizedBirthDate,
     dateStart: normalizedBirthDate,
+    dateEnd: "",
+    location: "",
+    notes: "",
+  });
+}
+
+export async function upsertPersonDeathAttribute(tenantKey: string, personId: string, deathDate: string) {
+  const normalizedDeathDate = deathDate.trim();
+  const existing = (await getAttributesForEntity(tenantKey, "person", personId)).find(
+    (item) =>
+      isDeathAttributeType(item.attributeType) ||
+      isDeathAttributeType(item.typeKey) ||
+      isDeathAttributeType(item.attributeTypeCategory),
+  );
+
+  if (existing) {
+    return updateAttribute(tenantKey, existing.attributeId, {
+      category: "event",
+      attributeType: "death",
+      attributeTypeCategory: "death",
+      attributeDate: normalizedDeathDate,
+      dateIsEstimated: false,
+      estimatedTo: "",
+      attributeDetail: normalizedDeathDate,
+      typeKey: "death",
+      valueText: normalizedDeathDate,
+      dateStart: normalizedDeathDate,
+    });
+  }
+
+  if (!normalizedDeathDate) {
+    return null;
+  }
+
+  return createAttribute(tenantKey, {
+    entityType: "person",
+    entityId: personId,
+    category: "event",
+    attributeType: "death",
+    attributeTypeCategory: "death",
+    attributeDate: normalizedDeathDate,
+    dateIsEstimated: false,
+    estimatedTo: "",
+    attributeDetail: normalizedDeathDate,
+    attributeNotes: "",
+    endDate: "",
+    typeKey: "death",
+    valueText: normalizedDeathDate,
+    dateStart: normalizedDeathDate,
     dateEnd: "",
     location: "",
     notes: "",

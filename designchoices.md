@@ -22,3 +22,4 @@ Latest alignment note:
 - 2026-03-10: Any signed-in family-group user can edit shared family data (people, households, relationships, attributes, media); admin remains limited to invites, access/security/audit/integrity, and family-group administration.
 - 2026-03-10: `PersonFamilyGroups.family_group_relationship_type` is the canonical family-group classification field with `founder`, `direct`, `in_law`, and `undeclared`; `founder` is admin-managed and other values are system-reconciled from membership + relationship state.
 - 2026-03-12: `Households` now represent one-parent or two-parent family units in the existing `husband_person_id` / `wife_person_id` model; divorce converts or creates a valid one-parent household instead of deleting the direct member household.
+- 2026-03-13: Death is modeled as a canonical `Attributes` event (`death`), not a top-level person flag/column; memorial UI derives `From / To` dates and `In Mem` presentation from that event.

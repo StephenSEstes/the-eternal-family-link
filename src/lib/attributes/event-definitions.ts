@@ -165,6 +165,26 @@ function mergeDescriptorDefaults(defs: AttributeEventDefinitions, fallback: Attr
   };
 }
 
+function mergeVersionThreeDefaults(defs: AttributeEventDefinitions, fallback: AttributeEventDefinitions): AttributeEventDefinitions {
+  const deathCategory = fallback.categories.find(
+    (item) => item.kind === "event" && normalizeAttributeTypeKey(item.categoryKey) === "death",
+  );
+  if (!deathCategory) {
+    return defs;
+  }
+  const hasDeathCategory = defs.categories.some(
+    (item) => item.kind === "event" && normalizeAttributeTypeKey(item.categoryKey) === "death",
+  );
+  if (hasDeathCategory) {
+    return defs;
+  }
+  return {
+    version: DEFAULT_ATTRIBUTE_DEFINITIONS_VERSION,
+    categories: dedupeCategories([...defs.categories, deathCategory]),
+    types: defs.types,
+  };
+}
+
 export function defaultAttributeEventDefinitions(): AttributeEventDefinitions {
   return defaultAttributeDefinitions();
 }
@@ -207,7 +227,11 @@ function normalizeConfig(input: unknown): AttributeEventDefinitions {
     types: normalizedTypes.filter((row) => categoryIds.has(makeAttributeDefinitionCategoryId(row.kind, row.categoryKey))),
   } satisfies AttributeEventDefinitions;
 
-  return version >= DEFAULT_ATTRIBUTE_DEFINITIONS_VERSION ? normalized : mergeDescriptorDefaults(normalized, fallback);
+  if (version >= DEFAULT_ATTRIBUTE_DEFINITIONS_VERSION) {
+    return normalized;
+  }
+  const withDescriptorDefaults = mergeDescriptorDefaults(normalized, fallback);
+  return mergeVersionThreeDefaults(withDescriptorDefaults, fallback);
 }
 
 async function ensureFamilyConfigShape(tenantKey: string) {

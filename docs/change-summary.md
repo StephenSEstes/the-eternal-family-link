@@ -559,6 +559,37 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Married child households stay attached to the correct sibling block rather than breaking the group apart.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-13 (death as event + memorial display)
+
+- `Change`: Added death as a canonical person event, synchronized the person modal `To Date` field to that event, and updated Home, Calendar, and Tree to display memorial/lifespan cues derived from the death event.
+- `Type`: Feature, UX
+- `Why`: The app needed to support deceased individuals without making death a prominent profile field. Root cause was that only `birth_date` had a simple edit/save path and the birthday/tree surfaces only understood birth dates, so memorial state had no canonical runtime model.
+- `Files`:
+  - `src/lib/attributes/store.ts`
+  - `src/lib/validation/person.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/people/[personId]/route.ts`
+  - `src/lib/attributes/definition-defaults.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/lib/person/vital-dates.ts`
+  - `src/lib/person/vital-dates-server.ts`
+  - `src/lib/home/birthdays.ts`
+  - `src/lib/tree/load-tree-page-data.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/home/BirthdaysSection.tsx`
+  - `src/components/calendar/CalendarPageClient.tsx`
+  - `src/components/TreeGraph.tsx`
+  - `src/app/tree/page.tsx`
+  - `src/app/t/[tenantKey]/tree/page.tsx`
+- `Data Changes`: No schema change. Attribute definition defaults now include the `death` event category, and person save can create/update the person’s canonical death event row.
+- `Verify`:
+  - Edit a person and enter `To Date`; save, reopen, and confirm the date persists without adding a top-level death column to `People`.
+  - Home birthday chips show `In Mem` instead of `Turning X` for deceased people.
+  - Calendar shows both birth anniversaries and death anniversaries for people with a recorded death event.
+  - Tree nodes render lifespan text (`birth year - death year`) for deceased people.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Death is now modeled as a canonical person event, not a top-level person field.
 
 ## 2026-03-11 (repair missing spouse households)
 

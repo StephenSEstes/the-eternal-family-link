@@ -48,6 +48,7 @@ export type PersonRecord = {
   maidenName: string;
   nickName: string;
   birthDate: string;
+  deathDate?: string;
   gender: "male" | "female" | "unspecified";
   phones: string;
   email: string;

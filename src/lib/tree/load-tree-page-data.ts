@@ -3,6 +3,7 @@ import "server-only";
 import { getHouseholds, getRelationships } from "@/lib/google/family";
 import { getPeople } from "@/lib/data/runtime";
 import { isTreePlacedFamilyGroupRelationshipType } from "@/lib/family-group/relationship-type";
+import { getPersonDeathDateMapForTenant } from "@/lib/person/vital-dates-server";
 
 export type TreePageData = {
   people: Awaited<ReturnType<typeof getPeople>>;
@@ -34,7 +35,17 @@ export async function loadTreePageData(tenantKey: string): Promise<TreePageData>
   }
 
   const next = (async () => {
-    const people = (await getPeople(tenantKey)).filter((person) =>
+    const basePeople = await getPeople(tenantKey);
+    const deathDatesByPersonId = await getPersonDeathDateMapForTenant(
+      tenantKey,
+      basePeople.map((person) => person.personId),
+    );
+    const people = basePeople
+      .map((person) => ({
+        ...person,
+        deathDate: deathDatesByPersonId.get(person.personId) ?? "",
+      }))
+      .filter((person) =>
       isTreePlacedFamilyGroupRelationshipType(person.familyGroupRelationshipType),
     );
     const peopleInFamily = new Set(people.map((person) => person.personId));

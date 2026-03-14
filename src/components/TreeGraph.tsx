@@ -7,6 +7,7 @@ import { PersonEditModal } from "@/components/PersonEditModal";
 import { FocusPanel, type FocusPanelGroup } from "@/components/familyTree/FocusPanel";
 import { GraphControls } from "@/components/familyTree/GraphControls";
 import { PersonNodeCard } from "@/components/familyTree/PersonNodeCard";
+import { formatTreeVitalText } from "@/lib/person/vital-dates";
 
 type PersonNode = {
   personId: string;
@@ -18,6 +19,7 @@ type PersonNode = {
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   birthDate?: string;
+  deathDate?: string;
   phones?: string;
   email?: string;
   address?: string;
@@ -845,15 +847,6 @@ export function TreeGraph({
       positions.set(personId, { x: pos.x + shiftX, y: pos.y + shiftY });
     });
   }
-
-  const toMonthDay = (value?: string) => {
-    const raw = (value ?? "").trim();
-    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (match) {
-      return `${match[2]}-${match[3]}`;
-    }
-    return "";
-  };
 
   function parseBirthSortValue(value?: string) {
     const raw = (value ?? "").trim();
@@ -2255,7 +2248,7 @@ export function TreeGraph({
         if (!pos) {
           return null;
         }
-        const secondaryText = toMonthDay(node.birthDate);
+        const secondaryText = formatTreeVitalText(node.birthDate, node.deathDate);
         const firstNameOnly = (node.firstName ?? "").trim() || node.displayName.trim().split(/\s+/)[0] || node.displayName;
         return (
           <div

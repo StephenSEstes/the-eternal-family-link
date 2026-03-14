@@ -18,6 +18,7 @@ import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
+import { getDeathDateFromAttributes } from "@/lib/person/vital-dates";
 
 type FamilyGroupRelationshipType = "founder" | "direct" | "in_law" | "undeclared";
 
@@ -30,6 +31,7 @@ type PersonItem = {
   maidenName?: string;
   nickName?: string;
   birthDate?: string;
+  deathDate?: string;
   gender?: "male" | "female" | "unspecified";
   photoFileId?: string;
   phones?: string;
@@ -247,6 +249,22 @@ function normalizeFamilyGroupRelationshipType(value?: string): FamilyGroupRelati
   }
   return "undeclared";
 }
+
+const EVENT_FALLBACK_TYPE_KEYS = [
+  "birth",
+  "death",
+  "education",
+  "religious",
+  "accomplishment",
+  "injury_health",
+  "life_event",
+  "moved",
+  "employment",
+  "family_relationship",
+  "pet",
+  "travel",
+  "other",
+];
 
 function isAnchorFamilyGroupRelationshipType(value?: string) {
   const normalized = normalizeFamilyGroupRelationshipType(value);
@@ -655,6 +673,7 @@ export function PersonEditModal({
   const [maidenName, setMaidenName] = useState("");
   const [nickName, setNickName] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [deathDate, setDeathDate] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [phones, setPhones] = useState("");
   const [email, setEmail] = useState("");
@@ -873,6 +892,7 @@ export function PersonEditModal({
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
     setAttributes(toPersonMediaAttributes(canonicalAttributes));
+    setDeathDate(getDeathDateFromAttributes(canonicalAttributes as AboutAttribute[]) || "");
   };
 
   const clearStoryImportQueue = () => {
@@ -956,6 +976,7 @@ export function PersonEditModal({
     setMaidenName(person.maidenName || "");
     setNickName(person.nickName || "");
     setBirthDate(person.birthDate || "");
+    setDeathDate(person.deathDate || "");
     setGender(person.gender || "unspecified");
     setPhones(formatUsPhoneForEdit(person.phones || ""));
     setEmail(person.email || "");
@@ -1103,6 +1124,12 @@ export function PersonEditModal({
     const formatted = formatDisplayDate(raw);
     return formatted === "-" ? "" : formatted;
   }, [marriedAttribute]);
+  const deathDateText = useMemo(() => {
+    const raw = deathDate || person?.deathDate || "";
+    if (!raw) return "";
+    const formatted = formatDisplayDate(raw);
+    return formatted === "-" ? "" : formatted;
+  }, [deathDate, person?.deathDate]);
   const yearsMarriedText = useMemo(() => computeYearsSince(marriedAttribute?.attributeDate || ""), [marriedAttribute]);
   const chipColorStyle = (rawTypeKey: string) => {
     const color = eventCategoryColorByKey[normalizeAttributeKey(rawTypeKey)] || "#d9e2ec";
@@ -1115,7 +1142,7 @@ export function PersonEditModal({
     const filtered = aboutAttributes.filter((item) => {
       const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
       const itemKind = item.category ?? (
-        ["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey)
+        EVENT_FALLBACK_TYPE_KEYS.includes(typeKey)
           ? "event"
           : "descriptor"
       );
@@ -1146,7 +1173,7 @@ export function PersonEditModal({
       const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
       const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
       const itemKind = item.category ?? (
-        ["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey)
+        EVENT_FALLBACK_TYPE_KEYS.includes(typeKey)
           ? "event"
           : "descriptor"
       );
@@ -1288,7 +1315,7 @@ export function PersonEditModal({
     return aboutAttributes.filter((item) => {
       if (item.category) return item.category === "descriptor";
       const typeKey = normalizeAttributeKey(item.attributeType || item.typeKey);
-      return !["birth", "education", "religious", "accomplishment", "injury_health", "life_event", "moved", "employment", "family_relationship", "pet", "travel", "other"].includes(typeKey);
+      return !EVENT_FALLBACK_TYPE_KEYS.includes(typeKey);
     });
   }, [aboutAttributes]);
   const thingsChips = useMemo(() => {
@@ -1804,7 +1831,9 @@ export function PersonEditModal({
             <div className="person-modal-header-copy">
               <h3 className="person-modal-title">{displayName || person.displayName}</h3>
               <p className="person-modal-meta">
-                Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
+                {deathDateText
+                  ? `From: ${formatDisplayDate(birthDate || person.birthDate || "")} | To: ${deathDateText} | ID: ${person.personId}`
+                  : `Birthdate: ${toMonthDay(birthDate || person.birthDate || "")} | ID: ${person.personId}`}
               </p>
               <p className="person-modal-meta">
                 Email: {email || "-"} | Phone: {phones || "-"}
@@ -1850,8 +1879,18 @@ export function PersonEditModal({
                     <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
                   </div>
                   <div>
-                    <label className="label">Birthdate</label>
+                    <label className="label">{deathDate.trim() ? "From Date" : "Birthdate"}</label>
                     <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
+                  </div>
+                  <div>
+                    <label className="label">To Date</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={deathDate}
+                      onChange={(e) => setDeathDate(e.target.value)}
+                      disabled={showReadOnly}
+                    />
                   </div>
                   <div className="field-span-2">
                     <label className="label">Gender</label>
@@ -2293,7 +2332,11 @@ export function PersonEditModal({
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-                  <p className="page-subtitle" style={{ margin: 0 }}><strong>Born:</strong> {formatDisplayDate(birthDate)}</p>
+                  <p className="page-subtitle" style={{ margin: 0 }}>
+                    {deathDate.trim()
+                      ? <><strong>From:</strong> {formatDisplayDate(birthDate)} <strong style={{ marginLeft: "0.4rem" }}>To:</strong> {formatDisplayDate(deathDate)}</>
+                      : <><strong>Born:</strong> {formatDisplayDate(birthDate)}</>}
+                  </p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> coming</p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Married:</strong> {marriedSummaryText}</p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Major Accomplishments and Events:</strong> coming</p>
@@ -2911,6 +2954,7 @@ export function PersonEditModal({
                       maiden_name: maidenName,
                       nick_name: nickName,
                       birth_date: birthDate,
+                      death_date: deathDate,
                       gender,
                       phones,
                       email,

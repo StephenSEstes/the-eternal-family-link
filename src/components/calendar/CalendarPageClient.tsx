@@ -16,6 +16,7 @@ type CalendarPageClientProps = {
     personId: string;
     displayName: string;
     birthDate: string;
+    deathDate?: string;
     personBasePath?: string;
     familyGroupKeys?: string[];
   }>;
@@ -111,7 +112,7 @@ export function CalendarPageClient({
     year: "numeric",
   });
   const birthdaysByDayKey = useMemo(() => {
-    const result = new Map<string, Array<{ personId: string; displayName: string; ageLabel: string; href: string }>>();
+    const result = new Map<string, Array<{ personId: string; displayName: string; metaLabel: string; href: string; eventKind: "birth" | "death" }>>();
     birthdayPeople.forEach((person) => {
       const personFamilyGroupKeys = person.familyGroupKeys ?? [];
       if (
@@ -121,22 +122,53 @@ export function CalendarPageClient({
         return;
       }
       const parsedBirthDate = parseIsoDate(person.birthDate);
-      if (!parsedBirthDate) {
+      const parsedDeathDate = parseIsoDate(person.deathDate ?? "");
+      const hasBirthInMonth = Boolean(parsedBirthDate && parsedBirthDate.getMonth() === displayMonth.getMonth());
+      const hasDeathInMonth = Boolean(parsedDeathDate && parsedDeathDate.getMonth() === displayMonth.getMonth());
+      if (!hasBirthInMonth && !hasDeathInMonth) {
         return;
       }
-      if (parsedBirthDate.getMonth() !== displayMonth.getMonth()) {
+      const href = buildPersonHref(person.personBasePath ?? basePath, person.personId, returnToPath);
+      if (hasBirthInMonth && parsedBirthDate) {
+        const occurrence = new Date(displayMonth.getFullYear(), parsedBirthDate.getMonth(), parsedBirthDate.getDate(), 12, 0, 0, 0);
+        const key = `${occurrence.getFullYear()}-${occurrence.getMonth()}-${occurrence.getDate()}`;
+        const bucket = result.get(key) ?? [];
+        bucket.push({
+          personId: person.personId,
+          displayName: person.displayName,
+          metaLabel: person.deathDate?.trim() ? "In Mem" : getBirthdayAgeLabel(occurrence.getFullYear() - parsedBirthDate.getFullYear()),
+          href,
+          eventKind: "birth",
+        });
+        bucket.sort((left, right) => {
+          const byName = left.displayName.localeCompare(right.displayName);
+          if (byName !== 0) {
+            return byName;
+          }
+          return left.eventKind.localeCompare(right.eventKind);
+        });
+        result.set(key, bucket);
+      }
+      if (!hasDeathInMonth || !parsedDeathDate) {
         return;
       }
-      const occurrence = new Date(displayMonth.getFullYear(), parsedBirthDate.getMonth(), parsedBirthDate.getDate(), 12, 0, 0, 0);
+      const occurrence = new Date(displayMonth.getFullYear(), parsedDeathDate.getMonth(), parsedDeathDate.getDate(), 12, 0, 0, 0);
       const key = `${occurrence.getFullYear()}-${occurrence.getMonth()}-${occurrence.getDate()}`;
       const bucket = result.get(key) ?? [];
       bucket.push({
         personId: person.personId,
         displayName: person.displayName,
-        ageLabel: getBirthdayAgeLabel(occurrence.getFullYear() - parsedBirthDate.getFullYear()),
-        href: buildPersonHref(person.personBasePath ?? basePath, person.personId, returnToPath),
+        metaLabel: "Death",
+        href,
+        eventKind: "death",
       });
-      bucket.sort((left, right) => left.displayName.localeCompare(right.displayName));
+      bucket.sort((left, right) => {
+        const byName = left.displayName.localeCompare(right.displayName);
+        if (byName !== 0) {
+          return byName;
+        }
+        return left.eventKind.localeCompare(right.eventKind);
+      });
       result.set(key, bucket);
     });
     return result;
@@ -222,13 +254,13 @@ export function CalendarPageClient({
                 <div className="calendar-day-chip-list">
                   {dayBirthdays.map((person) => (
                     <Link
-                      key={`${dayKey}-${person.personId}`}
+                      key={`${dayKey}-${person.personId}-${person.eventKind}`}
                       href={person.href}
                       prefetch={false}
                       className="calendar-birthday-chip"
                     >
                       <span>{person.displayName}</span>
-                      {person.ageLabel ? <strong>{person.ageLabel}</strong> : null}
+                      {person.metaLabel ? <strong>{person.metaLabel}</strong> : null}
                     </Link>
                   ))}
                 </div>

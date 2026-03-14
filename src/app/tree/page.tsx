@@ -119,6 +119,7 @@ export default async function TreePage() {
                 gender: person.gender,
                 photoFileId: person.photoFileId,
                 birthDate: person.birthDate,
+                deathDate: person.deathDate,
                 phones: person.phones,
                 email: person.email,
                 address: person.address,
