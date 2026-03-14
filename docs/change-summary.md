@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (header compact family selector + person quick contact actions)
+
+- `Date`: 2026-03-13
+- `Change`: Compacted the app header by moving the family selector into the main top row between the title and user menu, removed the extra visible `Family Group` label row, tightened header spacing, and added compact `Call`, `Text`, and `Email` action chips to the person modal header when contact details exist.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The header height was inflated by a separate desktop-only family-group meta row with an external label, and the person modal already had phone/email data available but forced contact actions to live farther down in the form instead of offering quick access in the header.
+- `Files`:
+  - `src/components/AppHeader.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - The app header shows the family selector inline between the title and the user menu without a separate `Family Group` label row.
+  - On mobile, the inline family selector remains usable without wrapping the header into a tall multi-row block.
+  - Opening a person shows compact `Call`, `Text`, and/or `Email` actions in the modal header when those contact methods exist.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `AppHeader`, `PersonEditModal`, and header/person-header CSS changes.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (invite local membership upsert no longer collides with google row)
 
 - `Date`: 2026-03-13

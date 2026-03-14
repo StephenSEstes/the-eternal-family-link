@@ -58,7 +58,7 @@ export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
             </span>
           </Link>
 
-          <div className="app-mobile-family-switch">
+          <div className="app-family-switch-inline">
             <FamilyGroupSwitcher
               activeFamilyGroupKey={tenant.tenantKey}
               showRole={false}
@@ -77,19 +77,6 @@ export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
             loginType={loginType}
             appVersion={appVersion}
             avatarInitials={avatarInitials}
-          />
-        </div>
-
-        <div className="app-meta-row app-meta-row-desktop">
-          <label className="app-meta-label">Family Group</label>
-          <FamilyGroupSwitcher
-            activeFamilyGroupKey={tenant.tenantKey}
-            showRole={false}
-            familyGroups={tenant.tenants.map((item) => ({
-              familyGroupKey: item.tenantKey,
-              familyGroupName: item.tenantName,
-              role: item.role,
-            }))}
           />
         </div>
 

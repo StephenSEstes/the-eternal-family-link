@@ -798,6 +798,8 @@ export function PersonEditModal({
   }, [edges, person]);
   const aboutLabel = useMemo(() => `About ${firstNameFromDisplayName(displayName || person?.displayName || "")}`, [displayName, person?.displayName]);
   const phoneActionItems = useMemo(() => extractPhoneLinkItems(phones), [phones]);
+  const primaryPhoneAction = phoneActionItems[0] ?? null;
+  const emailActionHref = email.trim() ? `mailto:${email.trim()}` : "";
   const attributeLaunchMeta = useMemo(() => {
     if (attributeLaunchSource === "main_events") {
       return { label: "Main Events", initialTypeKey: "life_event", initialTypeCategory: "", addTitle: "Add Event" };
@@ -1794,20 +1796,39 @@ export function PersonEditModal({
       >
         <div className="person-modal-sticky-head">
           <div className="person-modal-header">
-          <img
-            src={headerAvatar}
-            alt={person.displayName}
-            className="person-modal-avatar"
-          />
-          <div>
-            <h3 className="person-modal-title">{displayName || person.displayName}</h3>
-            <p className="person-modal-meta">
-              Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
-            </p>
-            <p className="person-modal-meta">
-              Email: {email || "-"} | Phone: {phones || "-"}
-            </p>
-          </div>
+            <img
+              src={headerAvatar}
+              alt={person.displayName}
+              className="person-modal-avatar"
+            />
+            <div className="person-modal-header-copy">
+              <h3 className="person-modal-title">{displayName || person.displayName}</h3>
+              <p className="person-modal-meta">
+                Birthdate: {toMonthDay(birthDate || person.birthDate || "")} | ID: {person.personId}
+              </p>
+              <p className="person-modal-meta">
+                Email: {email || "-"} | Phone: {phones || "-"}
+              </p>
+            </div>
+            {primaryPhoneAction || emailActionHref ? (
+              <div className="person-modal-contact-actions" aria-label="Quick contact actions">
+                {primaryPhoneAction ? (
+                  <>
+                    <a href={primaryPhoneAction.telHref} className="person-modal-contact-action">
+                      Call
+                    </a>
+                    <a href={primaryPhoneAction.smsHref} className="person-modal-contact-action">
+                      Text
+                    </a>
+                  </>
+                ) : null}
+                {emailActionHref ? (
+                  <a href={emailActionHref} className="person-modal-contact-action">
+                    Email
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
