@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { upsertPersonBirthAttribute, upsertPersonDeathAttribute } from "@/lib/attributes/store";
+import { upsertPersonBirthAttribute } from "@/lib/attributes/store";
 import {
   appendAuditLog,
   deleteTableRows,
@@ -199,7 +199,6 @@ export async function POST(request: Request, { params }: TenantPersonRouteProps)
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   await upsertPersonBirthAttribute(resolved.tenant.tenantKey, personId, parsed.data.birth_date);
-  await upsertPersonDeathAttribute(resolved.tenant.tenantKey, personId, parsed.data.death_date);
 
   await appendAuditLog({
     actorEmail: resolved.session.user?.email ?? "",

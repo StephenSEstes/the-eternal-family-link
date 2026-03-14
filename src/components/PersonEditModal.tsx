@@ -673,7 +673,6 @@ export function PersonEditModal({
   const [maidenName, setMaidenName] = useState("");
   const [nickName, setNickName] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [deathDate, setDeathDate] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [phones, setPhones] = useState("");
   const [email, setEmail] = useState("");
@@ -892,7 +891,6 @@ export function PersonEditModal({
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
     setAttributes(toPersonMediaAttributes(canonicalAttributes));
-    setDeathDate(getDeathDateFromAttributes(canonicalAttributes as AboutAttribute[]) || "");
   };
 
   const clearStoryImportQueue = () => {
@@ -976,7 +974,6 @@ export function PersonEditModal({
     setMaidenName(person.maidenName || "");
     setNickName(person.nickName || "");
     setBirthDate(person.birthDate || "");
-    setDeathDate(person.deathDate || "");
     setGender(person.gender || "unspecified");
     setPhones(formatUsPhoneForEdit(person.phones || ""));
     setEmail(person.email || "");
@@ -1124,12 +1121,15 @@ export function PersonEditModal({
     const formatted = formatDisplayDate(raw);
     return formatted === "-" ? "" : formatted;
   }, [marriedAttribute]);
+  const deathDateValue = useMemo(() => {
+    return getDeathDateFromAttributes(aboutAttributes) || person?.deathDate || "";
+  }, [aboutAttributes, person?.deathDate]);
   const deathDateText = useMemo(() => {
-    const raw = deathDate || person?.deathDate || "";
+    const raw = deathDateValue;
     if (!raw) return "";
     const formatted = formatDisplayDate(raw);
     return formatted === "-" ? "" : formatted;
-  }, [deathDate, person?.deathDate]);
+  }, [deathDateValue]);
   const yearsMarriedText = useMemo(() => computeYearsSince(marriedAttribute?.attributeDate || ""), [marriedAttribute]);
   const chipColorStyle = (rawTypeKey: string) => {
     const color = eventCategoryColorByKey[normalizeAttributeKey(rawTypeKey)] || "#d9e2ec";
@@ -1879,19 +1879,21 @@ export function PersonEditModal({
                     <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
                   </div>
                   <div>
-                    <label className="label">{deathDate.trim() ? "From Date" : "Birthdate"}</label>
+                    <label className="label">{deathDateValue.trim() ? "From Date" : "Birthdate"}</label>
                     <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
                   </div>
-                  <div>
-                    <label className="label">To Date</label>
-                    <input
-                      className="input"
-                      type="date"
-                      value={deathDate}
-                      onChange={(e) => setDeathDate(e.target.value)}
-                      disabled={showReadOnly}
-                    />
-                  </div>
+                  {deathDateValue.trim() ? (
+                    <div>
+                      <label className="label">To Date</label>
+                      <input
+                        className="input"
+                        type="date"
+                        value={deathDateValue}
+                        disabled
+                        readOnly
+                      />
+                    </div>
+                  ) : null}
                   <div className="field-span-2">
                     <label className="label">Gender</label>
                     <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")} disabled={showReadOnly}>
@@ -2333,8 +2335,8 @@ export function PersonEditModal({
                 <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
                   <p className="page-subtitle" style={{ margin: 0 }}>
-                    {deathDate.trim()
-                      ? <><strong>From:</strong> {formatDisplayDate(birthDate)} <strong style={{ marginLeft: "0.4rem" }}>To:</strong> {formatDisplayDate(deathDate)}</>
+                    {deathDateValue.trim()
+                      ? <><strong>From:</strong> {formatDisplayDate(birthDate)} <strong style={{ marginLeft: "0.4rem" }}>To:</strong> {formatDisplayDate(deathDateValue)}</>
                       : <><strong>Born:</strong> {formatDisplayDate(birthDate)}</>}
                   </p>
                   <p className="page-subtitle" style={{ margin: 0 }}><strong>Schools Attended:</strong> coming</p>
@@ -2954,7 +2956,6 @@ export function PersonEditModal({
                       maiden_name: maidenName,
                       nick_name: nickName,
                       birth_date: birthDate,
-                      death_date: deathDate,
                       gender,
                       phones,
                       email,

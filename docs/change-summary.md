@@ -590,6 +590,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Death is now modeled as a canonical person event, not a top-level person field.
+## 2026-03-13 (death event entry path correction)
+
+- `Change`: Removed the always-visible editable `To Date` field from person contact edit, restored death entry to the Life Event flow only, and kept `From / To` display visible only after a death event already exists.
+- `Type`: Bugfix, UX
+- `Why`: Root cause was the first pass wiring death through the person save form as a hidden secondary person-field flow, which contradicted the approved design that death should be an event and not a prominent field.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/validation/person.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/route.ts`
+  - `src/app/api/people/[personId]/route.ts`
+  - `src/lib/attributes/store.ts`
+  - `docs/design-decisions.md`
+- `Data Changes`: No schema change. Existing death events remain canonical; person save no longer creates or updates death events directly.
+- `Verify`:
+  - Person contact edit shows only `Birthdate` until a death event exists.
+  - Add a `Death` life event, reopen the person, and confirm the screen now displays `From Date` and read-only `To Date`.
+  - Saving normal person edits no longer creates/changes a death event.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No new design decision change; this restores the UI to the approved event-only death-entry model.
 
 ## 2026-03-11 (repair missing spouse households)
 
