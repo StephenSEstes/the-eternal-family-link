@@ -1067,6 +1067,7 @@ export async function upsertOciTenantAccess(input: {
   const personId = input.personId.trim();
   const googleAccess = input.isEnabled ? "TRUE" : "FALSE";
   const membershipEnabled = input.isEnabled ? "TRUE" : "FALSE";
+  const isLocalAlias = isLocalAliasEmail(userEmail);
 
   if (!tenantKey) {
     throw new Error("family_group_key is required");
@@ -1082,8 +1083,15 @@ export async function upsertOciTenantAccess(input: {
            is_enabled = :membershipEnabled
        WHERE LOWER(TRIM(family_group_key)) = :tenantKey
          AND (
-           (:personId <> '' AND TRIM(person_id) = :personId)
-           OR LOWER(TRIM(user_email)) = :userEmail
+           LOWER(TRIM(user_email)) = :userEmail
+           OR (
+             :personId <> ''
+             AND TRIM(person_id) = :personId
+             AND (
+               (:isLocalAlias = 'TRUE' AND LOWER(TRIM(user_email)) LIKE '%@local')
+               OR (:isLocalAlias = 'FALSE' AND LOWER(TRIM(user_email)) NOT LIKE '%@local')
+             )
+           )
          )`,
       {
         userEmail,
@@ -1092,6 +1100,7 @@ export async function upsertOciTenantAccess(input: {
         personId,
         membershipEnabled,
         tenantKey,
+        isLocalAlias: isLocalAlias ? "TRUE" : "FALSE",
       },
       { autoCommit: false },
     );
@@ -1201,6 +1210,7 @@ export async function upsertOciUserFamilyGroupAccess(input: {
   const role = input.role.trim().toUpperCase() || "USER";
   const personId = input.personId.trim();
   const membershipEnabled = input.isEnabled ? "TRUE" : "FALSE";
+  const isLocalAlias = isLocalAliasEmail(userEmail);
 
   if (!userEmail) {
     throw new Error("user_email is required");
@@ -1221,7 +1231,16 @@ export async function upsertOciUserFamilyGroupAccess(input: {
            person_id = :personId,
            is_enabled = :membershipEnabled
        WHERE LOWER(TRIM(family_group_key)) = :tenantKey
-         AND TRIM(person_id) = :personId`,
+         AND (
+           LOWER(TRIM(user_email)) = :userEmail
+           OR (
+             TRIM(person_id) = :personId
+             AND (
+               (:isLocalAlias = 'TRUE' AND LOWER(TRIM(user_email)) LIKE '%@local')
+               OR (:isLocalAlias = 'FALSE' AND LOWER(TRIM(user_email)) NOT LIKE '%@local')
+             )
+           )
+         )`,
       {
         userEmail,
         tenantName,
@@ -1229,6 +1248,7 @@ export async function upsertOciUserFamilyGroupAccess(input: {
         personId,
         membershipEnabled,
         tenantKey,
+        isLocalAlias: isLocalAlias ? "TRUE" : "FALSE",
       },
       { autoCommit: false },
     );

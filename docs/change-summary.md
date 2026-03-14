@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-13 (invite local membership upsert no longer collides with google row)
+
+- `Date`: 2026-03-13
+- `Change`: Fixed invite/local family-access provisioning so it updates only the matching local or Google `UserFamilyGroups` row for a person instead of trying to rewrite both auth rows onto the same `(user_email, family_group_key)` key.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The OCI family-access upsert matched `user_family_groups` rows only by `person_id` and `family_group_key`. For people who correctly have both a Google row and a local `@local` row in the same family group, a local invite/save tried to update both rows to the local alias, which triggered Oracle `ORA-00001` on `PK_USER_FAMILY_GROUPS`.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Creating or sending an invite for a person who already has both Google and local access no longer fails with `ORA-00001` on `USER_FAMILY_GROUPS`.
+  - Rollback-safe OCI checks for `Stephen Estes` in `snowestes` show the local row update affects `1` row and the Google row update affects `1` row, with no uniqueness violation.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `src/lib/oci/tables.ts` upsert changes to restore the old person-only match behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (home birthday chip age copy + default range)
 
 - `Date`: 2026-03-13

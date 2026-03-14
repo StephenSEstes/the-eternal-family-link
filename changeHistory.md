@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-13: Fixed invite/local family-access provisioning so people who already have both Google and local access no longer hit `ORA-00001` on `USER_FAMILY_GROUPS` when sending an invite. See `docs/change-summary.md`.
 - 2026-03-13: Home `Birthdays` now defaults to `This Month`, and birthday chips say `Turning X` instead of `Age X` for people under 30. See `docs/change-summary.md`.
 - 2026-03-13: Fixed Family Tree so opening the focus panel no longer prevents top-level navigation from committing; Home and other header routes should open immediately without first closing the tree panel. See `docs/change-summary.md`.
 - 2026-03-13: Calendar now has family-group filters at the top so users can view one accessible family at a time or `All Families`, while birthday links still prefer the selected family-group route when valid. See `docs/change-summary.md`.
