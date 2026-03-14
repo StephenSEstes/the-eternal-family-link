@@ -610,6 +610,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No new design decision change; this restores the UI to the approved event-only death-entry model.
+## 2026-03-13 (death event single-date form)
+
+- `Change`: Updated the generic Attributes event editor so `Death` is always treated as a single-date event with no `End Date` field or saved end date.
+- `Type`: Bugfix, UX
+- `Why`: Root cause was the death event using the generic event fallback path in `AttributesModal`, which assumes unknown event types may be date ranges and therefore showed `End Date`.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: No schema change. Existing stale death end dates are suppressed in the UI, and future death saves send no end date.
+- `Verify`:
+  - Add or edit a `Death` event and confirm only one date field is shown.
+  - Saving a death event does not persist an end date.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
 
 ## 2026-03-11 (repair missing spouse households)
 

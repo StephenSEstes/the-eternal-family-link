@@ -71,6 +71,10 @@ function normalizeTypeKey(value: string) {
   return normalizeAttributeTypeKey(value);
 }
 
+function isSingleDayEventType(category: AttributeCategory, typeKey: string) {
+  return category === "event" && normalizeTypeKey(typeKey) === "death";
+}
+
 function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   const normalizedType = normalizeTypeKey(item.attributeType || item.typeKey || "");
   const attributeDate = getSafeAttributeValueText(item.attributeDate || item.dateStart);
@@ -83,6 +87,7 @@ function normalizeAttributeItem(item: AttributeItem): AttributeItem {
   const attributeDetail = getSafeAttributeValueText(item.attributeDetail || item.valueText);
   const attributeNotes = getSafeAttributeValueText(item.attributeNotes || item.notes);
   const label = getSafeAttributeValueText(item.label);
+  const normalizedEndDate = isSingleDayEventType(category, normalizedType) ? "" : endDate;
   return {
     ...item,
     category,
@@ -91,13 +96,13 @@ function normalizeAttributeItem(item: AttributeItem): AttributeItem {
     attributeTypeCategory,
     typeKey: normalizedType,
     attributeDate,
-    endDate,
+    endDate: normalizedEndDate,
     attributeDetail,
     attributeNotes,
     label,
     valueText: attributeDetail,
     dateStart: attributeDate,
-    dateEnd: endDate,
+    dateEnd: normalizedEndDate,
     notes: attributeNotes,
   };
 }
@@ -349,6 +354,18 @@ export function AttributesModal({
     const categoryId = makeAttributeDefinitionCategoryId(category, normalizedType);
     return (definitionTypeOptionsByCategory.get(categoryId) ?? []).find((item) => item.typeKey === normalizedCategory) ?? null;
   }, [attributeTypeCategory, category, definitionTypeOptionsByCategory, typeKey]);
+  const shouldShowEventEndDate = useMemo(() => {
+    if (category !== "event") {
+      return false;
+    }
+    if (isSingleDayEventType(category, typeKey)) {
+      return false;
+    }
+    if (selectedTypeDefinition == null) {
+      return true;
+    }
+    return selectedTypeDefinition.askEndDate || selectedTypeDefinition.dateMode === "range";
+  }, [category, selectedTypeDefinition, typeKey]);
   const activeAddModalTitle = useMemo(() => {
     if (editingId) {
       if (category === "event" && normalizeTypeKey(attributeTypeCategory) === "story") {
@@ -538,7 +555,11 @@ export function AttributesModal({
     setLabel(getSafeAttributeValueText(item.label));
     setValueText(getSafeAttributeValueText(item.attributeDetail || item.valueText));
     setDateStart(getSafeAttributeValueText(item.attributeDate || item.dateStart));
-    setDateEnd(getSafeAttributeValueText(item.endDate || item.dateEnd));
+    setDateEnd(
+      isSingleDayEventType(item.category, getSafeAttributeValueText(item.attributeType || item.typeKey))
+        ? ""
+        : getSafeAttributeValueText(item.endDate || item.dateEnd),
+    );
     setNotes(getSafeAttributeValueText(item.attributeNotes || item.notes));
   };
 
@@ -552,7 +573,11 @@ export function AttributesModal({
     setLabel(getSafeAttributeValueText(draft.label));
     setValueText(getSafeAttributeValueText(draft.attributeDetail));
     setDateStart(getSafeAttributeValueText(draft.attributeDate));
-    setDateEnd(getSafeAttributeValueText(draft.endDate));
+    setDateEnd(
+      isSingleDayEventType(draft.attributeKind, draft.attributeType)
+        ? ""
+        : getSafeAttributeValueText(draft.endDate),
+    );
     setNotes(getSafeAttributeValueText(draft.attributeNotes));
   };
 
@@ -573,6 +598,7 @@ export function AttributesModal({
     }
     setBusy(true);
     const normalizedType = normalizeTypeKey(typeKey);
+    const normalizedEndDate = shouldShowEventEndDate ? dateEnd : "";
     const payload = {
       entityType,
       entityId,
@@ -586,12 +612,12 @@ export function AttributesModal({
       ...(dateIsEstimated && estimatedTo ? { estimatedTo } : {}),
       attributeDetail: valueText,
       attributeNotes: notes,
-      endDate: dateEnd,
+      endDate: normalizedEndDate,
       typeKey: normalizedType,
       label,
       valueText,
       dateStart,
-      dateEnd,
+      dateEnd: normalizedEndDate,
       notes,
     };
     const res = await fetch(editingId ? `/api/attributes/${encodeURIComponent(editingId)}` : "/api/attributes", {
@@ -1130,8 +1156,12 @@ export function AttributesModal({
                       className="input"
                       value={typeKey}
                       onChange={(e) => {
-                        setTypeKey(normalizeTypeKey(e.target.value));
+                        const nextType = normalizeTypeKey(e.target.value);
+                        setTypeKey(nextType);
                         setAttributeTypeCategory("");
+                        if (isSingleDayEventType(category, nextType)) {
+                          setDateEnd("");
+                        }
                       }}
                     >
                       {addTypeSuggestions.map((item) => (
@@ -1185,7 +1215,7 @@ export function AttributesModal({
                         <label className="label">Date</label>
                         <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
                       </div>
-                      {selectedTypeDefinition == null || selectedTypeDefinition.askEndDate || selectedTypeDefinition.dateMode === "range" ? (
+                      {shouldShowEventEndDate ? (
                         <div style={{ flex: 1, minWidth: "170px" }}>
                           <label className="label">{addFormCopy.endDateLabel}</label>
                           <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
