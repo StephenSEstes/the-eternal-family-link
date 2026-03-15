@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-14: `Add User` now validates missing local-user fields like `Temporary Password` before submit and shows validation/API errors directly inside the modal instead of only in the hidden page-level status area. See `docs/change-summary.md`.
 - 2026-03-13: Household `Add Child` now defaults last name from the household father, shows missing-field/API errors directly inside the child form, and the inline spouse add dialog no longer crowds the `First Name` field under the heading. See `docs/change-summary.md`.
 - 2026-03-13: Compacted the app header by moving the family selector into the main top row, removing the extra `Family Group` label row, and added compact `Call`/`Text`/`Email` actions to the person modal header. See `docs/change-summary.md`.
 - 2026-03-13: Fixed invite/local family-access provisioning so people who already have both Google and local access no longer hit `ORA-00001` on `USER_FAMILY_GROUPS` when sending an invite. See `docs/change-summary.md`.

@@ -1031,6 +1031,19 @@ export function SettingsClient({
   };
 
   const createLocalUser = async () => {
+    if (!localPersonId.trim()) {
+      setLocalUserStatus("Select a person before creating a user.");
+      return false;
+    }
+    if (!localUsername.trim()) {
+      setLocalUserStatus("Local Username is required.");
+      return false;
+    }
+    if (!localPassword.trim()) {
+      setLocalUserStatus("Temporary Password is required.");
+      return false;
+    }
+
     setLocalUserStatus("Creating local user...");
     const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/local-users`, {
       method: "POST",
@@ -1043,10 +1056,33 @@ export function SettingsClient({
         isEnabled: localEnabled,
       }),
     });
-    const body = await res.text();
+    const body = await res.json().catch(() => null);
     if (!res.ok) {
-      setLocalUserStatus(`Failed: ${res.status} ${body.slice(0, 200)}`);
-      return;
+      const passwordIssues =
+        body && typeof body === "object" && body.error === "invalid_payload"
+          ? Array.isArray(body.issues?.fieldErrors?.password)
+            ? body.issues.fieldErrors.password
+            : []
+          : [];
+      const usernameIssues =
+        body && typeof body === "object" && body.error === "invalid_payload"
+          ? Array.isArray(body.issues?.fieldErrors?.username)
+            ? body.issues.fieldErrors.username
+            : []
+          : [];
+      const personIssues =
+        body && typeof body === "object" && body.error === "invalid_payload"
+          ? Array.isArray(body.issues?.fieldErrors?.personId)
+            ? body.issues.fieldErrors.personId
+            : []
+          : [];
+      const message =
+        passwordIssues[0] ||
+        usernameIssues[0] ||
+        personIssues[0] ||
+        (body && typeof body === "object" && typeof body.message === "string" ? body.message : "");
+      setLocalUserStatus(message ? `Cannot create user. ${message}` : `Failed: ${res.status}`);
+      return false;
     }
     setLocalUserStatus("Local user saved.");
     setLocalUsername("");
@@ -1055,6 +1091,7 @@ export function SettingsClient({
     setLocalPersonId("");
     setLocalEnabled(true);
     await loadTenantAdminData(selectedTenantKey);
+    return true;
   };
 
   const patchLocalUser = async (username: string, payload: Record<string, unknown>) => {
@@ -1563,7 +1600,10 @@ export function SettingsClient({
       setLocalUserStatus("Select a person before creating a user.");
       return;
     }
-    await createLocalUser();
+    const localCreated = await createLocalUser();
+    if (!localCreated) {
+      return;
+    }
     if (userEmail.trim()) {
       setPersonId(localPersonId);
       await upsertAccess();
@@ -1582,6 +1622,7 @@ export function SettingsClient({
     setUserEmail("");
     setRole("USER");
     setIsEnabled(false);
+    setLocalUserStatus("");
   };
 
   const closeAddUserModal = () => {
@@ -2196,6 +2237,14 @@ export function SettingsClient({
                         Cancel
                       </button>
                     </div>
+                    {localUserStatus ? (
+                      <p
+                        className={localUserStatus.startsWith("Cannot") || localUserStatus.startsWith("Failed") ? "status-warn" : "page-subtitle"}
+                        style={{ marginTop: "0.75rem" }}
+                      >
+                        {localUserStatus}
+                      </p>
+                    ) : null}
                     <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
                       Google access supports Gmail and Google Workspace accounts.
                     </p>

@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-14 (add user inline password validation)
+
+- `Date`: 2026-03-14
+- `Change`: The `Add User` modal now validates required local-user fields before submit and shows missing-password or API validation errors directly inside the modal instead of only in the page-level status area behind it.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. `Add User` always posts to the local-user create API, which requires a password, but the modal did not validate that requirement first and only wrote the resulting `400` status to the shared `localUserStatus` message rendered at the bottom of the underlying Settings page.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `Admin -> Users & Access -> Add User`.
+  - Leave `Temporary Password` blank and click `Create User`.
+  - The modal stays open and shows `Temporary Password is required.` inside the modal itself.
+  - If the API rejects the create payload, the modal shows a readable inline message instead of a raw hidden `400`.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `SettingsClient` Add User modal validation and inline-status rendering changes.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-13 (header compact family selector + person quick contact actions)
 
 - `Date`: 2026-03-13
