@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-14: The person photo-detail editor now uses `Save and Close` and closes after a successful save instead of leaving the photo editor open. See `docs/change-summary.md`.
 - 2026-03-14: Adding a photo from a person’s own `Pictures` tab now makes it the current profile photo instead of leaving it as a non-primary gallery-only media link. See `docs/change-summary.md`.
 - 2026-03-14: `Add User` now validates missing local-user fields like `Temporary Password` before submit and shows validation/API errors directly inside the modal instead of only in the hidden page-level status area. See `docs/change-summary.md`.
 - 2026-03-13: Household `Add Child` now defaults last name from the household father, shows missing-field/API errors directly inside the child form, and the inline spouse add dialog no longer crowds the `First Name` field under the heading. See `docs/change-summary.md`.

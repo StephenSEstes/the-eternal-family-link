@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-14 (photo editor save and close)
+
+- `Date`: 2026-03-14
+- `Change`: The person photo-detail editor now labels the primary action `Save and Close` and closes the photo editor after a successful save instead of leaving the detail panel open.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The photo-detail save path updated metadata and refreshed the person state, but it never closed the photo detail shell, while the sticky action bar still advertised `Save Changes`, which did not match the actual desired workflow.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open a person photo from `Pictures`.
+  - Edit metadata and click `Save and Close`.
+  - The save succeeds and the photo detail editor closes back to the person’s picture list.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the photo-detail save/close behavior and sticky-bar label change in `PersonEditModal`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (person photo attach sets primary profile photo)
 
 - `Date`: 2026-03-14

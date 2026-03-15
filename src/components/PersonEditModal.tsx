@@ -502,13 +502,15 @@ function StickySaveBar({
   saving,
   onCancel,
   onSave,
+  saveLabel = "Save Changes",
 }: {
   dirty: boolean;
   saving: boolean;
   onCancel: () => void;
   onSave: () => void;
+  saveLabel?: string;
 }) {
-  const label = saving ? "Saving..." : "Save Changes";
+  const label = saving ? "Saving..." : saveLabel;
   return (
     <div className="photo-save-sticky-bar">
       <div className="photo-save-sticky-actions">
@@ -1490,6 +1492,8 @@ export function PersonEditModal({
     setPhotoBusy(false);
     await loadPersonAttributeState(person.personId);
     await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
+    setShowPhotoDetail(false);
+    setSelectedPhotoAttributeId("");
     onSaved();
   };
 
@@ -2730,6 +2734,7 @@ export function PersonEditModal({
                       draftMeta.isPrimary !== selectedPhoto.isPrimary
                     }
                     saving={photoBusy}
+                    saveLabel="Save and Close"
                     onCancel={() => setShowPhotoDetail(false)}
                     onSave={() => {
                       void saveSelectedPhotoMetadata();
