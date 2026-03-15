@@ -20,6 +20,7 @@ export type PersonAttributeLinkInput = {
   label: string;
   notes: string;
   startDate: string;
+  isPrimary?: boolean;
   shareScope?: "one_family" | "both_families";
   shareFamilyGroupKey?: string;
 };
@@ -59,7 +60,7 @@ export function buildPersonAttributeLinkPayload(input: PersonAttributeLinkInput)
     valueText: input.valueText,
     valueJson: input.valueJson,
     label: input.label,
-    isPrimary: false,
+    isPrimary: Boolean(input.isPrimary),
     sortOrder: 0,
     startDate: input.startDate,
     endDate: "",

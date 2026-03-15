@@ -261,12 +261,17 @@ async function uploadToPerson(input: {
   attributeType: "photo" | "video" | "audio" | "media";
   captureSource?: string;
 }) {
+  const shouldSetPrimary =
+    input.attributeType === "photo" &&
+    Boolean(input.context.defaultIsPrimary) &&
+    input.context.source === "person" &&
+    (input.context.personId ?? "").trim() === input.personId.trim();
   const contract = buildPersonUploadContractFields({
     label: input.title,
     description: input.description,
     photoDate: input.date,
     attributeType: input.attributeType,
-    isHeadshot: false,
+    isHeadshot: shouldSetPrimary,
   });
   const mediaMeta = await readClientMediaFileMetadata(input.file);
   const form = new FormData();
@@ -353,6 +358,11 @@ async function linkToPerson(input: {
   date: string;
   attributeType: "photo" | "video" | "audio" | "media";
 }) {
+  const shouldSetPrimary =
+    input.attributeType === "photo" &&
+    Boolean(input.context.defaultIsPrimary) &&
+    input.context.source === "person" &&
+    (input.context.personId ?? "").trim() === input.personId.trim();
   const payload = buildPersonAttributeLinkPayload({
     attributeType: input.attributeType,
     valueText: input.fileId,
@@ -360,6 +370,7 @@ async function linkToPerson(input: {
     label: input.title,
     notes: input.description,
     startDate: input.date,
+    isPrimary: shouldSetPrimary,
     ...mediaTabShareDefaults(input.context),
   });
   const res = await fetch(

@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-14 (person photo attach sets primary profile photo)
+
+- `Date`: 2026-03-14
+- `Change`: Adding a photo from a person’s own `Pictures` tab now marks that photo as the current person’s primary/profile photo so it shows in the person header and people/profile views immediately instead of only existing as a gallery item.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The person media attach flow in `MediaAttachWizard` and `attach-orchestrator` ignored the existing `defaultIsPrimary` concept and hardcoded person uploads/links as non-primary (`isHeadshot: false`, `isPrimary: false`), so adding a photo from a person’s profile often left `People.photo_file_id` unchanged.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/lib/media/attach-contracts.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Open a person, go to `Pictures`, and add a photo from that person’s own profile.
+  - After save, the person header/profile image updates to the new photo.
+  - Existing cross-person or household media links remain non-primary unless explicitly edited later.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the person `Pictures` wizard primary-photo defaults in `PersonEditModal`, `attach-orchestrator`, and `attach-contracts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (add user inline password validation)
 
 - `Date`: 2026-03-14

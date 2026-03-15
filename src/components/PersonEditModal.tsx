@@ -2750,6 +2750,7 @@ export function PersonEditModal({
                   personId: person.personId,
                   entityType: "person",
                   defaultAttributeType: "photo",
+                  defaultIsPrimary: true,
                   defaultLabel: "photo",
                   preselectedPersonIds: [person.personId],
                   peopleOptions: personOptions.map((item) => ({
