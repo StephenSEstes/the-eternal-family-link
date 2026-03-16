@@ -162,7 +162,7 @@ function buildInviteMessage(
       ? "Continue with Google to activate your access."
       : invite.authMode === "local"
         ? "Open the link to activate your access and install the app."
-        : "Open the link to continue with Google, or use the local username and temporary password below.";
+        : "Open the link to activate local sign-in with the username and temporary password below, or use Google if you prefer.";
   const lines = [
     `Hi ${invite.personDisplayName},`,
     "",

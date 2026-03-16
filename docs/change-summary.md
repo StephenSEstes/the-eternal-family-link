@@ -633,6 +633,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Added 2026-03-14 access-inheritance decision documenting create/provision-time parent-based inheritance with persisted `UserFamilyGroups` rows.
+
+## 2026-03-16 (invite login emphasis + visible/failing manage-user status)
+
+- `Change`: De-emphasized Google in invite UX by making local the default invite path when local access exists, reordering `Sign-In Path` options to lead with local, changing invite copy to describe Google as optional, and making the public invite acceptance page lead with username/password when local is available. Also moved Manage User save feedback into the active modal and fixed the local-user PATCH API so username/password/role/enable updates now fail loudly when no local user row was actually updated.
+- `Type`: UX, Bugfix
+- `Why`: Root cause was split across two UI paths. The admin invite flow and the public invite page both presented Google first when both methods were available, which created confusion about the recommended sign-in path. Separately, `Update User` and `Update Password` wrote their status into shared page-level state that only rendered behind the active modal, and the local-user PATCH route returned success for several actions even when `patchLocalUser(...)` found no matching user and changed nothing.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+  - `src/components/InviteAcceptClient.tsx`
+  - `src/lib/invite/store.ts`
+  - `src/app/api/t/[tenantKey]/local-users/[username]/route.ts`
+- `Data Changes`: No schema or data change.
+- `Verify`:
+  - Open `Admin -> Users & Access -> Manage User -> Invite` for a user with both auth methods and confirm local is the default path, local options are listed first, and the explanatory copy leads with local sign-in.
+  - Open an invite that allows both auth methods and confirm the local activation form appears before the Google option.
+  - In `Manage User`, click `Update User` and `Update Password` and confirm success/failure messages appear inside the active modal instead of behind it.
+  - Attempt a password or role update against a missing/stale local username and confirm the route returns a real failure (`Local user not found.`) instead of silent success.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
 ## 2026-03-13 (death as event + memorial display)
 
 - `Change`: Added death as a canonical person event, synchronized the person modal `To Date` field to that event, and updated Home, Calendar, and Tree to display memorial/lifespan cues derived from the death event.

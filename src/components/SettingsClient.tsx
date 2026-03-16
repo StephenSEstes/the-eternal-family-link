@@ -282,7 +282,7 @@ function defaultInviteAuthMode(
   const hasEnabledGoogle = googleAccess.some((entry) => entry.isEnabled && entry.userEmail.trim());
   const hasEnabledLocal = localAccess.some((entry) => entry.isEnabled && entry.username.trim());
   if (hasEnabledGoogle && hasEnabledLocal) {
-    return "either";
+    return "local";
   }
   if (hasEnabledGoogle) {
     return "google";
@@ -413,7 +413,7 @@ export function SettingsClient({
   const [auditFromDate, setAuditFromDate] = useState("");
   const [auditToDate, setAuditToDate] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("google");
+  const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("local");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "USER">("USER");
   const [inviteLocalUsername, setInviteLocalUsername] = useState("");
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14);
@@ -1106,7 +1106,18 @@ export function SettingsClient({
     );
     const body = await res.text();
     if (!res.ok) {
-      setLocalUserStatus(`Failed: ${res.status} ${body.slice(0, 200)}`);
+      let message = body.slice(0, 200);
+      try {
+        const parsed = JSON.parse(body) as { message?: string; error?: string };
+        if (typeof parsed.message === "string" && parsed.message.trim()) {
+          message = parsed.message.trim();
+        } else if (typeof parsed.error === "string" && parsed.error.trim()) {
+          message = parsed.error.trim();
+        }
+      } catch {
+        // Keep raw text fallback when the response is not JSON.
+      }
+      setLocalUserStatus(`Failed: ${res.status} ${message}`);
       return false;
     }
     await loadTenantAdminData(selectedTenantKey);
@@ -1788,6 +1799,13 @@ export function SettingsClient({
     () => selectedPersonGoogleAccess[0]?.lastLoginAt || selectedPersonLocalUser?.lastLoginAt || "",
     [selectedPersonGoogleAccess, selectedPersonLocalUser],
   );
+  const manageUserStatus = localUserStatus || accessStatus;
+  const manageUserStatusIsWarning =
+    manageUserStatus.startsWith("Cannot") ||
+    manageUserStatus.startsWith("Failed") ||
+    manageUserStatus.includes("required") ||
+    manageUserStatus.includes("No local user") ||
+    manageUserStatus.includes("Enter a password");
   const familyPeopleById = useMemo(
     () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
     [familyPeople],
@@ -2302,6 +2320,14 @@ export function SettingsClient({
                   <div className="person-modal-content">
                     {manageUserModalTab === "manage" ? (
                       <>
+                        {manageUserStatus ? (
+                          <p
+                            className={manageUserStatusIsWarning ? "status-warn" : "page-subtitle"}
+                            style={{ marginTop: 0, marginBottom: "0.75rem" }}
+                          >
+                            {manageUserStatus}
+                          </p>
+                        ) : null}
                         <div className="settings-chip-list">
                           <label className="label">
                             <input
@@ -2523,7 +2549,7 @@ export function SettingsClient({
                     ) : (
                       <>
                         <p className="page-subtitle" style={{ marginTop: 0 }}>
-                          Create one shareable invite for {selectedDirectoryPerson.displayName}. The link can handle Google sign-in, local sign-in, or both, depending on the mode you choose.
+                          Create one shareable invite for {selectedDirectoryPerson.displayName}. Local sign-in is the simplest path. Google sign-in is optional when you want them to use a Google account instead.
                         </p>
                         {inviteAuthMode !== "google" ? (
                           <>
@@ -2553,9 +2579,9 @@ export function SettingsClient({
                           value={inviteAuthMode}
                           onChange={(e) => setInviteAuthMode(e.target.value as "google" | "local" | "either")}
                         >
-                          <option value="google">Google only</option>
                           <option value="local">Local only</option>
-                          <option value="either">Google or Local</option>
+                          <option value="either">Local or Google</option>
+                          <option value="google">Google only</option>
                         </select>
 
                         <label className="label">Role</label>

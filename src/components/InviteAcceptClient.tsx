@@ -188,19 +188,8 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
         Invite email: <strong>{invite.inviteEmail}</strong>
       </p>
 
-      {invite.canUseGoogle ? (
-        <div style={{ marginTop: "1rem" }}>
-          <button type="button" className="button tap-button" disabled={busy} onClick={() => void onGoogleContinue()}>
-            Continue with Google
-          </button>
-          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-            Use the invited Google account. After sign-in, this page will finish setup automatically.
-          </p>
-        </div>
-      ) : null}
-
       {invite.canUseLocal ? (
-        <form onSubmit={onLocalAccept} style={{ marginTop: invite.canUseGoogle ? "1.25rem" : "0.75rem" }}>
+        <form onSubmit={onLocalAccept} style={{ marginTop: "0.75rem" }}>
           <h2 style={{ marginBottom: "0.5rem" }}>Use Username And Password</h2>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
             If your invite message included a temporary password, you can use it here or enter a new password to replace it during activation.
@@ -232,6 +221,18 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
             Activate Local Sign-In
           </button>
         </form>
+      ) : null}
+
+      {invite.canUseGoogle ? (
+        <div style={{ marginTop: invite.canUseLocal ? "1.25rem" : "1rem" }}>
+          <h2 style={{ marginBottom: "0.5rem" }}>{invite.canUseLocal ? "Use Google Instead" : "Continue With Google"}</h2>
+          <button type="button" className="button secondary tap-button" disabled={busy} onClick={() => void onGoogleContinue()}>
+            Continue with Google
+          </button>
+          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+            Use the invited Google account. After sign-in, this page will finish setup automatically.
+          </p>
+        </div>
       ) : null}
 
       <div className="card" style={{ marginTop: "1rem" }}>

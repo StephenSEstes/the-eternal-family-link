@@ -23,6 +23,10 @@ function decodeRouteUsername(username: string) {
   }
 }
 
+function localUserNotFoundResponse() {
+  return NextResponse.json({ error: "not_found", message: "Local user not found." }, { status: 404 });
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ tenantKey: string; username: string }> },
@@ -45,7 +49,13 @@ export async function PATCH(
     if (parsed.data.isEnabled === undefined) {
       return NextResponse.json({ error: "invalid_payload", message: "isEnabled required" }, { status: 400 });
     }
-    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { isEnabled: parsed.data.isEnabled });
+    if (!existingUser) {
+      return localUserNotFoundResponse();
+    }
+    const updated = await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { isEnabled: parsed.data.isEnabled });
+    if (!updated) {
+      return localUserNotFoundResponse();
+    }
     if (existingUser) {
       await appendSessionAuditLog(resolved.session, {
         action: "UPDATE",
@@ -60,10 +70,16 @@ export async function PATCH(
   }
 
   if (parsed.data.action === "unlock") {
-    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
+    if (!existingUser) {
+      return localUserNotFoundResponse();
+    }
+    const updated = await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
       failedAttempts: 0,
       lockedUntil: "",
     });
+    if (!updated) {
+      return localUserNotFoundResponse();
+    }
     if (existingUser) {
       await appendSessionAuditLog(resolved.session, {
         action: "UPDATE",
@@ -81,7 +97,13 @@ export async function PATCH(
     if (!parsed.data.role) {
       return NextResponse.json({ error: "invalid_payload", message: "role required" }, { status: 400 });
     }
-    await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { role: parsed.data.role });
+    if (!existingUser) {
+      return localUserNotFoundResponse();
+    }
+    const updated = await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, { role: parsed.data.role });
+    if (!updated) {
+      return localUserNotFoundResponse();
+    }
     if (existingUser) {
       await appendSessionAuditLog(resolved.session, {
         action: "UPDATE",
@@ -128,12 +150,18 @@ export async function PATCH(
   if (complexityError) {
     return NextResponse.json({ error: "password_policy_failed", message: complexityError }, { status: 400 });
   }
-  await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
+  if (!existingUser) {
+    return localUserNotFoundResponse();
+  }
+  const updated = await patchLocalUser(resolved.tenant.tenantKey, decodedUsername, {
     password: parsed.data.password,
     failedAttempts: 0,
     lockedUntil: "",
     mustChangePassword: false,
   });
+  if (!updated) {
+    return localUserNotFoundResponse();
+  }
   if (existingUser) {
     await appendSessionAuditLog(resolved.session, {
       action: "UPDATE",

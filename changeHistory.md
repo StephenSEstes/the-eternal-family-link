@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-16: De-emphasized Google in invites, made Manage User feedback visible inside the active modal, and fixed local username/password update routes to fail loudly when no local user row is actually updated. See `docs/change-summary.md`.
 - 2026-03-14: The person photo-detail editor now uses `Save and Close` and closes after a successful save instead of leaving the photo editor open. See `docs/change-summary.md`.
 - 2026-03-14: Adding a photo from a person’s own `Pictures` tab now makes it the current profile photo instead of leaving it as a non-primary gallery-only media link. See `docs/change-summary.md`.
 - 2026-03-14: `Add User` now validates missing local-user fields like `Temporary Password` before submit and shows validation/API errors directly inside the modal instead of only in the hidden page-level status area. See `docs/change-summary.md`.
@@ -131,6 +132,7 @@ This file is a quick release-log entry point.
 
 - 2026-03-05: Redesigned Attributes UX into list + detail drawer + add modal and changed Media Library cards to open edit on thumbnail click. See `docs/change-summary.md`.
 - 2026-03-14: Added parent-based family-group access inheritance for new user creation and new-family provisioning while keeping `UserFamilyGroups` as the persisted access model. See `docs/change-summary.md`.
+- 2026-03-16: De-emphasized Google in the invite flow, made local the default path when available, and moved Manage User save/password feedback into the active modal. See `docs/change-summary.md`.
 - 2026-03-13: Added death as a canonical person event with `To Date` sync in person edit, `In Mem` birthday chips, calendar death anniversaries, and tree lifespan display. See `docs/change-summary.md`.
 - 2026-03-13: Corrected death-entry UX so death stays event-only; person edit now shows `From / To` only after a death event already exists, instead of exposing a default editable `To Date` field. See `docs/change-summary.md`.
 - 2026-03-13: Fixed the Death event form so it uses a single date only and no longer shows or saves an `End Date`. See `docs/change-summary.md`.
