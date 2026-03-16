@@ -13,10 +13,16 @@ import {
   updateTableRecordById,
   upsertTenantAccess,
 } from "@/lib/data/runtime";
+import {
+  deriveInheritedFamilyGroupAccessGrants,
+  getProvisionableUserIdentities,
+  loadFamilyGroupAccessInheritanceSnapshot,
+} from "@/lib/family-group/access-inheritance";
 import { getRequestFamilyGroupContext } from "@/lib/family-group/context";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildPersonId } from "@/lib/person/id";
 import { classifyOperationalError, createRequestId, logRoute, maskEmail } from "@/lib/diagnostics/route";
+import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
 
 const payloadSchema = z.object({
   familyGroupKey: z.string().trim().min(1).max(80).optional(),
@@ -613,6 +619,7 @@ export async function POST(request: Request) {
   let householdImportCandidates: Array<{ personId: string; displayName: string }> = [];
   let autoImportedPeopleCount = 0;
   let autoImportedAccessCount = 0;
+  let inheritedAccessCount = 0;
   let autoImportedHouseholdCandidates = false;
   if (parsed.data.includeHouseholdCandidates) {
     const selectedCandidateIds = new Set(
@@ -733,6 +740,64 @@ export async function POST(request: Request) {
     }
   }
 
+  currentStep = "inherit_access";
+  const currentAccessRows = await countedGetTableRecords("UserFamilyGroups").catch(() => []);
+  const inheritanceSnapshot = await loadFamilyGroupAccessInheritanceSnapshot();
+  const importedPersonIds = Array.from(
+    new Set([
+      ...requestedMemberIds,
+      ...householdImportCandidates.map((candidate) => candidate.personId),
+    ]),
+  );
+  const hasEnabledTargetAccess = (personId: string, kind: "google" | "local") =>
+    currentAccessRows.some((row) => {
+      const rowPersonId = (row.data.person_id ?? "").trim();
+      const rowTenantKey = readValue(row.data, "family_group_key", "tenant_key").toLowerCase();
+      const rowEmail = readValue(row.data, "user_email").toLowerCase();
+      if (rowPersonId !== personId || rowTenantKey !== familyGroupKey || !isTrueLike(row.data.is_enabled)) {
+        return false;
+      }
+      if (kind === "local") {
+        return rowEmail.endsWith("@local");
+      }
+      return !!rowEmail && !rowEmail.endsWith("@local");
+    });
+
+  for (const personId of importedPersonIds) {
+    const inheritedGrant = deriveInheritedFamilyGroupAccessGrants(personId, inheritanceSnapshot).find(
+      (grant) => grant.tenantKey === familyGroupKey,
+    );
+    if (!inheritedGrant) {
+      continue;
+    }
+    const identities = getProvisionableUserIdentities(personId, inheritanceSnapshot);
+    for (const identity of identities) {
+      if (hasEnabledTargetAccess(personId, identity.kind)) {
+        continue;
+      }
+      if (identity.kind === "google") {
+        await countedUpsertTenantAccess({
+          userEmail: identity.userEmail,
+          tenantKey: familyGroupKey,
+          tenantName: inheritedGrant.tenantName,
+          role: "USER",
+          personId,
+          isEnabled: true,
+        });
+      } else {
+        await upsertOciUserFamilyGroupAccess({
+          userEmail: identity.userEmail,
+          tenantKey: familyGroupKey,
+          tenantName: inheritedGrant.tenantName,
+          role: "USER",
+          personId,
+          isEnabled: true,
+        });
+      }
+      inheritedAccessCount += 1;
+    }
+  }
+
     currentStep = "append_audit_log";
     await appendAuditLog({
       actorEmail: session.user?.email ?? "",
@@ -770,6 +835,7 @@ export async function POST(request: Request) {
       parentsLinkedToInitialAdmin: parsed.data.parentsAreInitialAdminParents,
       householdImportCandidates,
       importedAccessCount,
+      inheritedAccessCount,
       autoImportedHouseholdCandidates,
       autoImportedPeopleCount,
       autoImportedAccessCount,

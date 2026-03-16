@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { appendAuditLog, getTenantConfig, getTenantUserAccessList, upsertTenantAccess } from "@/lib/data/runtime";
+import {
+  deriveInheritedFamilyGroupAccessGrants,
+  loadFamilyGroupAccessInheritanceSnapshot,
+} from "@/lib/family-group/access-inheritance";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 
 const upsertSchema = z.object({
@@ -50,6 +54,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     personId: parsed.data.personId,
     isEnabled: parsed.data.isEnabled ?? true,
   });
+
+  let inheritedAccessCount = 0;
+  if (parsed.data.isEnabled ?? true) {
+    const inheritanceSnapshot = await loadFamilyGroupAccessInheritanceSnapshot();
+    const inheritedFamilies = deriveInheritedFamilyGroupAccessGrants(parsed.data.personId, inheritanceSnapshot, {
+      excludeTenantKeys: [resolved.tenant.tenantKey],
+    });
+    for (const family of inheritedFamilies) {
+      await upsertTenantAccess({
+        userEmail: parsed.data.userEmail,
+        tenantKey: family.tenantKey,
+        tenantName: family.tenantName,
+        role: "USER",
+        personId: parsed.data.personId,
+        isEnabled: true,
+      });
+      inheritedAccessCount += 1;
+    }
+  }
   await appendAuditLog({
     actorEmail: resolved.session.user?.email ?? "",
     actorPersonId: resolved.session.user?.person_id ?? "",
@@ -58,8 +81,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     entityId: parsed.data.personId,
     familyGroupKey: resolved.tenant.tenantKey,
     status: "SUCCESS",
-    details: `role=${parsed.data.role}, email=${parsed.data.userEmail.toLowerCase()}, enabled=${String(parsed.data.isEnabled ?? true)}`,
+    details: `role=${parsed.data.role}, email=${parsed.data.userEmail.toLowerCase()}, enabled=${String(parsed.data.isEnabled ?? true)}, inherited_family_groups=${inheritedAccessCount}`,
   }).catch(() => undefined);
 
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, inheritedAccessCount, ...result });
 }

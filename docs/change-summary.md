@@ -613,6 +613,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Married child households stay attached to the correct sibling block rather than breaking the group apart.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-14 (parent-based family-group access inheritance)
+
+- `Change`: Added shared parent-based family-group access inheritance for new user provisioning. Local-user creation, Google access creation, and new family-group provisioning now derive additional family-group access from enabled parent access rows intersected with the child's enabled family memberships, while keeping `UserFamilyGroups` as the canonical persisted access model.
+- `Type`: Feature, Access Control
+- `Why`: Root cause was that the app only granted access for the selected family group or copied already-existing source-family access rows. That left children without the expected family-group access when their parents already had access to the related grandparent family groups.
+- `Files`:
+  - `src/lib/family-group/access-inheritance.ts`
+  - `src/app/api/t/[tenantKey]/local-users/route.ts`
+  - `src/app/api/t/[tenantKey]/user-access/route.ts`
+  - `src/app/api/family-groups/provision/route.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: No schema change. New access rows are written to existing `UserFamilyGroups`; inherited grants default to `USER` role unless an explicit access-copy flow already writes a more specific role.
+- `Verify`:
+  - Create a user for a child in one family group and confirm additional enabled `UserFamilyGroups` rows are created only for family groups where the child's parents already have enabled access and the child is already a member.
+  - Create a new family group from an existing household and confirm imported child users inherit access to the new family group when their parents now have access there.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Added 2026-03-14 access-inheritance decision documenting create/provision-time parent-based inheritance with persisted `UserFamilyGroups` rows.
 ## 2026-03-13 (death as event + memorial display)
 
 - `Change`: Added death as a canonical person event, synchronized the person modal `To Date` field to that event, and updated Home, Calendar, and Tree to display memorial/lifespan cues derived from the death event.

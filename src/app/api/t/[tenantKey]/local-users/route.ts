@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getLocalUsers, getTenantSecurityPolicy, upsertLocalUser } from "@/lib/auth/local-users";
 import { getTenantConfig } from "@/lib/data/runtime";
+import {
+  deriveInheritedFamilyGroupAccessGrants,
+  getProvisionableUserIdentities,
+  loadFamilyGroupAccessInheritanceSnapshot,
+} from "@/lib/family-group/access-inheritance";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
 import { validatePasswordComplexity } from "@/lib/security/password";
@@ -76,14 +81,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
     isEnabled: parsed.data.isEnabled ?? true,
   });
 
+  let inheritedAccessCount = 0;
+  if (parsed.data.isEnabled ?? true) {
+    const inheritanceSnapshot = await loadFamilyGroupAccessInheritanceSnapshot();
+    const localIdentity = getProvisionableUserIdentities(parsed.data.personId, inheritanceSnapshot).find(
+      (identity) => identity.kind === "local",
+    );
+    const inheritedFamilies = deriveInheritedFamilyGroupAccessGrants(parsed.data.personId, inheritanceSnapshot, {
+      excludeTenantKeys: [resolved.tenant.tenantKey],
+    });
+    if (localIdentity) {
+      for (const family of inheritedFamilies) {
+        await upsertOciUserFamilyGroupAccess({
+          userEmail: localIdentity.userEmail,
+          tenantKey: family.tenantKey,
+          tenantName: family.tenantName,
+          role: "USER",
+          personId: parsed.data.personId,
+          isEnabled: true,
+        });
+        inheritedAccessCount += 1;
+      }
+    }
+  }
+
   await appendSessionAuditLog(resolved.session, {
     action: "CREATE",
     entityType: "LOCAL_USER",
     entityId: parsed.data.personId,
     familyGroupKey: resolved.tenant.tenantKey,
     status: "SUCCESS",
-    details: `Created local access username=${normalizedUsername}, enabled=${String(parsed.data.isEnabled ?? true)}, role=${parsed.data.role}.`,
+    details: `Created local access username=${normalizedUsername}, enabled=${String(parsed.data.isEnabled ?? true)}, role=${parsed.data.role}, inherited_family_groups=${inheritedAccessCount}.`,
   });
 
-  return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey });
+  return NextResponse.json({ ok: true, tenantKey: resolved.tenant.tenantKey, inheritedAccessCount });
 }

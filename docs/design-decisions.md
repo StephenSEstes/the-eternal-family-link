@@ -169,3 +169,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Add `is_deceased` / `death_date` columns to `People`; add a prominent `Deceased` toggle; hide death only inside freeform notes.
 - `Impact`: Attribute Definitions now include a default `Death` event category, memorial UI derives from that event, Home birthday chips show `In Mem`, Calendar can display both birth and death anniversaries, Tree/header date summaries can render lifespan ranges, and the person screen only shows `From / To` after a death event already exists.
 - `Follow-up`: If memorial-specific content grows later, keep it attached to the same `death` event model rather than creating a separate memorial entity type.
+
+## 2026-03-14
+
+- `Area`: Family-group access inheritance
+- `Decision`: Keep `UserFamilyGroups` as the canonical persisted family-group access model, but when creating user access or provisioning a new family group, derive additional family-group access from the union of enabled parent `UserFamilyGroups` memberships intersected with the child's enabled `PersonFamilyGroups` memberships. This inheritance runs only at create/provision time; it is not a live recursive access engine.
+- `Reason`: The existing app only granted access for the currently selected family group or copied already-existing family access rows from a source family. That left children like Cleo without the expected family-group access even when their parents already had enabled access to the relevant grandparent family groups.
+- `Alternatives Considered`: Keep access fully manual family-by-family; derive access recursively at session read time; infer access directly from `PersonFamilyGroups` without persisted `UserFamilyGroups` rows.
+- `Impact`: Local-user creation, Google access creation, and new-family provisioning can now add inherited family-group access rows for eligible children. Inherited rows default to `USER` role unless an existing explicit family access row is copied by another flow. Auth/session behavior remains unchanged because the runtime still reads persisted `UserFamilyGroups`.
+- `Follow-up`: If parent access changes later and inherited child access should be reconciled automatically, add an explicit repair/reconcile workflow rather than shifting auth to live recursive derivation.

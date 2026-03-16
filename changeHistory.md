@@ -130,6 +130,7 @@ This file is a quick release-log entry point.
 - 2026-03-05: Updated Media Library selected-link labels and ordering so selected chips appear above search inputs across upload/filter/edit flows. See `docs/change-summary.md`.
 
 - 2026-03-05: Redesigned Attributes UX into list + detail drawer + add modal and changed Media Library cards to open edit on thumbnail click. See `docs/change-summary.md`.
+- 2026-03-14: Added parent-based family-group access inheritance for new user creation and new-family provisioning while keeping `UserFamilyGroups` as the persisted access model. See `docs/change-summary.md`.
 - 2026-03-13: Added death as a canonical person event with `To Date` sync in person edit, `In Mem` birthday chips, calendar death anniversaries, and tree lifespan display. See `docs/change-summary.md`.
 - 2026-03-13: Corrected death-entry UX so death stays event-only; person edit now shows `From / To` only after a death event already exists, instead of exposing a default editable `To Date` field. See `docs/change-summary.md`.
 - 2026-03-13: Fixed the Death event form so it uses a single date only and no longer shows or saves an `End Date`. See `docs/change-summary.md`.
