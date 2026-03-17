@@ -1388,7 +1388,7 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
   return withConnection(async (connection) => {
     await ensureUserAccessTableCompatibility(connection);
     const result = await connection.execute(
-      `SELECT
+      `SELECT DISTINCT
          :tenantKey AS tenant_key,
          LOWER(TRIM(u.username)) AS username,
          NVL(u.password_hash, '') AS password_hash,

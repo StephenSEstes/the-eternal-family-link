@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-17 (password reset dedupe + schema repair)
+
+- `Date`: 2026-03-17
+- `Change`: Fixed local password-reset matching for users who have both Google and local family-access rows in the same family group by deduping the tenant local-user query at the OCI source, and repaired the missing live `PASSWORD_RESETS` table in OCI.
+- `Type`: API | Data | Schema
+- `Why`: Root cause was a `mixed issue`. The reset matcher in [password-reset.ts](C:/Users/steph/the-eternal-family-link/src/lib/auth/password-reset.ts) requires exactly one enabled local user, but [getOciLocalUsersForTenant](C:/Users/steph/the-eternal-family-link/src/lib/oci/tables.ts) was joining `user_access` to `user_family_groups` by `person_id` and returning the same local user twice whenever that person had both Google and local access rows in the same family. In production, the `PASSWORD_RESETS` table was also missing, so even a successful match would not have had a reset-token table to write into.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: Created the live OCI `PASSWORD_RESETS` table plus its expected indexes (`UX_PASSWORD_RESETS_TOKEN_HASH`, `IX_PASSWORD_RESETS_EMAIL_STATUS`, `IX_PASSWORD_RESETS_PERSON_STATUS`).
+- `Verify`:
+  - For a user with both Google and local access rows in the same family, confirm the tenant local-user query now returns one row per family/person instead of duplicates.
+  - Confirm `PASSWORD_RESETS` exists in OCI.
+  - Request a password reset for a valid active local user and confirm a token row can be created and the email send path can proceed.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert the `DISTINCT` dedupe in `getOciLocalUsersForTenant` only if the local-user query is replaced with a more specific join strategy; dropping the repaired `PASSWORD_RESETS` table would break the public forgot-password flow and should not be done without replacing the feature.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-17 (build fix: password reset client server-only import)
 
 - `Date`: 2026-03-17

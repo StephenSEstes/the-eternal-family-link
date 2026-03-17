@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-17: Fixed password reset for users with both Google and local family access by deduping tenant local-user lookup, and repaired the missing live `PASSWORD_RESETS` table in OCI. See `docs/change-summary.md`.
 - 2026-03-17: Fixed the deploy-blocking password-reset build break by removing the server-only tenant-context import from the client reset screen and replacing it with a client-safe callback-path helper. See `docs/change-summary.md`.
 - 2026-03-17: The person `Profile` tab is now summary-first, with compact label/value cards by default and section-level editing for `Identity`, `Name`, `Contact`, `Family`, and `Notes`. See `docs/change-summary.md`.
 - 2026-03-16: Added a self-service `Forgot Password?` email-reset flow for local users, with single-use reset links, password re-entry, and automatic sign-in after a successful reset. See `docs/change-summary.md`.
