@@ -1122,7 +1122,10 @@ export function SettingsClient({
     }
     await loadTenantAdminData(selectedTenantKey);
     setLocalUserStatus("Local user updated.");
-    if (typeof payload.action === "string" && payload.action === "rename_username") {
+    if (
+      typeof payload.action === "string" &&
+      (payload.action === "rename_username" || payload.action === "update_user")
+    ) {
       const next = typeof payload.nextUsername === "string" ? payload.nextUsername.trim().toLowerCase() : "";
       if (next) {
         setSelectedLocalUsername(next);
@@ -2428,38 +2431,18 @@ export function SettingsClient({
 
                                 if (localEnabled) {
                                   if (selectedPersonLocalUser) {
-                                    if (
-                                      localUsername.trim() &&
-                                      localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
-                                    ) {
-                                      const renamed = await patchLocalUser(selectedPersonLocalUser.username, {
-                                        action: "rename_username",
-                                        nextUsername: localUsername.trim(),
-                                      });
-                                      if (!renamed) return;
-                                    }
-                                    const activeUsername = (
-                                      localUsername.trim().toLowerCase() || selectedPersonLocalUser.username
-                                    ).trim();
-                                    if (activeUsername) {
-                                      const roleOk = await patchLocalUser(activeUsername, {
-                                        action: "update_role",
-                                        role,
-                                      });
-                                      if (!roleOk) return;
-                                      const enabledOk = await patchLocalUser(activeUsername, {
-                                        action: "set_enabled",
-                                        isEnabled: true,
-                                      });
-                                      if (!enabledOk) return;
-                                      if (localPassword.trim()) {
-                                        const passwordOk = await patchLocalUser(activeUsername, {
-                                          action: "reset_password",
-                                          password: localPassword,
-                                        });
-                                        if (!passwordOk) return;
-                                      }
-                                    }
+                                    const ok = await patchLocalUser(selectedPersonLocalUser.username, {
+                                      action: "update_user",
+                                      nextUsername:
+                                        localUsername.trim() &&
+                                        localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
+                                          ? localUsername.trim()
+                                          : undefined,
+                                      role: localRole,
+                                      isEnabled: true,
+                                      password: localPassword.trim() || undefined,
+                                    });
+                                    if (!ok) return;
                                   } else {
                                     if (!localUsername.trim() || !localPassword.trim()) {
                                       setLocalUserStatus(
@@ -2499,7 +2482,7 @@ export function SettingsClient({
                                   return;
                                 }
                                 const ok = await patchLocalUser(selectedPersonLocalUser.username, {
-                                  action: "reset_password",
+                                  action: "update_user",
                                   password: localPassword,
                                 });
                                 if (!ok) return;

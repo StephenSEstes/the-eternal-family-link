@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (atomic local-user update for password changes)
+
+- `Date`: 2026-03-16
+- `Change`: Reworked the Manage User local-account save path so existing local users are updated through one server-side `update_user` action instead of a chained rename/role/enabled/password sequence, and aligned that path to use the local-role state.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. The Manage User screen was issuing multiple local-user PATCH requests with admin-data reloads between them, which allowed partial success states where a username rename persisted but the password reset did not. The same handler also pulled the Google `role` state instead of `localRole` for existing local-user updates.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+  - `src/app/api/t/[tenantKey]/local-users/[username]/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `Admin -> Users & Access -> Manage User` for an existing local user.
+  - Change the username and password in one save.
+  - Confirm the UI reports success once, the local username updates, and the new password works for login in the correct family group.
+  - Repeat with only a password change through `Update Password` and confirm the new password works.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `update_user` action in the local-user route and restore the prior multi-request local-user update flow in `SettingsClient`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (photo editor save and close)
 
 - `Date`: 2026-03-14

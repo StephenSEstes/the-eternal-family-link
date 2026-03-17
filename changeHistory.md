@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-16: Reworked Manage User local-account updates into one atomic server-side action so username/password changes no longer split across partial PATCH requests, and fixed the handler to use `localRole` for existing local users. See `docs/change-summary.md`.
 - 2026-03-16: De-emphasized Google in invites, made Manage User feedback visible inside the active modal, and fixed local username/password update routes to fail loudly when no local user row is actually updated. See `docs/change-summary.md`.
 - 2026-03-14: The person photo-detail editor now uses `Save and Close` and closes after a successful save instead of leaving the photo editor open. See `docs/change-summary.md`.
 - 2026-03-14: Adding a photo from a person’s own `Pictures` tab now makes it the current profile photo instead of leaving it as a non-primary gallery-only media link. See `docs/change-summary.md`.

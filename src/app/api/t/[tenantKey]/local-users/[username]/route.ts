@@ -1,13 +1,20 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { deleteLocalUser, getLocalUserByUsername, getTenantSecurityPolicy, patchLocalUser, renameLocalUser } from "@/lib/auth/local-users";
+import {
+  deleteLocalUser,
+  getLocalUserByUsername,
+  getTenantSecurityPolicy,
+  patchLocalUser,
+  renameLocalUser,
+  updateLocalUser,
+} from "@/lib/auth/local-users";
 import { requireTenantAdmin } from "@/lib/family-group/guard";
 import { validatePasswordComplexity } from "@/lib/security/password";
 
 const patchSchema = z
   .object({
-    action: z.enum(["set_enabled", "unlock", "reset_password", "update_role", "rename_username"]),
+    action: z.enum(["set_enabled", "unlock", "reset_password", "update_role", "rename_username", "update_user"]),
     isEnabled: z.boolean().optional(),
     password: z.string().optional(),
     role: z.enum(["ADMIN", "USER"]).optional(),
@@ -139,6 +146,59 @@ export async function PATCH(
         { error: "rename_failed", message: error instanceof Error ? error.message : "Rename failed" },
         { status: 400 },
       );
+    }
+  }
+
+  if (parsed.data.action === "update_user") {
+    if (!existingUser) {
+      return localUserNotFoundResponse();
+    }
+    if (parsed.data.password) {
+      const policy = await getTenantSecurityPolicy(resolved.tenant.tenantKey);
+      const complexityError = validatePasswordComplexity(parsed.data.password, policy);
+      if (complexityError) {
+        return NextResponse.json({ error: "password_policy_failed", message: complexityError }, { status: 400 });
+      }
+    }
+    try {
+      const updatedUser = await updateLocalUser(resolved.tenant.tenantKey, decodedUsername, {
+        nextUsername: parsed.data.nextUsername,
+        password: parsed.data.password,
+        role: parsed.data.role,
+        isEnabled: parsed.data.isEnabled,
+        failedAttempts: parsed.data.password !== undefined ? 0 : undefined,
+        lockedUntil: parsed.data.password !== undefined ? "" : undefined,
+        mustChangePassword: parsed.data.password !== undefined ? false : undefined,
+      });
+      const detailParts: string[] = [];
+      if (updatedUser.previousUsername !== updatedUser.username) {
+        detailParts.push(`username ${updatedUser.previousUsername} -> ${updatedUser.username}`);
+      }
+      if (parsed.data.role) {
+        detailParts.push(`role=${parsed.data.role}`);
+      }
+      if (parsed.data.isEnabled !== undefined) {
+        detailParts.push(`enabled=${String(parsed.data.isEnabled)}`);
+      }
+      if (parsed.data.password !== undefined) {
+        detailParts.push("password reset");
+      }
+      await appendSessionAuditLog(resolved.session, {
+        action: "UPDATE",
+        entityType: "LOCAL_USER",
+        entityId: updatedUser.personId,
+        familyGroupKey: resolved.tenant.tenantKey,
+        status: "SUCCESS",
+        details:
+          detailParts.length > 0
+            ? `Updated local user (${detailParts.join(", ")}).`
+            : `Updated local user username=${updatedUser.username}.`,
+      });
+      return NextResponse.json({ ok: true, username: updatedUser.username });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update failed";
+      const status = message === "Local user not found." ? 404 : 400;
+      return NextResponse.json({ error: "update_failed", message }, { status });
     }
   }
 

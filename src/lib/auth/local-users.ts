@@ -194,6 +194,64 @@ export async function patchLocalUser(
   return updateTableRecordById(USERS_TABLE, current.personId, payload, "person_id");
 }
 
+export async function updateLocalUser(
+  tenantKey: string,
+  username: string,
+  patch: Partial<{
+    nextUsername: string;
+    password: string;
+    isEnabled: boolean;
+    role: AppRole;
+    personId: string;
+    failedAttempts: number;
+    lockedUntil: string;
+    mustChangePassword: boolean;
+    lastLoginAt: string;
+  }>,
+) {
+  const current = await getLocalUserByUsername(tenantKey, username);
+  if (!current) {
+    throw new Error("Local user not found.");
+  }
+
+  const nextUsername =
+    patch.nextUsername !== undefined ? normalizeUsername(patch.nextUsername) : current.username;
+  if (!nextUsername || nextUsername.length < 3) {
+    throw new Error("Username must be at least 3 characters.");
+  }
+
+  if (nextUsername !== current.username) {
+    const users = await getLocalUsers(tenantKey);
+    if (users.some((user) => user.username === nextUsername && user.personId !== current.personId)) {
+      throw new Error("Target username already exists.");
+    }
+  }
+
+  const payload: Record<string, string> = {
+    username: nextUsername,
+    local_access: "TRUE",
+  };
+  if (patch.password !== undefined) payload.password_hash = hashPassword(patch.password);
+  if (patch.isEnabled !== undefined) payload.is_enabled = patch.isEnabled ? "TRUE" : "FALSE";
+  if (patch.role !== undefined) payload.role = patch.role;
+  if (patch.personId !== undefined) payload.person_id = patch.personId;
+  if (patch.failedAttempts !== undefined) payload.failed_attempts = String(patch.failedAttempts);
+  if (patch.lockedUntil !== undefined) payload.locked_until = patch.lockedUntil;
+  if (patch.mustChangePassword !== undefined) payload.must_change_password = patch.mustChangePassword ? "TRUE" : "FALSE";
+  if (patch.lastLoginAt !== undefined) payload.last_login_at = patch.lastLoginAt;
+
+  const updated = await updateTableRecordById(USERS_TABLE, current.personId, payload, "person_id");
+  if (!updated) {
+    throw new Error("Local user not found.");
+  }
+
+  return {
+    personId: current.personId,
+    previousUsername: current.username,
+    username: nextUsername,
+  };
+}
+
 export async function renameLocalUser(tenantKey: string, username: string, nextUsername: string) {
   const current = normalizeUsername(username);
   const next = normalizeUsername(nextUsername);
