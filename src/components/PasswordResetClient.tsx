@@ -5,12 +5,20 @@ import { FormEvent, useMemo, useState } from "react";
 import { signIn } from "next-auth/react";
 import type { PasswordResetPresentation } from "@/lib/auth/password-reset-types";
 import { AsyncActionButton, ModalStatusBanner, inferStatusTone } from "@/components/ui/primitives";
-import { getFamilyGroupBasePath } from "@/lib/tenant/context";
+import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 
 type PasswordResetClientProps = {
   token: string;
   initialReset: PasswordResetPresentation | null;
 };
+
+function getResetCallbackPath(tenantKey?: string) {
+  const normalized = String(tenantKey ?? "").trim().toLowerCase();
+  if (!normalized || normalized === DEFAULT_FAMILY_GROUP_KEY) {
+    return "/";
+  }
+  return `/t/${encodeURIComponent(normalized)}`;
+}
 
 export function PasswordResetClient({ token, initialReset }: PasswordResetClientProps) {
   const [reset, setReset] = useState(initialReset);
@@ -20,7 +28,7 @@ export function PasswordResetClient({ token, initialReset }: PasswordResetClient
   const [pending, setPending] = useState(false);
 
   const callbackUrl = useMemo(
-    () => (reset ? getFamilyGroupBasePath(reset.tenantKey) || "/" : "/"),
+    () => (reset ? getResetCallbackPath(reset.tenantKey) : "/"),
     [reset],
   );
 

@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-17 (build fix: password reset client server-only import)
+
+- `Date`: 2026-03-17
+- `Change`: Fixed the production build break in the new password-reset flow by removing the server-only tenant-context import from the client-side password reset screen and replacing it with a client-safe callback-path helper.
+- `Type`: Infra | UI
+- `Why`: Root cause was a `code issue`. [PasswordResetClient.tsx](C:/Users/steph/the-eternal-family-link/src/components/PasswordResetClient.tsx) imported `getFamilyGroupBasePath` from [context.ts](C:/Users/steph/the-eternal-family-link/src/lib/tenant/context.ts), which imports `next/headers`. That server-only dependency is not allowed in a client component, so Vercel failed the build before the person-profile summary deploy could complete.
+- `Files`:
+  - `src/components/PasswordResetClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Confirm the reset-password flow still computes the post-reset callback URL correctly for the default family and non-default family routes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert the `PasswordResetClient` callback-path helper change and restore the prior import only if the reset callback logic is moved back onto a server-safe path.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-17 (person profile summary-first editing)
 
 - `Date`: 2026-03-17
