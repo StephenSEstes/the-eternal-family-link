@@ -9,7 +9,6 @@ import type { InvitePresentation } from "@/lib/invite/types";
 type InviteAcceptClientProps = {
   token: string;
   initialInvite: InvitePresentation;
-  sessionEmail: string;
 };
 
 type BeforeInstallPromptEvent = Event & {
@@ -31,16 +30,15 @@ function isSafari() {
   return /safari/i.test(navigator.userAgent) && !/chrome|crios|android/i.test(navigator.userAgent);
 }
 
-export function InviteAcceptClient({ token, initialInvite, sessionEmail }: InviteAcceptClientProps) {
+export function InviteAcceptClient({ token, initialInvite }: InviteAcceptClientProps) {
   const [invite, setInvite] = useState(initialInvite);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [busyAction, setBusyAction] = useState<"" | "local" | "google" | "install">("");
+  const [busyAction, setBusyAction] = useState<"" | "local" | "install">("");
   const [localUsername, setLocalUsername] = useState(initialInvite.localUsername);
   const [localPassword, setLocalPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [autoAcceptedGoogle, setAutoAcceptedGoogle] = useState(false);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -52,65 +50,15 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     return () => window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
   }, []);
 
-  useEffect(() => {
-    if (invite.status !== "pending" || !invite.canUseGoogle || !sessionEmail || autoAcceptedGoogle) {
-      return;
-    }
-    if (!invite.sessionEmailMatches) {
-      setStatus(`This invite is for ${invite.inviteEmail}. Sign in with that Google account.`);
-      return;
-    }
-
-    let cancelled = false;
-    const run = async () => {
-      setBusy(true);
-      setBusyAction("google");
-      setStatus("Checking your Google sign-in...");
-      const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept_google" }),
-      });
-      const body = await res.json().catch(() => null);
-      if (cancelled) {
-        return;
-      }
-      if (!res.ok || !body?.ok || !body.invite) {
-        setStatus(body?.message ? String(body.message) : `Google acceptance failed (${res.status}).`);
-        setBusy(false);
-        setBusyAction("");
-        setAutoAcceptedGoogle(true);
-        return;
-      }
-      setInvite(body.invite as InvitePresentation);
-      setStatus("Invite accepted. Open the app or install it on this device.");
-      setBusy(false);
-      setBusyAction("");
-      setAutoAcceptedGoogle(true);
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [autoAcceptedGoogle, invite.canUseGoogle, invite.inviteEmail, invite.sessionEmailMatches, invite.status, sessionEmail, token]);
-
   const installHint = useMemo(() => {
     if (!isIosDevice()) {
-      return "Use your browser menu to install or add this app to your home screen if the install button is not shown.";
+      return "Install from your browser menu if the app prompt is not shown automatically after sign-in.";
     }
     if (isSafari()) {
-      return "In Safari, tap Share and choose Add to Home Screen.";
+      return "On iPhone or iPad in Safari, tap Share and choose Add to Home Screen.";
     }
-    return "Open this link in Safari, then tap Share and choose Add to Home Screen.";
+    return "On iPhone or iPad, open this link in Safari, then tap Share and choose Add to Home Screen.";
   }, []);
-
-  const onGoogleContinue = async () => {
-    setBusy(true);
-    setBusyAction("google");
-    setStatus("Redirecting to Google...");
-    await signIn("google", { callbackUrl: `/invite/${encodeURIComponent(token)}` });
-  };
 
   const onLocalAccept = async (event: FormEvent) => {
     event.preventDefault();
@@ -121,7 +69,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
 
     setBusy(true);
     setBusyAction("local");
-    setStatus("Activating your local sign-in...");
+    setStatus("Saving your password and activating access...");
     const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -148,7 +96,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
       callbackUrl: `/invite/${encodeURIComponent(token)}`,
     });
     if (!response?.ok) {
-      setStatus("Account created. Sign in from the login page if automatic sign-in did not complete.");
+      setStatus("Access is ready. Use your username and password on the login page if automatic sign-in did not complete.");
       setBusy(false);
       setBusyAction("");
       return;
@@ -174,7 +122,15 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
         <p className="page-subtitle">
           {invite.personDisplayName} now has access to {invite.familyGroupName}.
         </p>
-        <div className="settings-chip-list" style={{ marginBottom: "0.75rem" }}>
+        <div className="card" style={{ marginTop: "0.75rem" }}>
+          <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>How To Sign In</h2>
+          <ol style={{ margin: 0, paddingLeft: "1.1rem" }}>
+            <li>Open the app.</li>
+            <li>Choose the family group {invite.familyGroupName} if asked.</li>
+            <li>Sign in with username <strong>{invite.localUsername}</strong> and the password you just chose.</li>
+          </ol>
+        </div>
+        <div className="settings-chip-list" style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
           <Link className="button tap-button" href={invite.openAppPath}>Open App</Link>
           {installPrompt ? (
             <AsyncActionButton
@@ -190,9 +146,6 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
           ) : null}
         </div>
         <p className="page-subtitle" style={{ marginTop: 0 }}>{installHint}</p>
-        <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-          Sign-in method used: <strong>{invite.acceptedAuthMode || invite.authMode}</strong>
-        </p>
         {status ? <ModalStatusBanner tone={inferStatusTone(status)}>{status}</ModalStatusBanner> : null}
       </section>
     );
@@ -202,72 +155,56 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     <section className="card" style={{ maxWidth: "640px", margin: "0 auto" }}>
       <h1 className="page-title" style={{ marginTop: 0 }}>Join {invite.familyGroupName}</h1>
       <p className="page-subtitle">
-        This invite is for {invite.personDisplayName} and grants access to {invite.familyGroups.length} family group{invite.familyGroups.length === 1 ? "" : "s"}.
+        This invite is for {invite.personDisplayName}. Choose your username and password below to activate access.
       </p>
       <p className="page-subtitle" style={{ marginTop: 0 }}>
         Invite email: <strong>{invite.inviteEmail}</strong>
       </p>
 
-      {invite.canUseLocal ? (
-        <form onSubmit={onLocalAccept} style={{ marginTop: "0.75rem" }}>
-          <h2 style={{ marginBottom: "0.5rem" }}>Use Username And Password</h2>
-          <p className="page-subtitle" style={{ marginTop: 0 }}>
-            If your invite message included a temporary password, you can use it here or enter a new password to replace it during activation.
-          </p>
-          <label className="label">Username</label>
-          <input
-            className="input"
-            autoComplete="username"
-            value={localUsername}
-            onChange={(event) => setLocalUsername(event.target.value)}
-          />
-          <label className="label">Password</label>
-          <input
-            className="input"
-            type="password"
-            autoComplete="new-password"
-            value={localPassword}
-            onChange={(event) => setLocalPassword(event.target.value)}
-          />
-          <label className="label">Confirm Password</label>
-          <input
-            className="input"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-          />
-          <AsyncActionButton
-            type="submit"
-            className="tap-button"
-            pending={busy && busyAction === "local"}
-            pendingLabel="Activating..."
-            disabled={busy}
-          >
-            Activate Local Sign-In
-          </AsyncActionButton>
-        </form>
-      ) : null}
+      <div className="card" style={{ marginTop: "0.75rem" }}>
+        <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>What To Do</h2>
+        <ol style={{ margin: 0, paddingLeft: "1.1rem" }}>
+          <li>Confirm or adjust your username.</li>
+          <li>Choose a password and enter it twice.</li>
+          <li>Tap <strong>Save Password and Open App</strong>.</li>
+          <li>After setup, sign in with your username and password on this family group.</li>
+        </ol>
+      </div>
 
-      {invite.canUseGoogle ? (
-        <div style={{ marginTop: invite.canUseLocal ? "1.25rem" : "1rem" }}>
-          <h2 style={{ marginBottom: "0.5rem" }}>{invite.canUseLocal ? "Use Google Instead" : "Continue With Google"}</h2>
-          <AsyncActionButton
-            type="button"
-            tone="secondary"
-            className="tap-button"
-            pending={busy && busyAction === "google"}
-            pendingLabel="Redirecting..."
-            disabled={busy}
-            onClick={() => void onGoogleContinue()}
-          >
-            Continue with Google
-          </AsyncActionButton>
-          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-            Use the invited Google account. After sign-in, this page will finish setup automatically.
-          </p>
-        </div>
-      ) : null}
+      <form onSubmit={onLocalAccept} style={{ marginTop: "0.75rem" }}>
+        <label className="label">Username</label>
+        <input
+          className="input"
+          autoComplete="username"
+          value={localUsername}
+          onChange={(event) => setLocalUsername(event.target.value)}
+        />
+        <label className="label">Choose Password</label>
+        <input
+          className="input"
+          type="password"
+          autoComplete="new-password"
+          value={localPassword}
+          onChange={(event) => setLocalPassword(event.target.value)}
+        />
+        <label className="label">Confirm Password</label>
+        <input
+          className="input"
+          type="password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+        />
+        <AsyncActionButton
+          type="submit"
+          className="tap-button"
+          pending={busy && busyAction === "local"}
+          pendingLabel="Saving..."
+          disabled={busy}
+        >
+          Save Password and Open App
+        </AsyncActionButton>
+      </form>
 
       <div className="card" style={{ marginTop: "1rem" }}>
         <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Included Access</h2>
@@ -278,6 +215,13 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="card" style={{ marginTop: "1rem" }}>
+        <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Install On iPhone Or iPad</h2>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>
+          Open this invite in Safari, then tap <strong>Share</strong> and choose <strong>Add to Home Screen</strong>.
+        </p>
       </div>
 
       <p className="page-subtitle" style={{ marginTop: "1rem" }}>{installHint}</p>

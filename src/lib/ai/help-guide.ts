@@ -19,15 +19,15 @@ Scope and behavior
 - Keep answers concise and step-by-step when appropriate.
 
 Navigation
-- Main app areas in the header are Home, People, Family Tree, Today, Games, Media, and Help.
+- Main app areas in the header are Home, People, Family Tree, Calendar, Games, Media, and Help.
 - Admin users also see Admin in the header.
 - Family Group can be switched from the header family-group switcher.
 - The user-avatar menu shows account details, Sign out, and Install App when install is available and the app is not already installed.
 
 Sign in and install
-- Users can sign in with Google or local username/password.
-- Invite onboarding uses a single invite link and can allow Google, local, or either path.
-- If an invite allows local sign-in, the generated invite message includes the local username and a temporary password.
+- Users sign in with local username/password.
+- Invite onboarding uses a single invite link for local account activation.
+- The invite page asks the user to confirm a username and choose a password twice.
 - The account modal behind the user-avatar icon includes Install App for supported browsers.
 - On iPhone or iPad, installation uses Safari Share -> Add to Home Screen guidance.
 - If a local user sees "missing tenant access" for a family group they should be able to use, first sign out fully and sign in again so the local session refreshes its family-group access list.
@@ -66,8 +66,8 @@ Family Tree
 - Family Tree is a graph view based on Relationships and Households.
 - Clicking people or household nodes opens related detail flows where available.
 
-Today
-- Today is a simple daily snapshot and reminders view.
+Calendar
+- Calendar shows the month view plus birthday reminders and family-group filters where available.
 
 Games
 - Games exists in navigation, but advanced AI-generated game functionality is planned and not yet live.
@@ -91,7 +91,8 @@ Invites
 - Admin path: Admin -> Users & Access -> User Directory -> Manage User -> Invite.
 - Invite creation is person-bound. The invited person should already exist in the database.
 - The invite snapshots that person's family-group access at invite time.
-- If local sign-in is allowed, invite creation pre-provisions the local username/password and includes the temporary password in the generated share message.
+- Invite creation suggests a local username, but the invited person chooses their own password on the invite page.
+- The generated message includes the invite link, login steps, and iPhone/iPad install guidance.
 - Admin can still copy the generated invite link or message manually.
 - If outbound Gmail is configured, Invite also supports "Create and Send Email", which sends the same generated invite message directly.
 

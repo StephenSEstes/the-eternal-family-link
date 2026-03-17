@@ -28,9 +28,6 @@ export type InvitePresentation = {
   createdAt: string;
   createdByEmail: string;
   openAppPath: string;
-  canUseGoogle: boolean;
-  canUseLocal: boolean;
-  sessionEmailMatches: boolean;
 };
 
 export type InviteEmailDeliveryResult = {

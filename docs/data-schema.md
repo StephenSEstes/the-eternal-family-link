@@ -205,7 +205,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_by_email`
   - `created_by_person_id`
 - Purpose:
-  - Person-bound onboarding records used to generate shareable invite links, snapshot family-group access at invite time, and track acceptance for Google or local sign-in setup.
+  - Person-bound onboarding records used to generate shareable invite links, snapshot family-group access at invite time, and track acceptance for local username/password setup.
 - Logical index/key:
   - Unique: `invite_id`
   - Recommended unique: `token_hash`
@@ -350,8 +350,8 @@ This section is a quick reference for the three data areas that drive profile/me
 - Invite acceptance:
   - `Invites.person_id` -> `People.person_id`
   - `Invites.family_groups_json[*].tenantKey` mirrors the family groups granted when the invite was created
-  - Accepted Google invites write/update `UserAccess` + `UserFamilyGroups`
-  - Accepted local invites write/update `UserAccess.username/password_hash/local_access` and ensure `UserFamilyGroups`
+  - Current runtime creates local-only invites and uses `invite_email` as the delivery/contact email, not the login identity
+  - Accepted invites write/update `UserAccess.username/password_hash/local_access` and ensure `UserFamilyGroups`
 - Relationships:
   - `Relationships.from_person_id` and `Relationships.to_person_id` -> `People.person_id`
   - Family views filter edges by membership of both endpoint people

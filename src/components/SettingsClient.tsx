@@ -282,21 +282,6 @@ function suggestInviteUsername(displayName: string) {
   return normalized.length >= 3 ? normalized : "";
 }
 
-function defaultInviteAuthMode(
-  googleAccess: AccessItem[],
-  localAccess: LocalUserItem[],
-): "google" | "local" | "either" {
-  const hasEnabledGoogle = googleAccess.some((entry) => entry.isEnabled && entry.userEmail.trim());
-  const hasEnabledLocal = localAccess.some((entry) => entry.isEnabled && entry.username.trim());
-  if (hasEnabledGoogle && hasEnabledLocal) {
-    return "local";
-  }
-  if (hasEnabledGoogle) {
-    return "google";
-  }
-  return "local";
-}
-
 function defaultInviteEmail(
   selectedPerson: { personId: string; displayName: string; email: string } | null,
   googleAccess: AccessItem[],
@@ -422,7 +407,6 @@ export function SettingsClient({
   const [auditFromDate, setAuditFromDate] = useState("");
   const [auditToDate, setAuditToDate] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteAuthMode, setInviteAuthMode] = useState<"google" | "local" | "either">("local");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "USER">("USER");
   const [inviteLocalUsername, setInviteLocalUsername] = useState("");
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14);
@@ -1712,7 +1696,7 @@ export function SettingsClient({
         body: JSON.stringify({
           personId: selectedDirectoryPersonId,
           inviteEmail,
-          authMode: inviteAuthMode,
+          authMode: "local",
           role: inviteRole,
           localUsername: inviteLocalUsername,
           expiresInDays: inviteExpiresInDays,
@@ -1762,7 +1746,6 @@ export function SettingsClient({
     const selected = familyPeople.find((person) => person.personId === nextPersonId);
     const nextInviteEmail = defaultInviteEmail(selected ?? null, personGoogle);
     const nextInviteLocalUsername = defaultInviteLocalUsername(selected ?? null, personLocal);
-    const nextInviteAuthMode = defaultInviteAuthMode(personGoogle, personLocal);
 
     const firstGoogle = personGoogle[0];
     if (firstGoogle) {
@@ -1777,7 +1760,6 @@ export function SettingsClient({
       setInviteRole("USER");
     }
     setInviteEmail(nextInviteEmail);
-    setInviteAuthMode(nextInviteAuthMode);
 
     const firstLocal = personLocal[0];
     if (firstLocal) {
@@ -1898,7 +1880,6 @@ export function SettingsClient({
       }
     }
     setInviteEmail(defaultInviteEmail(selected, selectedPersonGoogleAccess));
-    setInviteAuthMode(defaultInviteAuthMode(selectedPersonGoogleAccess, selectedPersonLocalUsers));
   }, [familyPeople, selectedDirectoryPersonId, selectedPersonGoogleAccess, selectedPersonLocalUsers]);
   const selectedTenantOption = tenantOptions.find((option) => option.tenantKey === selectedTenantKey) ?? null;
   const importMemberCandidates = existingPeopleOptions.filter(
@@ -2627,19 +2608,15 @@ export function SettingsClient({
                     ) : (
                       <>
                         <p className="page-subtitle" style={{ marginTop: 0 }}>
-                          Create one shareable invite for {selectedDirectoryPerson.displayName}. Local sign-in is the simplest path. Google sign-in is optional when you want them to use a Google account instead.
+                          Create one shareable invite for {selectedDirectoryPerson.displayName}. The invite lets them confirm a username, choose their own password, and follow the install steps on their phone.
                         </p>
-                        {inviteAuthMode !== "google" ? (
-                          <>
-                            <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                              Local-capable invites now generate a username and temporary password and include them in the suggested message below.
-                            </p>
-                            {selectedInviteLocalUser ? (
-                              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                                This person already has local sign-in. Re-inviting will reuse the current username below and generate a fresh temporary password. If you need a different username, change it on the Manage tab first.
-                              </p>
-                            ) : null}
-                          </>
+                        <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                          The copied message includes login instructions and iPhone/iPad install guidance. It no longer generates a temporary password.
+                        </p>
+                        {selectedInviteLocalUser ? (
+                          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                            This person already has local sign-in. Re-inviting will reuse the current username below. They can choose a new password on the invite page if needed.
+                          </p>
                         ) : null}
                         <label className="label">Invite Email</label>
                         <input
@@ -2650,17 +2627,6 @@ export function SettingsClient({
                           onChange={(e) => setInviteEmail(e.target.value)}
                           placeholder="name@example.com"
                         />
-
-                        <label className="label">Sign-In Path</label>
-                        <select
-                          className="input"
-                          value={inviteAuthMode}
-                          onChange={(e) => setInviteAuthMode(e.target.value as "google" | "local" | "either")}
-                        >
-                          <option value="local">Local only</option>
-                          <option value="either">Local or Google</option>
-                          <option value="google">Google only</option>
-                        </select>
 
                         <label className="label">Role</label>
                         <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "ADMIN" | "USER")}>
@@ -2732,11 +2698,9 @@ export function SettingsClient({
                                 Email send error: {inviteResult.emailDelivery.errorMessage}
                               </p>
                             ) : null}
-                            {inviteResult.invite.authMode !== "google" ? (
-                              <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                                The suggested message includes the generated local username and temporary password. That password is only shown in the copied message for this invite creation.
-                              </p>
-                            ) : null}
+                            <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+                              The suggested message includes the invite link, the username to use, login steps, and iPhone/iPad install instructions.
+                            </p>
                             <label className="label">Invite URL</label>
                             <textarea className="input" rows={3} readOnly value={inviteResult.inviteUrl} />
                             <div className="settings-chip-list">

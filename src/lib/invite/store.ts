@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { getLocalUserByUsername, getLocalUsers, getTenantSecurityPolicy, patchLocalUser, upsertLocalUser } from "@/lib/auth/local-users";
 import type { TableRecord } from "@/lib/data/types";
-import { createTableRecord, getPeople, getTableRecords, updateTableRecordById, upsertTenantAccess } from "@/lib/data/runtime";
+import { createTableRecord, getPeople, getTableRecords, updateTableRecordById } from "@/lib/data/runtime";
 import { getTenantBasePath } from "@/lib/family-group/context";
 import type { AppRole, PersonRecord } from "@/lib/google/types";
 import { upsertOciUserFamilyGroupAccess } from "@/lib/oci/tables";
@@ -106,84 +106,28 @@ function safeJsonParse<T>(value: string, fallback: T): T {
   }
 }
 
-function randomCharFrom(pool: string) {
-  if (!pool) {
-    return "";
-  }
-  return pool[randomBytes(1)[0] % pool.length] ?? "";
-}
-
-function shuffleString(value: string) {
-  const chars = value.split("");
-  for (let index = chars.length - 1; index > 0; index -= 1) {
-    const next = randomBytes(1)[0] % (index + 1);
-    const current = chars[index];
-    chars[index] = chars[next] ?? current;
-    chars[next] = current ?? chars[next] ?? "";
-  }
-  return chars.join("");
-}
-
-async function buildTemporaryInvitePassword(tenantKey: string) {
-  const policy = await getTenantSecurityPolicy(tenantKey);
-  const lowercase = "abcdefghjkmnpqrstuvwxyz";
-  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const digits = "23456789";
-  const symbols = "!@$%*+-_";
-  const pool = `${lowercase}${uppercase}${digits}${symbols}`;
-  const required: string[] = [];
-  if (policy.requireLowercase) required.push(randomCharFrom(lowercase));
-  if (policy.requireUppercase) required.push(randomCharFrom(uppercase));
-  if (policy.requireNumber) required.push(randomCharFrom(digits));
-  const targetLength = Math.max(policy.minLength, 12);
-
-  for (let attempt = 0; attempt < 32; attempt += 1) {
-    let candidate = required.join("");
-    while (candidate.length < targetLength) {
-      candidate += randomCharFrom(pool);
-    }
-    candidate = shuffleString(candidate);
-    const complexityError = validatePasswordComplexity(candidate, policy);
-    if (!complexityError) {
-      return candidate;
-    }
-  }
-
-  throw new Error("Unable to generate a temporary password that satisfies the tenant policy.");
-}
-
 function buildInviteMessage(
   invite: InvitePresentation,
   inviteUrl: string,
-  localCredentials?: { username: string; temporaryPassword: string } | null,
 ) {
-  const authLine =
-    invite.authMode === "google"
-      ? "Continue with Google to activate your access."
-      : invite.authMode === "local"
-        ? "Open the link to activate your access and install the app."
-        : "Open the link to activate local sign-in with the username and temporary password below, or use Google if you prefer.";
   const lines = [
     `Hi ${invite.personDisplayName},`,
     "",
     `You have been invited to join The Eternal Family Link for ${invite.familyGroupName}.`,
-    authLine,
+    "To get started:",
+    "1. Open the link below.",
+    `2. Confirm your username (${invite.localUsername}) or adjust it if needed.`,
+    "3. Choose a password and enter it twice.",
+    "4. After activation, sign in with the username you confirm on the invite page and your chosen password.",
     "",
     inviteUrl,
     "",
-    "For the easiest setup on your phone, open the link on the device where you want to install the app.",
+    "Install guidance:",
+    "- On iPhone or iPad, open the link in Safari, tap Share, then choose Add to Home Screen.",
+    "- On other devices, install from the browser menu if the app offers it after sign-in.",
+    "",
+    "For the easiest setup, open the link on the phone or tablet where you want the app installed.",
   ];
-
-  if (localCredentials && invite.authMode !== "google") {
-    lines.push(
-      "",
-      "Local sign-in credentials:",
-      `Username: ${localCredentials.username}`,
-      `Temporary password: ${localCredentials.temporaryPassword}`,
-      "",
-      "You can use the temporary password as-is, or replace it on the invite page when you activate local sign-in.",
-    );
-  }
 
   return lines.join("\n");
 }
@@ -220,7 +164,7 @@ function toInviteRecord(row: TableRecord): InviteRecord {
     familyGroupKey: (row.data.family_group_key ?? "").trim().toLowerCase(),
     personId: (row.data.person_id ?? "").trim(),
     inviteEmail: normalizeEmail(row.data.invite_email ?? ""),
-    authMode: ((row.data.auth_mode ?? "").trim().toLowerCase() as InviteAuthMode) || "google",
+    authMode: ((row.data.auth_mode ?? "").trim().toLowerCase() as InviteAuthMode) || "local",
     role: (row.data.role ?? "").trim().toUpperCase() === "ADMIN" ? "ADMIN" : "USER",
     localUsername: normalizeUsername(row.data.local_username ?? ""),
     familyGroups: familyGroups.map((item) => ({
@@ -289,48 +233,12 @@ async function buildFamilyGroupSnapshot(personId: string, role: AppRole, sourceT
 }
 
 async function ensureInviteEmailAvailable(inviteEmail: string, personId: string) {
-  const [userAccessRows, familyRows, inviteRows] = await Promise.all([
-    getTableRecords("UserAccess").catch(() => []),
-    getTableRecords("UserFamilyGroups").catch(() => []),
-    getTableRecords("Invites").catch(() => []),
-  ]);
-
-  const conflictingAccess = userAccessRows.find((row) => {
-    const rowEmail = normalizeEmail(row.data.user_email ?? "");
-    const rowPersonId = (row.data.person_id ?? "").trim();
-    return rowEmail === inviteEmail && rowPersonId && rowPersonId !== personId;
-  });
-  if (conflictingAccess) {
-    throw new Error("This email is already connected to another person.");
-  }
-
-  const conflictingFamilyAccess = familyRows.find((row) => {
-    const rowEmail = normalizeEmail(row.data.user_email ?? "");
-    const rowPersonId = (row.data.person_id ?? "").trim();
-    return rowEmail === inviteEmail && rowPersonId && rowPersonId !== personId && parseBool(row.data.is_enabled, true);
-  });
-  if (conflictingFamilyAccess) {
-    throw new Error("This email is already connected to another person.");
-  }
-
+  const inviteRows = await getTableRecords("Invites").catch(() => []);
   const conflictingPendingInvite = inviteRows
     .map(toInviteRecord)
     .find((invite) => invite.inviteEmail === inviteEmail && invite.personId !== personId && effectiveStatus(invite) === "pending");
   if (conflictingPendingInvite) {
     throw new Error("This email already has a pending invite for another person.");
-  }
-}
-
-async function provisionGoogleAccess(invite: InviteRecord) {
-  for (const family of invite.familyGroups) {
-    await upsertTenantAccess({
-      userEmail: invite.inviteEmail,
-      tenantKey: family.tenantKey,
-      tenantName: family.tenantName,
-      role: family.role,
-      personId: invite.personId,
-      isEnabled: true,
-    });
   }
 }
 
@@ -380,6 +288,17 @@ async function resolveInviteLocalUsername(
     }
   }
 
+  const pendingInvites = (await getTableRecords("Invites").catch(() => []))
+    .map(toInviteRecord)
+    .filter((invite) => invite.personId !== personId && effectiveStatus(invite) === "pending" && normalizeUsername(invite.localUsername) === resolvedUsername);
+  const requestedFamilyKeys = new Set(familyGroups.map((family) => family.tenantKey));
+  const conflictingInvite = pendingInvites.find((invite) =>
+    invite.familyGroups.some((family) => requestedFamilyKeys.has(family.tenantKey)),
+  );
+  if (conflictingInvite) {
+    throw new Error(`Username "${resolvedUsername}" is already reserved by another pending invite.`);
+  }
+
   return resolvedUsername;
 }
 
@@ -390,14 +309,13 @@ async function updateInviteRecord(
   await updateTableRecordById("Invites", inviteId, payload, "invite_id");
 }
 
-async function buildInvitePresentation(record: InviteRecord, sessionEmail?: string): Promise<InvitePresentation> {
+async function buildInvitePresentation(record: InviteRecord): Promise<InvitePresentation> {
   const person = await getPersonOrThrow(record.personId);
   const familyGroup = record.familyGroups[0] ?? {
     tenantKey: record.familyGroupKey,
     tenantName: record.familyGroupKey,
     role: record.role,
   };
-  const normalizedSessionEmail = normalizeEmail(sessionEmail ?? "");
   const status = effectiveStatus(record);
 
   return {
@@ -405,7 +323,7 @@ async function buildInvitePresentation(record: InviteRecord, sessionEmail?: stri
     personId: record.personId,
     personDisplayName: person.displayName || person.personId,
     inviteEmail: record.inviteEmail,
-    authMode: record.authMode,
+    authMode: "local",
     role: record.role,
     localUsername: record.localUsername || suggestLocalUsername(person),
     familyGroupKey: familyGroup.tenantKey,
@@ -419,9 +337,6 @@ async function buildInvitePresentation(record: InviteRecord, sessionEmail?: stri
     createdAt: record.createdAt,
     createdByEmail: record.createdByEmail,
     openAppPath: buildOpenAppPath(record.familyGroups),
-    canUseGoogle: status === "pending" && record.authMode !== "local",
-    canUseLocal: status === "pending" && record.authMode !== "google",
-    sessionEmailMatches: normalizedSessionEmail.length > 0 && normalizedSessionEmail === record.inviteEmail,
   };
 }
 
@@ -436,12 +351,12 @@ async function getInviteRecordByToken(token: string) {
   return row ? toInviteRecord(row) : null;
 }
 
-export async function getInvitePresentationByToken(token: string, sessionEmail?: string) {
+export async function getInvitePresentationByToken(token: string) {
   const invite = await getInviteRecordByToken(token);
   if (!invite) {
     return null;
   }
-  return buildInvitePresentation(invite, sessionEmail);
+  return buildInvitePresentation(invite);
 }
 
 export async function createInvite(input: CreateInviteInput): Promise<CreatedInvitePayload> {
@@ -451,9 +366,7 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
   if (familyGroups.length === 0) {
     throw new Error("Selected person does not have any enabled family-group memberships.");
   }
-  if (input.authMode !== "local") {
-    await ensureInviteEmailAvailable(inviteEmail, input.personId);
-  }
+  await ensureInviteEmailAvailable(inviteEmail, input.personId);
 
   const inviteId = buildInviteId();
   const token = buildInviteToken();
@@ -461,19 +374,14 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + Math.max(1, input.expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
   const requestedLocalUsername = normalizeUsername(input.localUsername ?? "") || suggestLocalUsername(person);
-  const localTemporaryPassword =
-    input.authMode !== "google" ? await buildTemporaryInvitePassword(familyGroups[0]?.tenantKey ?? input.sourceTenantKey) : "";
-  const localUsername =
-    input.authMode !== "google"
-      ? await resolveInviteLocalUsername(input.personId, familyGroups, requestedLocalUsername)
-      : requestedLocalUsername;
+  const localUsername = await resolveInviteLocalUsername(input.personId, familyGroups, requestedLocalUsername);
 
   const record: InviteRecord = {
     inviteId,
     familyGroupKey: familyGroups[0]?.tenantKey ?? input.sourceTenantKey.trim().toLowerCase(),
     personId: input.personId,
     inviteEmail,
-    authMode: input.authMode,
+    authMode: "local",
     role: input.role,
     localUsername,
     familyGroups,
@@ -508,87 +416,19 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
     created_by_person_id: record.createdByPersonId,
   });
 
-  if (record.authMode !== "local") {
-    await provisionGoogleAccess(record);
-  }
-  if (record.authMode !== "google") {
-    await provisionLocalMemberships(record, `${record.localUsername}@local`);
-    await upsertLocalUser({
-      tenantKey: record.familyGroups[0]!.tenantKey,
-      username: record.localUsername,
-      password: localTemporaryPassword,
-      role: record.role,
-      personId: record.personId,
-      isEnabled: true,
-    });
-  }
-
   const inviteUrl = `${input.appBaseUrl.replace(/\/$/, "")}/invite/${encodeURIComponent(token)}`;
   const invitePresentation = await buildInvitePresentation(record);
   return {
     invite: invitePresentation,
     inviteUrl,
-    inviteMessage: buildInviteMessage(
-      invitePresentation,
-      inviteUrl,
-      record.authMode !== "google"
-        ? { username: record.localUsername, temporaryPassword: localTemporaryPassword }
-        : null,
-    ),
+    inviteMessage: buildInviteMessage(invitePresentation, inviteUrl),
   };
-}
-
-export async function acceptInviteWithGoogle(token: string, sessionEmail: string) {
-  const invite = await getInviteRecordByToken(token);
-  if (!invite) {
-    throw new Error("Invite not found.");
-  }
-  if (invite.authMode === "local") {
-    throw new Error("This invite only supports local sign-in.");
-  }
-  if (effectiveStatus(invite) === "expired") {
-    throw new Error("This invite has expired.");
-  }
-  if (invite.status === "revoked") {
-    throw new Error("This invite is no longer active.");
-  }
-  if (invite.status === "accepted") {
-    return buildInvitePresentation(invite, sessionEmail);
-  }
-
-  const normalizedSessionEmail = normalizeEmail(sessionEmail);
-  if (!normalizedSessionEmail || normalizedSessionEmail !== invite.inviteEmail) {
-    throw new Error(`This invite is for ${invite.inviteEmail}. Sign in with that Google account.`);
-  }
-
-  await provisionGoogleAccess(invite);
-  const acceptedAt = new Date().toISOString();
-  await updateInviteRecord(invite.inviteId, {
-    status: "accepted",
-    accepted_at: acceptedAt,
-    accepted_by_email: normalizedSessionEmail,
-    accepted_auth_mode: "google",
-  });
-
-  return buildInvitePresentation(
-    {
-      ...invite,
-      status: "accepted",
-      acceptedAt,
-      acceptedByEmail: normalizedSessionEmail,
-      acceptedAuthMode: "google",
-    },
-    normalizedSessionEmail,
-  );
 }
 
 export async function acceptInviteWithLocal(token: string, username: string, password: string) {
   const invite = await getInviteRecordByToken(token);
   if (!invite) {
     throw new Error("Invite not found.");
-  }
-  if (invite.authMode === "google") {
-    throw new Error("This invite only supports Google sign-in.");
   }
   if (effectiveStatus(invite) === "expired") {
     throw new Error("This invite has expired.");
@@ -633,6 +473,14 @@ export async function acceptInviteWithLocal(token: string, username: string, pas
       role: invite.role,
       personId: invite.personId,
       isEnabled: true,
+    });
+    await patchLocalUser(primaryFamily.tenantKey, normalizedUsername, {
+      role: invite.role,
+      personId: invite.personId,
+      isEnabled: true,
+      mustChangePassword: false,
+      failedAttempts: 0,
+      lockedUntil: "",
     });
   } else if (!verifyPassword(password, existingLocalUser.passwordHash)) {
     await patchLocalUser(primaryFamily.tenantKey, normalizedUsername, {

@@ -13,6 +13,35 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (local-only invite onboarding with explicit install/login guidance)
+
+- `Date`: 2026-03-16
+- `Change`: Switched the user-facing invite and login flows to local-only onboarding, removed temporary-password generation from invite creation, updated invite acceptance so the recipient chooses their password on the invite page, and added explicit login plus iPhone/iPad install guidance to the invite UI/message and login screen.
+- `Type`: UI | API
+- `Why`: Root cause was a `code/design issue`. Invite creation was still pre-generating a temporary password and optional Google path even though the live invite-accept flow already asked the recipient to choose a password twice. That left the onboarding model more complex than necessary and made the generated invite copy misleading.
+- `Files`:
+  - `src/lib/invite/store.ts`
+  - `src/lib/invite/types.ts`
+  - `src/app/api/invite/[token]/route.ts`
+  - `src/app/invite/[token]/page.tsx`
+  - `src/app/api/t/[tenantKey]/invites/route.ts`
+  - `src/components/InviteAcceptClient.tsx`
+  - `src/components/LoginPageClient.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: None.
+- `Verify`:
+  - In `Admin -> Users & Access -> Manage User -> Invite`, confirm there is no `Sign-In Path` selector and the copy explains that the recipient chooses their own password.
+  - Create an invite and confirm the suggested message includes the username, local login steps, and iPhone/iPad install guidance but no temporary password.
+  - Open a pending invite and confirm the page only offers username/password activation, requires password + confirm password, and no longer offers Google.
+  - Open `/login` and confirm it only offers local username/password sign-in plus first-time/install guidance.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the invite-store/local-accept changes, the invite/login UI changes, and the design/doc updates together so the invite model does not partially mix generated passwords with local-only onboarding.
+- `Design Decision Change`: Updated the user onboarding and sign-in decision in `docs/design-decisions.md`, aligned `designchoices.md`, and refreshed the invite behavior notes in `docs/data-schema.md`.
+
 ## 2026-03-16 (fixed-position modal close control)
 
 - `Date`: 2026-03-16

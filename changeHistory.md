@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-16: User-facing invite and login flows are now local-only, invite creation no longer generates temporary passwords, and invite/login screens now include explicit sign-in plus iPhone/iPad install guidance. See `docs/change-summary.md`.
 - 2026-03-16: Anchored the shared modal close control to a fixed top-right slot and switched it to a consistent inline-SVG icon so it no longer shifts with header layout across devices. See `docs/change-summary.md`.
 - 2026-03-16: Added a documented modal/button interaction standard, created shared async/modal UI primitives, and migrated the main admin/person/household/invite flows onto that pattern. See `docs/change-summary.md`.
 - 2026-03-16: Fixed `/login` so local username/password sign-in uses the active family-group cookie instead of hardcoding `snowestes`, which restores valid local sign-in for users like Ezra in `meldrumclark`. See `docs/change-summary.md`.

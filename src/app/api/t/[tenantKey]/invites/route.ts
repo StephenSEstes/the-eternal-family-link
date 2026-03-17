@@ -9,7 +9,7 @@ import { sendPlainTextEmail } from "@/lib/google/gmail";
 const createInviteSchema = z.object({
   personId: z.string().trim().min(1),
   inviteEmail: z.string().trim().email(),
-  authMode: z.enum(["google", "local", "either"]),
+  authMode: z.enum(["google", "local", "either"]).optional().default("local"),
   role: z.enum(["ADMIN", "USER"]).optional().default("USER"),
   localUsername: z.string().trim().max(80).optional().default(""),
   expiresInDays: z.coerce.number().int().min(1).max(60).optional().default(14),
@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       sourceTenantKey: resolved.tenant.tenantKey,
       personId: parsed.data.personId,
       inviteEmail: parsed.data.inviteEmail,
-      authMode: parsed.data.authMode,
+      authMode: "local",
       role: parsed.data.role,
       localUsername: parsed.data.localUsername,
       expiresInDays: parsed.data.expiresInDays,
@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       entityId: created.invite.inviteId,
       familyGroupKey: resolved.tenant.tenantKey,
       status: "SUCCESS",
-      details: `person_id=${parsed.data.personId}, email=${parsed.data.inviteEmail.toLowerCase()}, auth_mode=${parsed.data.authMode}, role=${parsed.data.role}, send_email=${parsed.data.sendEmail ? "true" : "false"}`,
+      details: `person_id=${parsed.data.personId}, email=${parsed.data.inviteEmail.toLowerCase()}, auth_mode=local, role=${parsed.data.role}, send_email=${parsed.data.sendEmail ? "true" : "false"}`,
     }).catch(() => undefined);
 
     if (parsed.data.sendEmail) {
