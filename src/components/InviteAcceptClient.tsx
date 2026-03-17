@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { AsyncActionButton, ModalStatusBanner, inferStatusTone } from "@/components/ui/primitives";
 import type { InvitePresentation } from "@/lib/invite/types";
 
 type InviteAcceptClientProps = {
@@ -34,6 +35,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
   const [invite, setInvite] = useState(initialInvite);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"" | "local" | "google" | "install">("");
   const [localUsername, setLocalUsername] = useState(initialInvite.localUsername);
   const [localPassword, setLocalPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -62,6 +64,8 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     let cancelled = false;
     const run = async () => {
       setBusy(true);
+      setBusyAction("google");
+      setStatus("Checking your Google sign-in...");
       const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,12 +78,14 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
       if (!res.ok || !body?.ok || !body.invite) {
         setStatus(body?.message ? String(body.message) : `Google acceptance failed (${res.status}).`);
         setBusy(false);
+        setBusyAction("");
         setAutoAcceptedGoogle(true);
         return;
       }
       setInvite(body.invite as InvitePresentation);
       setStatus("Invite accepted. Open the app or install it on this device.");
       setBusy(false);
+      setBusyAction("");
       setAutoAcceptedGoogle(true);
     };
 
@@ -100,7 +106,9 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
   }, []);
 
   const onGoogleContinue = async () => {
-    setStatus("");
+    setBusy(true);
+    setBusyAction("google");
+    setStatus("Redirecting to Google...");
     await signIn("google", { callbackUrl: `/invite/${encodeURIComponent(token)}` });
   };
 
@@ -112,6 +120,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     }
 
     setBusy(true);
+    setBusyAction("local");
     setStatus("Activating your local sign-in...");
     const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
       method: "POST",
@@ -126,6 +135,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     if (!res.ok || !body?.ok || !body.invite) {
       setStatus(body?.message ? String(body.message) : `Local setup failed (${res.status}).`);
       setBusy(false);
+      setBusyAction("");
       return;
     }
 
@@ -140,6 +150,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     if (!response?.ok) {
       setStatus("Account created. Sign in from the login page if automatic sign-in did not complete.");
       setBusy(false);
+      setBusyAction("");
       return;
     }
     window.location.href = response.url ?? `/invite/${encodeURIComponent(token)}`;
@@ -149,9 +160,11 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
     if (!installPrompt) {
       return;
     }
+    setBusyAction("install");
     await installPrompt.prompt();
     await installPrompt.userChoice.catch(() => undefined);
     setInstallPrompt(null);
+    setBusyAction("");
   };
 
   if (invite.status === "accepted") {
@@ -164,16 +177,23 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
         <div className="settings-chip-list" style={{ marginBottom: "0.75rem" }}>
           <Link className="button tap-button" href={invite.openAppPath}>Open App</Link>
           {installPrompt ? (
-            <button type="button" className="button secondary tap-button" onClick={() => void onInstall()}>
+            <AsyncActionButton
+              type="button"
+              tone="secondary"
+              className="tap-button"
+              pending={busyAction === "install"}
+              pendingLabel="Installing..."
+              onClick={() => void onInstall()}
+            >
               Install App
-            </button>
+            </AsyncActionButton>
           ) : null}
         </div>
         <p className="page-subtitle" style={{ marginTop: 0 }}>{installHint}</p>
         <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
           Sign-in method used: <strong>{invite.acceptedAuthMode || invite.authMode}</strong>
         </p>
-        {status ? <p>{status}</p> : null}
+        {status ? <ModalStatusBanner tone={inferStatusTone(status)}>{status}</ModalStatusBanner> : null}
       </section>
     );
   }
@@ -217,18 +237,32 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
           />
-          <button type="submit" className="button tap-button" disabled={busy}>
+          <AsyncActionButton
+            type="submit"
+            className="tap-button"
+            pending={busy && busyAction === "local"}
+            pendingLabel="Activating..."
+            disabled={busy}
+          >
             Activate Local Sign-In
-          </button>
+          </AsyncActionButton>
         </form>
       ) : null}
 
       {invite.canUseGoogle ? (
         <div style={{ marginTop: invite.canUseLocal ? "1.25rem" : "1rem" }}>
           <h2 style={{ marginBottom: "0.5rem" }}>{invite.canUseLocal ? "Use Google Instead" : "Continue With Google"}</h2>
-          <button type="button" className="button secondary tap-button" disabled={busy} onClick={() => void onGoogleContinue()}>
+          <AsyncActionButton
+            type="button"
+            tone="secondary"
+            className="tap-button"
+            pending={busy && busyAction === "google"}
+            pendingLabel="Redirecting..."
+            disabled={busy}
+            onClick={() => void onGoogleContinue()}
+          >
             Continue with Google
-          </button>
+          </AsyncActionButton>
           <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
             Use the invited Google account. After sign-in, this page will finish setup automatically.
           </p>
@@ -247,7 +281,7 @@ export function InviteAcceptClient({ token, initialInvite, sessionEmail }: Invit
       </div>
 
       <p className="page-subtitle" style={{ marginTop: "1rem" }}>{installHint}</p>
-      {status ? <p>{status}</p> : null}
+      {status ? <ModalStatusBanner tone={inferStatusTone(status)}>{status}</ModalStatusBanner> : null}
     </section>
   );
 }

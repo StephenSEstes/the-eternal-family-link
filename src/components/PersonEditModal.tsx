@@ -3,7 +3,13 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import { PrimaryButton, SecondaryButton } from "@/components/ui/primitives";
+import {
+  AsyncActionButton,
+  ModalActionBar,
+  ModalCloseButton,
+  ModalStatusBanner,
+  inferStatusTone,
+} from "@/components/ui/primitives";
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
@@ -510,17 +516,26 @@ function StickySaveBar({
   onSave: () => void;
   saveLabel?: string;
 }) {
-  const label = saving ? "Saving..." : saveLabel;
   return (
     <div className="photo-save-sticky-bar">
-      <div className="photo-save-sticky-actions">
-        <SecondaryButton type="button" disabled={saving} onClick={onCancel}>
-          Cancel
-        </SecondaryButton>
-        <PrimaryButton type="button" disabled={!dirty || saving} onClick={onSave}>
-          {label}
-        </PrimaryButton>
-      </div>
+      <ModalActionBar
+        actions={
+          <>
+            <AsyncActionButton type="button" tone="secondary" disabled={saving} onClick={onCancel}>
+              Cancel
+            </AsyncActionButton>
+            <AsyncActionButton
+              type="button"
+              pending={saving}
+              pendingLabel="Saving..."
+              disabled={!dirty || saving}
+              onClick={onSave}
+            >
+              {saveLabel}
+            </AsyncActionButton>
+          </>
+        }
+      />
     </div>
   );
 }
@@ -706,6 +721,7 @@ export function PersonEditModal({
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
+  const personStatusTone = inferStatusTone(status);
   const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [personPhotoQuery, setPersonPhotoQuery] = useState("");
@@ -1817,7 +1833,10 @@ export function PersonEditModal({
   return (
     <div
       className="person-modal-backdrop"
-      onClick={onClose}
+      onClick={() => {
+        if (saving) return;
+        onClose();
+      }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div
@@ -1843,25 +1862,28 @@ export function PersonEditModal({
                 Email: {email || "-"} | Phone: {phones || "-"}
               </p>
             </div>
-            {primaryPhoneAction || emailActionHref ? (
-              <div className="person-modal-contact-actions" aria-label="Quick contact actions">
-                {primaryPhoneAction ? (
-                  <>
-                    <a href={primaryPhoneAction.telHref} className="person-modal-contact-action">
-                      Call
+            <div className="person-modal-header-actions">
+              {primaryPhoneAction || emailActionHref ? (
+                <div className="person-modal-contact-actions" aria-label="Quick contact actions">
+                  {primaryPhoneAction ? (
+                    <>
+                      <a href={primaryPhoneAction.telHref} className="person-modal-contact-action">
+                        Call
+                      </a>
+                      <a href={primaryPhoneAction.smsHref} className="person-modal-contact-action">
+                        Text
+                      </a>
+                    </>
+                  ) : null}
+                  {emailActionHref ? (
+                    <a href={emailActionHref} className="person-modal-contact-action">
+                      Email
                     </a>
-                    <a href={primaryPhoneAction.smsHref} className="person-modal-contact-action">
-                      Text
-                    </a>
-                  </>
-                ) : null}
-                {emailActionHref ? (
-                  <a href={emailActionHref} className="person-modal-contact-action">
-                    Email
-                  </a>
-                ) : null}
-              </div>
-            ) : null}
+                  ) : null}
+                </div>
+              ) : null}
+              <ModalCloseButton disabled={saving} onClick={onClose} />
+            </div>
           </div>
         </div>
 
@@ -2938,91 +2960,100 @@ export function PersonEditModal({
           </div>
         ) : null}
 
-        <div className="settings-chip-list" style={{ marginTop: "1rem" }}>
-          <SecondaryButton type="button" className="tap-button" onClick={onClose}>Close</SecondaryButton>
-          <PrimaryButton
-            type="button"
-            className="tap-button"
-            disabled={showReadOnly || saving}
-            onClick={() =>
-              void (async () => {
-                if (!person.personId) return;
-                setSaving(true);
-                setStatus("Saving person...");
-                const personRes = await fetch(
-                  `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
-                  {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      display_name: displayName.trim() || person.displayName,
-                      first_name: firstName,
-                      middle_name: middleName,
-                      last_name: lastName,
-                      maiden_name: maidenName,
-                      nick_name: nickName,
-                      birth_date: birthDate,
-                      gender,
-                      phones,
-                      email,
-                      address,
-                      hobbies,
-                      notes,
-                    }),
-                  },
-                );
-                if (!personRes.ok) {
-                  const body = await personRes.text();
-                  setStatus(`Save failed: ${personRes.status} ${body.slice(0, 150)}`);
-                  setSaving(false);
-                  return;
-                }
-                if (canManage) {
-                  const initialFamily = initialFamilyRef.current;
-                  const familyChanged =
-                    familyTouched ||
-                    normalizeId(parent1Id) !== normalizeId(initialFamily.parent1Id) ||
-                    normalizeId(parent2Id) !== normalizeId(initialFamily.parent2Id) ||
-                    normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
-                  if (familyChanged) {
-                  const relationshipRes = await fetch(
-                    `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        personId: person.personId,
-                        parentIds: [parent1Id, parent2Id].filter(Boolean),
-                        childIds,
-                        spouseId: divorceSpouseId || spouseId,
-                        spouseAction: divorceSpouseId ? "divorce" : "link",
-                        familyChanged: true,
-                      }),
-                    },
-                  );
-                  if (!relationshipRes.ok) {
-                    const body = await relationshipRes.json().catch(() => null);
-                    const message = body?.message || body?.error || "";
-                    const hint = body?.hint ? ` | ${body.hint}` : "";
-                    setStatus(`Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`);
+        <ModalActionBar
+          status={status ? <ModalStatusBanner tone={personStatusTone}>{status}</ModalStatusBanner> : null}
+          actions={
+            <>
+              <AsyncActionButton type="button" tone="secondary" className="tap-button" disabled={saving} onClick={onClose}>
+                Cancel
+              </AsyncActionButton>
+              <AsyncActionButton
+                type="button"
+                className="tap-button"
+                pending={saving}
+                pendingLabel="Saving..."
+                disabled={showReadOnly || saving}
+                onClick={() =>
+                  void (async () => {
+                    if (!person.personId) return;
+                    setSaving(true);
+                    setStatus("Saving person...");
+                    const personRes = await fetch(
+                      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          display_name: displayName.trim() || person.displayName,
+                          first_name: firstName,
+                          middle_name: middleName,
+                          last_name: lastName,
+                          maiden_name: maidenName,
+                          nick_name: nickName,
+                          birth_date: birthDate,
+                          gender,
+                          phones,
+                          email,
+                          address,
+                          hobbies,
+                          notes,
+                        }),
+                      },
+                    );
+                    if (!personRes.ok) {
+                      const body = await personRes.text();
+                      setStatus(`Save failed: ${personRes.status} ${body.slice(0, 150)}`);
+                      setSaving(false);
+                      return;
+                    }
+                    if (canManage) {
+                      const initialFamily = initialFamilyRef.current;
+                      const familyChanged =
+                        familyTouched ||
+                        normalizeId(parent1Id) !== normalizeId(initialFamily.parent1Id) ||
+                        normalizeId(parent2Id) !== normalizeId(initialFamily.parent2Id) ||
+                        normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
+                      if (familyChanged) {
+                        const relationshipRes = await fetch(
+                          `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              personId: person.personId,
+                              parentIds: [parent1Id, parent2Id].filter(Boolean),
+                              childIds,
+                              spouseId: divorceSpouseId || spouseId,
+                              spouseAction: divorceSpouseId ? "divorce" : "link",
+                              familyChanged: true,
+                            }),
+                          },
+                        );
+                        if (!relationshipRes.ok) {
+                          const body = await relationshipRes.json().catch(() => null);
+                          const message = body?.message || body?.error || "";
+                          const hint = body?.hint ? ` | ${body.hint}` : "";
+                          setStatus(
+                            `Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`,
+                          );
+                          setSaving(false);
+                          return;
+                        }
+                        applyLocalFamilyGroupRelationshipType(person.personId, displayedFamilyGroupRelationshipType);
+                      }
+                    }
+                    setStatus("Saved.");
                     setSaving(false);
-                    return;
-                  }
-                  applyLocalFamilyGroupRelationshipType(person.personId, displayedFamilyGroupRelationshipType);
-                  }
+                    onSaved();
+                    onClose();
+                  })()
                 }
-                setStatus("Saved.");
-                setSaving(false);
-                onSaved();
-                onClose();
-              })()
-            }
-          >
-            {saving ? "Saving..." : "Save"}
-          </PrimaryButton>
-        </div>
-
-        {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+              >
+                Save and Close
+              </AsyncActionButton>
+            </>
+          }
+        />
         </div>
       </div>
     </div>

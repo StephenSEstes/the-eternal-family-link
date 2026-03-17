@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import {
+  AsyncActionButton,
+  ModalActionBar,
+  ModalCloseButton,
+  ModalStatusBanner,
+  inferStatusTone,
+} from "@/components/ui/primitives";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
@@ -249,6 +256,7 @@ function formatAddChildError(status: number, body: unknown) {
 
 export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSaved, onEditPerson }: Props) {
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("info");
   const [household, setHousehold] = useState<HouseholdSummary | null>(null);
@@ -298,6 +306,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const canShowChildMaidenName = gender === "female" && isOlderThanAge(birthDate, 19);
   const defaultChildLastName = extractLastName(household?.husbandName);
+  const householdStatusTone = inferStatusTone(status);
 
   const resetAddChildForm = () => {
     setFirstName("");
@@ -708,7 +717,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   return (
     <div
       className="person-modal-backdrop"
-      onClick={onClose}
+      onClick={() => {
+        if (loading || saving) return;
+        onClose();
+      }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div
@@ -731,7 +743,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               </p>
               <p className="person-modal-meta">Household ID: {householdId}</p>
             </div>
-            <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
+            <ModalCloseButton disabled={loading || saving} onClick={onClose} />
           </div>
         </div>
 
@@ -742,7 +754,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
         </div>
         <div className="person-modal-content">
 
-        {loading ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
+        {loading && status ? <ModalStatusBanner tone="pending">{status}</ModalStatusBanner> : null}
 
         {!loading && household ? (
           <>
@@ -1375,38 +1387,50 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               </>
             ) : null}
 
-            <div className="settings-chip-list" style={{ marginTop: "0.8rem" }}>
-              <button
-                type="button"
-                className="button tap-button"
-                disabled={addChildOpen}
-                onClick={() =>
-                  void (async () => {
-                    if (addChildOpen) {
-                      setStatus("Finish saving the child or cancel Add Child before saving household.");
-                      return;
+            <ModalActionBar
+              status={status ? <ModalStatusBanner tone={householdStatusTone}>{status}</ModalStatusBanner> : null}
+              actions={
+                <>
+                  <AsyncActionButton type="button" tone="secondary" className="tap-button" disabled={saving} onClick={onClose}>
+                    Cancel
+                  </AsyncActionButton>
+                  <AsyncActionButton
+                    type="button"
+                    className="tap-button"
+                    pending={saving}
+                    pendingLabel="Saving..."
+                    disabled={addChildOpen || saving}
+                    onClick={() =>
+                      void (async () => {
+                        if (addChildOpen) {
+                          setStatus("Finish saving the child or cancel Add Child before saving household.");
+                          return;
+                        }
+                        setSaving(true);
+                        setStatus("Saving household...");
+                        const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ label, notes, weddingPhotoFileId, marriedDate, address, city, state: stateValue, zip }),
+                        });
+                        if (!res.ok) {
+                          const body = await res.text();
+                          setStatus(`Save failed: ${res.status} ${body.slice(0, 140)}`);
+                          setSaving(false);
+                          return;
+                        }
+                        setStatus("Household saved.");
+                        setSaving(false);
+                        onSaved();
+                        onClose();
+                      })()
                     }
-                    setStatus("Saving household...");
-                    const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ label, notes, weddingPhotoFileId, marriedDate, address, city, state: stateValue, zip }),
-                    });
-                    if (!res.ok) {
-                      const body = await res.text();
-                      setStatus(`Save failed: ${res.status} ${body.slice(0, 140)}`);
-                      return;
-                    }
-                    setStatus("Household saved.");
-                    onSaved();
-                    onClose();
-                  })()
-                }
-              >
-                Save and Close
-              </button>
-              <button type="button" className="button secondary tap-button" onClick={onClose}>Close</button>
-            </div>
+                  >
+                    Save and Close
+                  </AsyncActionButton>
+                </>
+              }
+            />
             <AttributesModal
               open={showHouseholdAttributesModal}
               tenantKey={tenantKey}
@@ -1429,8 +1453,6 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
             />
           </>
         ) : null}
-
-        {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
       </div>
       </div>
     </div>

@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AttributeDefinitionsAdmin } from "@/components/AttributeDefinitionsAdmin";
+import {
+  AsyncActionButton,
+  ModalActionBar,
+  ModalCloseButton,
+  ModalStatusBanner,
+  inferStatusTone,
+} from "@/components/ui/primitives";
 import type { InviteEmailDeliveryResult, InvitePresentation } from "@/lib/invite/types";
 
 type AccessItem = {
@@ -396,6 +403,7 @@ export function SettingsClient({
   const [policyStatus, setPolicyStatus] = useState("");
   const [localUsers, setLocalUsers] = useState<LocalUserItem[]>([]);
   const [localUserStatus, setLocalUserStatus] = useState("");
+  const [createUserPending, setCreateUserPending] = useState(false);
   const [manageUserPendingAction, setManageUserPendingAction] = useState<"" | "update_user" | "update_password">("");
   const [localUsername, setLocalUsername] = useState("");
   const [localPassword, setLocalPassword] = useState("");
@@ -420,6 +428,7 @@ export function SettingsClient({
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14);
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteResult, setInviteResult] = useState<InviteCreationResult | null>(null);
+  const [invitePendingAction, setInvitePendingAction] = useState<"" | "create" | "send">("");
   const [manageUserModalTab, setManageUserModalTab] = useState<ManageUserModalTab>("manage");
   const [familyGroupsSubTab, setFamilyGroupsSubTab] = useState<FamilyGroupsSubTab>("overview");
   const [importSubTab, setImportSubTab] = useState<ImportSubTab>("target");
@@ -1619,13 +1628,18 @@ export function SettingsClient({
       setLocalUserStatus("Select a person before creating a user.");
       return;
     }
-    const localCreated = await createLocalUser();
-    if (!localCreated) {
-      return;
-    }
-    if (userEmail.trim()) {
-      setPersonId(localPersonId);
-      await upsertAccess();
+    setCreateUserPending(true);
+    try {
+      const localCreated = await createLocalUser();
+      if (!localCreated) {
+        return;
+      }
+      if (userEmail.trim()) {
+        setPersonId(localPersonId);
+        await upsertAccess();
+      }
+    } finally {
+      setCreateUserPending(false);
     }
   };
 
@@ -1642,6 +1656,7 @@ export function SettingsClient({
     setRole("USER");
     setIsEnabled(false);
     setLocalUserStatus("");
+    setCreateUserPending(false);
   };
 
   const closeAddUserModal = () => {
@@ -1687,45 +1702,50 @@ export function SettingsClient({
       return;
     }
 
-    setInviteStatus(sendEmail ? "Creating invite and sending email..." : "Creating invite...");
-    setInviteResult(null);
-    const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/invites`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        personId: selectedDirectoryPersonId,
-        inviteEmail,
-        authMode: inviteAuthMode,
-        role: inviteRole,
-        localUsername: inviteLocalUsername,
-        expiresInDays: inviteExpiresInDays,
-        sendEmail,
-      }),
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok || !body?.ok) {
-      setInviteStatus(body?.message ? String(body.message) : `Invite creation failed (${res.status}).`);
-      return;
-    }
-
-    setInviteResult({
-      invite: body.invite as InvitePresentation,
-      inviteUrl: String(body.inviteUrl ?? ""),
-      inviteMessage: String(body.inviteMessage ?? ""),
-      emailDelivery: body.emailDelivery as InviteEmailDeliveryResult | undefined,
-    });
-    const emailDelivery = body.emailDelivery as InviteEmailDeliveryResult | undefined;
-    if (sendEmail) {
-      if (emailDelivery?.sent) {
-        setInviteStatus("Invite created and email sent.");
-      } else if (emailDelivery?.errorMessage) {
-        setInviteStatus(`Invite created, but email send failed: ${emailDelivery.errorMessage}`);
-      } else {
-        setInviteStatus("Invite created, but email send failed. You can still copy the invite below.");
+    setInvitePendingAction(sendEmail ? "send" : "create");
+    try {
+      setInviteStatus(sendEmail ? "Creating invite and sending email..." : "Creating invite...");
+      setInviteResult(null);
+      const res = await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personId: selectedDirectoryPersonId,
+          inviteEmail,
+          authMode: inviteAuthMode,
+          role: inviteRole,
+          localUsername: inviteLocalUsername,
+          expiresInDays: inviteExpiresInDays,
+          sendEmail,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) {
+        setInviteStatus(body?.message ? String(body.message) : `Invite creation failed (${res.status}).`);
+        return;
       }
-      return;
+
+      setInviteResult({
+        invite: body.invite as InvitePresentation,
+        inviteUrl: String(body.inviteUrl ?? ""),
+        inviteMessage: String(body.inviteMessage ?? ""),
+        emailDelivery: body.emailDelivery as InviteEmailDeliveryResult | undefined,
+      });
+      const emailDelivery = body.emailDelivery as InviteEmailDeliveryResult | undefined;
+      if (sendEmail) {
+        if (emailDelivery?.sent) {
+          setInviteStatus("Invite created and email sent.");
+        } else if (emailDelivery?.errorMessage) {
+          setInviteStatus(`Invite created, but email send failed: ${emailDelivery.errorMessage}`);
+        } else {
+          setInviteStatus("Invite created, but email send failed. You can still copy the invite below.");
+        }
+        return;
+      }
+      setInviteStatus("Invite ready to copy and send.");
+    } finally {
+      setInvitePendingAction("");
     }
-    setInviteStatus("Invite ready to copy and send.");
   };
 
   const selectDirectoryPerson = (nextPersonId: string) => {
@@ -1782,6 +1802,7 @@ export function SettingsClient({
     setInviteResult(null);
     setInviteStatus("");
     setManageUserPendingAction("");
+    setInvitePendingAction("");
   };
 
   const selectedPersonGoogleAccess = useMemo(
@@ -1809,16 +1830,15 @@ export function SettingsClient({
     [selectedPersonGoogleAccess, selectedPersonLocalUser],
   );
   const manageUserStatus = localUserStatus || accessStatus;
-  const manageUserStatusIsWarning =
-    manageUserStatus.startsWith("Cannot") ||
-    manageUserStatus.startsWith("Failed") ||
-    manageUserStatus.includes("required") ||
-    manageUserStatus.includes("No local user") ||
-    manageUserStatus.includes("Enter a password");
-  const manageUserStatusClassName = manageUserStatusIsWarning ? "status-warn" : "status-ok";
   const isManageUserSaving = manageUserPendingAction === "update_user";
   const isManagePasswordSaving = manageUserPendingAction === "update_password";
   const isManageUserActionPending = manageUserPendingAction !== "";
+  const addUserStatusTone = inferStatusTone(localUserStatus);
+  const manageUserStatusTone = inferStatusTone(manageUserStatus);
+  const inviteStatusTone = inferStatusTone(inviteStatus);
+  const isInviteCreating = invitePendingAction === "create";
+  const isInviteSending = invitePendingAction === "send";
+  const isInvitePending = invitePendingAction !== "";
   const familyPeopleById = useMemo(
     () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
     [familyPeople],
@@ -2195,7 +2215,13 @@ export function SettingsClient({
             ) : null}
 
             {showAddUserForm ? (
-              <div className="person-modal-backdrop" onClick={closeAddUserModal}>
+              <div
+                className="person-modal-backdrop"
+                onClick={() => {
+                  if (createUserPending) return;
+                  closeAddUserModal();
+                }}
+              >
                 <div
                   className="person-modal-panel"
                   style={{ maxWidth: "620px", width: "min(620px, 96vw)", height: "auto", maxHeight: "90vh" }}
@@ -2209,9 +2235,7 @@ export function SettingsClient({
                           Create access for a family member who does not already have a user record.
                         </p>
                       </div>
-                      <button type="button" className="button secondary tap-button" onClick={closeAddUserModal}>
-                        Close
-                      </button>
+                      <ModalCloseButton disabled={createUserPending} onClick={closeAddUserModal} />
                     </div>
                   </div>
                   <div className="person-modal-content">
@@ -2262,20 +2286,33 @@ export function SettingsClient({
                       placeholder="name@gmail.com"
                     />
                     <label className="label"><input type="checkbox" checked={isEnabled} onChange={(e) => setIsEnabled(e.target.checked)} /> Google Access Enabled</label>
-                    <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
-                      <button type="button" className="button tap-button" onClick={createDirectoryUser}>Create User</button>
-                      <button type="button" className="button secondary tap-button" onClick={closeAddUserModal}>
-                        Cancel
-                      </button>
-                    </div>
-                    {localUserStatus ? (
-                      <p
-                        className={localUserStatus.startsWith("Cannot") || localUserStatus.startsWith("Failed") ? "status-warn" : "page-subtitle"}
-                        style={{ marginTop: "0.75rem" }}
-                      >
-                        {localUserStatus}
-                      </p>
-                    ) : null}
+                    <ModalActionBar
+                      status={
+                        localUserStatus ? <ModalStatusBanner tone={addUserStatusTone}>{localUserStatus}</ModalStatusBanner> : null
+                      }
+                      actions={
+                        <>
+                          <AsyncActionButton
+                            type="button"
+                            className="tap-button"
+                            pending={createUserPending}
+                            pendingLabel="Creating..."
+                            onClick={createDirectoryUser}
+                          >
+                            Create User
+                          </AsyncActionButton>
+                          <AsyncActionButton
+                            type="button"
+                            tone="secondary"
+                            className="tap-button"
+                            disabled={createUserPending}
+                            onClick={closeAddUserModal}
+                          >
+                            Cancel
+                          </AsyncActionButton>
+                        </>
+                      }
+                    />
                     <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
                       Google access supports Gmail and Google Workspace accounts.
                     </p>
@@ -2285,7 +2322,13 @@ export function SettingsClient({
             ) : null}
 
             {selectedDirectoryPerson ? (
-              <div className="person-modal-backdrop" onClick={closeManageUserModal}>
+              <div
+                className="person-modal-backdrop"
+                onClick={() => {
+                  if (isManageUserActionPending || isInvitePending) return;
+                  closeManageUserModal();
+                }}
+              >
                 <div
                   className="person-modal-panel"
                   style={{ maxWidth: "760px", width: "min(760px, 96vw)", height: "auto", maxHeight: "90vh" }}
@@ -2309,9 +2352,10 @@ export function SettingsClient({
                         <h3 className="person-modal-title">Manage User: {selectedDirectoryPerson.displayName}</h3>
                         <p className="person-modal-meta">User directory and invite actions for this person.</p>
                       </div>
-                      <button type="button" className="button secondary tap-button" onClick={closeManageUserModal}>
-                        Close
-                      </button>
+                      <ModalCloseButton
+                        disabled={isManageUserActionPending || isInvitePending}
+                        onClick={closeManageUserModal}
+                      />
                     </div>
                   </div>
                   <div className="person-modal-tabs" style={{ top: 0 }}>
@@ -2333,15 +2377,6 @@ export function SettingsClient({
                   <div className="person-modal-content">
                     {manageUserModalTab === "manage" ? (
                       <>
-                        {manageUserStatus ? (
-                          <p
-                            className={manageUserStatusClassName}
-                            aria-live="polite"
-                            style={{ marginTop: 0, marginBottom: "0.75rem" }}
-                          >
-                            {manageUserStatus}
-                          </p>
-                        ) : null}
                         <div className="settings-chip-list">
                           <label className="label">
                             <input
@@ -2409,152 +2444,167 @@ export function SettingsClient({
                           onChange={(e) => setLocalPassword(e.target.value)}
                           placeholder="new password"
                         />
-                        <div className="settings-chip-list">
-                          <button
-                            type="button"
-                            className="button tap-button"
-                            disabled={isManageUserActionPending}
-                            onClick={() =>
-                              void (async () => {
-                                setManageUserPendingAction("update_user");
-                                setLocalUserStatus("Saving user changes...");
-                                try {
-                                  setPersonId(selectedDirectoryPerson.personId);
-                                  setLocalPersonId(selectedDirectoryPerson.personId);
+                        <ModalActionBar
+                          status={
+                            manageUserStatus ? (
+                              <ModalStatusBanner tone={manageUserStatusTone}>{manageUserStatus}</ModalStatusBanner>
+                            ) : null
+                          }
+                          actions={
+                            <>
+                              <AsyncActionButton
+                                type="button"
+                                className="tap-button"
+                                pending={isManageUserSaving}
+                                pendingLabel="Saving..."
+                                disabled={isManageUserActionPending}
+                                onClick={() =>
+                                  void (async () => {
+                                    setManageUserPendingAction("update_user");
+                                    setLocalUserStatus("Saving user changes...");
+                                    try {
+                                      setPersonId(selectedDirectoryPerson.personId);
+                                      setLocalPersonId(selectedDirectoryPerson.personId);
 
-                                  if (isEnabled) {
-                                    if (!userEmail.trim()) {
-                                      setAccessStatus("Google email is required when Google Access is enabled.");
-                                      return;
+                                      if (isEnabled) {
+                                        if (!userEmail.trim()) {
+                                          setAccessStatus("Google email is required when Google Access is enabled.");
+                                          return;
+                                        }
+                                        await upsertAccess();
+                                      } else if (selectedPersonGoogleAccess.length > 0) {
+                                        const existing = selectedPersonGoogleAccess[0];
+                                        setUserEmail(existing.userEmail);
+                                        await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            userEmail: existing.userEmail,
+                                            role,
+                                            personId: selectedDirectoryPerson.personId,
+                                            isEnabled: false,
+                                          }),
+                                        });
+                                        await loadTenantAdminData(selectedTenantKey);
+                                      }
+
+                                      if (localEnabled) {
+                                        if (selectedPersonLocalUser) {
+                                          const ok = await patchLocalUser(
+                                            selectedPersonLocalUser.username,
+                                            {
+                                              action: "update_user",
+                                              nextUsername:
+                                                localUsername.trim() &&
+                                                localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
+                                                  ? localUsername.trim()
+                                                  : undefined,
+                                              role: localRole,
+                                              isEnabled: true,
+                                              password: localPassword.trim() || undefined,
+                                            },
+                                            {
+                                              pendingStatus: "Saving user changes...",
+                                              successStatus: "User updated.",
+                                            },
+                                          );
+                                          if (!ok) return;
+                                        } else {
+                                          if (!localUsername.trim() || !localPassword.trim()) {
+                                            setLocalUserStatus(
+                                              "Local username and password are required when enabling Local Access for a new user.",
+                                            );
+                                            return;
+                                          }
+                                          await createLocalUser();
+                                        }
+                                      } else if (selectedPersonLocalUser) {
+                                        await patchLocalUser(
+                                          selectedPersonLocalUser.username,
+                                          {
+                                            action: "set_enabled",
+                                            isEnabled: false,
+                                          },
+                                          {
+                                            pendingStatus: "Saving user changes...",
+                                            successStatus: "User updated.",
+                                          },
+                                        );
+                                      }
+
+                                      setLocalPassword("");
+                                      await loadTenantAdminData(selectedTenantKey);
+                                      router.refresh();
+                                    } finally {
+                                      setManageUserPendingAction("");
                                     }
-                                    await upsertAccess();
-                                  } else if (selectedPersonGoogleAccess.length > 0) {
-                                    const existing = selectedPersonGoogleAccess[0];
-                                    setUserEmail(existing.userEmail);
-                                    await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({
-                                        userEmail: existing.userEmail,
-                                        role,
-                                        personId: selectedDirectoryPerson.personId,
-                                        isEnabled: false,
-                                      }),
-                                    });
-                                    await loadTenantAdminData(selectedTenantKey);
-                                  }
-
-                                  if (localEnabled) {
-                                    if (selectedPersonLocalUser) {
+                                  })()
+                                }
+                              >
+                                Update User
+                              </AsyncActionButton>
+                              <AsyncActionButton
+                                type="button"
+                                className="tap-button"
+                                pending={isManagePasswordSaving}
+                                pendingLabel="Updating..."
+                                disabled={isManageUserActionPending}
+                                onClick={() =>
+                                  void (async () => {
+                                    setManageUserPendingAction("update_password");
+                                    setLocalUserStatus("Updating password...");
+                                    try {
+                                      if (!selectedPersonLocalUser) {
+                                        setLocalUserStatus("No local user exists to update password.");
+                                        return;
+                                      }
+                                      if (!localPassword.trim()) {
+                                        setLocalUserStatus("Enter a password first.");
+                                        return;
+                                      }
                                       const ok = await patchLocalUser(
                                         selectedPersonLocalUser.username,
                                         {
                                           action: "update_user",
-                                          nextUsername:
-                                            localUsername.trim() &&
-                                            localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
-                                              ? localUsername.trim()
-                                              : undefined,
-                                          role: localRole,
-                                          isEnabled: true,
-                                          password: localPassword.trim() || undefined,
+                                          password: localPassword,
                                         },
                                         {
-                                          pendingStatus: "Saving user changes...",
-                                          successStatus: "User updated.",
+                                          pendingStatus: "Updating password...",
+                                          successStatus: "Password updated.",
                                         },
                                       );
                                       if (!ok) return;
-                                    } else {
-                                      if (!localUsername.trim() || !localPassword.trim()) {
-                                        setLocalUserStatus(
-                                          "Local username and password are required when enabling Local Access for a new user.",
-                                        );
-                                        return;
-                                      }
-                                      await createLocalUser();
+                                      setLocalPassword("");
+                                    } finally {
+                                      setManageUserPendingAction("");
                                     }
-                                  } else if (selectedPersonLocalUser) {
-                                    await patchLocalUser(
-                                      selectedPersonLocalUser.username,
-                                      {
-                                        action: "set_enabled",
-                                        isEnabled: false,
-                                      },
-                                      {
-                                        pendingStatus: "Saving user changes...",
-                                        successStatus: "User updated.",
-                                      },
-                                    );
-                                  }
-
-                                  setLocalPassword("");
-                                  await loadTenantAdminData(selectedTenantKey);
-                                  router.refresh();
-                                } finally {
-                                  setManageUserPendingAction("");
+                                  })()
                                 }
-                              })()
-                            }
-                          >
-                            {isManageUserSaving ? "Saving..." : "Update User"}
-                          </button>
-                          <button
-                            type="button"
-                            className="button tap-button"
-                            disabled={isManageUserActionPending}
-                            onClick={() =>
-                              void (async () => {
-                                setManageUserPendingAction("update_password");
-                                setLocalUserStatus("Updating password...");
-                                try {
-                                  if (!selectedPersonLocalUser) {
-                                    setLocalUserStatus("No local user exists to update password.");
-                                    return;
-                                  }
-                                  if (!localPassword.trim()) {
-                                    setLocalUserStatus("Enter a password first.");
-                                    return;
-                                  }
-                                  const ok = await patchLocalUser(
-                                    selectedPersonLocalUser.username,
-                                    {
-                                      action: "update_user",
-                                      password: localPassword,
-                                    },
-                                    {
-                                      pendingStatus: "Updating password...",
-                                      successStatus: "Password updated.",
-                                    },
-                                  );
-                                  if (!ok) return;
-                                  setLocalPassword("");
-                                } finally {
-                                  setManageUserPendingAction("");
-                                }
-                              })()
-                            }
-                          >
-                            {isManagePasswordSaving ? "Updating..." : "Update Password"}
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setAuditActorPersonIdFilter(selectedDirectoryPerson.personId);
-                              setAuditActorEmailFilter(userEmail.trim());
-                              setAuditActionFilter("");
-                              setAuditEntityTypeFilter("");
-                              setAuditResultStatusFilter("");
-                              setAuditFromDate("");
-                              setAuditToDate("");
-                              closeManageUserModal();
-                              setUserAdminSubTab("audit");
-                            }}
-                          >
-                            Open Audit
-                          </button>
-                        </div>
+                              >
+                                Update Password
+                              </AsyncActionButton>
+                              <AsyncActionButton
+                                type="button"
+                                tone="secondary"
+                                className="tap-button"
+                                disabled={isManageUserActionPending}
+                                onClick={() => {
+                                  setAuditActorPersonIdFilter(selectedDirectoryPerson.personId);
+                                  setAuditActorEmailFilter(userEmail.trim());
+                                  setAuditActionFilter("");
+                                  setAuditEntityTypeFilter("");
+                                  setAuditResultStatusFilter("");
+                                  setAuditFromDate("");
+                                  setAuditToDate("");
+                                  closeManageUserModal();
+                                  setUserAdminSubTab("audit");
+                                }}
+                              >
+                                Open Audit
+                              </AsyncActionButton>
+                            </>
+                          }
+                        />
 
                         <div className="settings-table-wrap" style={{ marginTop: "0.75rem" }}>
                           <table className="settings-table">
@@ -2637,15 +2687,34 @@ export function SettingsClient({
                           onChange={(e) => setInviteExpiresInDays(Number.parseInt(e.target.value || "14", 10) || 14)}
                         />
 
-                        <div className="settings-chip-list">
-                          <button type="button" className="button tap-button" onClick={() => void createPersonInvite(false)}>
-                            Create Invite
-                          </button>
-                          <button type="button" className="button secondary tap-button" onClick={() => void createPersonInvite(true)}>
-                            Create and Send Email
-                          </button>
-                        </div>
-                        {inviteStatus ? <p style={{ marginTop: "0.75rem" }}>{inviteStatus}</p> : null}
+                        <ModalActionBar
+                          status={inviteStatus ? <ModalStatusBanner tone={inviteStatusTone}>{inviteStatus}</ModalStatusBanner> : null}
+                          actions={
+                            <>
+                              <AsyncActionButton
+                                type="button"
+                                className="tap-button"
+                                pending={isInviteCreating}
+                                pendingLabel="Creating..."
+                                disabled={isInvitePending}
+                                onClick={() => void createPersonInvite(false)}
+                              >
+                                Create Invite
+                              </AsyncActionButton>
+                              <AsyncActionButton
+                                type="button"
+                                tone="secondary"
+                                className="tap-button"
+                                pending={isInviteSending}
+                                pendingLabel="Sending..."
+                                disabled={isInvitePending}
+                                onClick={() => void createPersonInvite(true)}
+                              >
+                                Create and Send Email
+                              </AsyncActionButton>
+                            </>
+                          }
+                        />
 
                         {inviteResult ? (
                           <div className="card" style={{ marginTop: "0.75rem" }}>

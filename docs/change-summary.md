@@ -13,6 +13,31 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (modal and async interaction standardization)
+
+- `Date`: 2026-03-16
+- `Change`: Added a documented modal/button interaction standard, introduced shared UI primitives for async actions and modal feedback (`AsyncActionButton`, `ModalStatusBanner`, `ModalActionBar`, `ModalCloseButton`), and applied that pattern to the main admin/user modals, person edit, household edit, and invite acceptance flows.
+- `Type`: UI
+- `Why`: Root cause was a `code/design issue`. Async status and button behavior had drifted across screens, so saves could look silent, statuses could appear behind inactive surfaces, close/save semantics varied by modal, and admins could not reliably tell when an action was running or finished.
+- `Files`:
+  - `docs/ui-interaction-standards.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `src/components/ui/primitives.tsx`
+  - `src/app/globals.css`
+  - `src/components/SettingsClient.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/InviteAcceptClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - In `Settings -> Add User`, `Manage User`, and `Invite`, confirm the active buttons change immediately to pending labels, duplicate clicks are disabled, and status stays visible in the active modal.
+  - In `Person` and `Household` edit modals, confirm the header uses the shared close button, footer actions read `Cancel` + `Save and Close`, and status appears in the shared action bar.
+  - In invite acceptance, confirm local/google actions switch to pending labels and status is shown in a clear inline banner.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the shared interaction primitives, the modal/button migrations in the affected components, and the UI interaction design-decision/docs updates.
+- `Design Decision Change`: Added the modal and async interaction standard to `docs/design-decisions.md`, aligned `designchoices.md`, and added `docs/ui-interaction-standards.md`.
+
 ## 2026-03-16 (login page uses active family for local sign-in)
 
 - `Date`: 2026-03-16

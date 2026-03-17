@@ -178,3 +178,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep access fully manual family-by-family; derive access recursively at session read time; infer access directly from `PersonFamilyGroups` without persisted `UserFamilyGroups` rows.
 - `Impact`: Local-user creation, Google access creation, and new-family provisioning can now add inherited family-group access rows for eligible children. Inherited rows default to `USER` role unless an existing explicit family access row is copied by another flow. Auth/session behavior remains unchanged because the runtime still reads persisted `UserFamilyGroups`.
 - `Follow-up`: If parent access changes later and inherited child access should be reconciled automatically, add an explicit repair/reconcile workflow rather than shifting auth to live recursive derivation.
+
+## 2026-03-16
+
+- `Area`: Modal and async interaction standard
+- `Decision`: Standardize modal/action behavior across the app with one interaction model: async buttons must show immediate pending state, status feedback must remain in the active modal/card, `X` and `Cancel` must always mean close without saving, and the default modal footer action pattern is `Cancel` plus `Save and Close`. Shared UI primitives (`AsyncActionButton`, `ModalStatusBanner`, `ModalActionBar`, `ModalCloseButton`) are the preferred implementation path for new work.
+- `Reason`: The app had accumulated multiple one-off modal and action patterns, which caused invisible background status messages, silent waits, inconsistent close/save meanings, and different feedback behavior from screen to screen.
+- `Alternatives Considered`: Continue fixing each modal independently; standardize only copy without shared components; leave modal structure flexible and document only button labels.
+- `Impact`: New and updated modal flows should keep status in the active surface, disable duplicate clicks while pending, disable close/cancel while saving, and use the shared primitives/documented wording standards. Existing high-friction flows are migrated first, then the remaining modals can be aligned incrementally.
+- `Follow-up`: Audit remaining modal/card action flows against `docs/ui-interaction-standards.md` and migrate any remaining legacy status patterns onto the shared primitives.

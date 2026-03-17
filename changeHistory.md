@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-16: Added a documented modal/button interaction standard, created shared async/modal UI primitives, and migrated the main admin/person/household/invite flows onto that pattern. See `docs/change-summary.md`.
 - 2026-03-16: Fixed `/login` so local username/password sign-in uses the active family-group cookie instead of hardcoding `snowestes`, which restores valid local sign-in for users like Ezra in `meldrumclark`. See `docs/change-summary.md`.
 - 2026-03-16: Manage User now gives immediate inline pending/success/error feedback for `Update User` and `Update Password`, including button state changes while the save is running. See `docs/change-summary.md`.
 - 2026-03-16: Reworked Manage User local-account updates into one atomic server-side action so username/password changes no longer split across partial PATCH requests, and fixed the handler to use `localRole` for existing local users. See `docs/change-summary.md`.
