@@ -36,6 +36,7 @@ let householdsTableCompatEnsured = false;
 let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
+let passwordResetsTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -270,6 +271,21 @@ const TABLES: Record<string, TableConfig> = {
       "created_by_person_id",
     ],
   },
+  PasswordResets: {
+    tableName: "password_resets",
+    headers: [
+      "reset_id",
+      "person_id",
+      "family_group_key",
+      "reset_email",
+      "username",
+      "token_hash",
+      "status",
+      "expires_at",
+      "completed_at",
+      "created_at",
+    ],
+  },
 };
 
 export function listOciTables() {
@@ -377,7 +393,7 @@ function resolveIdColumn(headers: string[], idColumn?: string): string {
     const match = headers.find((h) => normalizeHeader(h) === normalizeHeader(idColumn));
     if (match) return match;
   }
-  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id"]) {
+  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id", "reset_id"]) {
     const match = headers.find((h) => normalizeHeader(h) === fallback);
     if (match) return match;
   }
@@ -621,6 +637,78 @@ async function ensureInvitesTableCompatibility(connection: OciConnection) {
   invitesTableCompatEnsured = true;
 }
 
+async function ensurePasswordResetsTableCompatibility(connection: OciConnection) {
+  if (passwordResetsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE password_resets (
+         reset_id VARCHAR2(128) PRIMARY KEY,
+         person_id VARCHAR2(128) NOT NULL,
+         family_group_key VARCHAR2(128) NOT NULL,
+         reset_email VARCHAR2(320) NOT NULL,
+         username VARCHAR2(256),
+         token_hash VARCHAR2(128) NOT NULL,
+         status VARCHAR2(32),
+         expires_at VARCHAR2(64),
+         completed_at VARCHAR2(64),
+         created_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_password_resets_token_hash ON password_resets(token_hash)`);
+    await connection.execute(`CREATE INDEX ix_password_resets_email_status ON password_resets(reset_email, status)`);
+    await connection.execute(`CREATE INDEX ix_password_resets_person_status ON password_resets(person_id, status)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "person_id VARCHAR2(128)",
+    "family_group_key VARCHAR2(128)",
+    "reset_email VARCHAR2(320)",
+    "username VARCHAR2(256)",
+    "token_hash VARCHAR2(128)",
+    "status VARCHAR2(32)",
+    "expires_at VARCHAR2(64)",
+    "completed_at VARCHAR2(64)",
+    "created_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE password_resets ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_password_resets_token_hash ON password_resets(token_hash)",
+    "CREATE INDEX ix_password_resets_email_status ON password_resets(reset_email, status)",
+    "CREATE INDEX ix_password_resets_person_status ON password_resets(person_id, status)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+  await connection.commit();
+  passwordResetsTableCompatEnsured = true;
+}
+
 async function ensureUserAccessTableCompatibility(connection: OciConnection) {
   if (userAccessTableCompatEnsured) {
     return;
@@ -660,6 +748,10 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
   }
   if (tableName === "invites") {
     await ensureInvitesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "password_resets") {
+    await ensurePasswordResetsTableCompatibility(connection);
   }
 }
 

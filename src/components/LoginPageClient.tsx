@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { AsyncActionButton, ModalStatusBanner, inferStatusTone } from "@/components/ui/primitives";
@@ -73,6 +74,9 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
             Sign In
           </AsyncActionButton>
         </form>
+        <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+          <Link href="/forgot-password">Forgot Password?</Link>
+        </p>
         <p className="page-subtitle" style={{ marginTop: "1rem" }}>
           On iPhone or iPad, install the app from Safari using Share &gt; Add to Home Screen after you sign in.
         </p>

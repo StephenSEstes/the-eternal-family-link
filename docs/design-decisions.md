@@ -194,3 +194,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep the Google/local/either invite model; keep generated temporary passwords; remove all backend Google compatibility immediately.
 - `Impact`: New invites are created as local invites, temporary-password generation is removed, invite messages now include login and iPhone/iPad install guidance, and the user-facing login/invite screens are local-only. Existing Google-access data can remain for compatibility, but it is no longer part of the supported onboarding/login UI.
 - `Follow-up`: If Google auth compatibility should be removed completely later, clean up the remaining provider/config/runtime branches in a separate auth-hardening pass.
+
+- `Area`: Local password recovery
+- `Decision`: Add a family-context self-service password reset flow for local users. The login page exposes `Forgot Password?`, reset requests are matched against exactly one enabled local user in the current family group using existing contact email data, and the app emails a single-use reset link that lets the user choose a new password and then sign in automatically.
+- `Reason`: The app now expects user-facing sign-in to be local-only, which makes self-service recovery necessary. Admin-only password resets are not sufficient once invites and login no longer rely on Google.
+- `Alternatives Considered`: Keep password resets admin-only; use usernames instead of email for reset lookup; store reset state inside invites instead of a separate token model.
+- `Impact`: Adds public forgot-password/reset-password routes, a `PasswordResets` token table, reset emails through the existing Gmail sender, and family-specific reset validation against active local users. The request flow returns a generic success message so it does not reveal whether an email matched a user.
+- `Follow-up`: If multiple active users intentionally share the same email in one family group, decide whether to support multi-user reset selection or require unique reset email addresses per active user.

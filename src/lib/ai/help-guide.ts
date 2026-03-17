@@ -28,6 +28,7 @@ Sign in and install
 - Users sign in with local username/password.
 - Invite onboarding uses a single invite link for local account activation.
 - The invite page asks the user to confirm a username and choose a password twice.
+- If a user forgets their password, use "Forgot Password?" on the login page, enter the email address associated with the active local user in that family group, and open the reset link from the email.
 - The account modal behind the user-avatar icon includes Install App for supported browsers.
 - On iPhone or iPad, installation uses Safari Share -> Add to Home Screen guidance.
 - If a local user sees "missing tenant access" for a family group they should be able to use, first sign out fully and sign in again so the local session refreshes its family-group access list.

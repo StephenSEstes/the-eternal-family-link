@@ -211,6 +211,26 @@ This section is a quick reference for the three data areas that drive profile/me
   - Recommended unique: `token_hash`
   - Common lookup: (`invite_email`, `status`), (`person_id`, `status`)
 
+## PasswordResets
+
+- Columns:
+  - `reset_id`
+  - `person_id`
+  - `family_group_key`
+  - `reset_email`
+  - `username`
+  - `token_hash`
+  - `status`
+  - `expires_at`
+  - `completed_at`
+  - `created_at`
+- Purpose:
+  - Single-use local password recovery tokens for one active user in one family group, delivered by email and consumed by the public reset-password flow.
+- Logical index/key:
+  - Unique: `reset_id`
+  - Recommended unique: `token_hash`
+  - Common lookup: (`reset_email`, `status`), (`person_id`, `family_group_key`, `status`)
+
 ## FamilyConfig
 
 - Columns:
@@ -352,6 +372,11 @@ This section is a quick reference for the three data areas that drive profile/me
   - `Invites.family_groups_json[*].tenantKey` mirrors the family groups granted when the invite was created
   - Current runtime creates local-only invites and uses `invite_email` as the delivery/contact email, not the login identity
   - Accepted invites write/update `UserAccess.username/password_hash/local_access` and ensure `UserFamilyGroups`
+- Password reset:
+  - `PasswordResets.person_id` -> `People.person_id`
+  - `PasswordResets.family_group_key` scopes recovery to one active family-group login context
+  - `PasswordResets.reset_email` is the delivery/match contact email only; it is not the canonical login identity key
+  - `PasswordResets.username` snapshots the expected local username at request time, while reset completion still resolves the active local user by `person_id`
 - Relationships:
   - `Relationships.from_person_id` and `Relationships.to_person_id` -> `People.person_id`
   - Family views filter edges by membership of both endpoint people

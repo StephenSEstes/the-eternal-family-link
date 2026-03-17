@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (self-service local password reset by email)
+
+- `Date`: 2026-03-16
+- `Change`: Added a public `Forgot Password?` flow for local users, including a family-context request form, emailed single-use reset links, a public reset-password page that lets the user choose a new password, and automatic sign-in after a successful reset.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a `code/design gap`. The app now uses local username/password as the supported user-facing sign-in path, but there was no self-service recovery flow. Users who forgot their password had no supported path other than asking an admin to reset it manually.
+- `Files`:
+  - `src/components/LoginPageClient.tsx`
+  - `src/app/forgot-password/page.tsx`
+  - `src/components/ForgotPasswordPageClient.tsx`
+  - `src/app/api/password-reset/request/route.ts`
+  - `src/app/reset-password/[token]/page.tsx`
+  - `src/components/PasswordResetClient.tsx`
+  - `src/app/api/password-reset/[token]/route.ts`
+  - `src/lib/auth/password-reset.ts`
+  - `src/lib/auth/password-reset-types.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/ai/help-guide.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: Adds the `PasswordResets` OCI table for single-use reset tokens. Request matching uses existing contact email sources (`UserAccess.user_email`, `People.email`, latest invite email) and does not add new email-based login rows.
+- `Verify`:
+  - Open `/login` and confirm a `Forgot Password?` link is visible.
+  - Request a reset from `/forgot-password` with an email that matches exactly one active local user in the current family group.
+  - Confirm the UI always returns the generic success message and, for a valid match, an email is sent with a reset link.
+  - Open the reset link, choose a new password twice, and confirm the password updates and the user is signed in automatically.
+  - Reuse the same reset link and confirm it is no longer active.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the forgot-password/reset-password routes, remove the `PasswordResets` table compatibility logic, and remove the login/help text updates together so the UI does not advertise a recovery path that no longer exists.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to add local self-service password recovery as a supported authentication behavior.
+
 ## 2026-03-16 (local-only invite onboarding with explicit install/login guidance)
 
 - `Date`: 2026-03-16
