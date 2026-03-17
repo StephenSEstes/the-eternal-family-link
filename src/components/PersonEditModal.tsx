@@ -114,6 +114,7 @@ function normalizeFamilyGroupKey(value?: string) {
 }
 
 type TabKey = "contact" | "attributes" | "photos";
+type ProfileSectionKey = "identity" | "name" | "contact" | "family" | "notes";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 const ADD_NEW_SPOUSE_OPTION = "__add_new_spouse__";
 const DIVORCE_SPOUSE_OPTION = "__divorce_spouse__";
@@ -193,6 +194,19 @@ function formatDisplayDate(value?: string) {
   const parsed = parseDate(value);
   if (!parsed) return "-";
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
+}
+
+function formatSummaryValue(value?: string, emptyLabel = "Not added") {
+  const trimmed = String(value ?? "").trim();
+  return trimmed || emptyLabel;
+}
+
+function summarizeNames(values: Array<string | undefined>, emptyLabel = "None") {
+  const cleaned = values.map((value) => String(value ?? "").trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return emptyLabel;
+  }
+  return cleaned.join(", ");
 }
 
 function computeYearsSince(value?: string) {
@@ -683,6 +697,7 @@ export function PersonEditModal({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("contact");
+  const [editingSection, setEditingSection] = useState<ProfileSectionKey | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -859,6 +874,62 @@ export function PersonEditModal({
     return `Review AI Draft ${storyImportDraftIndex + 1} of ${storyImportDrafts.length}`;
   }, [attributeLaunchMeta.addTitle, currentStoryImportDraft, storyImportDraftIndex, storyImportDrafts.length]);
 
+  const resetProfileEditorState = (nextPerson: PersonItem, clearStatus = true) => {
+    setDisplayName(nextPerson.displayName || "");
+    setFirstName(nextPerson.firstName || "");
+    setMiddleName(nextPerson.middleName || "");
+    setLastName(nextPerson.lastName || "");
+    setMaidenName(nextPerson.maidenName || "");
+    setNickName(nextPerson.nickName || "");
+    setBirthDate(nextPerson.birthDate || "");
+    setGender(nextPerson.gender || "unspecified");
+    setPhones(formatUsPhoneForEdit(nextPerson.phones || ""));
+    setEmail(nextPerson.email || "");
+    setAddress(nextPerson.address || "");
+    setHobbies(nextPerson.hobbies || "");
+    setNotes(nextPerson.notes || "");
+    const initialParent1Id = parentSelection.motherId;
+    const initialParent2Id = parentSelection.fatherId;
+    setParent1Id(initialParent1Id);
+    setParent2Id(initialParent2Id);
+    const partner = contextHouseholds.find((item) => item.partner1PersonId === nextPerson.personId || item.partner2PersonId === nextPerson.personId);
+    let initialSpouseId = "";
+    if (partner) {
+      initialSpouseId = partner.partner1PersonId === nextPerson.personId ? partner.partner2PersonId : partner.partner1PersonId;
+      setSpouseId(initialSpouseId);
+    } else {
+      initialSpouseId = spouseByRelationshipId;
+      setSpouseId(initialSpouseId);
+    }
+    setDivorceSpouseId("");
+    initialFamilyRef.current = {
+      parent1Id: normalizeId(initialParent1Id),
+      parent2Id: normalizeId(initialParent2Id),
+      spouseId: normalizeId(initialSpouseId),
+    };
+    setFamilyTouched(false);
+    setShowAddSpouse(false);
+    setNewSpouseFirstName("");
+    setNewSpouseMiddleName("");
+    setNewSpouseLastName("");
+    setNewSpouseNickName("");
+    setNewSpouseDisplayName("");
+    setNewSpouseMaidenName("");
+    setNewSpouseBirthDate("");
+    setNewSpouseGender(oppositeGender(nextPerson.gender || "unspecified"));
+    pendingCreatedSpouseIdRef.current = "";
+    setEditingSection(null);
+    if (clearStatus) {
+      setStatus("");
+    }
+    setPersonEnabledFamilyGroupKeys([normalizeFamilyGroupKey(tenantKey)]);
+    setStoredFamilyGroupRelationshipType(
+      normalizeFamilyGroupRelationshipType(
+        peopleById.get(nextPerson.personId)?.familyGroupRelationshipType ?? nextPerson.familyGroupRelationshipType,
+      ),
+    );
+  };
+
   useEffect(() => {
     setLocalPeople(people);
     setContextEdges(edges);
@@ -985,43 +1056,11 @@ export function PersonEditModal({
     }
     wasOpenRef.current = true;
     previousPersonIdRef.current = person.personId;
-    setDisplayName(person.displayName || "");
-    setFirstName(person.firstName || "");
-    setMiddleName(person.middleName || "");
-    setLastName(person.lastName || "");
-    setMaidenName(person.maidenName || "");
-    setNickName(person.nickName || "");
-    setBirthDate(person.birthDate || "");
-    setGender(person.gender || "unspecified");
-    setPhones(formatUsPhoneForEdit(person.phones || ""));
-    setEmail(person.email || "");
-    setAddress(person.address || "");
-    setHobbies(person.hobbies || "");
-    setNotes(person.notes || "");
+    resetProfileEditorState(person);
     setShowStoryImportModal(false);
     setStoryImportText(person.notes || "");
     setStoryImportStatus("");
     clearStoryImportQueue();
-    const initialParent1Id = parentSelection.motherId;
-    const initialParent2Id = parentSelection.fatherId;
-    setParent1Id(initialParent1Id);
-    setParent2Id(initialParent2Id);
-    const partner = contextHouseholds.find((item) => item.partner1PersonId === person.personId || item.partner2PersonId === person.personId);
-    let initialSpouseId = "";
-    if (partner) {
-      initialSpouseId = partner.partner1PersonId === person.personId ? partner.partner2PersonId : partner.partner1PersonId;
-      setSpouseId(initialSpouseId);
-    } else {
-      initialSpouseId = spouseByRelationshipId;
-      setSpouseId(initialSpouseId);
-    }
-    setDivorceSpouseId("");
-    initialFamilyRef.current = {
-      parent1Id: normalizeId(initialParent1Id),
-      parent2Id: normalizeId(initialParent2Id),
-      spouseId: normalizeId(initialSpouseId),
-    };
-    setFamilyTouched(false);
     setSelectedPhotoAttributeId("");
     setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
     setTagQuery("");
@@ -1034,24 +1073,7 @@ export function PersonEditModal({
     setPersonPhotoQuery("");
     setPhotoAssociationStatus("");
     setShowPhotoDetail(false);
-    setShowAddSpouse(false);
     setSelectedAboutAttributeId("");
-    setNewSpouseFirstName("");
-    setNewSpouseMiddleName("");
-    setNewSpouseLastName("");
-    setNewSpouseNickName("");
-    setNewSpouseDisplayName("");
-    setNewSpouseMaidenName("");
-    setNewSpouseBirthDate("");
-    setNewSpouseGender(oppositeGender(person.gender || "unspecified"));
-    pendingCreatedSpouseIdRef.current = "";
-    setStatus("");
-    setPersonEnabledFamilyGroupKeys([normalizeFamilyGroupKey(tenantKey)]);
-    setStoredFamilyGroupRelationshipType(
-      normalizeFamilyGroupRelationshipType(
-        peopleById.get(person.personId)?.familyGroupRelationshipType ?? person.familyGroupRelationshipType,
-      ),
-    );
     void loadPersonAttributeState(person.personId);
   }, [open, peopleById, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
 
@@ -1294,6 +1316,58 @@ export function PersonEditModal({
     return familyGroupOptions.filter((option) => allowedKeys.has(normalizeFamilyGroupKey(option.key)));
   }, [familyGroupOptions, personEnabledFamilyGroupKeys]);
   const canSwitchPersonFamilyGroup = linkedFamilyGroupOptions.length > 1;
+  const activeFamilyGroupName = useMemo(() => {
+    return (
+      familyGroupOptions.find((option) => normalizeFamilyGroupKey(option.key) === normalizeFamilyGroupKey(activeTenantKey))?.name
+      || linkedFamilyGroupOptions.find((option) => normalizeFamilyGroupKey(option.key) === normalizeFamilyGroupKey(activeTenantKey))?.name
+      || activeTenantKey
+    );
+  }, [activeTenantKey, familyGroupOptions, linkedFamilyGroupOptions]);
+  const parentSummaryText = useMemo(
+    () =>
+      summarizeNames(
+        [
+          parent1Id ? peopleNameById.get(parent1Id) ?? parent1Id : "",
+          parent2Id ? peopleNameById.get(parent2Id) ?? parent2Id : "",
+        ],
+        isFounderPerson
+          ? "Not shown for founders"
+          : isInLawPerson
+            ? "Visible in the direct family group"
+            : "Not connected",
+      ),
+    [isFounderPerson, isInLawPerson, parent1Id, parent2Id, peopleNameById],
+  );
+  const childrenSummaryText = useMemo(() => {
+    if (childIds.length === 0) {
+      return "No children linked";
+    }
+    const names = childIds.map((childId) => peopleNameById.get(childId) ?? childId).filter(Boolean);
+    if (names.length <= 3) {
+      return names.join(", ");
+    }
+    return `${names.slice(0, 3).join(", ")} +${names.length - 3} more`;
+  }, [childIds, peopleNameById]);
+  const spouseSummaryText = useMemo(() => {
+    if (selectedSpouseName !== "-") {
+      return selectedSpouseName;
+    }
+    if (!currentPersonCanHaveSpouse) {
+      return "Unavailable before age 19";
+    }
+    return "None";
+  }, [currentPersonCanHaveSpouse, selectedSpouseName]);
+  const notesPreviewText = useMemo(() => {
+    const trimmed = notes.trim();
+    return trimmed || "No notes added yet.";
+  }, [notes]);
+  const activeEditSectionLabel = useMemo(() => {
+    if (editingSection === "family") return "family";
+    if (editingSection === "notes") return "notes";
+    if (editingSection === "contact") return "contact";
+    if (editingSection === "name") return "name";
+    return "profile";
+  }, [editingSection]);
   const applyLocalFamilyGroupRelationshipType = (personId: string, nextType: FamilyGroupRelationshipType) => {
     setLocalPeople((current) =>
       current.map((item) =>
@@ -1328,6 +1402,96 @@ export function PersonEditModal({
     setFamilyRelationshipTypeBusy(false);
     setStatus(nextFounderValue ? "Founder designation saved." : "Founder designation removed.");
     onSaved();
+  };
+  const saveProfileSection = async () => {
+    if (!person?.personId || !editingSection) return;
+    setSaving(true);
+    setStatus(`Saving ${activeEditSectionLabel}...`);
+    const personRes = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: displayName.trim() || person.displayName,
+          first_name: firstName,
+          middle_name: middleName,
+          last_name: lastName,
+          maiden_name: maidenName,
+          nick_name: nickName,
+          birth_date: birthDate,
+          gender,
+          phones,
+          email,
+          address,
+          hobbies,
+          notes,
+        }),
+      },
+    );
+    if (!personRes.ok) {
+      const body = await personRes.text();
+      setStatus(`Save failed: ${personRes.status} ${body.slice(0, 150)}`);
+      setSaving(false);
+      return;
+    }
+    if (canManage) {
+      const initialFamily = initialFamilyRef.current;
+      const familyChanged =
+        familyTouched ||
+        normalizeId(parent1Id) !== normalizeId(initialFamily.parent1Id) ||
+        normalizeId(parent2Id) !== normalizeId(initialFamily.parent2Id) ||
+        normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
+      if (familyChanged) {
+        const relationshipRes = await fetch(
+          `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personId: person.personId,
+              parentIds: [parent1Id, parent2Id].filter(Boolean),
+              childIds,
+              spouseId: divorceSpouseId || spouseId,
+              spouseAction: divorceSpouseId ? "divorce" : "link",
+              familyChanged: true,
+            }),
+          },
+        );
+        if (!relationshipRes.ok) {
+          const body = await relationshipRes.json().catch(() => null);
+          const message = body?.message || body?.error || "";
+          const hint = body?.hint ? ` | ${body.hint}` : "";
+          setStatus(
+            `Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`,
+          );
+          setSaving(false);
+          return;
+        }
+        applyLocalFamilyGroupRelationshipType(person.personId, displayedFamilyGroupRelationshipType);
+      }
+    }
+    setStatus(
+      editingSection === "family"
+        ? "Family saved."
+        : editingSection === "notes"
+          ? "Notes saved."
+          : "Profile saved.",
+    );
+    setSaving(false);
+    setEditingSection(null);
+    onSaved();
+  };
+  const handleCancelSectionEdit = () => {
+    if (!person) return;
+    resetProfileEditorState(person);
+  };
+  const handleSelectTab = (nextTab: TabKey) => {
+    if (nextTab === activeTab) return;
+    if (activeTab === "contact" && editingSection && person) {
+      resetProfileEditorState(person);
+    }
+    setActiveTab(nextTab);
   };
   const aboutDescriptorAttributes = useMemo(() => {
     return aboutAttributes.filter((item) => {
@@ -1830,6 +1994,14 @@ export function PersonEditModal({
     }
   };
 
+  const isEditingIdentity = editingSection === "identity";
+  const isEditingName = editingSection === "name";
+  const isEditingContact = editingSection === "contact";
+  const isEditingFamily = editingSection === "family";
+  const isEditingNotes = editingSection === "notes";
+  const isContactTabEditing = activeTab === "contact" && Boolean(editingSection);
+  const allowSectionEdit = (section: ProfileSectionKey) => !showReadOnly && (!editingSection || editingSection === section) && !saving;
+
   return (
     <div
       className="person-modal-backdrop"
@@ -1888,182 +2060,258 @@ export function PersonEditModal({
         </div>
 
         <div className="person-modal-tabs">
-          <button type="button" className={`tab-pill ${activeTab === "contact" ? "active" : ""}`} onClick={() => setActiveTab("contact")}>Contact Info</button>
-          <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => setActiveTab("attributes")}>{aboutLabel}</button>
-          <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => setActiveTab("photos")}>Pictures</button>
+          <button type="button" className={`tab-pill ${activeTab === "contact" ? "active" : ""}`} onClick={() => handleSelectTab("contact")}>Profile</button>
+          <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => handleSelectTab("attributes")}>{aboutLabel}</button>
+          <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => handleSelectTab("photos")}>Pictures</button>
         </div>
         <div className="person-modal-content">
 
         {activeTab === "contact" ? (
           <>
-            <div className="person-section-grid">
-              <div className="card">
-                <h4 className="ui-section-title">Identity</h4>
-                <div className="field-grid">
-                  <div>
-                    <label className="label">Display Name</label>
-                    <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                  <div>
-                    <label className="label">{deathDateValue.trim() ? "From Date" : "Birthdate"}</label>
-                    <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                  {deathDateValue.trim() ? (
+            <div className="person-section-grid person-profile-grid">
+              <div className="card person-profile-card">
+                <div className="person-profile-card-header">
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Identity</h4>
+                  {!showReadOnly ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={!allowSectionEdit("identity")}
+                      onClick={() => {
+                        setEditingSection("identity");
+                        setStatus("");
+                      }}
+                    >
+                      {isEditingIdentity ? "Editing" : "Edit"}
+                    </button>
+                  ) : null}
+                </div>
+                {isEditingIdentity ? (
+                  <div className="field-grid">
                     <div>
-                      <label className="label">To Date</label>
+                      <label className="label">Display Name</label>
+                      <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    <div>
+                      <label className="label">{deathDateValue.trim() ? "From Date" : "Birthdate"}</label>
+                      <input className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    {deathDateValue.trim() ? (
+                      <div>
+                        <label className="label">To Date</label>
+                        <input className="input" type="date" value={deathDateValue} disabled readOnly />
+                      </div>
+                    ) : null}
+                    <div className="field-span-2">
+                      <label className="label">Gender</label>
+                      <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")} disabled={showReadOnly}>
+                        <option value="unspecified">Unspecified</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="person-summary-grid">
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Display Name</span>
+                      <span className="person-summary-value">{formatSummaryValue(displayName)}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">{deathDateText ? "From Date" : "Birthdate"}</span>
+                      <span className="person-summary-value">{formatDisplayDate(birthDate)}</span>
+                    </div>
+                    {deathDateText ? (
+                      <div className="person-summary-row">
+                        <span className="person-summary-label">To Date</span>
+                        <span className="person-summary-value">{deathDateText}</span>
+                      </div>
+                    ) : null}
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Gender</span>
+                      <span className="person-summary-value">{formatSummaryValue(gender === "unspecified" ? "" : gender)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="card person-profile-card">
+                <div className="person-profile-card-header">
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Name</h4>
+                  {!showReadOnly ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={!allowSectionEdit("name")}
+                      onClick={() => {
+                        setEditingSection("name");
+                        setStatus("");
+                      }}
+                    >
+                      {isEditingName ? "Editing" : "Edit"}
+                    </button>
+                  ) : null}
+                </div>
+                {isEditingName ? (
+                  <div className="field-grid">
+                    <div>
+                      <label className="label">First Name</label>
+                      <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    <div>
+                      <label className="label">Middle Name</label>
+                      <input className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    <div>
+                      <label className="label">Last Name</label>
+                      <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    <div>
+                      <label className="label">Nick Name</label>
+                      <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
+                    </div>
+                    {gender === "female" || maidenName.trim() ? (
+                      <div className="field-span-2">
+                        <label className="label">Maiden Name</label>
+                        <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} disabled={showReadOnly} />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="person-summary-grid">
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">First Name</span>
+                      <span className="person-summary-value">{formatSummaryValue(firstName)}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Middle Name</span>
+                      <span className="person-summary-value">{formatSummaryValue(middleName)}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Last Name</span>
+                      <span className="person-summary-value">{formatSummaryValue(lastName)}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Nick Name</span>
+                      <span className="person-summary-value">{formatSummaryValue(nickName)}</span>
+                    </div>
+                    {maidenName.trim() ? (
+                      <div className="person-summary-row">
+                        <span className="person-summary-label">Maiden Name</span>
+                        <span className="person-summary-value">{maidenName.trim()}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              <div className="card person-profile-card">
+                <div className="person-profile-card-header">
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Contact</h4>
+                  {!showReadOnly ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={!allowSectionEdit("contact")}
+                      onClick={() => {
+                        setEditingSection("contact");
+                        setStatus("");
+                      }}
+                    >
+                      {isEditingContact ? "Editing" : "Edit"}
+                    </button>
+                  ) : null}
+                </div>
+                {isEditingContact ? (
+                  <>
+                    <label className="label">Phone</label>
+                    <div className="settings-chip-list person-inline-input-actions">
                       <input
                         className="input"
-                        type="date"
-                        value={deathDateValue}
-                        disabled
-                        readOnly
+                        value={phones}
+                        onChange={(e) => setPhones(e.target.value)}
+                        onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
+                        disabled={showReadOnly}
                       />
+                      {phoneActionItems.length > 0 ? (
+                        <div className="person-summary-actions">
+                          {phoneActionItems.map((item) => (
+                            <span key={item.smsHref} className="person-summary-actions">
+                              <a href={item.telHref} className="button secondary tap-button person-profile-inline-action">Call</a>
+                              <a href={item.smsHref} className="button secondary tap-button person-profile-inline-action">Text</a>
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span />}
                     </div>
-                  ) : null}
-                  <div className="field-span-2">
-                    <label className="label">Gender</label>
-                    <select className="input" value={gender} onChange={(e) => setGender(e.target.value as "male" | "female" | "unspecified")} disabled={showReadOnly}>
-                      <option value="unspecified">Unspecified</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card">
-                <h4 className="ui-section-title">Name</h4>
-                <div className="field-grid">
-                  <div>
-                    <label className="label">First Name</label>
-                    <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                  <div>
-                    <label className="label">Middle Name</label>
-                    <input className="input" value={middleName} onChange={(e) => setMiddleName(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                  <div>
-                    <label className="label">Last Name</label>
-                    <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                  <div>
-                    <label className="label">Nick Name</label>
-                    <input className="input" value={nickName} onChange={(e) => setNickName(e.target.value)} disabled={showReadOnly} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="card">
-                <h4 className="ui-section-title">Contact</h4>
-                <label className="label">Phone</label>
-                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "stretch", marginBottom: "0.6rem" }}>
-                  <input
-                    className="input"
-                    value={phones}
-                    onChange={(e) => setPhones(e.target.value)}
-                    onBlur={() => setPhones((current) => formatUsPhoneForEdit(current))}
-                    disabled={showReadOnly}
-                  />
-                  {phoneActionItems.length > 0 ? (
-                    <div style={{ display: "inline-flex", gap: "0.4rem", alignItems: "stretch", alignSelf: "stretch" }}>
-                      {phoneActionItems.map((item) => (
-                        <span key={item.smsHref} style={{ display: "inline-flex", gap: "0.4rem", alignItems: "stretch" }}>
-                          <a
-                            href={item.telHref}
-                            className="button secondary tap-button"
-                            style={{
-                              minHeight: "44px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "0 0.8rem",
-                              whiteSpace: "nowrap",
-                              background: "#eef2f7",
-                              border: "1px solid #d3dbe6",
-                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
-                            }}
-                          >
-                            Call
-                          </a>
-                          <a
-                            href={item.smsHref}
-                            className="button secondary tap-button"
-                            style={{
-                              minHeight: "44px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "0 0.8rem",
-                              whiteSpace: "nowrap",
-                              background: "#eef2f7",
-                              border: "1px solid #d3dbe6",
-                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
-                            }}
-                          >
-                            Text
-                          </a>
-                        </span>
-                      ))}
+                    <label className="label">Email</label>
+                    <div className="settings-chip-list person-inline-input-actions">
+                      <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
+                      {email.trim() ? (
+                        <a href={`mailto:${email.trim()}`} className="button secondary tap-button person-profile-inline-action">
+                          Email
+                        </a>
+                      ) : null}
                     </div>
-                  ) : <span />}
-                </div>
-                <label className="label">Email</label>
-                <div className="settings-chip-list" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "stretch", marginBottom: "0.6rem" }}>
-                  <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={showReadOnly} />
-                  {email.trim() ? (
-                    <a
-                      href={`mailto:${email.trim()}`}
-                      className="button secondary tap-button"
-                      style={{
-                        minHeight: "44px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        padding: "0 0.8rem",
-                        whiteSpace: "nowrap",
-                        alignSelf: "stretch",
-                        background: "#eef2f7",
-                        border: "1px solid #d3dbe6",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
-                      }}
-                    >
-                      Email
-                    </a>
-                  ) : null}
-                </div>
-                <label className="label">Address</label>
-                <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
+                    <label className="label">Address</label>
+                    <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} disabled={showReadOnly} />
+                  </>
+                ) : (
+                  <div className="person-summary-grid">
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Phone</span>
+                      <div className="person-summary-value person-summary-value--actions">
+                        <span>{formatSummaryValue(formatUsPhoneForEdit(phones), "Not added")}</span>
+                        {primaryPhoneAction ? (
+                          <span className="person-summary-actions">
+                            <a href={primaryPhoneAction.telHref} className="person-modal-contact-action">Call</a>
+                            <a href={primaryPhoneAction.smsHref} className="person-modal-contact-action">Text</a>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Email</span>
+                      <div className="person-summary-value person-summary-value--actions">
+                        <span>{formatSummaryValue(email)}</span>
+                        {emailActionHref ? (
+                          <span className="person-summary-actions">
+                            <a href={emailActionHref} className="person-modal-contact-action">Email</a>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="person-summary-row person-summary-row--stacked">
+                      <span className="person-summary-label">Address</span>
+                      <span className="person-summary-value">{formatSummaryValue(address)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="card">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    flexWrap: "wrap",
-                    marginBottom: "0.75rem",
-                  }}
-                >
+              <div className="card person-profile-card field-span-2">
+                <div className="person-profile-card-header">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Family</h4>
-                  {canManageRelationshipType ? (
-                    <label
-                      className="label"
-                      style={{
-                        marginBottom: 0,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        fontSize: "0.82rem",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isFounderPerson}
-                        disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
-                        onChange={(e) => void saveFounderDesignation(e.target.checked)}
-                      />
-                      Founder
-                    </label>
-                  ) : null}
+                  <div className="person-profile-card-actions">
+                    {householdId ? (
+                      <button type="button" className="button secondary tap-button" onClick={() => onEditHousehold(householdId)}>
+                        Edit Household
+                      </button>
+                    ) : null}
+                    {!showReadOnly ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        disabled={!allowSectionEdit("family")}
+                        onClick={() => {
+                          setEditingSection("family");
+                          setStatus("");
+                        }}
+                      >
+                        {isEditingFamily ? "Editing" : "Edit"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <div
                   style={{
@@ -2074,7 +2322,7 @@ export function PersonEditModal({
                     marginBottom: "0.75rem",
                   }}
                 >
-                  <span className="label" style={{ marginBottom: 0 }}>Family Group</span>
+                  <span className="label" style={{ marginBottom: 0 }}>Relationship</span>
                   <span
                     title={familyRelationshipHint || undefined}
                     aria-label={familyRelationshipHint ? `${formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}. ${familyRelationshipHint}` : formatFamilyGroupRelationshipTypeLabel(displayedFamilyGroupRelationshipType)}
@@ -2104,6 +2352,7 @@ export function PersonEditModal({
                 </div>
                 {canSwitchPersonFamilyGroup ? (
                   <div style={{ marginBottom: "0.75rem" }}>
+                    <label className="label">View Family Group</label>
                     <select
                       className="input"
                       value={activeTenantKey}
@@ -2189,8 +2438,29 @@ export function PersonEditModal({
                     This in-law is not linked to another family group, so family-group switching is unavailable here.
                   </p>
                 ) : null}
-                {canManage ? (
+                {isEditingFamily ? (
+                  canManage ? (
                   <>
+                    {canManageRelationshipType ? (
+                      <label
+                        className="label"
+                        style={{
+                          marginBottom: "0.75rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isFounderPerson}
+                          disabled={familyRelationshipTypeBusy || (!isFounderPerson && founderCount >= 2)}
+                          onChange={(e) => void saveFounderDesignation(e.target.checked)}
+                        />
+                        Founder
+                      </label>
+                    ) : null}
                     <div className="settings-chip-list">
                       {!isInLawPerson && !isFounderPerson ? (
                         <>
@@ -2301,12 +2571,6 @@ export function PersonEditModal({
                           </p>
                         </div>
                       )}
-                      {gender === "female" && spouseId ? (
-                        <div style={{ flex: 1, minWidth: 180 }}>
-                          <label className="label">Maiden Name</label>
-                          <input className="input" value={maidenName} onChange={(e) => setMaidenName(e.target.value)} disabled={showReadOnly} />
-                        </div>
-                      ) : null}
                     </div>
                       {!hasVisibleSpouseSelection && !isAnchorFamilyGroupRelationshipType(displayedFamilyGroupRelationshipType) ? (
                         <div style={{ marginTop: "0.75rem" }}>
@@ -2322,33 +2586,73 @@ export function PersonEditModal({
                         </p>
                       </div>
                     ) : null}
-                    {householdId ? (
-                      <button type="button" className="button secondary tap-button" onClick={() => onEditHousehold(householdId)}>
-                        Edit Household
-                      </button>
-                    ) : null}
                   </>
                 ) : (
                   <p className="page-subtitle" style={{ marginBottom: "0.5rem" }}>
                     Relationship editing is available to administrators.
                   </p>
+                )
+                ) : (
+                  <div className="person-summary-grid">
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Family Group</span>
+                      <span className="person-summary-value">{formatSummaryValue(activeFamilyGroupName, activeTenantKey)}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Parents</span>
+                      <span className="person-summary-value">{parentSummaryText}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Spouse</span>
+                      <span className="person-summary-value">{spouseSummaryText}</span>
+                    </div>
+                    <div className="person-summary-row">
+                      <span className="person-summary-label">Children</span>
+                      <span className="person-summary-value">{childrenSummaryText}</span>
+                    </div>
+                    {marriedSummaryText !== "coming" ? (
+                      <div className="person-summary-row">
+                        <span className="person-summary-label">Married</span>
+                        <span className="person-summary-value">{marriedSummaryText}</span>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
 
-              <div className="card field-span-2">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.55rem" }}>
+              <div className="card person-profile-card field-span-2">
+                <div className="person-profile-card-header">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Notes</h4>
-                  {canManage ? (
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      onClick={openStoryImportModal}
-                    >
-                      Import Story with AI (testing)
-                    </button>
-                  ) : null}
+                  <div className="person-profile-card-actions">
+                    {canManage ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={openStoryImportModal}
+                      >
+                        Import Story with AI (testing)
+                      </button>
+                    ) : null}
+                    {!showReadOnly ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        disabled={!allowSectionEdit("notes")}
+                        onClick={() => {
+                          setEditingSection("notes");
+                          setStatus("");
+                        }}
+                      >
+                        {isEditingNotes ? "Editing" : "Edit"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-                <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
+                {isEditingNotes ? (
+                  <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={showReadOnly} />
+                ) : (
+                  <p className="person-notes-preview">{notesPreviewText}</p>
+                )}
               </div>
             </div>
           </>
@@ -2964,93 +3268,29 @@ export function PersonEditModal({
           status={status ? <ModalStatusBanner tone={personStatusTone}>{status}</ModalStatusBanner> : null}
           actions={
             <>
-              <AsyncActionButton type="button" tone="secondary" className="tap-button" disabled={saving} onClick={onClose}>
-                Cancel
-              </AsyncActionButton>
               <AsyncActionButton
                 type="button"
+                tone="secondary"
                 className="tap-button"
-                pending={saving}
-                pendingLabel="Saving..."
-                disabled={showReadOnly || saving}
-                onClick={() =>
-                  void (async () => {
-                    if (!person.personId) return;
-                    setSaving(true);
-                    setStatus("Saving person...");
-                    const personRes = await fetch(
-                      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}`,
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          display_name: displayName.trim() || person.displayName,
-                          first_name: firstName,
-                          middle_name: middleName,
-                          last_name: lastName,
-                          maiden_name: maidenName,
-                          nick_name: nickName,
-                          birth_date: birthDate,
-                          gender,
-                          phones,
-                          email,
-                          address,
-                          hobbies,
-                          notes,
-                        }),
-                      },
-                    );
-                    if (!personRes.ok) {
-                      const body = await personRes.text();
-                      setStatus(`Save failed: ${personRes.status} ${body.slice(0, 150)}`);
-                      setSaving(false);
-                      return;
-                    }
-                    if (canManage) {
-                      const initialFamily = initialFamilyRef.current;
-                      const familyChanged =
-                        familyTouched ||
-                        normalizeId(parent1Id) !== normalizeId(initialFamily.parent1Id) ||
-                        normalizeId(parent2Id) !== normalizeId(initialFamily.parent2Id) ||
-                        normalizeId(spouseId) !== normalizeId(initialFamily.spouseId);
-                      if (familyChanged) {
-                        const relationshipRes = await fetch(
-                          `/api/t/${encodeURIComponent(activeTenantKey)}/relationships/builder`,
-                          {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              personId: person.personId,
-                              parentIds: [parent1Id, parent2Id].filter(Boolean),
-                              childIds,
-                              spouseId: divorceSpouseId || spouseId,
-                              spouseAction: divorceSpouseId ? "divorce" : "link",
-                              familyChanged: true,
-                            }),
-                          },
-                        );
-                        if (!relationshipRes.ok) {
-                          const body = await relationshipRes.json().catch(() => null);
-                          const message = body?.message || body?.error || "";
-                          const hint = body?.hint ? ` | ${body.hint}` : "";
-                          setStatus(
-                            `Saved person, relationship save failed: ${relationshipRes.status} ${String(message).slice(0, 150)}${hint}`,
-                          );
-                          setSaving(false);
-                          return;
-                        }
-                        applyLocalFamilyGroupRelationshipType(person.personId, displayedFamilyGroupRelationshipType);
-                      }
-                    }
-                    setStatus("Saved.");
-                    setSaving(false);
-                    onSaved();
-                    onClose();
-                  })()
-                }
+                disabled={saving}
+                onClick={isContactTabEditing ? handleCancelSectionEdit : onClose}
               >
-                Save and Close
+                {isContactTabEditing ? "Cancel" : "Close"}
               </AsyncActionButton>
+              {isContactTabEditing ? (
+                <AsyncActionButton
+                  type="button"
+                  className="tap-button"
+                  pending={saving}
+                  pendingLabel="Saving..."
+                  disabled={showReadOnly || saving}
+                  onClick={() => {
+                    void saveProfileSection();
+                  }}
+                >
+                  Save and Close
+                </AsyncActionButton>
+              ) : null}
             </>
           }
         />

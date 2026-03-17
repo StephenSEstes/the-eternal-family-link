@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-17 (person profile summary-first editing)
+
+- `Date`: 2026-03-17
+- `Change`: Reworked the person `Contact Info` tab into a summary-first `Profile` tab that shows compact label/value cards by default and only reveals fields for the active section being edited (`Identity`, `Name`, `Contact`, `Family`, `Notes`).
+- `Type`: UI
+- `Why`: Root cause was a `code/design issue`. The person modal rendered its entire profile tab as a full edit form all the time, even though most fields are rarely changed. That consumed too much space, kept too many inputs visible, and made the screen feel heavier than necessary.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: None.
+- `Verify`:
+  - Open a person and confirm the first tab is now `Profile`.
+  - Confirm `Identity`, `Name`, `Contact`, `Family`, and `Notes` open as summary cards instead of always-visible edit fields.
+  - Click `Edit` on a section and confirm only that section reveals inputs.
+  - Confirm the modal footer only shows `Cancel` + `Save and Close` while a section is actively being edited, and otherwise just shows `Close`.
+  - Save a section and confirm it returns to summary mode with the updated values.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the `PersonEditModal` summary/edit refactor, the supporting CSS, and the design-doc updates together so the profile tab does not partially mix summary cards with the old full-form footer behavior.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make summary-first, section-level profile editing the person-screen rule.
+
 ## 2026-03-16 (self-service local password reset by email)
 
 - `Date`: 2026-03-16

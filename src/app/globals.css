@@ -2758,6 +2758,104 @@ main,
   gap: 0.9rem;
 }
 
+.person-profile-grid {
+  align-items: start;
+}
+
+.person-profile-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.person-profile-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.person-profile-card-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.person-summary-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.person-summary-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.person-summary-row--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.person-summary-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.person-summary-value {
+  min-width: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.person-summary-value--actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.person-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.person-inline-input-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  margin-bottom: 0.6rem;
+}
+
+.person-profile-inline-action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.8rem;
+  white-space: nowrap;
+  background: #eef2f7;
+  border: 1px solid #d3dbe6;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+}
+
+.person-notes-preview {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .field-grid {
   display: grid;
   gap: 0.75rem;
@@ -2810,6 +2908,21 @@ main,
 
   .person-library-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .person-summary-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  .person-summary-value--actions {
+    align-items: flex-start;
+  }
+
+  .person-inline-input-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

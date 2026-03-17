@@ -201,3 +201,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep password resets admin-only; use usernames instead of email for reset lookup; store reset state inside invites instead of a separate token model.
 - `Impact`: Adds public forgot-password/reset-password routes, a `PasswordResets` token table, reset emails through the existing Gmail sender, and family-specific reset validation against active local users. The request flow returns a generic success message so it does not reveal whether an email matched a user.
 - `Follow-up`: If multiple active users intentionally share the same email in one family group, decide whether to support multi-user reset selection or require unique reset email addresses per active user.
+
+## 2026-03-17
+
+- `Area`: Person profile editing UX
+- `Decision`: The person `Profile` tab should open in summary mode by default and expose editing one section at a time (`Identity`, `Name`, `Contact`, `Family`, `Notes`) instead of rendering the whole tab as an always-editable form.
+- `Reason`: Most person fields are read far more often than they are edited. The prior always-editable layout used too much space, kept too many inputs on screen at once, and made the person screen feel heavier than the actual editing frequency justified.
+- `Alternatives Considered`: Keep the full-form layout; add a single global edit checkbox that reveals all fields; split the person profile into separate pages instead of section editing.
+- `Impact`: The Profile tab now shows label/value summaries by default, section-level `Edit` actions reveal fields only for the active section, and the modal footer shows `Cancel` + `Save and Close` only while a section is actively being edited.
+- `Follow-up`: Apply the same summary-first pattern to other read-mostly entity screens if those screens show the same “always-edit form” problem.
