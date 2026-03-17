@@ -13,6 +13,42 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (login page uses active family for local sign-in)
+
+- `Date`: 2026-03-16
+- `Change`: The generic `/login` page now resolves the active family-group key from the request cookies and uses that tenant for local username/password sign-in, instead of hardcoding the default family. Successful sign-in now returns to that family’s home route.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. [login/page.tsx](/C:/Users/steph/the-eternal-family-link/src/app/login/page.tsx) always posted credentials with `tenantKey = snowestes`, so valid local credentials for users like Ezra in `meldrumclark` were checked against the wrong family and always failed.
+- `Files`:
+  - `src/app/login/page.tsx`
+  - `src/components/LoginPageClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Visit `/t/meldrumclark/...`, sign out, then open `/login`.
+  - Sign in locally with `ezra / Welcome1`.
+  - Confirm the login succeeds and returns into the `meldrumclark` family context.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the server/client split for `/login` and restore the prior fixed-tenant login page.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-16 (manage user immediate password feedback)
+
+- `Date`: 2026-03-16
+- `Change`: The Manage User modal now gives immediate inline feedback for `Update User` and `Update Password` by switching the active button labels to pending states, disabling duplicate clicks while the request runs, and showing the status banner in the modal as a clear success/error indicator instead of quiet subtitle text.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The password update request already wrote status text, but the active button never changed state and the modal banner rendered non-error messages with low-emphasis subtitle styling, so admins could not tell whether the action had started or completed.
+- `Files`:
+  - `src/components/SettingsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `Admin -> Users & Access -> Manage User`.
+  - Enter a password and click `Update Password`.
+  - Confirm the button changes to `Updating...`, the button is temporarily disabled, and the modal shows `Updating password...` followed by `Password updated.` or a visible error.
+  - Repeat with `Update User` and confirm the button changes to `Saving...` and the modal shows `Saving user changes...` followed by `User updated.` or a visible error.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the pending-action state and button/status-message emphasis changes in `SettingsClient`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-16 (atomic local-user update for password changes)
 
 - `Date`: 2026-03-16

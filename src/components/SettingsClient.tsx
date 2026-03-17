@@ -396,6 +396,7 @@ export function SettingsClient({
   const [policyStatus, setPolicyStatus] = useState("");
   const [localUsers, setLocalUsers] = useState<LocalUserItem[]>([]);
   const [localUserStatus, setLocalUserStatus] = useState("");
+  const [manageUserPendingAction, setManageUserPendingAction] = useState<"" | "update_user" | "update_password">("");
   const [localUsername, setLocalUsername] = useState("");
   const [localPassword, setLocalPassword] = useState("");
   const [localRole, setLocalRole] = useState<"ADMIN" | "USER">("USER");
@@ -1094,8 +1095,12 @@ export function SettingsClient({
     return true;
   };
 
-  const patchLocalUser = async (username: string, payload: Record<string, unknown>) => {
-    setLocalUserStatus(`Updating ${username}...`);
+  const patchLocalUser = async (
+    username: string,
+    payload: Record<string, unknown>,
+    options?: { pendingStatus?: string; successStatus?: string },
+  ) => {
+    setLocalUserStatus(options?.pendingStatus ?? `Updating ${username}...`);
     const res = await fetch(
       `/api/t/${encodeURIComponent(selectedTenantKey)}/local-users/${encodeURIComponent(username)}`,
       {
@@ -1121,7 +1126,7 @@ export function SettingsClient({
       return false;
     }
     await loadTenantAdminData(selectedTenantKey);
-    setLocalUserStatus("Local user updated.");
+    setLocalUserStatus(options?.successStatus ?? "Local user updated.");
     if (
       typeof payload.action === "string" &&
       (payload.action === "rename_username" || payload.action === "update_user")
@@ -1776,6 +1781,7 @@ export function SettingsClient({
     setLocalPassword("");
     setInviteResult(null);
     setInviteStatus("");
+    setManageUserPendingAction("");
   };
 
   const selectedPersonGoogleAccess = useMemo(
@@ -1809,6 +1815,10 @@ export function SettingsClient({
     manageUserStatus.includes("required") ||
     manageUserStatus.includes("No local user") ||
     manageUserStatus.includes("Enter a password");
+  const manageUserStatusClassName = manageUserStatusIsWarning ? "status-warn" : "status-ok";
+  const isManageUserSaving = manageUserPendingAction === "update_user";
+  const isManagePasswordSaving = manageUserPendingAction === "update_password";
+  const isManageUserActionPending = manageUserPendingAction !== "";
   const familyPeopleById = useMemo(
     () => new Map(familyPeople.map((person) => [person.personId, person.displayName])),
     [familyPeople],
@@ -2325,7 +2335,8 @@ export function SettingsClient({
                       <>
                         {manageUserStatus ? (
                           <p
-                            className={manageUserStatusIsWarning ? "status-warn" : "page-subtitle"}
+                            className={manageUserStatusClassName}
+                            aria-live="polite"
                             style={{ marginTop: 0, marginBottom: "0.75rem" }}
                           >
                             {manageUserStatus}
@@ -2402,96 +2413,129 @@ export function SettingsClient({
                           <button
                             type="button"
                             className="button tap-button"
+                            disabled={isManageUserActionPending}
                             onClick={() =>
                               void (async () => {
-                                setPersonId(selectedDirectoryPerson.personId);
-                                setLocalPersonId(selectedDirectoryPerson.personId);
+                                setManageUserPendingAction("update_user");
+                                setLocalUserStatus("Saving user changes...");
+                                try {
+                                  setPersonId(selectedDirectoryPerson.personId);
+                                  setLocalPersonId(selectedDirectoryPerson.personId);
 
-                                if (isEnabled) {
-                                  if (!userEmail.trim()) {
-                                    setAccessStatus("Google email is required when Google Access is enabled.");
-                                    return;
-                                  }
-                                  await upsertAccess();
-                                } else if (selectedPersonGoogleAccess.length > 0) {
-                                  const existing = selectedPersonGoogleAccess[0];
-                                  setUserEmail(existing.userEmail);
-                                  await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({
-                                      userEmail: existing.userEmail,
-                                      role,
-                                      personId: selectedDirectoryPerson.personId,
-                                      isEnabled: false,
-                                    }),
-                                  });
-                                  await loadTenantAdminData(selectedTenantKey);
-                                }
-
-                                if (localEnabled) {
-                                  if (selectedPersonLocalUser) {
-                                    const ok = await patchLocalUser(selectedPersonLocalUser.username, {
-                                      action: "update_user",
-                                      nextUsername:
-                                        localUsername.trim() &&
-                                        localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
-                                          ? localUsername.trim()
-                                          : undefined,
-                                      role: localRole,
-                                      isEnabled: true,
-                                      password: localPassword.trim() || undefined,
-                                    });
-                                    if (!ok) return;
-                                  } else {
-                                    if (!localUsername.trim() || !localPassword.trim()) {
-                                      setLocalUserStatus(
-                                        "Local username and password are required when enabling Local Access for a new user.",
-                                      );
+                                  if (isEnabled) {
+                                    if (!userEmail.trim()) {
+                                      setAccessStatus("Google email is required when Google Access is enabled.");
                                       return;
                                     }
-                                    await createLocalUser();
+                                    await upsertAccess();
+                                  } else if (selectedPersonGoogleAccess.length > 0) {
+                                    const existing = selectedPersonGoogleAccess[0];
+                                    setUserEmail(existing.userEmail);
+                                    await fetch(`/api/t/${encodeURIComponent(selectedTenantKey)}/user-access`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        userEmail: existing.userEmail,
+                                        role,
+                                        personId: selectedDirectoryPerson.personId,
+                                        isEnabled: false,
+                                      }),
+                                    });
+                                    await loadTenantAdminData(selectedTenantKey);
                                   }
-                                } else if (selectedPersonLocalUser) {
-                                  await patchLocalUser(selectedPersonLocalUser.username, {
-                                    action: "set_enabled",
-                                    isEnabled: false,
-                                  });
-                                }
 
-                                setLocalUserStatus("User updated.");
-                                setLocalPassword("");
-                                await loadTenantAdminData(selectedTenantKey);
-                                router.refresh();
+                                  if (localEnabled) {
+                                    if (selectedPersonLocalUser) {
+                                      const ok = await patchLocalUser(
+                                        selectedPersonLocalUser.username,
+                                        {
+                                          action: "update_user",
+                                          nextUsername:
+                                            localUsername.trim() &&
+                                            localUsername.trim().toLowerCase() !== selectedPersonLocalUser.username
+                                              ? localUsername.trim()
+                                              : undefined,
+                                          role: localRole,
+                                          isEnabled: true,
+                                          password: localPassword.trim() || undefined,
+                                        },
+                                        {
+                                          pendingStatus: "Saving user changes...",
+                                          successStatus: "User updated.",
+                                        },
+                                      );
+                                      if (!ok) return;
+                                    } else {
+                                      if (!localUsername.trim() || !localPassword.trim()) {
+                                        setLocalUserStatus(
+                                          "Local username and password are required when enabling Local Access for a new user.",
+                                        );
+                                        return;
+                                      }
+                                      await createLocalUser();
+                                    }
+                                  } else if (selectedPersonLocalUser) {
+                                    await patchLocalUser(
+                                      selectedPersonLocalUser.username,
+                                      {
+                                        action: "set_enabled",
+                                        isEnabled: false,
+                                      },
+                                      {
+                                        pendingStatus: "Saving user changes...",
+                                        successStatus: "User updated.",
+                                      },
+                                    );
+                                  }
+
+                                  setLocalPassword("");
+                                  await loadTenantAdminData(selectedTenantKey);
+                                  router.refresh();
+                                } finally {
+                                  setManageUserPendingAction("");
+                                }
                               })()
                             }
                           >
-                            Update User
+                            {isManageUserSaving ? "Saving..." : "Update User"}
                           </button>
                           <button
                             type="button"
                             className="button tap-button"
+                            disabled={isManageUserActionPending}
                             onClick={() =>
                               void (async () => {
-                                if (!selectedPersonLocalUser) {
-                                  setLocalUserStatus("No local user exists to update password.");
-                                  return;
+                                setManageUserPendingAction("update_password");
+                                setLocalUserStatus("Updating password...");
+                                try {
+                                  if (!selectedPersonLocalUser) {
+                                    setLocalUserStatus("No local user exists to update password.");
+                                    return;
+                                  }
+                                  if (!localPassword.trim()) {
+                                    setLocalUserStatus("Enter a password first.");
+                                    return;
+                                  }
+                                  const ok = await patchLocalUser(
+                                    selectedPersonLocalUser.username,
+                                    {
+                                      action: "update_user",
+                                      password: localPassword,
+                                    },
+                                    {
+                                      pendingStatus: "Updating password...",
+                                      successStatus: "Password updated.",
+                                    },
+                                  );
+                                  if (!ok) return;
+                                  setLocalPassword("");
+                                } finally {
+                                  setManageUserPendingAction("");
                                 }
-                                if (!localPassword.trim()) {
-                                  setLocalUserStatus("Enter a password first.");
-                                  return;
-                                }
-                                const ok = await patchLocalUser(selectedPersonLocalUser.username, {
-                                  action: "update_user",
-                                  password: localPassword,
-                                });
-                                if (!ok) return;
-                                setLocalUserStatus("Password updated.");
-                                setLocalPassword("");
                               })()
                             }
                           >
-                            Update Password
+                            {isManagePasswordSaving ? "Updating..." : "Update Password"}
                           </button>
                           <button
                             type="button"
