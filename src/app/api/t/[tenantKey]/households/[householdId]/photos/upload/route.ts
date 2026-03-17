@@ -5,7 +5,12 @@ import { buildEntityId } from "@/lib/entity-id";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
-import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
+import {
+  buildMediaMetadata,
+  fallbackUploadExtension,
+  sanitizeUploadFileName,
+  validateUploadInput,
+} from "@/lib/media/upload";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import { getAttributeById } from "@/lib/attributes/store";
 import {
@@ -62,7 +67,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
 
     const bytes = Buffer.from(await file.arrayBuffer());
-    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
+    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type, fileName: file.name });
     if (!validated.ok) {
       return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
@@ -73,7 +78,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
     const safeFileName = sanitizeUploadFileName(
       file.name || "",
-      `${householdId}-${Date.now()}.${validated.mediaKind === "image" ? "jpg" : validated.mediaKind === "video" ? "mp4" : "bin"}`,
+      `${householdId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,
     );
     const mediaMetadata = buildMediaMetadata({
       fileName: safeFileName,

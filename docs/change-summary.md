@@ -13,6 +13,40 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-17 (AI Help expansion + audit username logging + document media support)
+
+- `Date`: 2026-03-17
+- `Change`: Expanded grounded AI Help coverage, added first-class audit logging/filtering for attempted login usernames, and added document uploads/rendering across media flows.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a `mixed issue`. AI Help coverage in [help-guide.ts](C:/Users/steph/the-eternal-family-link/src/lib/ai/help-guide.ts) lagged current workflows, login attempts were logged but username visibility/filtering was weak because audit only had actor email/person fields, and media upload/display hard-rejected non-image/video/audio files.
+- `Files`:
+  - `src/lib/ai/help-guide.ts`
+  - `src/lib/data/store.ts`
+  - `src/lib/auth/options.ts`
+  - `src/lib/audit/log.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/audit/route.ts`
+  - `src/components/SettingsClient.tsx`
+  - `src/lib/media/upload.ts`
+  - `src/lib/media/upload.test.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `docs/data-schema.md`
+- `Data Changes`: AuditLog compatibility now includes `actor_username` (table/add-column/index compatibility in OCI layer). No destructive data migration.
+- `Verify`:
+  - Request failed local sign-ins and confirm Audit entries include `action=LOGIN`, `status=FAILURE`, and `actor_username`.
+  - In Admin Audit filters, filter by Username and confirm matching entries load.
+  - Upload/link a document (for example PDF) from media attach flows and confirm it stores/links successfully.
+  - Confirm document tiles and detail views render as document cards with `Open Document` action in Person, Household, and Media Library.
+  - `npm run build` passes.
+- `Rollback Notes`: Revert audit username threading and `audit_log` compatibility updates together with the UI/API filters to avoid partial behavior; revert document media type support in upload/inference/UI as one unit to restore strict image/video/audio-only behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-17 (password reset dedupe + schema repair)
 
 - `Date`: 2026-03-17

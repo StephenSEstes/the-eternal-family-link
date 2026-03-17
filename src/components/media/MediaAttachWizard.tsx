@@ -13,10 +13,11 @@ import {
   searchMediaLibrary,
   toMediaPreviewSrc,
 } from "@/lib/media/attach-orchestrator";
+import { inferMediaKindFromMimeTypeOrFileName, type SupportedMediaKind } from "@/lib/media/upload";
 
 type WizardStep = "source" | "select" | "grouping" | "shared" | "per_item" | "review";
 type SourceChoice = "device_upload" | "camera_capture" | "library_existing";
-type DisplayMediaKind = "image" | "video" | "audio";
+type DisplayMediaKind = SupportedMediaKind;
 type LinkedSearchResult =
   | { kind: "person"; key: string; displayName: string; personId: string; gender: "male" | "female" | "unspecified" }
   | { kind: "household"; key: string; displayName: string; householdId: string };
@@ -75,6 +76,16 @@ function UploadArrowIcon() {
   );
 }
 
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm7 1.2V8h3.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M8.5 12.2h7M8.5 15h7M8.5 17.8h4.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function inferDraftMediaKind(item: Pick<MediaAttachDraftItem, "mediaKind" | "file" | "fileId" | "existingMediaMetadata">): DisplayMediaKind {
   if (item.mediaKind) {
     return item.mediaKind;
@@ -88,6 +99,7 @@ function inferDraftMediaKind(item: Pick<MediaAttachDraftItem, "mediaKind" | "fil
 function mediaLabel(kind: DisplayMediaKind) {
   if (kind === "video") return "video";
   if (kind === "audio") return "audio";
+  if (kind === "document") return "document";
   return "photo";
 }
 
@@ -281,7 +293,7 @@ export function MediaAttachWizard({
     if (options?.compact && kind !== "image") {
       return (
         <div style={{ display: "grid", placeItems: "center", minHeight: "72px", borderRadius: "10px", background: "#f3f4f6", color: "#334155", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          {kind}
+          {kind === "document" ? <DocumentIcon /> : kind}
         </div>
       );
     }
@@ -293,6 +305,19 @@ export function MediaAttachWizard({
         <div style={{ display: "grid", gap: "0.5rem", padding: "0.9rem", borderRadius: "10px", background: "#f3f4f6", minHeight: options?.compact ? "72px" : "120px", alignContent: "center" }}>
           <strong style={{ fontSize: options?.compact ? "0.85rem" : "0.95rem" }}>Audio Preview</strong>
           <audio src={src} controls style={{ width: "100%" }} />
+        </div>
+      );
+    }
+    if (kind === "document") {
+      return (
+        <div style={{ display: "grid", gap: "0.45rem", padding: options?.compact ? "0.9rem" : "1rem", borderRadius: "10px", background: "#f3f4f6", minHeight: options?.compact ? "72px" : "120px", alignContent: "center", justifyItems: "center", textAlign: "center" }}>
+          <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+          <strong style={{ fontSize: options?.compact ? "0.85rem" : "0.95rem" }}>Document</strong>
+          {src ? (
+            <a href={src} target="_blank" rel="noreferrer" className="button secondary tap-button" style={{ textDecoration: "none" }}>
+              Open Document
+            </a>
+          ) : null}
         </div>
       );
     }
@@ -419,11 +444,10 @@ export function MediaAttachWizard({
   const appendFiles = async (files: FileList | null, source: SourceChoice) => {
     if (!files || files.length === 0) return;
     const incoming = Array.from(files).filter((file) => {
-      const type = file.type.toLowerCase();
-      return type.startsWith("image/") || type.startsWith("video/") || type.startsWith("audio/");
+      return inferMediaKindFromMimeTypeOrFileName(file.type, file.name) !== "unknown";
     });
     if (incoming.length === 0) {
-      setStatus("Select image, video, or audio files to continue.");
+      setStatus("Select image, video, audio, or document files to continue.");
       return;
     }
     const shouldScanDuplicates = context.source !== "attribute";
@@ -458,7 +482,7 @@ export function MediaAttachWizard({
           notes: "",
           personIds: Array.from(new Set((context.preselectedPersonIds ?? []).map((value) => value.trim()).filter(Boolean))),
           householdIds: Array.from(new Set((context.preselectedHouseholdIds ?? []).map((value) => value.trim()).filter(Boolean))),
-          attributeType: mediaKind === "image" ? (context.defaultAttributeType ?? "media") : mediaKind,
+          attributeType: mediaKind === "video" || mediaKind === "audio" ? mediaKind : (context.defaultAttributeType ?? "media"),
         });
       }
       return next;
@@ -493,7 +517,7 @@ export function MediaAttachWizard({
           notes: "",
           personIds: Array.from(new Set([...(context.preselectedPersonIds ?? []), ...match.people.map((person) => person.personId)])),
           householdIds: Array.from(new Set([...(context.preselectedHouseholdIds ?? []), ...match.households.map((household) => household.householdId)])),
-          attributeType: mediaKind === "image" ? (context.defaultAttributeType ?? "media") : mediaKind,
+          attributeType: mediaKind === "video" || mediaKind === "audio" ? mediaKind : (context.defaultAttributeType ?? "media"),
           duplicateDecision: undefined,
         });
       }
@@ -648,7 +672,7 @@ export function MediaAttachWizard({
           >
             <span style={{ color: "#0f4c81" }}><PhotoIcon /></span>
             <strong>Device Files</strong>
-            <span style={{ fontSize: "0.92rem", color: "#4b5563" }}>Pick photos, videos, or audio already on this device.</span>
+            <span style={{ fontSize: "0.92rem", color: "#4b5563" }}>Pick photos, videos, audio, or documents already on this device.</span>
           </button>
         ) : null}
         {availableSources.includes("camera_capture") ? (
@@ -689,7 +713,7 @@ export function MediaAttachWizard({
           ? "Search the library, then add the items you want to work with."
           : sourceChoice === "camera_capture"
             ? "Tap the button below to open your camera or media picker. Photos and videos are supported here."
-            : "Tap the button below to choose photos, videos, or audio files from this device."}
+            : "Tap the button below to choose photos, videos, audio, or document files from this device."}
       </p>
       {sourceChoice === "device_upload" ? (
         <>
@@ -697,7 +721,7 @@ export function MediaAttachWizard({
             ref={devicePickerRef}
             type="file"
             multiple
-            accept="image/*,video/*,audio/*"
+            accept="image/*,video/*,audio/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.rtf,.odt,.ods"
             style={{ display: "none" }}
             onChange={(event) => {
               void appendFiles(event.target.files, "device_upload");
@@ -711,7 +735,7 @@ export function MediaAttachWizard({
             style={{ border: "1px dashed #94a3b8", borderRadius: "14px", padding: "1rem", display: "grid", gap: "0.35rem", justifyItems: "center", background: "#f8fafc" }}
           >
             <UploadArrowIcon />
-            <strong>Choose Photos, Videos, Or Audio</strong>
+            <strong>Choose Media Or Documents</strong>
             <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Opens the device file picker.</span>
           </button>
         </>
@@ -1288,7 +1312,7 @@ export function MediaAttachWizard({
           <div className="person-modal-header">
             <div>
               <h3 className="person-modal-title">Media Attach Wizard</h3>
-              <p className="person-modal-meta">Add photos, videos, and audio, then link them to people or households.</p>
+              <p className="person-modal-meta">Add photos, videos, audio, or documents, then link them to people or households.</p>
             </div>
             <button type="button" className="button secondary tap-button" onClick={onClose} disabled={busy}>Close</button>
           </div>

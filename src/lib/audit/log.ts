@@ -9,9 +9,15 @@ type AuditSessionLike = {
   };
 } | null | undefined;
 
+function localUsernameFromEmail(email?: string | null) {
+  const normalized = String(email ?? "").trim().toLowerCase();
+  return normalized.endsWith("@local") ? normalized.slice(0, -6) : "";
+}
+
 export function getSessionAuditActor(session: AuditSessionLike) {
   return {
     actorEmail: session?.user?.email ?? "",
+    actorUsername: localUsernameFromEmail(session?.user?.email),
     actorPersonId: session?.user?.person_id ?? "",
   };
 }

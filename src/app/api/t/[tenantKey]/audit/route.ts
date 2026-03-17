@@ -31,6 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
   const searchParams = new URL(request.url).searchParams;
   const actorEmail = String(searchParams.get("actorEmail") ?? "").trim().toLowerCase();
+  const actorUsername = String(searchParams.get("actorUsername") ?? "").trim().toLowerCase();
   const actorPersonId = String(searchParams.get("actorPersonId") ?? "").trim();
   const action = String(searchParams.get("action") ?? "").trim().toUpperCase();
   const entityType = String(searchParams.get("entityType") ?? "").trim().toUpperCase();
@@ -43,6 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   const entries = await getAuditLogEntries({
     familyGroupKey: resolved.tenant.tenantKey,
     actorEmail,
+    actorUsername,
     actorPersonId,
     action,
     entityType,
@@ -57,6 +59,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     entries,
     filters: {
       actorEmail,
+      actorUsername,
       actorPersonId,
       action,
       entityType,

@@ -30,6 +30,7 @@ This section is a quick reference for the three data areas that drive profile/me
 
 ### 3) Media
 
+- Supported runtime media kinds are `image`, `video`, `audio`, and `document`.
 - File registry: `MediaAssets`
   - One logical media row per file (`media_id`, `file_id`, metadata)
 - Association table: `MediaLinks`
@@ -39,7 +40,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - Link to file: `media_id -> MediaAssets.media_id`
   - Display semantics: `usage_type`, `label`, `description`, `photo_date`, `is_primary`
 
-### 4) How One Photo Can Appear In Multiple Families
+### 4) How One Media File Can Appear In Multiple Families
 
 - File is shared at asset level (`MediaAssets`).
 - Visibility is family-scoped at link level (`MediaLinks.family_group_key`).
@@ -171,6 +172,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `event_id`
   - `timestamp`
   - `actor_email`
+  - `actor_username`
   - `actor_person_id`
   - `action`
   - `entity_type`
@@ -182,7 +184,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - Immutable audit trail for login outcomes and admin/user data changes, scoped to a family group when applicable.
 - Logical index/key:
   - Unique: `event_id`
-  - Common lookup: (`family_group_key`, `timestamp`), (`actor_email`, `timestamp`), (`actor_person_id`, `timestamp`)
+  - Common lookup: (`family_group_key`, `timestamp`), (`actor_email`, `timestamp`), (`actor_username`, `timestamp`), (`actor_person_id`, `timestamp`)
 
 ## Invites
 

@@ -14,6 +14,7 @@ import {
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 
 type HouseholdSummary = {
   householdId: string;
@@ -129,28 +130,30 @@ function HouseholdIcon() {
   );
 }
 
-function parseMediaMetadata(raw?: string) {
-  const text = (raw ?? "").trim();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as { mimeType?: string; fileName?: string };
-  } catch {
-    return null;
-  }
+function inferHouseholdMediaKind(fileId: string, raw?: string) {
+  return inferStoredMediaKind(fileId, raw);
 }
 
-function isVideoMediaByMetadata(raw?: string) {
-  const parsed = parseMediaMetadata(raw);
-  const mime = (parsed?.mimeType ?? "").toLowerCase();
-  const fileName = (parsed?.fileName ?? "").toLowerCase();
-  return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
+function isVideoMediaByMetadata(fileId: string, raw?: string) {
+  return inferHouseholdMediaKind(fileId, raw) === "video";
 }
 
-function isAudioMediaByMetadata(raw?: string) {
-  const parsed = parseMediaMetadata(raw);
-  const mime = (parsed?.mimeType ?? "").toLowerCase();
-  const fileName = (parsed?.fileName ?? "").toLowerCase();
-  return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
+function isAudioMediaByMetadata(fileId: string, raw?: string) {
+  return inferHouseholdMediaKind(fileId, raw) === "audio";
+}
+
+function isDocumentMediaByMetadata(fileId: string, raw?: string) {
+  return inferHouseholdMediaKind(fileId, raw) === "document";
+}
+
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm7 1.2V8h3.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M8.5 12.2h7M8.5 15h7M8.5 17.8h4.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function toPlainText(value: unknown): string {
@@ -281,6 +284,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
+  const [largePhotoIsDocument, setLargePhotoIsDocument] = useState(false);
   const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -340,6 +344,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setShowPhotoDetail(false);
     setLargePhotoFileId("");
     setLargePhotoIsVideo(false);
+    setLargePhotoIsDocument(false);
     setLargePhotoIsAudio(false);
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setMarriedDate(String(next.marriedDate ?? ""));
@@ -1118,16 +1123,21 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             setShowPhotoDetail(true);
                           }}
                         >
-                          {isVideoMediaByMetadata(photo.mediaMetadata) ? (
+                          {isVideoMediaByMetadata(photo.fileId, photo.mediaMetadata) ? (
                             <video
                               src={getPhotoProxyPath(photo.fileId, tenantKey)}
                               className="person-photo-tile-image"
                               muted
                               playsInline
                             />
-                          ) : isAudioMediaByMetadata(photo.mediaMetadata) ? (
+                          ) : isAudioMediaByMetadata(photo.fileId, photo.mediaMetadata) ? (
                             <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
                               <audio src={getPhotoProxyPath(photo.fileId, tenantKey)} controls style={{ width: "100%" }} />
+                            </div>
+                          ) : isDocumentMediaByMetadata(photo.fileId, photo.mediaMetadata) ? (
+                            <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", gap: "0.35rem", padding: "0.75rem", textAlign: "center", color: "#0f4c81" }}>
+                              <DocumentIcon />
+                              <strong style={{ fontSize: "0.85rem" }}>Document</strong>
                             </div>
                           ) : (
                             <img
@@ -1155,15 +1165,16 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         <div className="settings-chip-list">
                           <button
                             type="button"
-                            className="button secondary tap-button"
-                            onClick={() => {
-                              setLargePhotoFileId(selectedPhoto.fileId);
-                              setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata));
-                              setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.mediaMetadata));
-                            }}
-                          >
-                            View Large
-                          </button>
+                              className="button secondary tap-button"
+                              onClick={() => {
+                                setLargePhotoFileId(selectedPhoto.fileId);
+                                setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
+                                setLargePhotoIsDocument(isDocumentMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
+                                setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
+                              }}
+                            >
+                              {isDocumentMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata) ? "Open Document" : "View Large"}
+                            </button>
                           <button
                             type="button"
                             className="button secondary tap-button"
@@ -1175,19 +1186,33 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         </div>
                       </div>
                       <div className="card">
-                        {isVideoMediaByMetadata(selectedPhoto.mediaMetadata) ? (
+                        {isVideoMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata) ? (
                           <video
                             src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
                             className="person-photo-detail-preview"
                             controls
                             playsInline
                           />
-                        ) : isAudioMediaByMetadata(selectedPhoto.mediaMetadata) ? (
+                        ) : isAudioMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata) ? (
                           <audio
                             src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
                             className="person-photo-detail-preview"
                             controls
                           />
+                        ) : isDocumentMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata) ? (
+                          <div className="person-photo-detail-preview" style={{ display: "grid", placeItems: "center", gap: "0.65rem", alignContent: "center", padding: "1.5rem", textAlign: "center" }}>
+                            <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                            <strong>{selectedPhoto.name || "Document"}</strong>
+                            <a
+                              href={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="button secondary tap-button"
+                              style={{ textDecoration: "none" }}
+                            >
+                              Open Document
+                            </a>
+                          </div>
                         ) : (
                           <img
                             src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
@@ -1359,6 +1384,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     onClick={() => {
                       setLargePhotoFileId("");
                       setLargePhotoIsVideo(false);
+                      setLargePhotoIsDocument(false);
                       setLargePhotoIsAudio(false);
                     }}
                   >
@@ -1375,6 +1401,20 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                         controls
                         style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                       />
+                    ) : largePhotoIsDocument ? (
+                      <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
+                        <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                        <strong>Document</strong>
+                        <a
+                          href={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="button secondary tap-button"
+                          style={{ textDecoration: "none" }}
+                        >
+                          Open Document
+                        </a>
+                      </div>
                     ) : (
                       <img
                         src={getPhotoProxyPath(largePhotoFileId, tenantKey)}

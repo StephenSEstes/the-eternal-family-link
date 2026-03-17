@@ -1,12 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMediaMetadata, normalizeMediaKind, sanitizeUploadFileName, validateUploadInput } from "./upload";
+import {
+  buildMediaMetadata,
+  fallbackUploadExtension,
+  inferStoredMediaKind,
+  normalizeMediaKind,
+  sanitizeUploadFileName,
+  validateUploadInput,
+} from "./upload";
 
-test("normalizeMediaKind classifies image/video/audio", () => {
+test("normalizeMediaKind classifies image/video/audio/document", () => {
   assert.equal(normalizeMediaKind("image/jpeg"), "image");
   assert.equal(normalizeMediaKind("video/mp4"), "video");
   assert.equal(normalizeMediaKind("audio/mpeg"), "audio");
-  assert.equal(normalizeMediaKind("application/pdf"), "unknown");
+  assert.equal(normalizeMediaKind("application/pdf"), "document");
+  assert.equal(normalizeMediaKind("", "story.docx"), "document");
 });
 
 test("validateUploadInput rejects empty, oversize, and unsupported mime", () => {
@@ -21,7 +29,7 @@ test("validateUploadInput rejects empty, oversize, and unsupported mime", () => 
   if (!tooLarge.ok) assert.match(tooLarge.error, /exceeds max size/);
   process.env.EFL_MEDIA_MAX_BYTES = original;
 
-  const badType = validateUploadInput({ byteLength: 5, mimeType: "application/pdf" });
+  const badType = validateUploadInput({ byteLength: 5, mimeType: "application/x-msdownload" });
   assert.equal(badType.ok, false);
   if (!badType.ok) assert.match(badType.error, /unsupported media type/);
 });
@@ -32,6 +40,12 @@ test("validateUploadInput accepts supported media kinds", () => {
   if (allowed.ok) {
     assert.equal(allowed.mediaKind, "audio");
     assert.equal(allowed.mimeType, "audio/mpeg");
+  }
+
+  const document = validateUploadInput({ byteLength: 42, mimeType: "application/pdf", fileName: "memory.pdf" });
+  assert.equal(document.ok, true);
+  if (document.ok) {
+    assert.equal(document.mediaKind, "document");
   }
 });
 
@@ -58,4 +72,15 @@ test("buildMediaMetadata includes typed media details", () => {
   assert.equal(parsed.height, 1080);
   assert.equal(parsed.durationSec, 8.4);
   assert.equal(parsed.captureSource, "camera");
+});
+
+test("inferStoredMediaKind falls back to metadata and file extensions", () => {
+  assert.equal(inferStoredMediaKind("file.pdf"), "document");
+  assert.equal(inferStoredMediaKind("ignored", JSON.stringify({ mimeType: "application/pdf" })), "document");
+  assert.equal(inferStoredMediaKind("ignored", JSON.stringify({ mediaKind: "document" })), "document");
+});
+
+test("fallbackUploadExtension keeps file extension and provides document defaults", () => {
+  assert.equal(fallbackUploadExtension("document", "application/pdf", "notes.pdf"), "pdf");
+  assert.equal(fallbackUploadExtension("document", "text/plain", ""), "txt");
 });

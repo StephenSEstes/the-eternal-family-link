@@ -1,5 +1,9 @@
 import { getPhotoProxyPath } from "@/lib/google/photo-path";
-import { normalizeMediaKind, type MediaKind } from "@/lib/media/upload";
+import {
+  inferMediaKindFromMimeTypeOrFileName,
+  inferStoredMediaKind,
+  type SupportedMediaKind,
+} from "@/lib/media/upload";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import {
   buildHouseholdLinkPayload,
@@ -56,7 +60,7 @@ export type MediaAttachDraftItem = {
   source: "device_upload" | "camera_capture" | "library_existing";
   file?: File;
   fileId?: string;
-  mediaKind?: "image" | "video" | "audio";
+  mediaKind?: SupportedMediaKind;
   previewUrl?: string;
   existingMediaMetadata?: string;
   duplicateOfFileId?: string;
@@ -111,22 +115,9 @@ type RunPlanInput = {
   ) => void;
 };
 
-function norm(value: string | undefined) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-type SupportedMediaKind = Exclude<MediaKind, "unknown">;
-
 function inferUploadMediaKind(file: Pick<File, "name" | "type">): SupportedMediaKind | "" {
-  const byMime = normalizeMediaKind(file.type);
-  if (byMime !== "unknown") {
-    return byMime;
-  }
-  const lower = file.name.toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(lower)) return "image";
-  if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return "video";
-  if (/\.(mp3|m4a|wav|ogg|aac|flac)$/.test(lower)) return "audio";
-  return "";
+  const inferred = inferMediaKindFromMimeTypeOrFileName(file.type, file.name);
+  return inferred === "unknown" ? "" : inferred;
 }
 
 function mediaTabShareDefaults(context: MediaAttachContext) {
@@ -143,27 +134,7 @@ function mediaTabShareDefaults(context: MediaAttachContext) {
 }
 
 export function inferMediaKindByMetadataOrFileId(fileId: string, mediaMetadata?: string): SupportedMediaKind {
-  const raw = (mediaMetadata ?? "").trim();
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as { mediaKind?: string; mimeType?: string };
-      const mediaKind = norm(parsed.mediaKind);
-      if (mediaKind === "image" || mediaKind === "video" || mediaKind === "audio") {
-        return mediaKind;
-      }
-      const mimeType = norm(parsed.mimeType);
-      if (mimeType.startsWith("video/")) return "video";
-      if (mimeType.startsWith("audio/")) return "audio";
-      if (mimeType.startsWith("image/")) return "image";
-    } catch {
-      // Ignore malformed metadata.
-    }
-  }
-  const lower = fileId.toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(lower)) return "image";
-  if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return "video";
-  if (/\.(mp3|m4a|wav|ogg|aac|flac)$/.test(lower)) return "audio";
-  return "image";
+  return inferStoredMediaKind(fileId, mediaMetadata);
 }
 
 async function readImageDimensions(file: File): Promise<{ width?: number; height?: number }> {
@@ -224,6 +195,9 @@ export async function readClientMediaFileMetadata(file: File): Promise<{
   if (mediaKind === "image") {
     const dimensions = await readImageDimensions(file);
     return { mediaKind, mimeType, ...dimensions };
+  }
+  if (mediaKind === "document") {
+    return { mediaKind, mimeType };
   }
   const timed = await readTimedMediaMetadata(file, mediaKind);
   return { mediaKind, mimeType, ...timed };

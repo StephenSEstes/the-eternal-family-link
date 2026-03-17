@@ -10,7 +10,12 @@ import {
   getPrimaryPhotoFileIdForPerson,
 } from "@/lib/attributes/store";
 import { uploadPhotoToFolder } from "@/lib/google/drive";
-import { buildMediaMetadata, sanitizeUploadFileName, validateUploadInput } from "@/lib/media/upload";
+import {
+  buildMediaMetadata,
+  fallbackUploadExtension,
+  sanitizeUploadFileName,
+  validateUploadInput,
+} from "@/lib/media/upload";
 import {
   getPersonById,
   getTenantConfig,
@@ -69,7 +74,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
-    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type });
+    const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type, fileName: file.name });
     if (!validated.ok) {
       return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
@@ -77,7 +82,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const tenantConfig = await getTenantConfig(resolved.tenant.tenantKey);
     const safeFileName = sanitizeUploadFileName(
       file.name || "",
-      `${personId}-${Date.now()}.${validated.mediaKind === "image" ? "jpg" : validated.mediaKind === "video" ? "mp4" : "bin"}`,
+      `${personId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,
     );
     const uploaded = await uploadPhotoToFolder({
       folderId: tenantConfig.photosFolderId,

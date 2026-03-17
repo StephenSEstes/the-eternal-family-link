@@ -5,6 +5,7 @@ import { getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 
 type MediaLibraryClientProps = {
   tenantKey: string;
@@ -68,24 +69,18 @@ function HouseholdIcon() {
   );
 }
 
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm7 1.2V8h3.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M8.5 12.2h7M8.5 15h7M8.5 17.8h4.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function inferMediaKind(fileId: string, rawMetadata?: string) {
-  if (rawMetadata) {
-    try {
-      const parsed = JSON.parse(rawMetadata) as { mediaKind?: string; mimeType?: string };
-      const kind = (parsed.mediaKind ?? "").toLowerCase();
-      if (kind === "video" || kind === "audio" || kind === "image") return kind;
-      const mime = (parsed.mimeType ?? "").toLowerCase();
-      if (mime.startsWith("video/")) return "video";
-      if (mime.startsWith("audio/")) return "audio";
-      if (mime.startsWith("image/")) return "image";
-    } catch {
-      // Ignore malformed metadata and fall back to file extension.
-    }
-  }
-  const lower = fileId.toLowerCase();
-  if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm")) return "video";
-  if (lower.endsWith(".mp3") || lower.endsWith(".m4a") || lower.endsWith(".wav") || lower.endsWith(".ogg")) return "audio";
-  return "image";
+  return inferStoredMediaKind(fileId, rawMetadata);
 }
 
 async function assertOk(res: Response, fallbackMessage: string) {
@@ -737,6 +732,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     <video src={getPhotoProxyPath(item.fileId, tenantKey)} controls muted playsInline style={{ width: "100%", maxHeight: "160px", borderRadius: "8px" }} />
                   ) : kind === "audio" ? (
                     <audio src={getPhotoProxyPath(item.fileId, tenantKey)} controls style={{ width: "100%" }} />
+                  ) : kind === "document" ? (
+                    <div style={{ display: "grid", gap: "0.4rem", placeItems: "center", padding: "1rem", textAlign: "center", color: "#0f4c81" }}>
+                      <DocumentIcon />
+                      <strong>Document</strong>
+                    </div>
                   ) : (
                     <img
                       src={getPhotoProxyPath(item.fileId, tenantKey)}
@@ -765,7 +765,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             <div className="person-photo-detail-shell">
               <div className="person-photo-detail-card">
                 <div className="person-photo-detail-head">
-                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Photo</h4>
+                  <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Media</h4>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
                       type="button"
@@ -801,6 +801,20 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     />
                   ) : inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "audio" ? (
                     <audio src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)} className="person-photo-detail-preview" controls />
+                  ) : inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "document" ? (
+                    <div className="person-photo-detail-preview" style={{ display: "grid", placeItems: "center", gap: "0.65rem", alignContent: "center", padding: "1.5rem", textAlign: "center" }}>
+                      <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                      <strong>{selectedPhotoDetail.name || "Document"}</strong>
+                      <a
+                        href={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="button secondary tap-button"
+                        style={{ textDecoration: "none" }}
+                      >
+                        Open Document
+                      </a>
+                    </div>
                   ) : (
                     <img
                       src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
@@ -810,7 +824,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   )}
                 </div>
                 <div className="card" style={{ marginTop: "0.75rem" }}>
-                  <h5 style={{ margin: "0 0 0.5rem" }}>Photo Info</h5>
+                  <h5 style={{ margin: "0 0 0.5rem" }}>Media Info</h5>
                   <label className="label">Name</label>
                   <input
                     className="input"

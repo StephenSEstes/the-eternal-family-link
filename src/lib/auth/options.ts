@@ -26,6 +26,15 @@ function normalizeTenantKey(value?: string) {
   return raw || DEFAULT_TENANT_KEY;
 }
 
+function localAuditEmail(username: string) {
+  return `${username}@local`;
+}
+
+function localUsernameFromEmail(email?: string | null) {
+  const normalized = String(email ?? "").trim().toLowerCase();
+  return normalized.endsWith("@local") ? normalized.slice(0, -6) : "";
+}
+
 const STEVE_ACCESS_EMAIL = "stephensestes@gmail.com";
 const STEVE_PERSON_ID = "19660812-stephen-snow-estes";
 
@@ -53,7 +62,8 @@ export const authOptions: NextAuthOptions = {
         const password = credentials?.password ?? "";
         if (!username || !password) {
           await appendAuditLog({
-            actorEmail: username ? `${username}@local` : "",
+            actorEmail: username ? localAuditEmail(username) : "",
+            actorUsername: username,
             action: "LOGIN",
             entityType: "AUTH",
             entityId: "credentials",
@@ -67,7 +77,8 @@ export const authOptions: NextAuthOptions = {
         const user = await getLocalUserByUsername(tenantKey, username);
         if (!user || !user.isEnabled) {
           await appendAuditLog({
-            actorEmail: `${username}@local`,
+            actorEmail: localAuditEmail(username),
+            actorUsername: username,
             actorPersonId: user?.personId ?? "",
             action: "LOGIN",
             entityType: "AUTH",
@@ -83,7 +94,8 @@ export const authOptions: NextAuthOptions = {
         const lockedUntilMs = user.lockedUntil ? new Date(user.lockedUntil).getTime() : 0;
         if (lockedUntilMs && lockedUntilMs > now) {
           await appendAuditLog({
-            actorEmail: `${username}@local`,
+            actorEmail: localAuditEmail(username),
+            actorUsername: username,
             actorPersonId: user.personId,
             action: "LOGIN",
             entityType: "AUTH",
@@ -105,7 +117,8 @@ export const authOptions: NextAuthOptions = {
             lockedUntil: shouldLock ? new Date(now + 30 * 60 * 1000).toISOString() : "",
           });
           await appendAuditLog({
-            actorEmail: `${username}@local`,
+            actorEmail: localAuditEmail(username),
+            actorUsername: username,
             actorPersonId: user.personId,
             action: "LOGIN",
             entityType: "AUTH",
@@ -127,7 +140,7 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: `${tenantKey}:${username}`,
-          email: `${username}@local`,
+          email: localAuditEmail(username),
           name: username,
           role: user.role,
           person_id: user.personId,
@@ -158,6 +171,7 @@ export const authOptions: NextAuthOptions = {
         const localUser = user as { person_id?: string; tenantKey?: string } | undefined;
         await appendAuditLog({
           actorEmail: user.email ?? "",
+          actorUsername: user.name ?? localUsernameFromEmail(user.email),
           actorPersonId: typeof localUser?.person_id === "string" ? localUser.person_id : "",
           action: "LOGIN",
           entityType: "AUTH",
@@ -350,6 +364,7 @@ export const authOptions: NextAuthOptions = {
       const token = message.token as { email?: string; person_id?: string; tenantKey?: string } | undefined;
       await appendAuditLog({
         actorEmail: token?.email ?? "",
+        actorUsername: localUsernameFromEmail(token?.email),
         actorPersonId: token?.person_id ?? "",
         action: "LOGOUT",
         entityType: "AUTH",

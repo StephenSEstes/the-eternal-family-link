@@ -23,6 +23,7 @@ import {
 import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
 import { getDeathDateFromAttributes } from "@/lib/person/vital-dates";
 
@@ -233,29 +234,20 @@ function isAtLeastAge(value: string | undefined, minYears = 19) {
   return years >= minYears;
 }
 
-function parseMediaMetadata(raw?: string) {
-  const text = (raw ?? "").trim();
-  if (!text) return null;
-  try {
-    const parsed = JSON.parse(text) as { mimeType?: string; fileName?: string };
-    return parsed;
-  } catch {
-    return null;
-  }
+function inferPersonMediaKind(fileId: string, raw?: string) {
+  return inferStoredMediaKind(fileId, raw);
 }
 
-function isVideoMediaByMetadata(raw?: string) {
-  const parsed = parseMediaMetadata(raw);
-  const mime = (parsed?.mimeType ?? "").toLowerCase();
-  const fileName = (parsed?.fileName ?? "").toLowerCase();
-  return mime.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
+function isVideoMediaByMetadata(fileId: string, raw?: string) {
+  return inferPersonMediaKind(fileId, raw) === "video";
 }
 
-function isAudioMediaByMetadata(raw?: string) {
-  const parsed = parseMediaMetadata(raw);
-  const mime = (parsed?.mimeType ?? "").toLowerCase();
-  const fileName = (parsed?.fileName ?? "").toLowerCase();
-  return mime.startsWith("audio/") || fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav");
+function isAudioMediaByMetadata(fileId: string, raw?: string) {
+  return inferPersonMediaKind(fileId, raw) === "audio";
+}
+
+function isDocumentMediaByMetadata(fileId: string, raw?: string) {
+  return inferPersonMediaKind(fileId, raw) === "document";
 }
 
 function normalizeAttributeKey(value?: string) {
@@ -446,19 +438,31 @@ function HouseholdIcon() {
   );
 }
 
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm7 1.2V8h3.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M8.5 12.2h7M8.5 15h7M8.5 17.8h4.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function PhotoDetailHeader({
   onClose,
   onViewLarge,
+  viewLabel = "View Large",
 }: {
   onClose: () => void;
   onViewLarge: () => void;
+  viewLabel?: string;
 }) {
   return (
     <div className="person-photo-detail-head">
       <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Photo</h4>
       <div className="settings-chip-list">
         <button type="button" className="button secondary tap-button" onClick={onViewLarge}>
-          View Large
+          {viewLabel}
         </button>
         <button type="button" className="button secondary tap-button" onClick={onClose} aria-label="Close edit photo">
           x
@@ -736,6 +740,7 @@ export function PersonEditModal({
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
+  const [largePhotoIsDocument, setLargePhotoIsDocument] = useState(false);
   const personStatusTone = inferStatusTone(status);
   const [largePhotoIsAudio, setLargePhotoIsAudio] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -1068,6 +1073,7 @@ export function PersonEditModal({
     setPendingOps(new Set());
     setLargePhotoFileId("");
     setLargePhotoIsVideo(false);
+    setLargePhotoIsDocument(false);
     setLargePhotoIsAudio(false);
     setPhotoBusy(false);
     setPersonPhotoQuery("");
@@ -2965,16 +2971,21 @@ export function PersonEditModal({
                       className="person-photo-tile"
                       onClick={() => openPhotoDetail(item.attributeId)}
                     >
-                      {isVideoMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                      {isVideoMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <video
                           src={getPhotoProxyPath(item.valueText, activeTenantKey)}
                           className="person-photo-tile-image"
                           muted
                           playsInline
                         />
-                      ) : isAudioMediaByMetadata(item.mediaMetadata || item.valueJson) ? (
+                      ) : isAudioMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
                           <audio src={getPhotoProxyPath(item.valueText, activeTenantKey)} controls style={{ width: "100%" }} />
+                        </div>
+                      ) : isDocumentMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
+                        <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", gap: "0.35rem", padding: "0.75rem", textAlign: "center", color: "#0f4c81" }}>
+                          <DocumentIcon />
+                          <strong style={{ fontSize: "0.85rem" }}>Document</strong>
                         </div>
                       ) : (
                         <img
@@ -3004,24 +3015,40 @@ export function PersonEditModal({
                     onClose={() => setShowPhotoDetail(false)}
                     onViewLarge={() => {
                       setLargePhotoFileId(selectedPhoto.valueText);
-                      setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
-                      setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                      setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                      setLargePhotoIsDocument(isDocumentMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                      setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
                     }}
+                    viewLabel={isDocumentMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? "Open Document" : "View Large"}
                   />
                   <div className="card">
-                    {isVideoMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
+                    {isVideoMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <video
                         src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
                         className="person-photo-detail-preview"
                         controls
                         playsInline
                       />
-                    ) : isAudioMediaByMetadata(selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
+                    ) : isAudioMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <audio
                         src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
                         className="person-photo-detail-preview"
                         controls
                       />
+                    ) : isDocumentMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
+                      <div className="person-photo-detail-preview" style={{ display: "grid", placeItems: "center", gap: "0.65rem", alignContent: "center", padding: "1.5rem", textAlign: "center" }}>
+                        <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                        <strong>{selectedPhoto.label || "Document"}</strong>
+                        <a
+                          href={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="button secondary tap-button"
+                          style={{ textDecoration: "none" }}
+                        >
+                          Open Document
+                        </a>
+                      </div>
                     ) : (
                       <img
                         src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
@@ -3107,6 +3134,7 @@ export function PersonEditModal({
                 onClick={() => {
       setLargePhotoFileId("");
       setLargePhotoIsVideo(false);
+      setLargePhotoIsDocument(false);
       setLargePhotoIsAudio(false);
                 }}
               >
@@ -3123,6 +3151,20 @@ export function PersonEditModal({
                     controls
                     style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
+                ) : largePhotoIsDocument ? (
+                  <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
+                    <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                    <strong>Document</strong>
+                    <a
+                      href={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="button secondary tap-button"
+                      style={{ textDecoration: "none" }}
+                    >
+                      Open Document
+                    </a>
+                  </div>
                 ) : (
                   <img
                     src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}

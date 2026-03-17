@@ -37,6 +37,7 @@ let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
 let passwordResetsTableCompatEnsured = false;
+let auditLogTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -240,6 +241,7 @@ const TABLES: Record<string, TableConfig> = {
       "event_id",
       "timestamp",
       "actor_email",
+      "actor_username",
       "actor_person_id",
       "action",
       "entity_type",
@@ -709,6 +711,80 @@ async function ensurePasswordResetsTableCompatibility(connection: OciConnection)
   passwordResetsTableCompatEnsured = true;
 }
 
+async function ensureAuditLogTableCompatibility(connection: OciConnection) {
+  if (auditLogTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE audit_log (
+         event_id VARCHAR2(128) PRIMARY KEY,
+         timestamp VARCHAR2(64),
+         actor_email VARCHAR2(320),
+         actor_username VARCHAR2(256),
+         actor_person_id VARCHAR2(128),
+         action VARCHAR2(64),
+         entity_type VARCHAR2(64),
+         entity_id VARCHAR2(256),
+         family_group_key VARCHAR2(128),
+         status VARCHAR2(32),
+         details VARCHAR2(2000)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_audit_log_family_timestamp ON audit_log(family_group_key, timestamp)`);
+    await connection.execute(`CREATE INDEX ix_audit_log_email_timestamp ON audit_log(actor_email, timestamp)`);
+    await connection.execute(`CREATE INDEX ix_audit_log_username_timestamp ON audit_log(actor_username, timestamp)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "actor_email VARCHAR2(320)",
+    "actor_username VARCHAR2(256)",
+    "actor_person_id VARCHAR2(128)",
+    "action VARCHAR2(64)",
+    "entity_type VARCHAR2(64)",
+    "entity_id VARCHAR2(256)",
+    "family_group_key VARCHAR2(128)",
+    "status VARCHAR2(32)",
+    "details VARCHAR2(2000)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE audit_log ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_audit_log_family_timestamp ON audit_log(family_group_key, timestamp)",
+    "CREATE INDEX ix_audit_log_email_timestamp ON audit_log(actor_email, timestamp)",
+    "CREATE INDEX ix_audit_log_username_timestamp ON audit_log(actor_username, timestamp)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  auditLogTableCompatEnsured = true;
+}
+
 async function ensureUserAccessTableCompatibility(connection: OciConnection) {
   if (userAccessTableCompatEnsured) {
     return;
@@ -752,6 +828,10 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
   }
   if (tableName === "password_resets") {
     await ensurePasswordResetsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "audit_log") {
+    await ensureAuditLogTableCompatibility(connection);
   }
 }
 
@@ -931,6 +1011,7 @@ type OciAuditLogRow = {
   eventId: string;
   timestamp: string;
   actorEmail: string;
+  actorUsername: string;
   actorPersonId: string;
   action: string;
   entityType: string;
@@ -1429,6 +1510,7 @@ export async function getOciLocalUsersForTenant(tenantKey: string): Promise<OciL
 export async function getOciAuditLogRows(input: {
   familyGroupKey?: string;
   actorEmail?: string;
+  actorUsername?: string;
   actorPersonId?: string;
   action?: string;
   entityType?: string;
@@ -1451,6 +1533,15 @@ export async function getOciAuditLogRows(input: {
   if (actorEmail) {
     whereClauses.push(`LOWER(TRIM(actor_email)) = :actorEmail`);
     binds.actorEmail = actorEmail;
+  }
+
+  const actorUsername = input.actorUsername?.trim().toLowerCase() ?? "";
+  if (actorUsername) {
+    whereClauses.push(`LOWER(TRIM(NVL(actor_username, CASE
+      WHEN LOWER(TRIM(actor_email)) LIKE '%@local' THEN SUBSTR(TRIM(actor_email), 1, LENGTH(TRIM(actor_email)) - 6)
+      ELSE NULL
+    END))) = :actorUsername`);
+    binds.actorUsername = actorUsername;
   }
 
   const actorPersonId = input.actorPersonId?.trim() ?? "";
@@ -1491,6 +1582,7 @@ export async function getOciAuditLogRows(input: {
 
   const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
   return withConnection(async (connection) => {
+    await ensureAuditLogTableCompatibility(connection);
     const result = await connection.execute(
       `SELECT *
        FROM (
@@ -1498,6 +1590,7 @@ export async function getOciAuditLogRows(input: {
            event_id,
            timestamp,
            actor_email,
+           actor_username,
            actor_person_id,
            action,
            entity_type,
@@ -1518,6 +1611,12 @@ export async function getOciAuditLogRows(input: {
       eventId: fromDbValue(row.EVENT_ID),
       timestamp: fromDbValue(row.TIMESTAMP),
       actorEmail: fromDbValue(row.ACTOR_EMAIL),
+      actorUsername:
+        fromDbValue(row.ACTOR_USERNAME) ||
+        (() => {
+          const actorEmailValue = fromDbValue(row.ACTOR_EMAIL).toLowerCase();
+          return actorEmailValue.endsWith("@local") ? actorEmailValue.slice(0, -6) : "";
+        })(),
       actorPersonId: fromDbValue(row.ACTOR_PERSON_ID),
       action: fromDbValue(row.ACTION),
       entityType: fromDbValue(row.ENTITY_TYPE),

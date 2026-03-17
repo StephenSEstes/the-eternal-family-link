@@ -56,6 +56,7 @@ export type UpsertTenantAccessResult = {
 
 export type AuditLogInput = {
   actorEmail?: string;
+  actorUsername?: string;
   actorPersonId?: string;
   action: string;
   entityType: string;
@@ -69,6 +70,7 @@ export type AuditLogRecord = {
   eventId: string;
   timestamp: string;
   actorEmail: string;
+  actorUsername: string;
   actorPersonId: string;
   action: string;
   entityType: string;
@@ -81,6 +83,7 @@ export type AuditLogRecord = {
 export type AuditLogQuery = {
   familyGroupKey?: string;
   actorEmail?: string;
+  actorUsername?: string;
   actorPersonId?: string;
   action?: string;
   entityType?: string;
@@ -239,6 +242,7 @@ export async function appendAuditLog(input: AuditLogInput) {
       event_id: eventId,
       timestamp: now,
       actor_email: (input.actorEmail ?? "").trim().toLowerCase(),
+      actor_username: (input.actorUsername ?? "").trim().toLowerCase(),
       actor_person_id: (input.actorPersonId ?? "").trim(),
       action: input.action.trim(),
       entity_type: input.entityType.trim(),
@@ -256,6 +260,7 @@ export async function getAuditLogEntries(query: AuditLogQuery = {}): Promise<Aud
     eventId: row.eventId,
     timestamp: row.timestamp,
     actorEmail: row.actorEmail,
+    actorUsername: row.actorUsername,
     actorPersonId: row.actorPersonId,
     action: row.action,
     entityType: row.entityType,

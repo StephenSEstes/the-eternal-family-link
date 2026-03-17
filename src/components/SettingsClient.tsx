@@ -41,6 +41,7 @@ type AuditItem = {
   eventId: string;
   timestamp: string;
   actorEmail: string;
+  actorUsername: string;
   actorPersonId: string;
   action: string;
   entityType: string;
@@ -400,6 +401,7 @@ export function SettingsClient({
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
   const [auditStatusMessage, setAuditStatusMessage] = useState("");
   const [auditActorEmailFilter, setAuditActorEmailFilter] = useState("");
+  const [auditActorUsernameFilter, setAuditActorUsernameFilter] = useState("");
   const [auditActorPersonIdFilter, setAuditActorPersonIdFilter] = useState("");
   const [auditActionFilter, setAuditActionFilter] = useState("");
   const [auditEntityTypeFilter, setAuditEntityTypeFilter] = useState("");
@@ -430,6 +432,7 @@ export function SettingsClient({
   const adminLoadAbortRef = useRef<AbortController | null>(null);
   const auditFiltersRef = useRef({
     actorEmail: "",
+    actorUsername: "",
     actorPersonId: "",
     action: "",
     entityType: "",
@@ -607,6 +610,7 @@ export function SettingsClient({
   useEffect(() => {
     auditFiltersRef.current = {
       actorEmail: auditActorEmailFilter,
+      actorUsername: auditActorUsernameFilter,
       actorPersonId: auditActorPersonIdFilter,
       action: auditActionFilter,
       entityType: auditEntityTypeFilter,
@@ -617,6 +621,7 @@ export function SettingsClient({
   }, [
     auditActionFilter,
     auditActorEmailFilter,
+    auditActorUsernameFilter,
     auditActorPersonIdFilter,
     auditEntityTypeFilter,
     auditFromDate,
@@ -629,6 +634,7 @@ export function SettingsClient({
     setAuditStatusMessage("Loading audit log...");
     const params = new URLSearchParams();
     if (filters.actorEmail.trim()) params.set("actorEmail", filters.actorEmail.trim());
+    if (filters.actorUsername.trim()) params.set("actorUsername", filters.actorUsername.trim());
     if (filters.actorPersonId.trim()) params.set("actorPersonId", filters.actorPersonId.trim());
     if (filters.action.trim()) params.set("action", filters.action.trim());
     if (filters.entityType.trim()) params.set("entityType", filters.entityType.trim());
@@ -2782,7 +2788,7 @@ export function SettingsClient({
                 style={{
                   display: "grid",
                   gap: "0.6rem",
-                  gridTemplateColumns: "minmax(150px, 180px) minmax(220px, 1fr) minmax(120px, 150px) minmax(110px, 130px)",
+                  gridTemplateColumns: "minmax(150px, 180px) minmax(160px, 200px) minmax(220px, 1fr) minmax(120px, 150px) minmax(110px, 130px)",
                 }}
               >
                 <div style={{ minWidth: 0 }}>
@@ -2799,6 +2805,15 @@ export function SettingsClient({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <label className="label">Username</label>
+                  <input
+                    className="input"
+                    value={auditActorUsernameFilter}
+                    onChange={(e) => setAuditActorUsernameFilter(e.target.value)}
+                    placeholder="local username"
+                  />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <label className="label">Actor Email</label>
@@ -2876,6 +2891,7 @@ export function SettingsClient({
                     className="button secondary tap-button"
                     onClick={() => {
                       setAuditActorEmailFilter("");
+                      setAuditActorUsernameFilter("");
                       setAuditActorPersonIdFilter("");
                       setAuditActionFilter("");
                       setAuditEntityTypeFilter("");
@@ -2905,7 +2921,7 @@ export function SettingsClient({
                 <tbody>
                   {auditItems.length > 0 ? auditItems.map((item) => {
                     const actorName = item.actorPersonId ? familyPeopleById.get(item.actorPersonId) ?? item.actorPersonId : "";
-                    const actorLabel = [actorName, item.actorEmail].filter(Boolean).join(" | ") || "-";
+                    const actorLabel = [actorName, item.actorUsername, item.actorEmail].filter(Boolean).join(" | ") || "-";
                     const entityLabel = `${item.entityType}${item.entityId ? `:${item.entityId}` : ""}`;
                     return (
                       <tr key={item.eventId}>

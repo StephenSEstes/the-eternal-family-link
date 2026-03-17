@@ -1,9 +1,10 @@
 export const AI_HELP_SUGGESTIONS = [
   "How do I invite a family member to use the app?",
   "How do I add or edit a person profile?",
-  "How do I add photos, videos, or audio?",
+  "How do I add photos, videos, audio, or documents?",
   "How do I add a story or life event?",
   "How do I install the app on my phone?",
+  "How do I reset my password?",
   "How do I use the audit log?",
 ];
 
@@ -57,9 +58,9 @@ Households
 - Household primary image is the wedding photo / main household image.
 
 Media
-- Media Library stores and displays shared family photos, videos, and audio.
+- Media Library stores and displays shared family photos, videos, audio, and documents.
 - The shared add-media wizard supports device upload, camera capture, and choosing from the library.
-- The current wizard supports photo, video, and audio attachment.
+- Camera capture supports photos and video; device upload/library can include documents.
 - Media can be linked to people, households, and attributes.
 - Deleting media from the app removes links/associations in the app; it does not necessarily delete the underlying Drive file.
 
@@ -82,7 +83,8 @@ Admin
 - User Directory lets an admin select Manage User for a person.
 - Manage User includes two tabs: Manage User and Invite.
 - Invite generates a shareable invite link and message for an existing person already in the database.
-- Audit shows recent logins and change events with filters for actor, action, entity type, result, and date range.
+- Audit shows recent logins and change events with filters for actor person, actor email, actor username, action, entity type, result, and date range.
+- Failed login attempts are expected to appear in audit with action LOGIN and status FAILURE.
 - Attribute Definitions lets admins manage family-specific descriptor and event definitions.
 - Integrity includes data and system checks, duplicate merge tooling, and orphan-media tools.
 - Import supports CSV-based import flows where available.
