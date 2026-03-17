@@ -743,7 +743,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
               </p>
               <p className="person-modal-meta">Household ID: {householdId}</p>
             </div>
-            <ModalCloseButton disabled={loading || saving} onClick={onClose} />
+            <ModalCloseButton className="modal-close-button--floating" disabled={loading || saving} onClick={onClose} />
           </div>
         </div>
 

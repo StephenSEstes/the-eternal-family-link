@@ -126,7 +126,15 @@ type ModalCloseButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function ModalCloseButton({ className = "", label = "Close", ...props }: ModalCloseButtonProps) {
   return (
     <button type="button" className={`modal-close-button ${className}`.trim()} aria-label={label} title={label} {...props}>
-      ×
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+        <path
+          d="M5 5L15 15M15 5L5 15"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+        />
+      </svg>
     </button>
   );
 }

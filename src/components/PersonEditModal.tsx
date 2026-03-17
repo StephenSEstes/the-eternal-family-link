@@ -1882,7 +1882,7 @@ export function PersonEditModal({
                   ) : null}
                 </div>
               ) : null}
-              <ModalCloseButton disabled={saving} onClick={onClose} />
+              <ModalCloseButton className="modal-close-button--floating" disabled={saving} onClick={onClose} />
             </div>
           </div>
         </div>

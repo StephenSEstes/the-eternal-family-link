@@ -13,6 +13,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-16 (fixed-position modal close control)
+
+- `Date`: 2026-03-16
+- `Change`: Refined the shared modal close control so the `X` now uses a consistent inline-SVG icon and anchors to a reserved top-right slot instead of shifting with header wrapping across modal sizes and devices.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. Even after standardizing modal actions, the close control was still a normal grid item inside modal headers, so header content and responsive wrapping could move it to different positions on different screens.
+- `Files`:
+  - `src/components/ui/primitives.tsx`
+  - `src/app/globals.css`
+  - `src/components/SettingsClient.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `docs/ui-interaction-standards.md`
+- `Data Changes`: None.
+- `Verify`:
+  - Open the migrated admin/person/household modals on desktop and mobile widths.
+  - Confirm the close control stays in the same top-right position regardless of header content wrapping.
+  - Confirm the control uses the same icon, size, and hover/focus styling in each migrated modal.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the floating close-button styling and the close-button usage updates in the migrated modal headers.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-16 (modal and async interaction standardization)
 
 - `Date`: 2026-03-16

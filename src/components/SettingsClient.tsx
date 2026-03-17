@@ -2235,7 +2235,7 @@ export function SettingsClient({
                           Create access for a family member who does not already have a user record.
                         </p>
                       </div>
-                      <ModalCloseButton disabled={createUserPending} onClick={closeAddUserModal} />
+                      <ModalCloseButton className="modal-close-button--floating" disabled={createUserPending} onClick={closeAddUserModal} />
                     </div>
                   </div>
                   <div className="person-modal-content">
@@ -2353,6 +2353,7 @@ export function SettingsClient({
                         <p className="person-modal-meta">User directory and invite actions for this person.</p>
                       </div>
                       <ModalCloseButton
+                        className="modal-close-button--floating"
                         disabled={isManageUserActionPending || isInvitePending}
                         onClick={closeManageUserModal}
                       />
