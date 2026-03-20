@@ -23,6 +23,8 @@ type AllowedDefinitionMap = {
   summary: string;
 };
 
+const MAX_STORY_IMPORT_PROPOSALS = 10;
+
 function normalizeWhitespace(value: string) {
   return value.replace(/\r\n/g, "\n").trim();
 }
@@ -120,13 +122,20 @@ function buildInstructions(input: {
     `Current family group: ${input.tenantName}.`,
     `Current person: ${input.personDisplayName}.`,
     "Return JSON only. Do not include markdown fences or commentary.",
-    "Extract as many distinct attribute proposals as the source directly supports.",
+    "Create ONE primary story proposal that preserves the overall narrative.",
+    "The primary story must be: attributeKind=event, attributeType=life_event, attributeTypeCategory=story.",
+    "Do NOT split a single narrative into sentence-level proposals.",
+    "Add supporting proposals only for high-signal reusable facts (for example relationships, moves/addresses, major milestones).",
+    "Supporting proposals must be non-duplicative and materially useful on their own.",
+    "Return at most 10 proposals total including the one primary story.",
     "Do not invent facts, relationships, names, dates, or places.",
     "Use descriptor for timeless facts, hobbies, talents, physical details, and recurring personal facts.",
     "Use event for dated or time-bound milestones and for story vignettes.",
-    "For stories, use attributeType=life_event and attributeTypeCategory=story when the text is a narrative vignette or memory.",
+    "If sibling/family context is mentioned, prefer family_relationship event proposals only when a concrete relationship fact is present.",
+    "If address/home location is mentioned, prefer moved event proposals for concrete move/location facts.",
+    "If no subtype clearly matches an allowed subtype for a category, leave attributeTypeCategory empty.",
     "If a date is missing or uncertain, leave attributeDate empty. The user will review before saving.",
-    "Keep each proposal focused on one fact, event, anniversary source event, or story vignette.",
+    "Keep each supporting proposal focused on one distinct fact.",
     "label should be a short human-readable title.",
     "attributeDetail should contain the main fact or story body.",
     "attributeNotes may hold supporting context that helps the reviewer.",
@@ -137,6 +146,76 @@ function buildInstructions(input: {
     "Return this exact JSON shape:",
     '{"proposals":[{"proposalId":"proposal_1","attributeKind":"event","attributeType":"life_event","attributeTypeCategory":"story","attributeDate":"","endDate":"","dateIsEstimated":false,"estimatedTo":"year","label":"Short title","attributeDetail":"Main detail text","attributeNotes":"","sourceExcerpt":"","rationale":""}]}',
   ].join("\n");
+}
+
+function countWords(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function isPrimaryStoryProposal(proposal: AiStoryImportProposal) {
+  return (
+    normalizeAttributeKind(proposal.attributeKind) === "event" &&
+    normalizeAttributeTypeKey(proposal.attributeType) === "life_event" &&
+    normalizeAttributeTypeKey(proposal.attributeTypeCategory) === "story"
+  );
+}
+
+function looksFragmentarySupportingProposal(proposal: AiStoryImportProposal) {
+  if (isPrimaryStoryProposal(proposal)) {
+    return false;
+  }
+  const detail = proposal.attributeDetail.trim();
+  const notes = proposal.attributeNotes.trim();
+  const hasDate = proposal.attributeDate.trim().length > 0;
+  const hasSubtype = proposal.attributeTypeCategory.trim().length > 0;
+  const words = countWords(detail);
+  return words < 6 && !hasDate && !hasSubtype && notes.length < 24;
+}
+
+function buildPrimaryStoryProposalFromSource(sourceText: string): AiStoryImportProposal {
+  const normalized = normalizeWhitespace(sourceText);
+  const proposalId = "proposal_story_1";
+  const label = "Life Story";
+  const detail = clampText(normalized, 2000);
+  const remaining = normalized.slice(detail.length).trim();
+  const suffix = remaining ? "\n\n[Original narrative truncated for length.]" : "";
+  const notes = clampText(`${detail}${suffix}${remaining ? `\n${remaining}` : ""}`.trim(), 4000);
+  return {
+    proposalId,
+    attributeKind: "event",
+    attributeType: "life_event",
+    attributeTypeCategory: "story",
+    attributeDate: "",
+    endDate: "",
+    dateIsEstimated: false,
+    label,
+    attributeDetail: detail,
+    attributeNotes: notes === detail ? "" : notes,
+    sourceExcerpt: clampText(normalized, 1000),
+    rationale: "Primary narrative story captured from the original text.",
+  };
+}
+
+function dedupeProposals(proposals: AiStoryImportProposal[]) {
+  const seen = new Set<string>();
+  const output: AiStoryImportProposal[] = [];
+  for (const proposal of proposals) {
+    const key = [
+      normalizeAttributeKind(proposal.attributeKind) ?? "",
+      normalizeAttributeTypeKey(proposal.attributeType),
+      normalizeAttributeTypeKey(proposal.attributeTypeCategory),
+      proposal.attributeDate.trim(),
+      proposal.endDate.trim(),
+      proposal.attributeDetail.trim().toLowerCase(),
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(proposal);
+  }
+  return output;
 }
 
 export async function generateStoryImportProposals(input: StoryImportInput) {
@@ -184,10 +263,16 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     throw new Error("AI story import returned an invalid proposal payload.");
   }
 
-  const proposals = parsed.data.proposals
+  const normalizedProposals = parsed.data.proposals
     .map((proposal, index) => normalizeProposal(proposal, allowed, index))
     .filter((proposal): proposal is AiStoryImportProposal => Boolean(proposal))
-    .filter((proposal) => proposal.attributeDetail.trim().length > 0);
+    .filter((proposal) => proposal.attributeDetail.trim().length > 0)
+    .filter((proposal) => !looksFragmentarySupportingProposal(proposal));
+
+  const primaryFromModel = normalizedProposals.find((proposal) => isPrimaryStoryProposal(proposal)) ?? null;
+  const primaryStory = primaryFromModel ?? buildPrimaryStoryProposalFromSource(sourceText);
+  const supporting = normalizedProposals.filter((proposal) => !isPrimaryStoryProposal(proposal));
+  const proposals = dedupeProposals([primaryStory, ...supporting]).slice(0, MAX_STORY_IMPORT_PROPOSALS);
 
   return {
     proposals,

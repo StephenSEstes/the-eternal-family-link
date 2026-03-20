@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-19: AI story import is now story-first: it creates one primary narrative `life_event/story` draft and limits supporting drafts to high-signal facts, reducing sentence-level fragment proposals. See `docs/change-summary.md`.
 - 2026-03-19: Added thumbnail variants for new image uploads, stored thumbnail pointers in media metadata, and switched compact preview surfaces to prefer thumbnail assets while keeping originals for detail views. See `docs/change-summary.md`.
 - 2026-03-17: Expanded AI Help guidance, added first-class audit username logging/filtering for attempted logins, and added document support as a media type across upload/link/display flows. See `docs/change-summary.md`.
 - 2026-03-17: Fixed password reset for users with both Google and local family access by deduping tenant local-user lookup, and repaired the missing live `PASSWORD_RESETS` table in OCI. See `docs/change-summary.md`.

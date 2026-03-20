@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-19 (AI story import: story-first extraction and anti-fragment guardrails)
+
+- `Date`: 2026-03-19
+- `Change`: Reworked AI story import so it is story-first instead of sentence-fragment-first: the pipeline now enforces one primary `life_event/story` proposal for the overall narrative and only keeps high-signal supporting proposals.
+- `Type`: API
+- `Why`: Root cause was a `code/prompt issue`. The prior prompt explicitly asked the model to extract as many distinct proposals as possible, which encouraged sentence-level fragmentation and produced noisy low-value drafts from a single story.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Submit a long narrative story and confirm the first draft is one coherent `life_event/story` proposal.
+  - Confirm supporting proposals are limited to material facts (for example concrete relationship, move/location, or major milestone facts) rather than one per sentence.
+  - Confirm duplicate/near-duplicate and tiny fragment proposals are reduced.
+  - Confirm output is capped at 10 proposals total.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `src/lib/ai/story-import.ts` prompt + post-processing guardrail changes together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (thumbnail variants for media uploads + preview routing)
 
 - `Date`: 2026-03-19
