@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-20: `Import Story with AI` now opens in a desktop-first full-screen Story Workspace layout with side-by-side narrative/chat/suggestion panels, extraction-mode selector UI, and duplicate-review placeholder area for extraction tuning. See `docs/change-summary.md`.
 - 2026-03-20: Story import now includes a passthrough AI chat panel in the import modal, with applyable title/date/type suggestions that can be used as hints for draft generation. See `docs/change-summary.md`.
 - 2026-03-20: AI story import title normalization now blocks repeated/truncated opening fragments and prefers clean descriptive title phrases for story `attributeDetail`. See `docs/change-summary.md`.
 - 2026-03-20: AI story import now strips leading metadata-preface lines like `Top-level matriarch ...` so those descriptors do not appear in imported story notes/titles. See `docs/change-summary.md`.

@@ -112,6 +112,7 @@ type StoryImportHints = {
   attributeType: string;
   attributeTypeCategory: string;
 };
+type StoryExtractionMode = "story" | "balanced" | "resume";
 
 type Props = {
   open: boolean;
@@ -744,6 +745,7 @@ export function PersonEditModal({
   const [storyImportStatus, setStoryImportStatus] = useState("");
   const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
+  const [storyExtractionMode, setStoryExtractionMode] = useState<StoryExtractionMode>("balanced");
   const [storyImportHints, setStoryImportHints] = useState<StoryImportHints>({
     titleHint: "",
     startDate: "",
@@ -1040,6 +1042,7 @@ export function PersonEditModal({
       attributeType: "",
       attributeTypeCategory: "",
     });
+    setStoryExtractionMode("balanced");
   };
 
   const openStoryImportModal = () => {
@@ -3385,27 +3388,86 @@ export function PersonEditModal({
 
         {showStoryImportModal ? (
           <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 145, display: "grid", placeItems: "center", padding: "1rem" }}
+            className="story-workspace-backdrop"
             onClick={(event) => event.stopPropagation()}
           >
             <div
-              className="card"
-              style={{ width: "min(760px, 95vw)", maxHeight: "90vh", overflow: "auto" }}
+              className="story-workspace-panel"
               onClick={(event) => event.stopPropagation()}
             >
-              <h4 style={{ marginTop: 0 }}>Import Story with AI (testing)</h4>
+              <div className="story-workspace-header">
+                <h4 style={{ margin: 0 }}>Story Import Workspace (testing)</h4>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={storyImportBusy || storyChatBusy}
+                  onClick={() => {
+                    setShowStoryImportModal(false);
+                    setStoryImportStatus("");
+                  }}
+                >
+                  Close
+                </button>
+              </div>
               <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
-                Paste a life story, vignette, or notes. AI will propose canonical attributes, events, and stories. Nothing is saved until you review each proposal.
+                Desktop-first review layout for story extraction. Nothing is saved until you review each generated draft.
               </p>
+              <div className="story-workspace-body">
+                <div className="card story-workspace-story-pane">
+                  <div className="story-workspace-section-head">
+                    <h5 style={{ margin: 0 }}>Story Text</h5>
+                    <span className="status-chip status-chip--neutral">Chars {storyImportText.trim().length}</span>
+                  </div>
               <label className="label">Story Text</label>
               <textarea
                 className="textarea"
                 value={storyImportText}
                 onChange={(event) => setStoryImportText(event.target.value)}
                 placeholder="Paste a life story, biography, or story excerpt here."
-                style={{ minHeight: "18rem" }}
-                disabled={storyImportBusy}
+                style={{ minHeight: "18rem", flex: 1 }}
+                disabled={storyImportBusy || storyChatBusy}
               />
+                  <div className="story-workspace-controls">
+                    <div>
+                      <label className="label" style={{ marginBottom: "0.35rem" }}>Extraction Mode</label>
+                      <div className="settings-chip-list">
+                        <button
+                          type="button"
+                          className={`tab-pill ${storyExtractionMode === "story" ? "active" : ""}`}
+                          onClick={() => setStoryExtractionMode("story")}
+                          disabled={storyImportBusy || storyChatBusy}
+                        >
+                          Story
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-pill ${storyExtractionMode === "balanced" ? "active" : ""}`}
+                          onClick={() => setStoryExtractionMode("balanced")}
+                          disabled={storyImportBusy || storyChatBusy}
+                        >
+                          Balanced
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-pill ${storyExtractionMode === "resume" ? "active" : ""}`}
+                          onClick={() => setStoryExtractionMode("resume")}
+                          disabled={storyImportBusy || storyChatBusy}
+                        >
+                          Resume
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      disabled={storyImportBusy || storyChatBusy}
+                      onClick={() => void generateStoryImportDrafts()}
+                    >
+                      {storyImportBusy ? "Generating..." : "Generate Drafts"}
+                    </button>
+                  </div>
+                </div>
+                <div className="story-workspace-side">
               <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
                 <h5 style={{ marginTop: 0, marginBottom: "0.45rem" }}>Story AI Chat (passthrough)</h5>
                 <p className="page-subtitle" style={{ marginTop: 0 }}>
@@ -3474,33 +3536,20 @@ export function PersonEditModal({
                 ) : null}
                 {storyChatStatus ? <p style={{ marginTop: "0.55rem", marginBottom: 0 }}>{storyChatStatus}</p> : null}
               </div>
+              <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
+                <h5 style={{ marginTop: 0, marginBottom: "0.45rem" }}>Potential Duplicates</h5>
+                <p className="page-subtitle" style={{ margin: 0 }}>
+                  Placeholder for duplicate-candidate review and decision controls (`Add New`, `Replace`, `Skip`) in the next extraction phase.
+                </p>
+              </div>
+                </div>
+              </div>
               {(storyImportHints.titleHint || storyImportHints.startDate || storyImportHints.endDate || storyImportHints.attributeType || storyImportHints.attributeTypeCategory) ? (
                 <p className="page-subtitle" style={{ marginTop: "0.7rem", marginBottom: 0 }}>
                   Draft hints applied: title={storyImportHints.titleHint || "-"}, dates={storyImportHints.startDate || "-"}{storyImportHints.endDate ? ` to ${storyImportHints.endDate}` : ""}, type={storyImportHints.attributeType || "-"}{storyImportHints.attributeTypeCategory ? `/${storyImportHints.attributeTypeCategory}` : ""}
                 </p>
               ) : null}
               {storyImportStatus ? <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>{storyImportStatus}</p> : null}
-              <div className="settings-chip-list" style={{ marginTop: "0.9rem" }}>
-                <button
-                  type="button"
-                  className="button tap-button"
-                  disabled={storyImportBusy || storyChatBusy}
-                  onClick={() => void generateStoryImportDrafts()}
-                >
-                  {storyImportBusy ? "Generating..." : "Generate Drafts"}
-                </button>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  disabled={storyImportBusy || storyChatBusy}
-                  onClick={() => {
-                    setShowStoryImportModal(false);
-                    setStoryImportStatus("");
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           </div>
         ) : null}

@@ -157,6 +157,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert story-chat API + UI chat panel + story-import hint plumbing as one unit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-20 (story workspace desktop-first layout scaffold)
+
+- `Date`: 2026-03-20
+- `Change`: Reworked the `Import Story with AI` modal into a desktop-first full-screen Story Workspace scaffold with side-by-side story input and AI review panels, extraction mode selector UI (`Story`, `Balanced`, `Resume`), and a reserved duplicate-review section.
+- `Type`: UI
+- `Why`: Root cause was a `workflow/UX issue`. The prior compact modal made it hard to evaluate extraction quality, prompts, and refinement controls together while reviewing long narratives.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `Import Story with AI` on desktop and confirm full-screen workspace layout with two columns.
+  - Confirm story text/editor, chat panel, suggestion panel, and duplicate placeholder are visible together.
+  - Confirm mobile widths collapse back to one-column layout.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `PersonEditModal` story modal structure and the new `.story-workspace-*` styles in `globals.css`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19
