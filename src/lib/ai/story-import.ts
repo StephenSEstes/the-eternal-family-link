@@ -80,6 +80,24 @@ function buildConciseStoryDetail(value: string) {
   return clampText(sentence || value, STORY_DETAIL_MAX_CHARS);
 }
 
+function sanitizeTitleText(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/[“”"]/g, "")
+    .replace(/\s*[:;,.!?]+\s*$/g, "")
+    .trim();
+}
+
+function buildDetailTitle(value: string) {
+  const clean = sanitizeTitleText(value);
+  if (!clean) return "";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length <= 12) {
+    return clampText(clean, STORY_DETAIL_MAX_CHARS);
+  }
+  return clampText(words.slice(0, 12).join(" "), STORY_DETAIL_MAX_CHARS);
+}
+
 function buildStoryLabel(value: string) {
   const sentence = firstSentence(value).replace(/[.!?]+$/, "");
   const words = sentence
@@ -210,12 +228,14 @@ function buildPrimaryStoryNotes(sourceText: string, existingNotes: string) {
 function normalizePrimaryStoryProposalFromSource(proposal: AiStoryImportProposal, sourceText: string): AiStoryImportProposal {
   const normalizedSource = normalizeWhitespace(sourceText);
   const detailSource = proposal.attributeDetail || proposal.label || normalizedSource;
-  const detail = buildConciseStoryDetail(detailSource);
   const preferredSourceTitle = deriveStoryTitleFromSource(normalizedSource);
   const aiLabel = clampText(proposal.label || "", 120);
   const label = isWeakStoryLabel(aiLabel)
-    ? (preferredSourceTitle || buildStoryLabel(detail || normalizedSource))
+    ? (preferredSourceTitle || buildStoryLabel(proposal.attributeDetail || normalizedSource))
     : aiLabel;
+  const detail = buildDetailTitle(proposal.attributeDetail || label || preferredSourceTitle || detailSource)
+    || buildDetailTitle(preferredSourceTitle || label)
+    || buildConciseStoryDetail(detailSource);
   const inferredRange = extractStoryDateRangeFromText(normalizedSource);
   const attributeDate = clampText(
     (inferredRange?.startDate || proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource)),
@@ -333,7 +353,7 @@ function buildInstructions(input: {
     "If a date is missing or uncertain, leave attributeDate empty. Do not invent dates.",
     "Keep each supporting proposal focused on one distinct fact.",
     "label should be a short human-readable summary title (about 3-10 words) describing the core story, not the source article headline/date.",
-    "attributeDetail should be a brief one-sentence summary, not the full narrative body.",
+    "attributeDetail should be a descriptive title phrase (about 4-12 words), not a sentence body.",
     "For the primary story proposal, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
     "For supporting proposals, attributeNotes may hold extra context.",
     "Use only the allowed category/type combinations listed below.",

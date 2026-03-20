@@ -87,6 +87,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the draft-skip callback wiring in `AttributesModal`/`PersonEditModal` and the title/date normalization helpers in `story-import.ts`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-20 (AI story detail field now title-oriented)
+
+- `Date`: 2026-03-20
+- `Change`: Updated AI story-import instructions and normalization so primary-story `attributeDetail` is treated as a descriptive title phrase rather than a sentence summary.
+- `Type`: API
+- `Why`: Root cause was a `code/prompt issue`. The story importer still normalized detail toward first-sentence text, which produced sentence-like output instead of the intended title-style detail.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Run AI story import and confirm `attributeDetail` is a concise descriptive title phrase (not sentence body text).
+  - Confirm primary-story `label` and `attributeDetail` remain aligned and readable when source narratives are long.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `story-import.ts` detail-title normalization and prompt wording changes together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19
