@@ -246,6 +246,7 @@ export function AttributesModal({
   closeAfterAddSave = true,
   addModalTitle = "Add Attribute",
   launchSourceLabel = "",
+  onSkipDraft,
   onClose,
   onSaved,
 }: {
@@ -264,6 +265,7 @@ export function AttributesModal({
   closeAfterAddSave?: boolean;
   addModalTitle?: string;
   launchSourceLabel?: string;
+  onSkipDraft?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -299,6 +301,7 @@ export function AttributesModal({
 
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [showAddFormMediaAttachWizard, setShowAddFormMediaAttachWizard] = useState(false);
+  const isStoryDraftReview = Boolean(startInAddMode && initialDraft);
   const [debugMode, setDebugMode] = useState(false);
   const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultAttributeDefinitions());
   const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
@@ -1296,6 +1299,23 @@ export function AttributesModal({
                       disabled={busy}
                     >
                       Delete
+                    </button>
+                  ) : null}
+                  {isStoryDraftReview ? (
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        if (busy) return;
+                        if (onSkipDraft) {
+                          onSkipDraft();
+                          return;
+                        }
+                        closeAddModal();
+                      }}
+                      disabled={busy}
+                    >
+                      Skip
                     </button>
                   ) : null}
                   <button type="button" className="button secondary tap-button" onClick={() => void openAddFormMediaWizard()} disabled={busy}>

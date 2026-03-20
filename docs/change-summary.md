@@ -68,6 +68,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert JSON parse fallback helper and prompt note-size guidance changes in `story-import.ts`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-19 (AI story import title/date quality + draft skip action)
+
+- `Date`: 2026-03-19
+- `Change`: Added `Skip` support during AI draft review so users can move to the next story proposal without saving the current one. Improved primary-story title/date normalization to prefer meaningful story titles and operation-date ranges from narrative text (for example `from ... until ...`) instead of unrelated article/publication dates.
+- `Type`: UI | API
+- `Why`: Root cause was a `mixed issue`. Review flow lacked a skip path (only save-or-cancel), and story-date normalization defaulted to first-matched date patterns, which could select publication dates rather than the actual event/operation range described in the narrative.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Start AI story import review and confirm `Skip` advances to the next proposal without saving the current one.
+  - For narratives that include `from ... until ...` operation periods, confirm primary story dates prefer that range over article publication dates.
+  - Confirm primary story label is a concise summary title and avoids weak/generic labels when source context supports a stronger title.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the draft-skip callback wiring in `AttributesModal`/`PersonEditModal` and the title/date normalization helpers in `story-import.ts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19

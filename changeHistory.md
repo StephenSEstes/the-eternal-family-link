@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-19: AI story import review now supports `Skip` to advance without saving, and story date/title normalization now prefers operation ranges and stronger summary titles over article-date-driven labels. See `docs/change-summary.md`.
 - 2026-03-19: AI story import no longer hard-fails on malformed/truncated model JSON (`Unterminated string...`); it now falls back safely and continues with a primary story draft. See `docs/change-summary.md`.
 - 2026-03-19: Attribute add/edit forms now include `Add Photo`; new attributes auto-save first, then open photo attach in-place so media can be added without leaving the form. See `docs/change-summary.md`.
 - 2026-03-19: AI story import now stores full original narrative text in Notes for primary story drafts, keeps Description concise, and applies explicit-date extraction when present. See `docs/change-summary.md`.

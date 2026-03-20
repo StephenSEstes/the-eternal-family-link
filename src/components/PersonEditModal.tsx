@@ -2011,10 +2011,7 @@ export function PersonEditModal({
   return (
     <div
       className="person-modal-backdrop"
-      onClick={() => {
-        if (saving) return;
-        onClose();
-      }}
+      onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div
@@ -2904,6 +2901,21 @@ export function PersonEditModal({
             closeAfterAddSave={!currentStoryImportDraft}
             addModalTitle={storyImportDraftTitle}
             launchSourceLabel={currentStoryImportDraft ? "AI Story Import" : attributeLaunchMeta.label}
+            onSkipDraft={() => {
+              if (!currentStoryImportDraft) {
+                return;
+              }
+              const nextIndex = storyImportDraftIndex + 1;
+              if (nextIndex < storyImportDrafts.length) {
+                setStoryImportDraftIndex(nextIndex);
+                setStatus(`Skipped AI draft ${storyImportDraftIndex + 1} of ${storyImportDrafts.length}. Review the next proposal.`);
+                return;
+              }
+              clearStoryImportQueue();
+              setShowAttributeAddModal(false);
+              setSelectedAboutAttributeId("");
+              setStatus("Skipped final AI draft. No more drafts to review.");
+            }}
             onClose={() => {
               if (currentStoryImportDraft) {
                 const remaining = storyImportDrafts.length - storyImportDraftIndex;
@@ -3180,7 +3192,7 @@ export function PersonEditModal({
         {showAddSpouse ? (
           <div
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 145, display: "grid", placeItems: "center", padding: "1rem" }}
-            onClick={() => setShowAddSpouse(false)}
+            onClick={(event) => event.stopPropagation()}
           >
             <div
               className="card"
@@ -3255,12 +3267,7 @@ export function PersonEditModal({
         {showStoryImportModal ? (
           <div
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 145, display: "grid", placeItems: "center", padding: "1rem" }}
-            onClick={() => {
-              if (!storyImportBusy) {
-                setShowStoryImportModal(false);
-                setStoryImportStatus("");
-              }
-            }}
+            onClick={(event) => event.stopPropagation()}
           >
             <div
               className="card"

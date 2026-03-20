@@ -25,6 +25,20 @@ type AllowedDefinitionMap = {
 
 const MAX_STORY_IMPORT_PROPOSALS = 10;
 const STORY_DETAIL_MAX_CHARS = 180;
+const MONTH_INDEX: Record<string, number> = {
+  january: 1,
+  february: 2,
+  march: 3,
+  april: 4,
+  may: 5,
+  june: 6,
+  july: 7,
+  august: 8,
+  september: 9,
+  october: 10,
+  november: 11,
+  december: 12,
+};
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\r\n/g, "\n").trim();
@@ -74,6 +88,77 @@ function buildStoryLabel(value: string) {
     .slice(0, 8)
     .join(" ");
   return clampText(words || sentence || "Life Story", 120);
+}
+
+function isWeakStoryLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+  const weakLabels = new Set(["life story", "story", "short title", "proposal 1", "proposal_1"]);
+  return weakLabels.has(normalized) || normalized.startsWith("top-level");
+}
+
+function toIsoDate(month: number, day: number, year: number) {
+  if (!Number.isInteger(month) || !Number.isInteger(day) || !Number.isInteger(year)) return "";
+  if (year < 1800 || year > 2100) return "";
+  if (month < 1 || month > 12) return "";
+  if (day < 1 || day > 31) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseDateTokenToIso(value: string) {
+  const token = value.trim().replace(/[.,;]+$/g, "");
+  if (!token) return "";
+  const iso = token.match(/^((19|20)\d{2})-(\d{2})-(\d{2})$/);
+  if (iso) return iso[1] + token.slice(4);
+
+  const slash = token.match(/^(0?[1-9]|1[0-2])\/([0-2]?[0-9]|3[0-1])\/((19|20)\d{2})$/);
+  if (slash) {
+    const [, mm, dd, yyyy] = slash;
+    return toIsoDate(Number(mm), Number(dd), Number(yyyy));
+  }
+
+  const monthDayYear = token.match(
+    /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+([0-2]?[0-9]|3[0-1]),\s*((19|20)\d{2})$/i,
+  );
+  if (monthDayYear) {
+    const month = MONTH_INDEX[monthDayYear[1].toLowerCase()] ?? 0;
+    return toIsoDate(month, Number(monthDayYear[2]), Number(monthDayYear[3]));
+  }
+
+  const yearOnly = token.match(/^((19|20)\d{2})$/);
+  if (yearOnly) {
+    return `${yearOnly[1]}-01-01`;
+  }
+  return "";
+}
+
+function deriveStoryTitleFromSource(value: string) {
+  const normalized = normalizeWhitespace(value).replace(/\s+/g, " ");
+  if (!normalized) return "";
+  const birthPlaceName = normalized.match(
+    /([A-Z][A-Za-z'.&\-\s]{2,90}?)\s*,\s*the place of my birth\b/i,
+  );
+  if (birthPlaceName?.[1]) {
+    return clampText(`${birthPlaceName[1].trim()} where I was born`, 120);
+  }
+  const namedPlace = normalized.match(/([A-Z][A-Za-z'.&\-\s]{2,90}Maternity Home)\b/i);
+  if (namedPlace?.[1]) {
+    return clampText(namedPlace[1].trim(), 120);
+  }
+  return "";
+}
+
+function extractStoryDateRangeFromText(value: string) {
+  const text = normalizeWhitespace(value).replace(/\s+/g, " ");
+  if (!text) return null;
+  const rangeMatch = text.match(
+    /\bfrom\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s*(?:19|20)\d{2}|(?:19|20)\d{2}|(?:0?[1-9]|1[0-2])\/(?:[0-2]?[0-9]|3[0-1])\/(?:19|20)\d{2})[^.]{0,120}?\b(?:until|through|to)\b[^.]{0,40}?\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s*(?:19|20)\d{2}|(?:19|20)\d{2}|(?:0?[1-9]|1[0-2])\/(?:[0-2]?[0-9]|3[0-1])\/(?:19|20)\d{2})/i,
+  );
+  if (!rangeMatch) return null;
+  const startDate = parseDateTokenToIso(rangeMatch[1]);
+  const endDate = parseDateTokenToIso(rangeMatch[2]);
+  if (!startDate && !endDate) return null;
+  return { startDate, endDate };
 }
 
 function extractDateFromStoryText(value: string) {
@@ -126,14 +211,27 @@ function normalizePrimaryStoryProposalFromSource(proposal: AiStoryImportProposal
   const normalizedSource = normalizeWhitespace(sourceText);
   const detailSource = proposal.attributeDetail || proposal.label || normalizedSource;
   const detail = buildConciseStoryDetail(detailSource);
-  const label = buildStoryLabel(proposal.label || detail || normalizedSource);
-  const attributeDate = proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource);
+  const preferredSourceTitle = deriveStoryTitleFromSource(normalizedSource);
+  const aiLabel = clampText(proposal.label || "", 120);
+  const label = isWeakStoryLabel(aiLabel)
+    ? (preferredSourceTitle || buildStoryLabel(detail || normalizedSource))
+    : aiLabel;
+  const inferredRange = extractStoryDateRangeFromText(normalizedSource);
+  const attributeDate = clampText(
+    (inferredRange?.startDate || proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource)),
+    32,
+  );
+  const endDate = clampText(
+    (inferredRange?.endDate || proposal.endDate.trim()),
+    32,
+  );
   return {
     ...proposal,
     label,
     attributeDetail: detail,
     attributeNotes: buildPrimaryStoryNotes(normalizedSource, proposal.attributeNotes || proposal.sourceExcerpt || ""),
-    attributeDate: clampText(attributeDate, 32),
+    attributeDate,
+    endDate,
     sourceExcerpt: clampText(normalizedSource, 1000),
     rationale: clampText(proposal.rationale || "Primary narrative story captured from the original text.", 500),
   };
@@ -231,9 +329,10 @@ function buildInstructions(input: {
     "If address/home location is mentioned, prefer moved event proposals for concrete move/location facts.",
     "If no subtype clearly matches an allowed subtype for a category, leave attributeTypeCategory empty.",
     "Extract dates when explicitly present in the story text (for example YYYY-MM-DD, MM/DD/YYYY, or Month Day, Year).",
+    "If source text includes an operation/range phrase (for example 'from ... until ...'), prefer that range over publication/article dates.",
     "If a date is missing or uncertain, leave attributeDate empty. Do not invent dates.",
     "Keep each supporting proposal focused on one distinct fact.",
-    "label should be a short human-readable title (about 3-8 words).",
+    "label should be a short human-readable summary title (about 3-10 words) describing the core story, not the source article headline/date.",
     "attributeDetail should be a brief one-sentence summary, not the full narrative body.",
     "For the primary story proposal, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
     "For supporting proposals, attributeNotes may hold extra context.",
