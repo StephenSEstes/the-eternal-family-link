@@ -13,6 +13,45 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-19 (modal backdrop-close disabled for key edit/manage flows)
+
+- `Date`: 2026-03-19
+- `Change`: Disabled backdrop click-to-close on core edit/import/manage modals so closing now requires explicit user intent via `Cancel`, `Close`, `X`, or save actions.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. Several modal backdrops were still wired to close on outside click, causing accidental dismissal and loss of in-progress context.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open each updated modal and click outside the modal panel; confirm it stays open.
+  - Confirm `Cancel`, `Close`, and `X` still close when enabled.
+  - Confirm save flows still close when configured to do so.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the backdrop onClick handlers in the listed modal components.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-19 (AI story import notes-first narrative shaping)
+
+- `Date`: 2026-03-19
+- `Change`: Adjusted AI story-import shaping so story proposals now use a concise title/detail and preserve the full original narrative in notes; also strengthened date-extraction instructions and fallback date parsing for explicit date formats in source text.
+- `Type`: API
+- `Why`: Root cause was a `code/prompt issue`. The importer prompt and fallback logic explicitly encouraged long `attributeDetail` story bodies and only optional notes, which reversed the intended data shape.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Import a story and confirm the primary draft has a short `label`, a brief one-sentence `attributeDetail`, and full narrative text in `attributeNotes`.
+  - Confirm explicit dates in source text (for example `YYYY-MM-DD`, `MM/DD/YYYY`, `Month Day, Year`) populate `attributeDate` when available.
+  - Confirm primary proposal remains `event / life_event / story`.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `src/lib/ai/story-import.ts` prompt and primary-story normalization helpers together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import: story-first extraction and anti-fragment guardrails)
 
 - `Date`: 2026-03-19

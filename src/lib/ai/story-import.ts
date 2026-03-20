@@ -24,6 +24,7 @@ type AllowedDefinitionMap = {
 };
 
 const MAX_STORY_IMPORT_PROPOSALS = 10;
+const STORY_DETAIL_MAX_CHARS = 180;
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\r\n/g, "\n").trim();
@@ -41,6 +42,91 @@ function clampText(value: string, max: number) {
   const trimmed = value.trim();
   if (trimmed.length <= max) return trimmed;
   return trimmed.slice(0, max).trim();
+}
+
+function firstSentence(value: string) {
+  const normalized = normalizeWhitespace(value).replace(/\s+/g, " ");
+  if (!normalized) return "";
+  const match = normalized.match(/^[^.!?]+[.!?]?/);
+  return (match?.[0] ?? normalized).trim();
+}
+
+function buildConciseStoryDetail(value: string) {
+  const sentence = firstSentence(value);
+  return clampText(sentence || value, STORY_DETAIL_MAX_CHARS);
+}
+
+function buildStoryLabel(value: string) {
+  const sentence = firstSentence(value).replace(/[.!?]+$/, "");
+  const words = sentence
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(" ");
+  return clampText(words || sentence || "Life Story", 120);
+}
+
+function extractDateFromStoryText(value: string) {
+  const text = normalizeWhitespace(value);
+  if (!text) return "";
+  const iso = text.match(/\b(19|20)\d{2}-\d{2}-\d{2}\b/);
+  if (iso) return iso[0];
+
+  const slash = text.match(/\b(0?[1-9]|1[0-2])\/([0-2]?[0-9]|3[0-1])\/((19|20)\d{2})\b/);
+  if (slash) {
+    const [, mm, dd, yyyy] = slash;
+    return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  }
+
+  const monthName = text.match(
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+([0-2]?[0-9]|3[0-1]),\s*((19|20)\d{2})\b/i,
+  );
+  if (monthName) {
+    const parsed = new Date(`${monthName[1]} ${monthName[2]}, ${monthName[3]}`);
+    if (!Number.isNaN(parsed.getTime())) {
+      const year = parsed.getUTCFullYear();
+      const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(parsed.getUTCDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return "";
+}
+
+function buildPrimaryStoryNotes(sourceText: string, existingNotes: string) {
+  const normalizedSource = normalizeWhitespace(sourceText);
+  const normalizedExisting = normalizeWhitespace(existingNotes);
+  const pieces: string[] = [];
+  if (normalizedExisting) {
+    pieces.push(normalizedExisting);
+  }
+  if (normalizedSource) {
+    const alreadyContainsSource =
+      normalizedExisting.length > 0 &&
+      normalizedSource.length > 0 &&
+      normalizedExisting.includes(normalizedSource.slice(0, Math.min(normalizedSource.length, 120)));
+    if (!alreadyContainsSource) {
+      pieces.push(`Original narrative:\n${normalizedSource}`);
+    }
+  }
+  return clampText(pieces.join("\n\n").trim(), 4000);
+}
+
+function normalizePrimaryStoryProposalFromSource(proposal: AiStoryImportProposal, sourceText: string): AiStoryImportProposal {
+  const normalizedSource = normalizeWhitespace(sourceText);
+  const detailSource = proposal.attributeDetail || proposal.label || normalizedSource;
+  const detail = buildConciseStoryDetail(detailSource);
+  const label = buildStoryLabel(proposal.label || detail || normalizedSource);
+  const attributeDate = proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource);
+  return {
+    ...proposal,
+    label,
+    attributeDetail: detail,
+    attributeNotes: buildPrimaryStoryNotes(normalizedSource, proposal.attributeNotes || proposal.sourceExcerpt || ""),
+    attributeDate: clampText(attributeDate, 32),
+    sourceExcerpt: clampText(normalizedSource, 1000),
+    rationale: clampText(proposal.rationale || "Primary narrative story captured from the original text.", 500),
+  };
 }
 
 function buildAllowedDefinitionsSummary(definitions: Awaited<ReturnType<typeof getAttributeEventDefinitions>>): AllowedDefinitionMap {
@@ -134,11 +220,13 @@ function buildInstructions(input: {
     "If sibling/family context is mentioned, prefer family_relationship event proposals only when a concrete relationship fact is present.",
     "If address/home location is mentioned, prefer moved event proposals for concrete move/location facts.",
     "If no subtype clearly matches an allowed subtype for a category, leave attributeTypeCategory empty.",
-    "If a date is missing or uncertain, leave attributeDate empty. The user will review before saving.",
+    "Extract dates when explicitly present in the story text (for example YYYY-MM-DD, MM/DD/YYYY, or Month Day, Year).",
+    "If a date is missing or uncertain, leave attributeDate empty. Do not invent dates.",
     "Keep each supporting proposal focused on one distinct fact.",
-    "label should be a short human-readable title.",
-    "attributeDetail should contain the main fact or story body.",
-    "attributeNotes may hold supporting context that helps the reviewer.",
+    "label should be a short human-readable title (about 3-8 words).",
+    "attributeDetail should be a brief one-sentence summary, not the full narrative body.",
+    "For the primary story proposal, put the full original narrative in attributeNotes and preserve wording from the source text.",
+    "For supporting proposals, attributeNotes may hold extra context.",
     "Use only the allowed category/type combinations listed below.",
     "",
     input.definitionSummary,
@@ -178,22 +266,20 @@ function looksFragmentarySupportingProposal(proposal: AiStoryImportProposal) {
 function buildPrimaryStoryProposalFromSource(sourceText: string): AiStoryImportProposal {
   const normalized = normalizeWhitespace(sourceText);
   const proposalId = "proposal_story_1";
-  const label = "Life Story";
-  const detail = clampText(normalized, 2000);
-  const remaining = normalized.slice(detail.length).trim();
-  const suffix = remaining ? "\n\n[Original narrative truncated for length.]" : "";
-  const notes = clampText(`${detail}${suffix}${remaining ? `\n${remaining}` : ""}`.trim(), 4000);
+  const label = buildStoryLabel(normalized || "Life Story");
+  const detail = buildConciseStoryDetail(normalized || "Life Story");
+  const notes = buildPrimaryStoryNotes(normalized, "");
   return {
     proposalId,
     attributeKind: "event",
     attributeType: "life_event",
     attributeTypeCategory: "story",
-    attributeDate: "",
+    attributeDate: extractDateFromStoryText(normalized),
     endDate: "",
     dateIsEstimated: false,
     label,
     attributeDetail: detail,
-    attributeNotes: notes === detail ? "" : notes,
+    attributeNotes: notes,
     sourceExcerpt: clampText(normalized, 1000),
     rationale: "Primary narrative story captured from the original text.",
   };
@@ -271,7 +357,10 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     .filter((proposal) => !looksFragmentarySupportingProposal(proposal));
 
   const primaryFromModel = normalizedProposals.find((proposal) => isPrimaryStoryProposal(proposal)) ?? null;
-  const primaryStory = primaryFromModel ?? buildPrimaryStoryProposalFromSource(sourceText);
+  const primaryStory = normalizePrimaryStoryProposalFromSource(
+    primaryFromModel ?? buildPrimaryStoryProposalFromSource(sourceText),
+    sourceText,
+  );
   const supporting = normalizedProposals.filter((proposal) => !isPrimaryStoryProposal(proposal));
   const proposals = dedupeProposals([primaryStory, ...supporting]).slice(0, MAX_STORY_IMPORT_PROPOSALS);
 

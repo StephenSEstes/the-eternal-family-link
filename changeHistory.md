@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-19: AI story import now stores full original narrative text in Notes for primary story drafts, keeps Description concise, and applies explicit-date extraction when present. See `docs/change-summary.md`.
+- 2026-03-19: Backdrop clicks no longer close key edit/import/manage modals; those screens now require explicit `Cancel`, `Close`, `X`, or save actions to dismiss. See `docs/change-summary.md`.
 - 2026-03-19: Hardened AI story import parsing so minor model payload drift no longer hard-fails with `invalid proposal payload`; import now falls back to a valid primary story draft when needed. See `docs/change-summary.md`.
 - 2026-03-19: AI story import is now story-first: it creates one primary narrative `life_event/story` draft and limits supporting drafts to high-signal facts, reducing sentence-level fragment proposals. See `docs/change-summary.md`.
 - 2026-03-19: Added thumbnail variants for new image uploads, stored thumbnail pointers in media metadata, and switched compact preview surfaces to prefer thumbnail assets while keeping originals for detail views. See `docs/change-summary.md`.
