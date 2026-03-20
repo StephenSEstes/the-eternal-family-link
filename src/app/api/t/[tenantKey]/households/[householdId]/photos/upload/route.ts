@@ -11,6 +11,7 @@ import {
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 import { getAttributeById } from "@/lib/attributes/store";
 import {
@@ -80,6 +81,55 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       file.name || "",
       `${householdId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,
     );
+    const config = await getTenantConfig(resolved.tenant.tenantKey);
+    const uploaded = await uploadPhotoToFolder({
+      folderId: config.photosFolderId,
+      filename: safeFileName,
+      mimeType: validated.mimeType,
+      data: bytes,
+    });
+
+    let thumbnailUpload:
+      | {
+        fileId: string;
+        fileName: string;
+        mimeType: string;
+        width: number;
+        height: number;
+        sizeBytes: number;
+      }
+      | null = null;
+    if (validated.mediaKind === "image") {
+      try {
+        const thumbVariant = await createImageThumbnailVariant({
+          source: bytes,
+          mimeType: validated.mimeType,
+        });
+        if (thumbVariant) {
+          const thumbName = sanitizeUploadFileName(
+            safeFileName.replace(/\.[^.]+$/, "") + `-thumb.${thumbVariant.extension}`,
+            `${householdId}-${Date.now()}-thumb.${thumbVariant.extension}`,
+          );
+          const uploadedThumb = await uploadPhotoToFolder({
+            folderId: config.photosFolderId,
+            filename: thumbName,
+            mimeType: thumbVariant.mimeType,
+            data: thumbVariant.buffer,
+          });
+          thumbnailUpload = {
+            fileId: uploadedThumb.fileId,
+            fileName: thumbName,
+            mimeType: thumbVariant.mimeType,
+            width: thumbVariant.width,
+            height: thumbVariant.height,
+            sizeBytes: thumbVariant.buffer.length,
+          };
+        }
+      } catch (thumbError) {
+        console.warn("[household/photos/upload] thumbnail generation skipped", thumbError);
+      }
+    }
+
     const mediaMetadata = buildMediaMetadata({
       fileName: safeFileName,
       mimeType: validated.mimeType,
@@ -92,15 +142,13 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       captureSource,
       extra: {
         checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+        thumbnailFileId: thumbnailUpload?.fileId,
+        thumbnailFileName: thumbnailUpload?.fileName,
+        thumbnailMimeType: thumbnailUpload?.mimeType,
+        thumbnailWidth: thumbnailUpload?.width,
+        thumbnailHeight: thumbnailUpload?.height,
+        thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
       },
-    });
-
-    const config = await getTenantConfig(resolved.tenant.tenantKey);
-    const uploaded = await uploadPhotoToFolder({
-      folderId: config.photosFolderId,
-      filename: safeFileName,
-      mimeType: validated.mimeType,
-      data: bytes,
     });
 
     let photoId = buildEntityId("attr", `${resolved.tenant.tenantKey}|${householdId}|${Date.now()}|${uploaded.fileId}`);
@@ -201,6 +249,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       fileId: uploaded.fileId,
       isPrimary: shouldBePrimary,
       attributeId: targetAttributeId || "",
+      mediaMetadata,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

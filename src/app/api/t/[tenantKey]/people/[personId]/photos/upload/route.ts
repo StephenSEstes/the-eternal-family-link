@@ -16,6 +16,7 @@ import {
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import {
   getPersonById,
   getTenantConfig,
@@ -91,6 +92,47 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       data: bytes,
     });
 
+    let thumbnailUpload:
+      | {
+        fileId: string;
+        fileName: string;
+        mimeType: string;
+        width: number;
+        height: number;
+        sizeBytes: number;
+      }
+      | null = null;
+    if (validated.mediaKind === "image") {
+      try {
+        const thumbVariant = await createImageThumbnailVariant({
+          source: bytes,
+          mimeType: validated.mimeType,
+        });
+        if (thumbVariant) {
+          const thumbName = sanitizeUploadFileName(
+            safeFileName.replace(/\.[^.]+$/, "") + `-thumb.${thumbVariant.extension}`,
+            `${personId}-${Date.now()}-thumb.${thumbVariant.extension}`,
+          );
+          const uploadedThumb = await uploadPhotoToFolder({
+            folderId: tenantConfig.photosFolderId,
+            filename: thumbName,
+            mimeType: thumbVariant.mimeType,
+            data: thumbVariant.buffer,
+          });
+          thumbnailUpload = {
+            fileId: uploadedThumb.fileId,
+            fileName: thumbName,
+            mimeType: thumbVariant.mimeType,
+            width: thumbVariant.width,
+            height: thumbVariant.height,
+            sizeBytes: thumbVariant.buffer.length,
+          };
+        }
+      } catch (thumbError) {
+        console.warn("[photos/upload] thumbnail generation skipped", thumbError);
+      }
+    }
+
     const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
@@ -107,6 +149,12 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       captureSource,
       extra: {
         checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+        thumbnailFileId: thumbnailUpload?.fileId,
+        thumbnailFileName: thumbnailUpload?.fileName,
+        thumbnailMimeType: thumbnailUpload?.mimeType,
+        thumbnailWidth: thumbnailUpload?.width,
+        thumbnailHeight: thumbnailUpload?.height,
+        thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
       },
     });
 
@@ -197,6 +245,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       isHeadshot: shouldBePrimary,
       attributeType,
       attributeId,
+      mediaMetadata,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

@@ -210,3 +210,11 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep the full-form layout; add a single global edit checkbox that reveals all fields; split the person profile into separate pages instead of section editing.
 - `Impact`: The Profile tab now shows label/value summaries by default, section-level `Edit` actions reveal fields only for the active section, and the modal footer shows `Cancel` + `Save and Close` only while a section is actively being edited.
 - `Follow-up`: Apply the same summary-first pattern to other read-mostly entity screens if those screens show the same “always-edit form” problem.
+## 2026-03-19
+
+- `Area`: Media storage and delivery
+- `Decision`: Store original uploads as canonical media assets and generate a derived image thumbnail asset at upload time when possible. Persist thumbnail linkage in `media_metadata` (`thumbnailFileId` and related dimensions/mime/size fields), use thumbnail assets for compact/list previews, and keep original assets for detail/open/full-size views.
+- `Reason`: Family views and media lists need faster load/render behavior without losing source quality. Storing originals plus derived preview variants preserves quality while reducing bytes in high-frequency list/tile UI paths.
+- `Alternatives Considered`: Continue serving originals for every surface; generate thumbnails only at view time; defer all variant work until OCI migration.
+- `Impact`: Upload routes now attempt best-effort thumbnail generation for images, media metadata includes variant pointers, and preview UI paths resolve to thumbnail file IDs when present.
+- `Follow-up`: Keep storage adapter behavior variant-aware so OCI migration can move originals/thumbnails without UI contract changes.

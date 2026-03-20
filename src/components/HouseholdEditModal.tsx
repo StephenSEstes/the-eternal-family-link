@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import {
@@ -1141,7 +1141,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             </div>
                           ) : (
                             <img
-                              src={getPhotoProxyPath(photo.fileId, tenantKey)}
+                              src={getPhotoPreviewProxyPath(photo.fileId, photo.mediaMetadata, tenantKey)}
                               alt={photo.name || "photo"}
                               className="person-photo-tile-image"
                             />

@@ -5,6 +5,7 @@ import {
   fallbackUploadExtension,
   inferStoredMediaKind,
   normalizeMediaKind,
+  resolvePreviewFileId,
   sanitizeUploadFileName,
   validateUploadInput,
 } from "./upload";
@@ -83,4 +84,14 @@ test("inferStoredMediaKind falls back to metadata and file extensions", () => {
 test("fallbackUploadExtension keeps file extension and provides document defaults", () => {
   assert.equal(fallbackUploadExtension("document", "application/pdf", "notes.pdf"), "pdf");
   assert.equal(fallbackUploadExtension("document", "text/plain", ""), "txt");
+});
+
+test("resolvePreviewFileId prefers thumbnail metadata for images", () => {
+  const metadata = JSON.stringify({
+    mediaKind: "image",
+    thumbnailFileId: "thumb-123",
+  });
+  assert.equal(resolvePreviewFileId("full-123", metadata), "thumb-123");
+  assert.equal(resolvePreviewFileId("video-1", JSON.stringify({ mediaKind: "video", thumbnailFileId: "thumb-v" })), "video-1");
+  assert.equal(resolvePreviewFileId("full-123", "not-json"), "full-123");
 });

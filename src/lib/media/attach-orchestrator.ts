@@ -1,4 +1,4 @@
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoPreviewProxyPath } from "@/lib/google/photo-path";
 import {
   inferMediaKindFromMimeTypeOrFileName,
   inferStoredMediaKind,
@@ -271,12 +271,13 @@ async function uploadToPerson(input: {
     { method: "POST", body: form },
   );
   await assertOk(res, "Failed to upload media to person");
-  const body = (await res.json().catch(() => null)) as { fileId?: string } | null;
+  const body = (await res.json().catch(() => null)) as { fileId?: string; mediaMetadata?: string } | null;
   const fileId = String(body?.fileId ?? "").trim();
   if (!fileId) {
     throw new Error("Upload completed but no file ID was returned.");
   }
-  return { fileId, mediaMetadata: buildClientMediaMetadata(input.file, mediaMeta) };
+  const serverMetadata = String(body?.mediaMetadata ?? "").trim();
+  return { fileId, mediaMetadata: serverMetadata || buildClientMediaMetadata(input.file, mediaMeta) };
 }
 
 async function uploadToHousehold(input: {
@@ -314,12 +315,13 @@ async function uploadToHousehold(input: {
     { method: "POST", body: form },
   );
   await assertOk(res, "Failed to upload media to household");
-  const body = (await res.json().catch(() => null)) as { fileId?: string } | null;
+  const body = (await res.json().catch(() => null)) as { fileId?: string; mediaMetadata?: string } | null;
   const fileId = String(body?.fileId ?? "").trim();
   if (!fileId) {
     throw new Error("Upload completed but no file ID was returned.");
   }
-  return { fileId, mediaMetadata: buildClientMediaMetadata(input.file, mediaMeta) };
+  const serverMetadata = String(body?.mediaMetadata ?? "").trim();
+  return { fileId, mediaMetadata: serverMetadata || buildClientMediaMetadata(input.file, mediaMeta) };
 }
 
 async function linkToPerson(input: {
@@ -458,8 +460,8 @@ export async function searchMediaLibrary(input: {
   return items;
 }
 
-export function toMediaPreviewSrc(tenantKey: string, fileId: string) {
-  return getPhotoProxyPath(fileId, tenantKey);
+export function toMediaPreviewSrc(tenantKey: string, fileId: string, mediaMetadata?: string) {
+  return getPhotoPreviewProxyPath(fileId, mediaMetadata, tenantKey);
 }
 
 export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAttachExecutionSummary> {

@@ -159,3 +159,30 @@ export function buildMediaMetadata(input: {
   };
   return JSON.stringify(metadata);
 }
+
+type MediaMetadataParsed = {
+  mediaKind?: string;
+  thumbnailFileId?: string;
+  thumbFileId?: string;
+};
+
+export function parseMediaMetadata(rawMetadata: string | undefined): MediaMetadataParsed | null {
+  const value = String(rawMetadata ?? "").trim();
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as MediaMetadataParsed;
+  } catch {
+    return null;
+  }
+}
+
+export function resolvePreviewFileId(fileId: string, rawMetadata?: string) {
+  const fallback = String(fileId ?? "").trim();
+  if (!fallback) return "";
+  const parsed = parseMediaMetadata(rawMetadata);
+  if (!parsed) return fallback;
+  const mediaKind = String(parsed.mediaKind ?? "").trim().toLowerCase();
+  if (mediaKind !== "image") return fallback;
+  const thumbnail = String(parsed.thumbnailFileId ?? parsed.thumbFileId ?? "").trim();
+  return thumbnail || fallback;
+}

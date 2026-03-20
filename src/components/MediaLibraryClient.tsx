@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
@@ -739,7 +739,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </div>
                   ) : (
                     <img
-                      src={getPhotoProxyPath(item.fileId, tenantKey)}
+                      src={getPhotoPreviewProxyPath(item.fileId, item.mediaMetadata, tenantKey)}
                       alt={item.name || item.fileId}
                       style={{ width: "100%", maxHeight: "160px", objectFit: "cover", objectPosition: "top center", borderRadius: "8px" }}
                     />

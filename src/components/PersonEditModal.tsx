@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import {
   AsyncActionButton,
   ModalActionBar,
@@ -2989,7 +2989,7 @@ export function PersonEditModal({
                         </div>
                       ) : (
                         <img
-                          src={getPhotoProxyPath(item.valueText, activeTenantKey)}
+                          src={getPhotoPreviewProxyPath(item.valueText, item.mediaMetadata || item.valueJson, activeTenantKey)}
                           alt={item.label || "photo"}
                           className="person-photo-tile-image"
                         />

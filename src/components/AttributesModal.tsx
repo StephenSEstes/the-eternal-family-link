@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoPreviewProxyPath } from "@/lib/google/photo-path";
 import type { AttributeCategory, AttributeDraftPrefill, AttributeEntityType } from "@/lib/attributes/types";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
 import {
@@ -1038,7 +1038,7 @@ export function AttributesModal({
                   {(selectedItem.media ?? []).length > 0 ? selectedItem.media.map((item) => (
                     <div key={item.linkId} className="person-linked-row">
                       <div className="person-linked-main">
-                        <img src={getPhotoProxyPath(item.fileId, tenantKey)} alt={item.label || "media"} className="person-linked-avatar" />
+                        <img src={getPhotoPreviewProxyPath(item.fileId, item.mediaMetadata, tenantKey)} alt={item.label || "media"} className="person-linked-avatar" />
                         <span>{item.label || item.fileId}</span>
                       </div>
                       <button

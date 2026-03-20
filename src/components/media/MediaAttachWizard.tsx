@@ -474,7 +474,9 @@ export function MediaAttachWizard({
           previewUrl,
           existingMediaMetadata: duplicate?.mediaMetadata ?? "",
           duplicateOfFileId: duplicate?.fileId ?? "",
-          duplicateExistingPreviewUrl: duplicate?.fileId ? toMediaPreviewSrc(context.tenantKey, duplicate.fileId) : "",
+          duplicateExistingPreviewUrl: duplicate?.fileId
+            ? toMediaPreviewSrc(context.tenantKey, duplicate.fileId, duplicate.mediaMetadata)
+            : "",
           duplicateDecision: duplicate?.fileId ? "undecided" : undefined,
           title: context.defaultLabel ?? "",
           description: context.defaultDescription ?? "",
@@ -509,7 +511,7 @@ export function MediaAttachWizard({
           source: "library_existing",
           fileId: match.fileId,
           mediaKind,
-          previewUrl: toMediaPreviewSrc(context.tenantKey, match.fileId),
+          previewUrl: toMediaPreviewSrc(context.tenantKey, match.fileId, match.mediaMetadata),
           existingMediaMetadata: match.mediaMetadata ?? "",
           title: match.name || context.defaultLabel || mediaLabel(mediaKind),
           description: match.description || context.defaultDescription || "",

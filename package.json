@@ -18,6 +18,8 @@
     "googleapis": "^171.4.0",
     "next": "^15.5.12",
     "next-auth": "^4.24.13",
+    "oci-common": "^2.126.2",
+    "oci-sdk": "^2.126.2",
     "openai": "^6.27.0",
     "oracledb": "^6.10.0",
     "react": "19.2.3",

@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-19 (thumbnail variants for media uploads + preview routing)
+
+- `Date`: 2026-03-19
+- `Change`: Added original+thumbnail image handling for media uploads, persisted thumbnail pointers in media metadata, and switched compact preview surfaces to use thumbnail file IDs when available.
+- `Type`: UI | API
+- `Why`: Root cause was a `code/performance issue`. The app served original-size images in many list/tile previews, which increased payload size and slowed frequent gallery/tree/profile rendering paths.
+- `Files`:
+  - `src/lib/media/thumbnail.server.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/lib/media/upload.ts`
+  - `src/lib/google/photo-path.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/lib/media/upload.test.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+- `Data Changes`: No schema change. New image uploads now include thumbnail metadata fields (`thumbnailFileId`, file info, dimensions, size) in stored `media_metadata`.
+- `Verify`:
+  - Upload a new image and confirm both original and thumbnail files are created in storage.
+  - Confirm `media_metadata` includes `thumbnailFileId` for the new upload.
+  - Confirm media list/tile previews (Media Library, Person/Household picture tiles, Attribute media chips, attach wizard previews) load from thumbnail IDs when present.
+  - Confirm large/detail image views still load the original file.
+  - `npx tsc --noEmit` passes.
+  - `npx tsx --test src/lib/media/upload.test.ts` passes.
+- `Rollback Notes`: Revert thumbnail generation/upload in both upload routes together with preview-path resolver changes so metadata/UI do not point to non-existent variants.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` with the original+thumbnail media-delivery rule.
+
 ## 2026-03-17 (AI Help expansion + audit username logging + document media support)
 
 - `Date`: 2026-03-17
