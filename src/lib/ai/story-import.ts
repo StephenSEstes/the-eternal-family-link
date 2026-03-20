@@ -44,6 +44,16 @@ function clampText(value: string, max: number) {
   return trimmed.slice(0, max).trim();
 }
 
+function safeParseJsonObject(value: string) {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_parse_error";
+    console.warn("[ai/story-import] unable to parse model JSON payload; falling back to primary story draft", message);
+    return null;
+  }
+}
+
 function firstSentence(value: string) {
   const normalized = normalizeWhitespace(value).replace(/\s+/g, " ");
   if (!normalized) return "";
@@ -225,7 +235,7 @@ function buildInstructions(input: {
     "Keep each supporting proposal focused on one distinct fact.",
     "label should be a short human-readable title (about 3-8 words).",
     "attributeDetail should be a brief one-sentence summary, not the full narrative body.",
-    "For the primary story proposal, put the full original narrative in attributeNotes and preserve wording from the source text.",
+    "For the primary story proposal, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
     "For supporting proposals, attributeNotes may hold extra context.",
     "Use only the allowed category/type combinations listed below.",
     "",
@@ -343,8 +353,10 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     throw new Error("AI story import returned no proposals.");
   }
 
-  const parsedJson = JSON.parse(outputText) as unknown;
-  const parsed = aiStoryImportResponseSchema.safeParse(parsedJson);
+  const parsedJson = safeParseJsonObject(outputText);
+  const parsed = parsedJson == null
+    ? aiStoryImportResponseSchema.safeParse({ proposals: [] })
+    : aiStoryImportResponseSchema.safeParse(parsedJson);
   const modelProposals = parsed.success ? parsed.data.proposals : [];
   if (!parsed.success) {
     console.warn("[ai/story-import] model payload did not match schema; falling back to primary story draft", parsed.error.flatten());

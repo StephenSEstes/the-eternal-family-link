@@ -298,6 +298,7 @@ export function AttributesModal({
   const [notes, setNotes] = useState("");
 
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
+  const [showAddFormMediaAttachWizard, setShowAddFormMediaAttachWizard] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultAttributeDefinitions());
   const addFormCopy = useMemo(() => fieldCopyFor(category, typeKey), [category, typeKey]);
@@ -590,7 +591,8 @@ export function AttributesModal({
     return "";
   };
 
-  const saveAttribute = async () => {
+  const saveAttribute = async (options?: { openMediaAfterSave?: boolean }) => {
+    const openMediaAfterSave = Boolean(options?.openMediaAfterSave);
     const validationError = validateEditor();
     if (validationError) {
       setStatus(validationError);
@@ -638,6 +640,17 @@ export function AttributesModal({
     setStatus("Saved.");
     await refresh();
     onSaved();
+    if (openMediaAfterSave) {
+      if (!savedId) {
+        setStatus("Saved, but could not open photo attach because attribute id was missing.");
+        return;
+      }
+      setEditingId(savedId);
+      setAddModalOpen(true);
+      setShowAddFormMediaAttachWizard(true);
+      setStatus("Saved. Add a photo, then close.");
+      return;
+    }
     if (wasEdit && savedId && !savedFromAddModal) {
       setSelectedAttributeId(savedId);
       setDrawerEditMode(false);
@@ -706,6 +719,15 @@ export function AttributesModal({
     setStatus(formatMediaAttachUserSummary(summary));
     await refresh();
     onSaved();
+  };
+
+  const openAddFormMediaWizard = async () => {
+    if (busy) return;
+    if (editingId) {
+      setShowAddFormMediaAttachWizard(true);
+      return;
+    }
+    await saveAttribute({ openMediaAfterSave: true });
   };
 
   const openAddModal = () => {
@@ -780,7 +802,7 @@ export function AttributesModal({
   if (!open) return null;
 
   return (
-    <div className="person-modal-backdrop" onClick={onClose} onPointerDown={(event) => event.stopPropagation()}>
+    <div className="person-modal-backdrop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
       <div className="person-modal-panel" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
         <div className="person-modal-sticky-head">
           <div className="person-modal-header">
@@ -887,7 +909,7 @@ export function AttributesModal({
       </div>
 
       {selectedItem ? (
-        <div className="person-modal-backdrop" onClick={() => { setSelectedAttributeId(""); setDrawerEditMode(false); setEditingId(""); }} style={{ zIndex: 1200 }}>
+        <div className="person-modal-backdrop" onClick={(event) => event.stopPropagation()} style={{ zIndex: 1200 }}>
           <div className="person-modal-panel" style={{ maxWidth: "560px", marginLeft: "auto" }} onClick={(event) => event.stopPropagation()}>
             <div className="person-modal-sticky-head">
               <div className="person-modal-header">
@@ -1105,7 +1127,7 @@ export function AttributesModal({
       ) : null}
 
       {addModalOpen ? (
-        <div className="person-modal-backdrop" onClick={closeAddModal} style={{ zIndex: 1300 }}>
+        <div className="person-modal-backdrop" onClick={(event) => event.stopPropagation()} style={{ zIndex: 1300 }}>
           <div className="person-modal-panel" style={{ maxWidth: "680px", height: "auto", maxHeight: "none" }} onClick={(event) => event.stopPropagation()}>
             <div className="person-modal-sticky-head">
                 <div className="person-modal-header">
@@ -1261,7 +1283,7 @@ export function AttributesModal({
                 ) : null}
 
                 <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-                  Save first, then use Add Media on the attribute detail screen to open the shared attach wizard.
+                  Add Photo works in this form. New attributes are saved first, then photo attach opens.
                 </p>
 
                 <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
@@ -1276,6 +1298,9 @@ export function AttributesModal({
                       Delete
                     </button>
                   ) : null}
+                  <button type="button" className="button secondary tap-button" onClick={() => void openAddFormMediaWizard()} disabled={busy}>
+                    {busy ? "Saving..." : "Add Photo"}
+                  </button>
                   <button type="button" className="button secondary tap-button" onClick={closeAddModal} disabled={busy}>Cancel</button>
                   <button type="button" className="button tap-button" onClick={() => void saveAttribute()} disabled={busy}>
                     {busy ? "Saving..." : "Save"}
@@ -1303,6 +1328,30 @@ export function AttributesModal({
               </div>
               {status ? <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>{status}</p> : null}
             </div>
+            <MediaAttachWizard
+              open={showAddFormMediaAttachWizard}
+              context={{
+                tenantKey,
+                source: "attribute",
+                canManage: true,
+                allowHouseholdLinks: entityType === "household",
+                attributeId: editingId,
+                entityType: "attribute",
+                personId: entityType === "person" ? entityId : "",
+                householdId: entityType === "household" ? entityId : "",
+                defaultAttributeType: "media",
+                defaultLabel: label || valueText || "media",
+                defaultDescription: notes || "",
+                defaultDate: dateStart || "",
+                preselectedPersonIds: entityType === "person" ? [entityId] : [],
+                preselectedHouseholdIds: entityType === "household" ? [entityId] : [],
+              }}
+              onClose={() => setShowAddFormMediaAttachWizard(false)}
+              onComplete={(summary) => {
+                setShowAddFormMediaAttachWizard(false);
+                void handleWizardComplete(summary);
+              }}
+            />
           </div>
         </div>
       ) : null}

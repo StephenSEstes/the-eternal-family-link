@@ -35,6 +35,39 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the backdrop onClick handlers in the listed modal components.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-19 (attribute form photo attach support)
+
+- `Date`: 2026-03-19
+- `Change`: Added `Add Photo` directly inside the attribute add/edit form so users can attach photos without leaving the form. For new attributes, the form now saves first and then opens photo attach automatically.
+- `Type`: UI
+- `Why`: Root cause was a `code/UX issue`. The attribute form explicitly blocked media attach and forced users to leave the form and reopen the attribute detail drawer to add photos.
+- `Files`:
+  - `src/components/AttributesModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Open add attribute form and click `Add Photo`; confirm it saves (if new) and opens media attach wizard.
+  - In edit attribute form, click `Add Photo`; confirm wizard opens immediately for that attribute.
+  - Complete attach flow and confirm media appears on the attribute detail.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `src/components/AttributesModal.tsx` add-form media wizard state/actions.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-19 (AI story import malformed JSON fallback hardening)
+
+- `Date`: 2026-03-19
+- `Change`: Hardened AI story-import model payload parsing so malformed/truncated JSON responses no longer throw a hard error; the flow now falls back to a primary story draft and continues. Also tightened prompt guidance to keep model notes concise and avoid echoing full source narrative in output JSON.
+- `Type`: API
+- `Why`: Root cause was a `code/prompt issue`. `JSON.parse` was unguarded, so model output truncation (for long narratives) produced errors like `Unterminated string in JSON`, and prior prompt guidance encouraged oversized output by asking for full narrative text in model notes.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Import long narrative text that previously produced `Unterminated string in JSON` and confirm the API returns proposals instead of 500 parse failure.
+  - Confirm primary story draft still preserves full original narrative in notes (applied by server-side normalization) while model output remains compact.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert JSON parse fallback helper and prompt note-size guidance changes in `story-import.ts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19
