@@ -31,6 +31,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert `src/lib/ai/story-import.ts` prompt + post-processing guardrail changes together.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-19 (AI story import payload hardening + graceful fallback)
+
+- `Date`: 2026-03-19
+- `Change`: Hardened AI story-import payload parsing so minor model shape drift no longer fails the import; invalid/partial model payloads now fall back to a valid primary story draft instead of returning `invalid proposal payload`.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The response schema was too strict for occasional model output variation, causing hard failures even when narrative text was valid and a primary story draft could still be produced safely.
+- `Files`:
+  - `src/lib/ai/story-import-types.ts`
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Run story import with long narrative text and confirm it no longer errors with `AI story import returned an invalid proposal payload`.
+  - Confirm output still includes one primary story proposal and supporting proposals when valid.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert `story-import-types` normalization defaults and `story-import` fallback behavior together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (thumbnail variants for media uploads + preview routing)
 
 - `Date`: 2026-03-19

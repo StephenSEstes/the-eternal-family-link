@@ -259,11 +259,12 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
 
   const parsedJson = JSON.parse(outputText) as unknown;
   const parsed = aiStoryImportResponseSchema.safeParse(parsedJson);
+  const modelProposals = parsed.success ? parsed.data.proposals : [];
   if (!parsed.success) {
-    throw new Error("AI story import returned an invalid proposal payload.");
+    console.warn("[ai/story-import] model payload did not match schema; falling back to primary story draft", parsed.error.flatten());
   }
 
-  const normalizedProposals = parsed.data.proposals
+  const normalizedProposals = modelProposals
     .map((proposal, index) => normalizeProposal(proposal, allowed, index))
     .filter((proposal): proposal is AiStoryImportProposal => Boolean(proposal))
     .filter((proposal) => proposal.attributeDetail.trim().length > 0)
