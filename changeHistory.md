@@ -7,6 +7,9 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-20: Story import now includes a passthrough AI chat panel in the import modal, with applyable title/date/type suggestions that can be used as hints for draft generation. See `docs/change-summary.md`.
+- 2026-03-20: AI story import title normalization now blocks repeated/truncated opening fragments and prefers clean descriptive title phrases for story `attributeDetail`. See `docs/change-summary.md`.
+- 2026-03-20: AI story import now strips leading metadata-preface lines like `Top-level matriarch ...` so those descriptors do not appear in imported story notes/titles. See `docs/change-summary.md`.
 - 2026-03-20: AI story import now treats `attributeDetail` as a descriptive title phrase (not first-sentence body text) for primary story drafts. See `docs/change-summary.md`.
 - 2026-03-19: AI story import review now supports `Skip` to advance without saving, and story date/title normalization now prefers operation ranges and stronger summary titles over article-date-driven labels. See `docs/change-summary.md`.
 - 2026-03-19: AI story import no longer hard-fails on malformed/truncated model JSON (`Unterminated string...`); it now falls back safely and continues with a primary story draft. See `docs/change-summary.md`.

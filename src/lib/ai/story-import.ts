@@ -15,6 +15,13 @@ type StoryImportInput = {
   tenantName: string;
   personDisplayName: string;
   sourceText: string;
+  hints?: {
+    titleHint?: string;
+    startDate?: string;
+    endDate?: string;
+    attributeType?: string;
+    attributeTypeCategory?: string;
+  };
 };
 
 type AllowedDefinitionMap = {
@@ -42,6 +49,31 @@ const MONTH_INDEX: Record<string, number> = {
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\r\n/g, "\n").trim();
+}
+
+function sanitizeStoryImportHints(input?: StoryImportInput["hints"]) {
+  return {
+    titleHint: clampText(String(input?.titleHint ?? "").trim(), 120),
+    startDate: clampText(String(input?.startDate ?? "").trim(), 32),
+    endDate: clampText(String(input?.endDate ?? "").trim(), 32),
+    attributeType: clampText(normalizeAttributeTypeKey(String(input?.attributeType ?? "").trim()), 120),
+    attributeTypeCategory: clampText(normalizeAttributeTypeKey(String(input?.attributeTypeCategory ?? "").trim()), 120),
+  };
+}
+
+function stripLeadingNarrativeDescriptor(value: string) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return "";
+  const lines = normalized.split("\n");
+  const first = lines[0]?.trim() ?? "";
+  const isTopLevelDescriptor =
+    /^top-level\b/i.test(first) &&
+    /\b(matriarch|patriarch|ancestor|founder)\b/i.test(first);
+  if (!isTopLevelDescriptor) {
+    return normalized;
+  }
+  const remaining = lines.slice(1).join("\n").trim();
+  return remaining || normalized;
 }
 
 function stripMarkdownFence(value: string) {
@@ -88,8 +120,40 @@ function sanitizeTitleText(value: string) {
     .trim();
 }
 
+function collapseRepeatedLead(value: string) {
+  const normalized = sanitizeTitleText(value);
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length < 6) return normalized;
+  for (let size = 5; size >= 2; size -= 1) {
+    const first = words.slice(0, size).join(" ").toLowerCase();
+    const second = words.slice(size, size * 2).join(" ").toLowerCase();
+    if (first && second && first === second) {
+      return [words.slice(0, size).join(" "), words.slice(size * 2).join(" ")].join(" ").trim();
+    }
+  }
+  return normalized;
+}
+
+function looksSentenceLikeTitle(value: string) {
+  const normalized = sanitizeTitleText(value);
+  if (!normalized) return true;
+  if (/[.!?]$/.test(normalized)) return true;
+  if (/,/.test(normalized)) return true;
+  if (/\b(the place of|was located|it was|she was|he was|on\s+\w+\s+\d{1,2},\s*(19|20)\d{2})\b/i.test(normalized)) return true;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length > 14;
+}
+
+function titleFromClauseStart(value: string) {
+  const normalized = collapseRepeatedLead(value);
+  if (!normalized) return "";
+  const atComma = normalized.split(",")[0]?.trim() ?? "";
+  const candidate = atComma || normalized;
+  return buildDetailTitle(candidate);
+}
+
 function buildDetailTitle(value: string) {
-  const clean = sanitizeTitleText(value);
+  const clean = collapseRepeatedLead(value);
   if (!clean) return "";
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length <= 12) {
@@ -233,9 +297,16 @@ function normalizePrimaryStoryProposalFromSource(proposal: AiStoryImportProposal
   const label = isWeakStoryLabel(aiLabel)
     ? (preferredSourceTitle || buildStoryLabel(proposal.attributeDetail || normalizedSource))
     : aiLabel;
-  const detail = buildDetailTitle(proposal.attributeDetail || label || preferredSourceTitle || detailSource)
-    || buildDetailTitle(preferredSourceTitle || label)
-    || buildConciseStoryDetail(detailSource);
+  const aiDetail = buildDetailTitle(proposal.attributeDetail || "");
+  const labelAsDetail = buildDetailTitle(label);
+  const sourceAsDetail = titleFromClauseStart(detailSource);
+  const preferredAsDetail = buildDetailTitle(preferredSourceTitle || "");
+  const detail =
+    (aiDetail && !looksSentenceLikeTitle(aiDetail) ? aiDetail : "") ||
+    (labelAsDetail && !looksSentenceLikeTitle(labelAsDetail) ? labelAsDetail : "") ||
+    (preferredAsDetail && !looksSentenceLikeTitle(preferredAsDetail) ? preferredAsDetail : "") ||
+    sourceAsDetail ||
+    buildConciseStoryDetail(detailSource);
   const inferredRange = extractStoryDateRangeFromText(normalizedSource);
   const attributeDate = clampText(
     (inferredRange?.startDate || proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource)),
@@ -330,7 +401,15 @@ function buildInstructions(input: {
   tenantName: string;
   personDisplayName: string;
   definitionSummary: string;
+  hints: ReturnType<typeof sanitizeStoryImportHints>;
 }) {
+  const hintLines = [
+    input.hints.titleHint ? `Preferred title hint from user: ${input.hints.titleHint}` : "",
+    input.hints.startDate ? `Preferred start date hint from user: ${input.hints.startDate}` : "",
+    input.hints.endDate ? `Preferred end date hint from user: ${input.hints.endDate}` : "",
+    input.hints.attributeType ? `Preferred attributeType hint from user: ${input.hints.attributeType}` : "",
+    input.hints.attributeTypeCategory ? `Preferred attributeTypeCategory hint from user: ${input.hints.attributeTypeCategory}` : "",
+  ].filter(Boolean);
   return [
     "You extract canonical attribute drafts for The Eternal Family Link.",
     `Current family group: ${input.tenantName}.`,
@@ -354,9 +433,17 @@ function buildInstructions(input: {
     "Keep each supporting proposal focused on one distinct fact.",
     "label should be a short human-readable summary title (about 3-10 words) describing the core story, not the source article headline/date.",
     "attributeDetail should be a descriptive title phrase (about 4-12 words), not a sentence body.",
+    "Do not repeat leading words or copy/paste the first sentence fragment into attributeDetail.",
     "For the primary story proposal, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
     "For supporting proposals, attributeNotes may hold extra context.",
     "Use only the allowed category/type combinations listed below.",
+    ...(hintLines.length > 0
+      ? [
+          "",
+          "User-provided refinement hints (use when consistent with source text and allowed definitions):",
+          ...hintLines,
+        ]
+      : []),
     "",
     input.definitionSummary,
     "",
@@ -438,13 +525,14 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     throw new Error("AI story import is not configured.");
   }
 
-  const sourceText = normalizeWhitespace(input.sourceText);
+  const sourceText = stripLeadingNarrativeDescriptor(input.sourceText);
   if (!sourceText) {
     throw new Error("Story text is required.");
   }
 
   const definitions = await getAttributeEventDefinitions(input.tenantKey);
   const allowed = buildAllowedDefinitionsSummary(definitions);
+  const hints = sanitizeStoryImportHints(input.hints);
   const client = getOpenAiClient();
   const response = await client.responses.create({
     model: getOpenAiStoryImportModel(),
@@ -452,6 +540,7 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
       tenantName: input.tenantName,
       personDisplayName: input.personDisplayName,
       definitionSummary: allowed.summary,
+      hints,
     }),
     input: [
       {
@@ -488,10 +577,25 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     .filter((proposal) => !looksFragmentarySupportingProposal(proposal));
 
   const primaryFromModel = normalizedProposals.find((proposal) => isPrimaryStoryProposal(proposal)) ?? null;
-  const primaryStory = normalizePrimaryStoryProposalFromSource(
+  let primaryStory = normalizePrimaryStoryProposalFromSource(
     primaryFromModel ?? buildPrimaryStoryProposalFromSource(sourceText),
     sourceText,
   );
+  if (hints.titleHint) {
+    const titleHint = clampText(hints.titleHint, 120);
+    primaryStory = {
+      ...primaryStory,
+      label: titleHint,
+      attributeDetail: buildDetailTitle(titleHint) || primaryStory.attributeDetail,
+    };
+  }
+  if (hints.startDate || hints.endDate) {
+    primaryStory = {
+      ...primaryStory,
+      attributeDate: hints.startDate || primaryStory.attributeDate,
+      endDate: hints.endDate || primaryStory.endDate,
+    };
+  }
   const supporting = normalizedProposals.filter((proposal) => !isPrimaryStoryProposal(proposal));
   const proposals = dedupeProposals([primaryStory, ...supporting]).slice(0, MAX_STORY_IMPORT_PROPOSALS);
 

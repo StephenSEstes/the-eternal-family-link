@@ -90,6 +90,29 @@ type PhotoLibraryItem = {
   households: Array<{ householdId: string; label: string }>;
 };
 
+type StoryChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type StoryChatSuggestion = {
+  titleHint: string;
+  startDate: string;
+  endDate: string;
+  attributeKind: "event" | "descriptor";
+  attributeType: string;
+  attributeTypeCategory: string;
+  reasoning: string;
+};
+
+type StoryImportHints = {
+  titleHint: string;
+  startDate: string;
+  endDate: string;
+  attributeType: string;
+  attributeTypeCategory: string;
+};
+
 type Props = {
   open: boolean;
   tenantKey: string;
@@ -721,6 +744,18 @@ export function PersonEditModal({
   const [storyImportStatus, setStoryImportStatus] = useState("");
   const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
+  const [storyImportHints, setStoryImportHints] = useState<StoryImportHints>({
+    titleHint: "",
+    startDate: "",
+    endDate: "",
+    attributeType: "",
+    attributeTypeCategory: "",
+  });
+  const [storyChatMessages, setStoryChatMessages] = useState<StoryChatMessage[]>([]);
+  const [storyChatInput, setStoryChatInput] = useState("");
+  const [storyChatBusy, setStoryChatBusy] = useState(false);
+  const [storyChatStatus, setStoryChatStatus] = useState("");
+  const [storyChatSuggestion, setStoryChatSuggestion] = useState<StoryChatSuggestion | null>(null);
   const [parent1Id, setParent1Id] = useState("");
   const [parent2Id, setParent2Id] = useState("");
   const [spouseId, setSpouseId] = useState("");
@@ -992,9 +1027,25 @@ export function PersonEditModal({
     setStoryImportDraftIndex(0);
   };
 
+  const clearStoryChatState = () => {
+    setStoryChatMessages([]);
+    setStoryChatInput("");
+    setStoryChatBusy(false);
+    setStoryChatStatus("");
+    setStoryChatSuggestion(null);
+    setStoryImportHints({
+      titleHint: "",
+      startDate: "",
+      endDate: "",
+      attributeType: "",
+      attributeTypeCategory: "",
+    });
+  };
+
   const openStoryImportModal = () => {
     setStoryImportText(notes.trim() || person?.notes || "");
     setStoryImportStatus("");
+    clearStoryChatState();
     setShowStoryImportModal(true);
   };
 
@@ -1022,7 +1073,10 @@ export function PersonEditModal({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceText }),
+        body: JSON.stringify({
+          sourceText,
+          hints: storyImportHints,
+        }),
       },
     );
     const body = await res.json().catch(() => null);
@@ -1049,6 +1103,70 @@ export function PersonEditModal({
     setStatus(`AI prepared ${proposals.length} attribute drafts. Review and save them one at a time.`);
   };
 
+  const requestStoryChatSuggestion = async () => {
+    if (!person?.personId) return;
+    const sourceText = storyImportText.trim();
+    if (!sourceText) {
+      setStoryChatStatus("Story text is required before chat.");
+      return;
+    }
+    const prompt = storyChatInput.trim();
+    if (!prompt) {
+      setStoryChatStatus("Ask a question for AI.");
+      return;
+    }
+    const nextMessages = [...storyChatMessages, { role: "user", content: prompt }] as StoryChatMessage[];
+    setStoryChatBusy(true);
+    setStoryChatStatus("AI is thinking...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/story-chat`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyText: sourceText,
+          messages: nextMessages,
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setStoryChatBusy(false);
+      setStoryChatStatus(String(body?.message || body?.error || `Story chat failed (${res.status}).`).slice(0, 220));
+      return;
+    }
+    const answerText = String(body?.answer || "").trim();
+    const assistantMessage = answerText ? [{ role: "assistant", content: answerText } as StoryChatMessage] : [];
+    setStoryChatMessages([...nextMessages, ...assistantMessage]);
+    setStoryChatInput("");
+    setStoryChatBusy(false);
+    setStoryChatStatus("");
+    const suggestion = body?.suggestion as StoryChatSuggestion | undefined;
+    if (suggestion) {
+      setStoryChatSuggestion({
+        titleHint: String(suggestion.titleHint || ""),
+        startDate: String(suggestion.startDate || ""),
+        endDate: String(suggestion.endDate || ""),
+        attributeKind: suggestion.attributeKind === "descriptor" ? "descriptor" : "event",
+        attributeType: String(suggestion.attributeType || ""),
+        attributeTypeCategory: String(suggestion.attributeTypeCategory || ""),
+        reasoning: String(suggestion.reasoning || ""),
+      });
+    }
+  };
+
+  const applyStoryChatSuggestion = () => {
+    if (!storyChatSuggestion) return;
+    setStoryImportHints({
+      titleHint: storyChatSuggestion.titleHint || "",
+      startDate: storyChatSuggestion.startDate || "",
+      endDate: storyChatSuggestion.endDate || "",
+      attributeType: storyChatSuggestion.attributeType || "",
+      attributeTypeCategory: storyChatSuggestion.attributeTypeCategory || "",
+    });
+    setStoryChatStatus("Applied AI suggestion for next draft generation.");
+  };
+
   useEffect(() => {
     if (!open || !person) {
       setShowAttributeAddModal(false);
@@ -1065,6 +1183,7 @@ export function PersonEditModal({
     setShowStoryImportModal(false);
     setStoryImportText(person.notes || "");
     setStoryImportStatus("");
+    clearStoryChatState();
     clearStoryImportQueue();
     setSelectedPhotoAttributeId("");
     setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
@@ -3287,12 +3406,85 @@ export function PersonEditModal({
                 style={{ minHeight: "18rem" }}
                 disabled={storyImportBusy}
               />
+              <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
+                <h5 style={{ marginTop: 0, marginBottom: "0.45rem" }}>Story AI Chat (passthrough)</h5>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Ask AI about title/date/type choices before generating drafts. Nothing is saved automatically.
+                </p>
+                <div style={{ border: "1px solid #E7EAF0", borderRadius: "0.7rem", padding: "0.6rem", maxHeight: "180px", overflowY: "auto", background: "#FAFBFD" }}>
+                  {storyChatMessages.length === 0 ? (
+                    <p className="page-subtitle" style={{ margin: 0 }}>No chat yet.</p>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.45rem" }}>
+                      {storyChatMessages.map((message, index) => (
+                        <div key={`story-chat-${index}`} style={{ fontSize: "0.9rem" }}>
+                          <strong>{message.role === "user" ? "You" : "AI"}:</strong> {message.content}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <label className="label" style={{ marginTop: "0.65rem" }}>Ask AI</label>
+                <textarea
+                  className="textarea"
+                  value={storyChatInput}
+                  onChange={(event) => setStoryChatInput(event.target.value)}
+                  placeholder="Example: Suggest a better title and the correct operation date range for this story."
+                  style={{ minHeight: "4.8rem" }}
+                  disabled={storyChatBusy || storyImportBusy}
+                />
+                <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => void requestStoryChatSuggestion()}
+                    disabled={storyChatBusy || storyImportBusy}
+                  >
+                    {storyChatBusy ? "Asking..." : "Ask AI"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={clearStoryChatState}
+                    disabled={storyChatBusy || storyImportBusy}
+                  >
+                    Clear Chat
+                  </button>
+                </div>
+                {storyChatSuggestion ? (
+                  <div style={{ marginTop: "0.65rem", border: "1px solid #E7EAF0", borderRadius: "0.65rem", padding: "0.6rem", background: "#FFFFFF" }}>
+                    <strong>Latest AI Suggestion</strong>
+                    <p style={{ margin: "0.4rem 0 0" }}><strong>Title:</strong> {storyChatSuggestion.titleHint || "-"}</p>
+                    <p style={{ margin: "0.25rem 0 0" }}><strong>Dates:</strong> {(storyChatSuggestion.startDate || "-")} {(storyChatSuggestion.endDate ? `to ${storyChatSuggestion.endDate}` : "")}</p>
+                    <p style={{ margin: "0.25rem 0 0" }}><strong>Type:</strong> {storyChatSuggestion.attributeType || "-"} {storyChatSuggestion.attributeTypeCategory ? `/ ${storyChatSuggestion.attributeTypeCategory}` : ""}</p>
+                    {storyChatSuggestion.reasoning ? (
+                      <p className="page-subtitle" style={{ margin: "0.4rem 0 0" }}>{storyChatSuggestion.reasoning}</p>
+                    ) : null}
+                    <div className="settings-chip-list" style={{ marginTop: "0.45rem" }}>
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={applyStoryChatSuggestion}
+                        disabled={storyChatBusy || storyImportBusy}
+                      >
+                        Apply Suggestion
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {storyChatStatus ? <p style={{ marginTop: "0.55rem", marginBottom: 0 }}>{storyChatStatus}</p> : null}
+              </div>
+              {(storyImportHints.titleHint || storyImportHints.startDate || storyImportHints.endDate || storyImportHints.attributeType || storyImportHints.attributeTypeCategory) ? (
+                <p className="page-subtitle" style={{ marginTop: "0.7rem", marginBottom: 0 }}>
+                  Draft hints applied: title={storyImportHints.titleHint || "-"}, dates={storyImportHints.startDate || "-"}{storyImportHints.endDate ? ` to ${storyImportHints.endDate}` : ""}, type={storyImportHints.attributeType || "-"}{storyImportHints.attributeTypeCategory ? `/${storyImportHints.attributeTypeCategory}` : ""}
+                </p>
+              ) : null}
               {storyImportStatus ? <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>{storyImportStatus}</p> : null}
               <div className="settings-chip-list" style={{ marginTop: "0.9rem" }}>
                 <button
                   type="button"
                   className="button tap-button"
-                  disabled={storyImportBusy}
+                  disabled={storyImportBusy || storyChatBusy}
                   onClick={() => void generateStoryImportDrafts()}
                 >
                   {storyImportBusy ? "Generating..." : "Generate Drafts"}
@@ -3300,7 +3492,7 @@ export function PersonEditModal({
                 <button
                   type="button"
                   className="button secondary tap-button"
-                  disabled={storyImportBusy}
+                  disabled={storyImportBusy || storyChatBusy}
                   onClick={() => {
                     setShowStoryImportModal(false);
                     setStoryImportStatus("");

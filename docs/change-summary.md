@@ -103,6 +103,60 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert `story-import.ts` detail-title normalization and prompt wording changes together.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-20 (strip top-level descriptor preface from story source)
+
+- `Date`: 2026-03-20
+- `Change`: Story import now strips a leading metadata-style descriptor line (for example `Top-level matriarch ...`) before AI parsing and note/title shaping.
+- `Type`: API
+- `Why`: Root cause was a `code/input-normalization issue`. Some source narratives include graph/profile descriptor prefixes that are not part of the story body, and those prefixes were being preserved into imported notes/titles.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Import a story beginning with `Top-level matriarch ...` and confirm the imported narrative no longer starts with that descriptor text.
+  - Confirm regular narratives without that prefix are unchanged.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert leading-descriptor strip helper and source normalization call in `story-import.ts`.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-20 (AI story title-quality guardrails)
+
+- `Date`: 2026-03-20
+- `Change`: Tightened primary-story title normalization to reject repeated/truncated sentence fragments and prefer clean descriptive title phrases for `attributeDetail`.
+- `Type`: API
+- `Why`: Root cause was a `code-normalization issue`. Even with AI output, fallback/post-processing could still pass through repeated lead text (for example duplicated place names + opening sentence fragment), making titles look like raw truncation instead of summaries.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Import a story with repeated lead text and confirm `attributeDetail` no longer duplicates opening phrases.
+  - Confirm `attributeDetail` is title-like (short phrase) and avoids sentence-like comma fragments.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert title guardrail helpers in `story-import.ts` (`collapseRepeatedLead`, sentence-like gating, clause-start fallback).
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-20 (story import passthrough AI chat + apply-to-draft hints)
+
+- `Date`: 2026-03-20
+- `Change`: Added a new in-modal Story AI Chat passthrough experience so users can discuss title/date/type choices against the current story text before generating drafts. Chat now returns structured suggestions and users can apply those suggestions as generation hints for the next story-import run.
+- `Type`: UI | API
+- `Why`: Root cause was a `workflow gap`. Story import previously had one-shot generation with no conversational refinement loop, so users could not guide AI output quality before draft creation.
+- `Files`:
+  - `src/lib/ai/story-chat.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-chat/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-import/route.ts`
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Open `Import Story with AI` and confirm Story AI Chat appears under story text.
+  - Ask AI a question and confirm assistant response plus structured suggestion fields return.
+  - Click `Apply Suggestion` and confirm hints are shown and included in subsequent `Generate Drafts` request.
+  - Confirm existing draft review/save flow remains unchanged after generation.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert story-chat API + UI chat panel + story-import hint plumbing as one unit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19

@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { generateStoryImportProposals } from "@/lib/ai/story-import";
+import { answerStoryChat, type StoryChatMessage } from "@/lib/ai/story-chat";
+import { isOpenAiConfigured } from "@/lib/ai/openai";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getPersonById } from "@/lib/data/runtime";
-import { isOpenAiConfigured } from "@/lib/ai/openai";
+
+const messageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(4000),
+});
 
 const payloadSchema = z.object({
-  sourceText: z.string().trim().min(1).max(20000),
-  hints: z
-    .object({
-      titleHint: z.string().trim().max(120).default(""),
-      startDate: z.string().trim().max(32).default(""),
-      endDate: z.string().trim().max(32).default(""),
-      attributeType: z.string().trim().max(120).default(""),
-      attributeTypeCategory: z.string().trim().max(120).default(""),
-    })
-    .optional(),
+  storyText: z.string().trim().min(1).max(20000),
+  messages: z.array(messageSchema).min(1).max(20),
 });
 
 export async function POST(
@@ -41,48 +38,53 @@ export async function POST(
 
   if (!isOpenAiConfigured()) {
     return NextResponse.json(
-      { error: "ai_story_import_unavailable", message: "AI story import is not configured yet." },
+      { error: "ai_story_chat_unavailable", message: "AI story chat is not configured yet." },
       { status: 503 },
     );
   }
 
-  const sourceLength = parsed.data.sourceText.trim().length;
+  const messages = parsed.data.messages.map((message) => ({
+    role: message.role,
+    content: message.content.trim(),
+  })) satisfies StoryChatMessage[];
 
   try {
-    const result = await generateStoryImportProposals({
+    const result = await answerStoryChat({
       tenantKey: resolved.tenant.tenantKey,
       tenantName: resolved.tenant.tenantName,
       personDisplayName: person.displayName || personId,
-      sourceText: parsed.data.sourceText,
-      hints: parsed.data.hints,
+      storyText: parsed.data.storyText,
+      messages,
     });
 
     await appendSessionAuditLog(resolved.session, {
-      action: "IMPORT",
-      entityType: "AI_STORY_IMPORT",
+      action: "ASK",
+      entityType: "AI_STORY_CHAT",
       entityId: personId,
       familyGroupKey: resolved.tenant.tenantKey,
       status: "SUCCESS",
-      details: `Generated ${String(result.proposals.length)} AI story import proposals; chars=${String(sourceLength)}.`,
+      details: `AI story chat answered; chars=${String(parsed.data.storyText.length)}; messages=${String(messages.length)}.`,
     });
 
     return NextResponse.json({
       ok: true,
       tenantKey: resolved.tenant.tenantKey,
       personId,
+      answer: result.answer,
+      suggestion: result.suggestion,
       model: result.model,
-      proposals: result.proposals,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "AI story import failed.";
+    const message = error instanceof Error ? error.message : "AI story chat failed.";
     await appendSessionAuditLog(resolved.session, {
-      action: "IMPORT",
-      entityType: "AI_STORY_IMPORT",
+      action: "ASK",
+      entityType: "AI_STORY_CHAT",
       entityId: personId,
       familyGroupKey: resolved.tenant.tenantKey,
       status: "FAILURE",
-      details: `AI story import failed; chars=${String(sourceLength)}; message=${message.slice(0, 180)}.`,
+      details: `AI story chat failed; chars=${String(parsed.data.storyText.length)}; message=${message.slice(0, 180)}.`,
     });
-    return NextResponse.json({ error: "ai_story_import_failed", message }, { status: 500 });
+    return NextResponse.json({ error: "ai_story_chat_failed", message }, { status: 500 });
   }
 }
+
