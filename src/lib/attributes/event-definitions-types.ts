@@ -1,6 +1,6 @@
 import type { AttributeCategory } from "@/lib/attributes/types";
 
-export type EventTypeDateMode = "single" | "range";
+export type EventTypeDateMode = "none" | "single" | "range";
 
 export type AttributeEventCategoryDefinition = {
   categoryKey: string;

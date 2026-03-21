@@ -322,7 +322,7 @@ export function AttributesModal({
   const definitionTypeOptionsByCategory = useMemo(() => {
     const map = new Map<
       string,
-      Array<{ typeKey: string; typeLabel: string; detailLabel: string; dateMode: "single" | "range"; askEndDate: boolean }>
+      Array<{ typeKey: string; typeLabel: string; detailLabel: string; dateMode: "none" | "single" | "range"; askEndDate: boolean }>
     >();
     for (const item of eventDefinitions.types) {
       if (!item.isEnabled) continue;
@@ -359,17 +359,25 @@ export function AttributesModal({
     return (definitionTypeOptionsByCategory.get(categoryId) ?? []).find((item) => item.typeKey === normalizedCategory) ?? null;
   }, [attributeTypeCategory, category, definitionTypeOptionsByCategory, typeKey]);
   const shouldShowEventEndDate = useMemo(() => {
-    if (category !== "event") {
-      return false;
-    }
-    if (isSingleDayEventType(category, typeKey)) {
-      return false;
-    }
     if (selectedTypeDefinition == null) {
-      return true;
+      return category === "event";
     }
-    return selectedTypeDefinition.askEndDate || selectedTypeDefinition.dateMode === "range";
+    if (selectedTypeDefinition.dateMode !== "range") return false;
+    if (isSingleDayEventType(category, typeKey)) return false;
+    return true;
   }, [category, selectedTypeDefinition, typeKey]);
+  const shouldShowDateFields = useMemo(() => {
+    if (selectedTypeDefinition == null) {
+      return category === "event";
+    }
+    return selectedTypeDefinition.dateMode !== "none";
+  }, [category, selectedTypeDefinition]);
+  const shouldRequireDate = useMemo(() => {
+    if (selectedTypeDefinition == null) {
+      return category === "event";
+    }
+    return selectedTypeDefinition.dateMode !== "none";
+  }, [category, selectedTypeDefinition]);
   const activeAddModalTitle = useMemo(() => {
     if (editingId) {
       if (category === "event" && normalizeTypeKey(attributeTypeCategory) === "story") {
@@ -493,11 +501,17 @@ export function AttributesModal({
   }, []);
 
   useEffect(() => {
-    if (category !== "event") return;
-    if (selectedTypeDefinition && !selectedTypeDefinition.askEndDate && selectedTypeDefinition.dateMode !== "range") {
+    if (!shouldShowDateFields) {
+      setDateStart("");
+      setDateEnd("");
+      setDateIsEstimated(false);
+      setEstimatedTo("");
+      return;
+    }
+    if (!shouldShowEventEndDate) {
       setDateEnd("");
     }
-  }, [category, selectedTypeDefinition]);
+  }, [shouldShowDateFields, shouldShowEventEndDate]);
 
   useEffect(() => {
     const normalizedCurrent = normalizeTypeKey(typeKey);
@@ -589,7 +603,7 @@ export function AttributesModal({
     const normalizedType = normalizeTypeKey(typeKey);
     if (!normalizedType) return "Type is required.";
     if (!valueText.trim()) return "Attribute detail is required.";
-    if (category === "event" && !dateStart.trim()) return "Date is required for event attributes.";
+    if (shouldRequireDate && !dateStart.trim()) return "Date is required for this attribute type.";
     if (dateIsEstimated && !estimatedTo) return "Choose month or year for estimated date.";
     return "";
   };
@@ -609,7 +623,7 @@ export function AttributesModal({
       entityId,
       category,
       attributeKind: category,
-      isDateRelated: category === "event",
+      isDateRelated: shouldShowDateFields,
       attributeType: normalizedType,
       attributeTypeCategory,
       attributeDate: dateStart,
@@ -621,7 +635,7 @@ export function AttributesModal({
       typeKey: normalizedType,
       label,
       valueText,
-      dateStart,
+      dateStart: shouldShowDateFields ? dateStart : "",
       dateEnd: normalizedEndDate,
       notes,
     };
@@ -1005,17 +1019,19 @@ export function AttributesModal({
                   <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Override title shown on saved card" />
                   <label className="label">Attribute Detail</label>
                   <input className="input" value={valueText} onChange={(e) => setValueText(e.target.value)} placeholder="Event or mission name" />
-                  {category === "event" ? (
+                  {shouldShowDateFields ? (
                     <>
                       <div className="settings-chip-list">
                         <div style={{ flex: 1, minWidth: "170px" }}>
-                          <label className="label">Start Date</label>
+                          <label className="label">Date</label>
                           <input className="input" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
                         </div>
-                        <div style={{ flex: 1, minWidth: "170px" }}>
+                        {shouldShowEventEndDate ? (
+                          <div style={{ flex: 1, minWidth: "170px" }}>
                           <label className="label">End Date</label>
                           <input className="input" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
-                        </div>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="settings-chip-list">
                         <div style={{ flex: 1, minWidth: "170px" }}>
@@ -1218,7 +1234,7 @@ export function AttributesModal({
                   ) : null}
                 </div>
                 <label className="label">
-                  {category === "event" && selectedTypeDefinition?.detailLabel
+                  {selectedTypeDefinition?.detailLabel
                     ? selectedTypeDefinition.detailLabel
                     : getDetailLabel(attributeTypeCategory || typeKey)}
                 </label>
@@ -1227,13 +1243,13 @@ export function AttributesModal({
                   value={valueText}
                   onChange={(e) => setValueText(e.target.value)}
                   placeholder={
-                    category === "event" && selectedTypeDefinition?.detailLabel
+                    selectedTypeDefinition?.detailLabel
                       ? selectedTypeDefinition.detailLabel
                       : getDetailLabel(attributeTypeCategory || typeKey)
                   }
                 />
 
-                {category === "event" ? (
+                {shouldShowDateFields ? (
                   <div style={{ marginTop: "0.75rem" }}>
                     <div className="settings-chip-list">
                       <div style={{ flex: 1, minWidth: "170px" }}>
@@ -1278,7 +1294,7 @@ export function AttributesModal({
                     <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
                   </div>
                 ) : null}
-                {category !== "event" ? (
+                {!shouldShowDateFields ? (
                   <div style={{ marginTop: "0.75rem" }}>
                     <label className="label">Attribute Notes</label>
                     <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />

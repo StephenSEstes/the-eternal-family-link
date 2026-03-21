@@ -769,8 +769,6 @@ export function PersonEditModal({
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
   const [storyExtractionMode, setStoryExtractionMode] = useState<StoryExtractionMode>("balanced");
   const [storyWorkspaceStep, setStoryWorkspaceStep] = useState<StoryWorkspaceStep>(1);
-  const [storyWorkspaceGuidance, setStoryWorkspaceGuidance] = useState("");
-  const [storyWorkspaceMissingFacts, setStoryWorkspaceMissingFacts] = useState("");
   const [storyWorkspaceDrafts, setStoryWorkspaceDrafts] = useState<StoryWorkspaceDraft[]>([]);
   const [storyWorkspaceDraftIndex, setStoryWorkspaceDraftIndex] = useState(0);
   const [storyImportHints, setStoryImportHints] = useState<StoryImportHints>({
@@ -1167,8 +1165,6 @@ export function PersonEditModal({
     });
     setStoryExtractionMode("balanced");
     setStoryWorkspaceStep(1);
-    setStoryWorkspaceGuidance("");
-    setStoryWorkspaceMissingFacts("");
   };
 
   const openStoryImportModal = () => {
@@ -1197,7 +1193,7 @@ export function PersonEditModal({
 
     setStoryImportBusy(true);
     setStoryImportStatus("Generating drafts...");
-    const guidanceText = [storyWorkspaceGuidance.trim(), storyWorkspaceMissingFacts.trim()].filter(Boolean).join("\n");
+    const guidanceText = storyChatInput.trim();
     const res = await fetch(
       `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/story-import`,
       {
@@ -1367,7 +1363,6 @@ export function PersonEditModal({
     const answerText = String(body?.answer || "").trim();
     const assistantMessage = answerText ? [{ role: "assistant", content: answerText } as StoryChatMessage] : [];
     setStoryChatMessages([...nextMessages, ...assistantMessage]);
-    setStoryChatInput("");
     setStoryChatBusy(false);
     setStoryChatStatus("");
     const suggestion = body?.suggestion as StoryChatSuggestion | undefined;
@@ -3801,28 +3796,12 @@ export function PersonEditModal({
                         >
                           Consolidate Selected Into One Story
                         </button>
-                        <label className="label">Additional AI Guidance</label>
-                        <textarea
-                          className="textarea"
-                          value={storyWorkspaceGuidance}
-                          onChange={(event) => setStoryWorkspaceGuidance(event.target.value)}
-                          placeholder="Example: Keep this as one story and extract only high-signal attributes."
-                          style={{ minHeight: "5rem" }}
-                        />
-                        <label className="label">Missing Facts To Add</label>
-                        <textarea
-                          className="textarea"
-                          value={storyWorkspaceMissingFacts}
-                          onChange={(event) => setStoryWorkspaceMissingFacts(event.target.value)}
-                          placeholder="Add any missing facts the story should include."
-                          style={{ minHeight: "4.5rem" }}
-                        />
-                        <label className="label">Ask AI (Step 1)</label>
+                        <label className="label">Ask AI</label>
                         <textarea
                           className="textarea"
                           value={storyChatInput}
                           onChange={(event) => setStoryChatInput(event.target.value)}
-                          placeholder="Example: This is too granular. Merge to one story with only major supporting attributes."
+                          placeholder="Ask AI what to consolidate, what is missing, or how to adjust granularity."
                           style={{ minHeight: "4.8rem" }}
                           disabled={storyChatBusy || storyImportBusy}
                         />
@@ -3860,7 +3839,7 @@ export function PersonEditModal({
                             onClick={() => void requestStoryChatSuggestion()}
                             disabled={storyChatBusy || storyImportBusy}
                           >
-                            {storyChatBusy ? "Asking..." : "Ask AI About Step 1"}
+                            {storyChatBusy ? "Asking..." : "Ask AI"}
                           </button>
                           <button
                             type="button"
@@ -3868,7 +3847,7 @@ export function PersonEditModal({
                             onClick={() => void generateStoryImportDrafts()}
                             disabled={storyImportBusy || storyChatBusy}
                           >
-                            {storyImportBusy ? "Rebuilding..." : "Apply Guidance + Rebuild"}
+                            {storyImportBusy ? "Rebuilding..." : "Rebuild Drafts"}
                           </button>
                           <button
                             type="button"

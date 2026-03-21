@@ -66,7 +66,10 @@ function toInt(value: unknown, fallback: number) {
 }
 
 function normalizeDateMode(value: unknown): EventTypeDateMode {
-  return String(value ?? "").trim().toLowerCase() === "range" ? "range" : "single";
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "range") return "range";
+  if (normalized === "none" || normalized === "no_date" || normalized === "no-date" || normalized === "nodate") return "none";
+  return "single";
 }
 
 function sortCategories(rows: AttributeEventCategoryDefinition[]) {
@@ -144,7 +147,7 @@ function normalizeTypeRow(
     typeLabel,
     detailLabel: normalizeLabel(String(raw.detailLabel ?? fallbackType?.detailLabel ?? "")) || "Attribute Detail",
     dateMode: mode,
-    askEndDate: toBool(raw.askEndDate, mode === "range" || fallbackType?.askEndDate === true),
+    askEndDate: mode === "range",
     sortOrder: toInt(raw.sortOrder, (index + 1) * 10),
     isEnabled: toBool(raw.isEnabled, true),
   };

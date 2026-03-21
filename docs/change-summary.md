@@ -4884,3 +4884,25 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (date mode tri-state + story step-1 ask-ai consolidation)
+
+- `Change`: Added tri-state attribute date mode support (`No Date`, `Date`, `Range`) across definitions API, normalization, admin editor, and attribute add/edit behavior; also consolidated Story Workspace Step 1 guidance into one `Ask AI` input + response stream and removed the separate guidance/missing-facts fields and `Ask AI About Step 1` action.
+- `Type`: UX Consistency, Bugfix
+- `Why`: Root cause was split logic. Date behavior was constrained to `single|range` with event-centric assumptions, and Step 1 guidance was fragmented across multiple controls that all mapped to one refinement intent.
+- `Files`:
+  - `src/lib/attributes/event-definitions-types.ts`
+  - `src/lib/attributes/event-definitions.ts`
+  - `src/lib/attributes/definition-defaults.ts`
+  - `src/app/api/t/[tenantKey]/attribute-definitions/route.ts`
+  - `src/components/AttributeDefinitionsAdmin.tsx`
+  - `src/components/AttributesModal.tsx`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - Attribute definition type editor offers `No Date`, `Date`, and `Range` for all types.
+  - Attribute add/edit form hides date controls for `No Date`, shows one date for `Date`, and start/end for `Range`.
+  - Date-required validation applies only when selected mode is `Date` or `Range`.
+  - Story workspace Step 1 shows a single `Ask AI` input/response area and no longer shows separate guidance/missing-facts controls.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

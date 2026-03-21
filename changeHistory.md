@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-20: Attribute definitions now support `No Date`, `Date`, and `Range` modes across admin/editor/runtime, and Story Workspace Step 1 guidance is consolidated into a single `Ask AI` input + response area. See `docs/change-summary.md`.
 - 2026-03-20: Story workspace now uses a guided right-side Step 1/Step 2 flow (identify/consolidate + draft-entry/save), moves `Close` to the bottom action area, and strips `Top-level ...` metadata from default story text seed. See `docs/change-summary.md`.
 - 2026-03-20: Story workspace now keeps extraction mode chips on one row, opens taller, and shows generated potential attributes/stories inline before entering draft review. See `docs/change-summary.md`.
 - 2026-03-20: `Import Story with AI` now opens in a desktop-first full-screen Story Workspace layout with side-by-side narrative/chat/suggestion panels, extraction-mode selector UI, and duplicate-review placeholder area for extraction tuning. See `docs/change-summary.md`.

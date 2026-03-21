@@ -323,7 +323,7 @@ export function AttributeDefinitionsAdmin({
       categoryKey: selectedCategory.categoryKey,
       typeLabel: `Type ${next}`,
       detailLabel: "Attribute Detail",
-      dateMode: "single",
+      dateMode: "none",
       askEndDate: false,
       sortOrder: next * 10,
       isEnabled: true,
@@ -539,23 +539,26 @@ export function AttributeDefinitionsAdmin({
                       <input className="input" value={selectedType.detailLabel} onChange={(e) => updateType(selectedTypeId, { detailLabel: e.target.value })} />
                     </div>
                   </div>
-                  {selectedCategory.kind === "event" ? (
-                    <div className="settings-chip-list">
-                      <div style={{ minWidth: "180px" }}>
-                        <label className="label">Date Mode</label>
-                        <select className="input" value={selectedType.dateMode} onChange={(e) => updateType(selectedTypeId, { dateMode: e.target.value as "single" | "range" })}>
-                          <option value="single">Single</option>
-                          <option value="range">Range</option>
-                        </select>
-                      </div>
-                      <div style={{ minWidth: "140px" }}>
-                        <label className="label">Ask End Date</label>
-                        <label className="label" style={{ marginBottom: 0 }}>
-                          <input type="checkbox" checked={selectedType.askEndDate} onChange={(e) => updateType(selectedTypeId, { askEndDate: e.target.checked })} /> Yes
-                        </label>
-                      </div>
+                  <div className="settings-chip-list">
+                    <div style={{ minWidth: "180px" }}>
+                      <label className="label">Date Mode</label>
+                      <select
+                        className="input"
+                        value={selectedType.dateMode}
+                        onChange={(e) => {
+                          const nextMode = e.target.value as "none" | "single" | "range";
+                          updateType(selectedTypeId, {
+                            dateMode: nextMode,
+                            askEndDate: nextMode === "range",
+                          });
+                        }}
+                      >
+                        <option value="none">No Date</option>
+                        <option value="single">Date</option>
+                        <option value="range">Range</option>
+                      </select>
                     </div>
-                  ) : null}
+                  </div>
                   <div className="settings-chip-list">
                     <div style={{ minWidth: "120px" }}>
                       <label className="label">Enabled</label>
