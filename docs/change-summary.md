@@ -4869,3 +4869,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Local `npm run build -- --no-lint` still fails on Windows with the pre-existing `spawn EPERM` environment error before app compile output.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (story workspace step-2 picklist parity + unified in-panel review)
+
+- `Change`: Updated Story Import Workspace so Step 2 uses definition-driven picklists for `Attribute Type` and `Type Category` (same source as Add Attribute), added detail suggestions, removed both legacy draft-review buttons, and made the left panel support Step 2 draft queue navigation/select.
+- `Type`: UX Consistency, Bugfix
+- `Why`: Root cause was a split review flow: Step 2 used free-text fields and legacy handoff buttons, so behavior diverged from Add Attribute and required extra clicks through old review routes.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No.
+- `Verify`:
+  - Story Import Workspace Step 2 shows dropdown-style selections for type and type category.
+  - Left panel no longer shows `Open Draft Review` or `Open Classic Draft Review`.
+  - Left panel supports selecting/cycling drafts while Step 2 form on the right updates accordingly.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

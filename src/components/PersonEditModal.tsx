@@ -22,6 +22,10 @@ import {
 } from "@/lib/attributes/media-response";
 import { extractPhoneLinkItems } from "@/lib/phone-links";
 import type { AttributeEventDefinitions } from "@/lib/attributes/event-definitions-types";
+import {
+  defaultAttributeDefinitions,
+  makeAttributeDefinitionCategoryId,
+} from "@/lib/attributes/definition-defaults";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { inferStoredMediaKind } from "@/lib/media/upload";
 import { DEFAULT_FAMILY_GROUP_KEY } from "@/lib/family-group/constants";
@@ -825,6 +829,7 @@ export function PersonEditModal({
   const [attributeLaunchSource, setAttributeLaunchSource] = useState<AttributeLaunchSource>("main_events");
   const [timelineSortOrder, setTimelineSortOrder] = useState<"asc" | "desc">("asc");
   const [eventCategoryColorByKey, setEventCategoryColorByKey] = useState<Record<string, string>>({});
+  const [eventDefinitions, setEventDefinitions] = useState<AttributeEventDefinitions>(defaultAttributeDefinitions());
   const [newSpouseFirstName, setNewSpouseFirstName] = useState("");
   const [newSpouseMiddleName, setNewSpouseMiddleName] = useState("");
   const [newSpouseLastName, setNewSpouseLastName] = useState("");
@@ -942,6 +947,94 @@ export function PersonEditModal({
     () => storyWorkspaceDrafts[storyWorkspaceDraftIndex] ?? null,
     [storyWorkspaceDraftIndex, storyWorkspaceDrafts],
   );
+  const workspaceTypeOptionsByKind = useMemo(() => {
+    const byKind: Record<"descriptor" | "event", Array<{ value: string; label: string }>> = {
+      descriptor: [],
+      event: [],
+    };
+    for (const row of eventDefinitions.categories ?? []) {
+      if (!row?.isEnabled) continue;
+      const key = normalizeAttributeKey(row.categoryKey);
+      const kind = row.kind === "event" ? "event" : "descriptor";
+      if (!key) continue;
+      byKind[kind].push({
+        value: key,
+        label: String(row.categoryLabel || toTitleWords(key) || "Type"),
+      });
+    }
+    byKind.descriptor.sort((a, b) => a.label.localeCompare(b.label));
+    byKind.event.sort((a, b) => a.label.localeCompare(b.label));
+    return byKind;
+  }, [eventDefinitions]);
+  const workspaceTypeCategoryOptionsByType = useMemo(() => {
+    const map = new Map<string, Array<{ value: string; label: string; detailLabel: string }>>();
+    for (const row of eventDefinitions.types ?? []) {
+      if (!row?.isEnabled) continue;
+      const typeGroupKey = makeAttributeDefinitionCategoryId(
+        row.kind === "event" ? "event" : "descriptor",
+        normalizeAttributeKey(row.categoryKey),
+      );
+      const options = map.get(typeGroupKey) ?? [];
+      options.push({
+        value: normalizeAttributeKey(row.typeKey),
+        label: String(row.typeLabel || toTitleWords(row.typeKey) || "Type"),
+        detailLabel: String(row.detailLabel || "Attribute Detail"),
+      });
+      map.set(typeGroupKey, options);
+    }
+    for (const [key, options] of map) {
+      options.sort((a, b) => a.label.localeCompare(b.label));
+      map.set(key, options);
+    }
+    return map;
+  }, [eventDefinitions]);
+  const currentWorkspaceTypeOptions = useMemo(() => {
+    if (!currentWorkspaceDraft) return [] as Array<{ value: string; label: string }>;
+    const kind = currentWorkspaceDraft.attributeKind === "event" ? "event" : "descriptor";
+    return workspaceTypeOptionsByKind[kind];
+  }, [currentWorkspaceDraft, workspaceTypeOptionsByKind]);
+  const currentWorkspaceTypeCategoryOptions = useMemo(() => {
+    if (!currentWorkspaceDraft) return [] as Array<{ value: string; label: string; detailLabel: string }>;
+    const kind = currentWorkspaceDraft.attributeKind === "event" ? "event" : "descriptor";
+    const typeKey = normalizeAttributeKey(currentWorkspaceDraft.attributeType);
+    if (!typeKey) return [] as Array<{ value: string; label: string; detailLabel: string }>;
+    return workspaceTypeCategoryOptionsByType.get(makeAttributeDefinitionCategoryId(kind, typeKey)) ?? [];
+  }, [currentWorkspaceDraft, workspaceTypeCategoryOptionsByType]);
+  const workspaceDetailSuggestionOptions = useMemo(() => {
+    if (!currentWorkspaceDraft) return [] as string[];
+    const selectedType = normalizeAttributeKey(currentWorkspaceDraft.attributeType);
+    const selectedTypeCategory = normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory);
+    const options = new Set<string>();
+    for (const item of aboutAttributes) {
+      const type = normalizeAttributeKey(item.attributeType || item.typeKey);
+      const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
+      if (type !== selectedType) continue;
+      if (selectedTypeCategory && typeCategory && typeCategory !== selectedTypeCategory) continue;
+      const detail = getSafeAttributeText(item.attributeDetail || item.valueText || item.label);
+      if (detail) {
+        options.add(detail);
+      }
+    }
+    for (const item of storyWorkspaceDrafts) {
+      if (item.localId === currentWorkspaceDraft.localId) continue;
+      const type = normalizeAttributeKey(item.attributeType);
+      const typeCategory = normalizeAttributeKey(item.attributeTypeCategory);
+      if (type !== selectedType) continue;
+      if (selectedTypeCategory && typeCategory && typeCategory !== selectedTypeCategory) continue;
+      const detail = getSafeAttributeText(item.attributeDetail || item.label);
+      if (detail) {
+        options.add(detail);
+      }
+    }
+    return Array.from(options).slice(0, 40);
+  }, [aboutAttributes, currentWorkspaceDraft, storyWorkspaceDrafts]);
+  const currentWorkspaceDetailLabel = useMemo(() => {
+    if (!currentWorkspaceDraft) return "Title / Detail";
+    const selectedTypeCategory = normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory);
+    if (!selectedTypeCategory) return "Title / Detail";
+    const option = currentWorkspaceTypeCategoryOptions.find((item) => normalizeAttributeKey(item.value) === selectedTypeCategory);
+    return option?.detailLabel || "Title / Detail";
+  }, [currentWorkspaceDraft, currentWorkspaceTypeCategoryOptions]);
 
   const resetProfileEditorState = (nextPerson: PersonItem, clearStatus = true) => {
     setDisplayName(nextPerson.displayName || "");
@@ -1014,6 +1107,7 @@ export function PersonEditModal({
       const body = await res.json().catch(() => null);
       if (!res.ok || !body?.definitions || cancelled) return;
       const defs = body.definitions as AttributeEventDefinitions;
+      setEventDefinitions(defs);
       const next: Record<string, string> = {};
       for (const row of defs.categories ?? []) {
         const key = normalizeAttributeKey(row.categoryKey);
@@ -1145,7 +1239,7 @@ export function PersonEditModal({
       })),
     );
     setStoryWorkspaceDraftIndex(0);
-    setStoryImportStatus(`AI prepared ${proposals.length} potential attributes/stories below. Review them here, then open draft review when ready.`);
+    setStoryImportStatus(`AI prepared ${proposals.length} potential attributes/stories below. Review Step 1 then Step 2 to save.`);
   };
 
   const updateStoryWorkspaceDraft = (localId: string, patch: Partial<StoryWorkspaceDraft>) => {
@@ -1184,37 +1278,6 @@ export function PersonEditModal({
         ),
     );
     setStoryImportStatus(`Consolidated ${selected.length} selected items into one story draft.`);
-  };
-
-  const openStoryDraftReview = () => {
-    const selectedDrafts = storyWorkspaceDrafts.filter((item) => item.selected || storyWorkspaceDrafts.length === 1);
-    const nextDrafts = selectedDrafts.length > 0 ? selectedDrafts : storyWorkspaceDrafts;
-    if (nextDrafts.length === 0) {
-      setStoryImportStatus("Generate drafts first.");
-      return;
-    }
-    const mapped = nextDrafts.map((item) => ({
-      proposalId: item.proposalId,
-      attributeKind: item.attributeKind,
-      attributeType: item.attributeType,
-      attributeTypeCategory: item.attributeTypeCategory,
-      attributeDate: item.attributeDate,
-      endDate: item.endDate,
-      dateIsEstimated: item.dateIsEstimated,
-      estimatedTo: item.estimatedTo,
-      label: item.label,
-      attributeDetail: item.attributeDetail,
-      attributeNotes: item.attributeNotes,
-      sourceExcerpt: item.sourceExcerpt,
-      rationale: item.rationale,
-    })) satisfies AiStoryImportProposal[];
-    setStoryImportDrafts(mapped);
-    setStoryImportDraftIndex(0);
-    setShowStoryImportModal(false);
-    setSelectedAboutAttributeId("");
-    setAttributeLaunchSource("stories");
-    setShowAttributeAddModal(true);
-    setStatus(`AI prepared ${mapped.length} attribute drafts. Review and save them one at a time.`);
   };
 
   const saveWorkspaceDraft = async (localId: string) => {
@@ -3619,11 +3682,38 @@ export function PersonEditModal({
                   {storyImportDrafts.length > 0 ? (
                     <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
                       <div className="story-workspace-section-head">
-                        <h5 style={{ margin: 0 }}>Potential Attributes / Stories</h5>
+                        <h5 style={{ margin: 0 }}>
+                          {storyWorkspaceStep === 2 ? "Step 2 Queue" : "Potential Attributes / Stories"}
+                        </h5>
                         <span className="status-chip status-chip--neutral">{storyImportDrafts.length}</span>
                       </div>
                       <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.5rem", maxHeight: "280px", overflowY: "auto" }}>
-                        {storyImportDrafts.map((proposal, index) => (
+                        {storyWorkspaceDrafts.length > 0 ? storyWorkspaceDrafts.map((proposal, index) => (
+                          <button
+                            key={proposal.localId || proposal.proposalId || `draft-${index}`}
+                            type="button"
+                            onClick={() => setStoryWorkspaceDraftIndex(index)}
+                            className="button secondary tap-button"
+                            style={{
+                              textAlign: "left",
+                              border: `1px solid ${index === storyWorkspaceDraftIndex ? "#2563eb" : "#E7EAF0"}`,
+                              borderRadius: "0.6rem",
+                              padding: "0.55rem",
+                              background: index === storyWorkspaceDraftIndex ? "#eff6ff" : "#fff",
+                              color: "inherit",
+                            }}
+                          >
+                            <p style={{ margin: 0, fontWeight: 700 }}>
+                              {index + 1}. {proposal.attributeDetail || proposal.label || "(no title)"}
+                            </p>
+                            <p className="page-subtitle" style={{ margin: "0.2rem 0 0" }}>
+                              {proposal.attributeKind} / {proposal.attributeType}{proposal.attributeTypeCategory ? ` / ${proposal.attributeTypeCategory}` : ""}
+                            </p>
+                            <p className="page-subtitle" style={{ margin: "0.2rem 0 0" }}>
+                              Date: {proposal.attributeDate || "-"}{proposal.endDate ? ` to ${proposal.endDate}` : ""}
+                            </p>
+                          </button>
+                        )) : storyImportDrafts.map((proposal, index) => (
                           <div key={proposal.proposalId || `draft-${index}`} style={{ border: "1px solid #E7EAF0", borderRadius: "0.6rem", padding: "0.55rem" }}>
                             <p style={{ margin: 0, fontWeight: 700 }}>
                               {index + 1}. {proposal.attributeDetail || proposal.label || "(no title)"}
@@ -3637,16 +3727,26 @@ export function PersonEditModal({
                           </div>
                         ))}
                       </div>
-                      <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
-                        <button
-                          type="button"
-                          className="button secondary tap-button"
-                          onClick={openStoryDraftReview}
-                          disabled={storyImportBusy || storyChatBusy}
-                        >
-                          Open Draft Review
-                        </button>
-                      </div>
+                      {storyWorkspaceStep === 2 && storyWorkspaceDrafts.length > 1 ? (
+                        <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => setStoryWorkspaceDraftIndex((idx) => Math.max(0, idx - 1))}
+                            disabled={storyWorkspaceDraftIndex === 0}
+                          >
+                            Previous
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => setStoryWorkspaceDraftIndex((idx) => Math.min(storyWorkspaceDrafts.length - 1, idx + 1))}
+                            disabled={storyWorkspaceDraftIndex >= storyWorkspaceDrafts.length - 1}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -3792,23 +3892,74 @@ export function PersonEditModal({
                               <span className="status-chip status-chip--neutral">{currentWorkspaceDraft.attributeKind}</span>
                             </div>
                             <label className="label">Attribute Type</label>
-                            <input
+                            <select
                               className="input"
                               value={currentWorkspaceDraft.attributeType}
-                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeType: event.target.value })}
-                            />
+                              onChange={(event) => {
+                                const nextType = event.target.value;
+                                const nextTypeCategoryOptions =
+                                  workspaceTypeCategoryOptionsByType.get(
+                                    makeAttributeDefinitionCategoryId(
+                                      currentWorkspaceDraft.attributeKind === "event" ? "event" : "descriptor",
+                                      normalizeAttributeKey(nextType),
+                                    ),
+                                  ) ?? [];
+                                updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, {
+                                  attributeType: nextType,
+                                  attributeTypeCategory:
+                                    nextTypeCategoryOptions.some(
+                                      (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
+                                    )
+                                      ? currentWorkspaceDraft.attributeTypeCategory
+                                      : "",
+                                });
+                              }}
+                            >
+                              {currentWorkspaceTypeOptions.length === 0 ? (
+                                <option value={currentWorkspaceDraft.attributeType || ""}>
+                                  {toTitleWords(currentWorkspaceDraft.attributeType || "type")}
+                                </option>
+                              ) : (
+                                currentWorkspaceTypeOptions.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))
+                              )}
+                            </select>
                             <label className="label">Type Category</label>
-                            <input
+                            <select
                               className="input"
                               value={currentWorkspaceDraft.attributeTypeCategory}
                               onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeTypeCategory: event.target.value })}
-                            />
-                            <label className="label">Title / Detail</label>
+                            >
+                              <option value="">Select category</option>
+                              {currentWorkspaceTypeCategoryOptions.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.label}
+                                </option>
+                              ))}
+                              {currentWorkspaceDraft.attributeTypeCategory &&
+                              !currentWorkspaceTypeCategoryOptions.some(
+                                (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
+                              ) ? (
+                                <option value={currentWorkspaceDraft.attributeTypeCategory}>{toTitleWords(currentWorkspaceDraft.attributeTypeCategory)}</option>
+                              ) : null}
+                            </select>
+                            <label className="label">{currentWorkspaceDetailLabel}</label>
                             <input
                               className="input"
+                              list="story-workspace-detail-picklist"
                               value={currentWorkspaceDraft.attributeDetail}
                               onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeDetail: event.target.value })}
                             />
+                            {workspaceDetailSuggestionOptions.length > 0 ? (
+                              <datalist id="story-workspace-detail-picklist">
+                                {workspaceDetailSuggestionOptions.map((item) => (
+                                  <option key={item} value={item} />
+                                ))}
+                              </datalist>
+                            ) : null}
                             <label className="label">Date</label>
                             <input
                               className="input"
@@ -3866,14 +4017,6 @@ export function PersonEditModal({
                             onClick={() => setStoryWorkspaceStep(1)}
                           >
                             Back
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary tap-button"
-                            onClick={openStoryDraftReview}
-                            disabled={storyWorkspaceDrafts.length === 0}
-                          >
-                            Open Classic Draft Review
                           </button>
                         </div>
                       </div>
