@@ -61,6 +61,8 @@
   - pause and ask Steve for confirmation before implementation,
   - ask whether to update design decisions,
   - if approved, update decision docs with date and reason in the same commit.
+- When a multi-step design/implementation approach is agreed, write the full execution plan into `TODO.md` before coding.
+- The `TODO.md` plan entry must include enough detail to execute without additional context (scope, phases, API/UI/data changes, validation checks, and completion criteria).
 
 ## Session Startup Behavior
 - At the start of each new repo session, read `TODO.md`, `docs/design-decisions.md`, and `designchoices.md`.

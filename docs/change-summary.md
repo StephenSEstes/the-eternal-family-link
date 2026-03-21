@@ -4906,3 +4906,25 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (ai documentarian workflow, no extraction modes, planning-rule update)
+
+- `Change`: Updated AI story extraction to an expert-documentarian flow that supports single-story vs multi-vignette proposals, removed extraction-mode controls/contracts, and made draft regeneration follow iterative user/AI interaction guidance. Added repo operating-rule update requiring agreed multi-step designs to be written to `TODO.md` before implementation, and added the full AI redesign plan entry.
+- `Type`: UX Consistency, AI Workflow, Process
+- `Why`: Root cause was a constrained import model that forced one primary story and mode toggles (`story/balanced/resume`) instead of iterative guidance-based refinement, which limited intelligent multi-vignette extraction and user-directed adjustment.
+- `Files`:
+  - `AGENTS.md`
+  - `TODO.md`
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-import/route.ts`
+  - `src/lib/ai/story-import.ts`
+  - `src/lib/ai/story-chat.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - Story import request payload no longer accepts/uses extraction mode.
+  - Story workspace no longer displays extraction mode chips.
+  - Regeneration uses accumulated AI/user conversation guidance.
+  - Import prompt supports one or multiple story-vignette outputs and retains supporting fact extraction.
+  - At least one story proposal is still guaranteed via fallback when model output is incomplete.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

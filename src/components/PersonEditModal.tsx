@@ -116,7 +116,6 @@ type StoryImportHints = {
   attributeType: string;
   attributeTypeCategory: string;
 };
-type StoryExtractionMode = "story" | "balanced" | "resume";
 type StoryWorkspaceStep = 1 | 2;
 type StoryWorkspaceDraft = AiStoryImportProposal & {
   localId: string;
@@ -767,7 +766,6 @@ export function PersonEditModal({
   const [storyImportStatus, setStoryImportStatus] = useState("");
   const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
-  const [storyExtractionMode, setStoryExtractionMode] = useState<StoryExtractionMode>("balanced");
   const [storyWorkspaceStep, setStoryWorkspaceStep] = useState<StoryWorkspaceStep>(1);
   const [storyWorkspaceDrafts, setStoryWorkspaceDrafts] = useState<StoryWorkspaceDraft[]>([]);
   const [storyWorkspaceDraftIndex, setStoryWorkspaceDraftIndex] = useState(0);
@@ -1163,7 +1161,6 @@ export function PersonEditModal({
       attributeType: "",
       attributeTypeCategory: "",
     });
-    setStoryExtractionMode("balanced");
     setStoryWorkspaceStep(1);
   };
 
@@ -1193,7 +1190,15 @@ export function PersonEditModal({
 
     setStoryImportBusy(true);
     setStoryImportStatus("Generating drafts...");
-    const guidanceText = storyChatInput.trim();
+    const transcript = storyChatMessages
+      .map((message) => `${message.role === "user" ? "User" : "AI"}: ${message.content.trim()}`)
+      .filter(Boolean)
+      .join("\n");
+    const pendingUserPrompt = storyChatInput.trim();
+    const guidanceText = [transcript, pendingUserPrompt]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
     const res = await fetch(
       `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/story-import`,
       {
@@ -1203,7 +1208,6 @@ export function PersonEditModal({
           sourceText,
           hints: {
             ...storyImportHints,
-            extractionMode: storyExtractionMode,
             refinementPrompt: guidanceText,
           },
         }),
@@ -3638,33 +3642,6 @@ export function PersonEditModal({
                 disabled={storyImportBusy || storyChatBusy}
               />
                   <div className="story-workspace-controls">
-                    <label className="label" style={{ marginBottom: "0.35rem" }}>Extraction Mode</label>
-                    <div className="settings-chip-list story-mode-row">
-                      <button
-                        type="button"
-                        className={`tab-pill ${storyExtractionMode === "story" ? "active" : ""}`}
-                        onClick={() => setStoryExtractionMode("story")}
-                        disabled={storyImportBusy || storyChatBusy}
-                      >
-                        Story
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab-pill ${storyExtractionMode === "balanced" ? "active" : ""}`}
-                        onClick={() => setStoryExtractionMode("balanced")}
-                        disabled={storyImportBusy || storyChatBusy}
-                      >
-                        Balanced
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab-pill ${storyExtractionMode === "resume" ? "active" : ""}`}
-                        onClick={() => setStoryExtractionMode("resume")}
-                        disabled={storyImportBusy || storyChatBusy}
-                      >
-                        Resume
-                      </button>
-                    </div>
                     <button
                       type="button"
                       className="button tap-button"
@@ -3870,61 +3847,67 @@ export function PersonEditModal({
                               <strong>Draft {storyWorkspaceDraftIndex + 1} of {storyWorkspaceDrafts.length}</strong>
                               <span className="status-chip status-chip--neutral">{currentWorkspaceDraft.attributeKind}</span>
                             </div>
-                            <label className="label">Attribute Type</label>
-                            <select
-                              className="input"
-                              value={currentWorkspaceDraft.attributeType}
-                              onChange={(event) => {
-                                const nextType = event.target.value;
-                                const nextTypeCategoryOptions =
-                                  workspaceTypeCategoryOptionsByType.get(
-                                    makeAttributeDefinitionCategoryId(
-                                      currentWorkspaceDraft.attributeKind === "event" ? "event" : "descriptor",
-                                      normalizeAttributeKey(nextType),
-                                    ),
-                                  ) ?? [];
-                                updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, {
-                                  attributeType: nextType,
-                                  attributeTypeCategory:
-                                    nextTypeCategoryOptions.some(
-                                      (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
-                                    )
-                                      ? currentWorkspaceDraft.attributeTypeCategory
-                                      : "",
-                                });
-                              }}
-                            >
-                              {currentWorkspaceTypeOptions.length === 0 ? (
-                                <option value={currentWorkspaceDraft.attributeType || ""}>
-                                  {toTitleWords(currentWorkspaceDraft.attributeType || "type")}
-                                </option>
-                              ) : (
-                                currentWorkspaceTypeOptions.map((item) => (
-                                  <option key={item.value} value={item.value}>
-                                    {item.label}
-                                  </option>
-                                ))
-                              )}
-                            </select>
-                            <label className="label">Type Category</label>
-                            <select
-                              className="input"
-                              value={currentWorkspaceDraft.attributeTypeCategory}
-                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeTypeCategory: event.target.value })}
-                            >
-                              <option value="">Select category</option>
-                              {currentWorkspaceTypeCategoryOptions.map((item) => (
-                                <option key={item.value} value={item.value}>
-                                  {item.label}
-                                </option>
-                              ))}
-                              {currentWorkspaceDraft.attributeTypeCategory &&
-                              !currentWorkspaceTypeCategoryOptions.some(
-                                (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
-                              ) ? (
-                                <option value={currentWorkspaceDraft.attributeTypeCategory}>{toTitleWords(currentWorkspaceDraft.attributeTypeCategory)}</option>
-                              ) : null}
-                            </select>
+                            <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <label className="label">Attribute Type</label>
+                                <select
+                                  className="input"
+                                  value={currentWorkspaceDraft.attributeType}
+                                  onChange={(event) => {
+                                    const nextType = event.target.value;
+                                    const nextTypeCategoryOptions =
+                                      workspaceTypeCategoryOptionsByType.get(
+                                        makeAttributeDefinitionCategoryId(
+                                          currentWorkspaceDraft.attributeKind === "event" ? "event" : "descriptor",
+                                          normalizeAttributeKey(nextType),
+                                        ),
+                                      ) ?? [];
+                                    updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, {
+                                      attributeType: nextType,
+                                      attributeTypeCategory:
+                                        nextTypeCategoryOptions.some(
+                                          (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
+                                        )
+                                          ? currentWorkspaceDraft.attributeTypeCategory
+                                          : "",
+                                    });
+                                  }}
+                                >
+                                  {currentWorkspaceTypeOptions.length === 0 ? (
+                                    <option value={currentWorkspaceDraft.attributeType || ""}>
+                                      {toTitleWords(currentWorkspaceDraft.attributeType || "type")}
+                                    </option>
+                                  ) : (
+                                    currentWorkspaceTypeOptions.map((item) => (
+                                      <option key={item.value} value={item.value}>
+                                        {item.label}
+                                      </option>
+                                    ))
+                                  )}
+                                </select>
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <label className="label">Type Category</label>
+                                <select
+                                  className="input"
+                                  value={currentWorkspaceDraft.attributeTypeCategory}
+                                  onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeTypeCategory: event.target.value })}
+                                >
+                                  <option value="">Select category</option>
+                                  {currentWorkspaceTypeCategoryOptions.map((item) => (
+                                    <option key={item.value} value={item.value}>
+                                      {item.label}
+                                    </option>
+                                  ))}
+                                  {currentWorkspaceDraft.attributeTypeCategory &&
+                                  !currentWorkspaceTypeCategoryOptions.some(
+                                    (item) => normalizeAttributeKey(item.value) === normalizeAttributeKey(currentWorkspaceDraft.attributeTypeCategory),
+                                  ) ? (
+                                    <option value={currentWorkspaceDraft.attributeTypeCategory}>{toTitleWords(currentWorkspaceDraft.attributeTypeCategory)}</option>
+                                  ) : null}
+                                </select>
+                              </div>
+                            </div>
                             <label className="label">{currentWorkspaceDetailLabel}</label>
                             <input
                               className="input"

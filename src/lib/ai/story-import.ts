@@ -21,7 +21,6 @@ type StoryImportInput = {
     endDate?: string;
     attributeType?: string;
     attributeTypeCategory?: string;
-    extractionMode?: "story" | "balanced" | "resume";
     refinementPrompt?: string;
   };
 };
@@ -60,7 +59,6 @@ function sanitizeStoryImportHints(input?: StoryImportInput["hints"]) {
     endDate: clampText(String(input?.endDate ?? "").trim(), 32),
     attributeType: clampText(normalizeAttributeTypeKey(String(input?.attributeType ?? "").trim()), 120),
     attributeTypeCategory: clampText(normalizeAttributeTypeKey(String(input?.attributeTypeCategory ?? "").trim()), 120),
-    extractionMode: input?.extractionMode === "story" || input?.extractionMode === "resume" ? input.extractionMode : "balanced",
     refinementPrompt: clampText(String(input?.refinementPrompt ?? "").trim(), 1200),
   };
 }
@@ -293,7 +291,7 @@ function buildPrimaryStoryNotes(sourceText: string, existingNotes: string) {
   return clampText(pieces.join("\n\n").trim(), 4000);
 }
 
-function normalizePrimaryStoryProposalFromSource(proposal: AiStoryImportProposal, sourceText: string): AiStoryImportProposal {
+function normalizeStoryProposalFromSource(proposal: AiStoryImportProposal, sourceText: string): AiStoryImportProposal {
   const normalizedSource = normalizeWhitespace(sourceText);
   const detailSource = proposal.attributeDetail || proposal.label || normalizedSource;
   const preferredSourceTitle = deriveStoryTitleFromSource(normalizedSource);
@@ -415,27 +413,23 @@ function buildInstructions(input: {
     input.hints.attributeTypeCategory ? `Preferred attributeTypeCategory hint from user: ${input.hints.attributeTypeCategory}` : "",
     input.hints.refinementPrompt ? `Additional user guidance: ${input.hints.refinementPrompt}` : "",
   ].filter(Boolean);
-  const modeGuidance =
-    input.hints.extractionMode === "story"
-      ? "Extraction mode is STORY: prefer fewer records, preserve narrative coherence, and avoid over-fragmenting."
-      : input.hints.extractionMode === "resume"
-        ? "Extraction mode is RESUME: extract more concrete standalone records when facts support them."
-        : "Extraction mode is BALANCED: preserve core stories and extract only high-signal supporting facts.";
   return [
-    "You extract canonical attribute drafts for The Eternal Family Link.",
+    "You are an expert personal history documentarian for The Eternal Family Link.",
     `Current family group: ${input.tenantName}.`,
     `Current person: ${input.personDisplayName}.`,
     "Return JSON only. Do not include markdown fences or commentary.",
-    "Create ONE primary story proposal that preserves the overall narrative.",
-    "The primary story must be: attributeKind=event, attributeType=life_event, attributeTypeCategory=story.",
-    "Do NOT split a single narrative into sentence-level proposals.",
-    "Add supporting proposals only for high-signal reusable facts (for example relationships, moves/addresses, major milestones).",
+    "First decide whether the text is one story or multiple distinct vignettes.",
+    "If one story, output one story proposal.",
+    "If multiple vignettes, output one story proposal per vignette.",
+    "Each story proposal must be: attributeKind=event, attributeType=life_event, attributeTypeCategory=story.",
+    "Do NOT split a single vignette into sentence-level proposals.",
+    "Also extract supporting proposals for high-signal reusable facts when explicitly grounded in the text.",
+    "Examples of supporting facts: moved/home/address, key relationships (friends/mentors/relatives), major milestones, durable descriptors.",
     "Supporting proposals must be non-duplicative and materially useful on their own.",
-    "Return at most 10 proposals total including the one primary story.",
+    "Return at most 10 proposals total across story and supporting proposals.",
     "Do not invent facts, relationships, names, dates, or places.",
     "Use descriptor for timeless facts, hobbies, talents, physical details, and recurring personal facts.",
     "Use event for dated or time-bound milestones and for story vignettes.",
-    modeGuidance,
     "If sibling/family context is mentioned, prefer family_relationship event proposals only when a concrete relationship fact is present.",
     "If address/home location is mentioned, prefer moved event proposals for concrete move/location facts.",
     "If no subtype clearly matches an allowed subtype for a category, leave attributeTypeCategory empty.",
@@ -443,10 +437,10 @@ function buildInstructions(input: {
     "If source text includes an operation/range phrase (for example 'from ... until ...'), prefer that range over publication/article dates.",
     "If a date is missing or uncertain, leave attributeDate empty. Do not invent dates.",
     "Keep each supporting proposal focused on one distinct fact.",
-    "label should be a short human-readable summary title (about 3-10 words) describing the core story, not the source article headline/date.",
+    "label should be a short human-readable summary title (about 3-10 words), not a source article headline/date.",
     "attributeDetail should be a descriptive title phrase (about 4-12 words), not a sentence body.",
     "Do not repeat leading words or copy/paste the first sentence fragment into attributeDetail.",
-    "For the primary story proposal, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
+    "For story proposals, keep attributeNotes concise. Do not copy the entire source narrative into model output.",
     "For supporting proposals, attributeNotes may hold extra context.",
     "Use only the allowed category/type combinations listed below.",
     ...(hintLines.length > 0
@@ -471,7 +465,7 @@ function countWords(value: string) {
     .filter(Boolean).length;
 }
 
-function isPrimaryStoryProposal(proposal: AiStoryImportProposal) {
+function isStoryProposal(proposal: AiStoryImportProposal) {
   return (
     normalizeAttributeKind(proposal.attributeKind) === "event" &&
     normalizeAttributeTypeKey(proposal.attributeType) === "life_event" &&
@@ -480,7 +474,7 @@ function isPrimaryStoryProposal(proposal: AiStoryImportProposal) {
 }
 
 function looksFragmentarySupportingProposal(proposal: AiStoryImportProposal) {
-  if (isPrimaryStoryProposal(proposal)) {
+  if (isStoryProposal(proposal)) {
     return false;
   }
   const detail = proposal.attributeDetail.trim();
@@ -491,7 +485,7 @@ function looksFragmentarySupportingProposal(proposal: AiStoryImportProposal) {
   return words < 6 && !hasDate && !hasSubtype && notes.length < 24;
 }
 
-function buildPrimaryStoryProposalFromSource(sourceText: string): AiStoryImportProposal {
+function buildFallbackStoryProposalFromSource(sourceText: string): AiStoryImportProposal {
   const normalized = normalizeWhitespace(sourceText);
   const proposalId = "proposal_story_1";
   const label = buildStoryLabel(normalized || "Life Story");
@@ -509,7 +503,7 @@ function buildPrimaryStoryProposalFromSource(sourceText: string): AiStoryImportP
     attributeDetail: detail,
     attributeNotes: notes,
     sourceExcerpt: clampText(normalized, 1000),
-    rationale: "Primary narrative story captured from the original text.",
+    rationale: "Narrative story captured from the original text.",
   };
 }
 
@@ -588,28 +582,27 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
     .filter((proposal) => proposal.attributeDetail.trim().length > 0)
     .filter((proposal) => !looksFragmentarySupportingProposal(proposal));
 
-  const primaryFromModel = normalizedProposals.find((proposal) => isPrimaryStoryProposal(proposal)) ?? null;
-  let primaryStory = normalizePrimaryStoryProposalFromSource(
-    primaryFromModel ?? buildPrimaryStoryProposalFromSource(sourceText),
-    sourceText,
-  );
+  const storyProposals = normalizedProposals.filter((proposal) => isStoryProposal(proposal));
+  const supporting = normalizedProposals.filter((proposal) => !isStoryProposal(proposal));
+  const normalizedStories = (storyProposals.length > 0 ? storyProposals : [buildFallbackStoryProposalFromSource(sourceText)])
+    .map((proposal) => normalizeStoryProposalFromSource(proposal, sourceText));
+
   if (hints.titleHint) {
     const titleHint = clampText(hints.titleHint, 120);
-    primaryStory = {
-      ...primaryStory,
+    normalizedStories[0] = {
+      ...normalizedStories[0],
       label: titleHint,
-      attributeDetail: buildDetailTitle(titleHint) || primaryStory.attributeDetail,
+      attributeDetail: buildDetailTitle(titleHint) || normalizedStories[0].attributeDetail,
     };
   }
   if (hints.startDate || hints.endDate) {
-    primaryStory = {
-      ...primaryStory,
-      attributeDate: hints.startDate || primaryStory.attributeDate,
-      endDate: hints.endDate || primaryStory.endDate,
+    normalizedStories[0] = {
+      ...normalizedStories[0],
+      attributeDate: hints.startDate || normalizedStories[0].attributeDate,
+      endDate: hints.endDate || normalizedStories[0].endDate,
     };
   }
-  const supporting = normalizedProposals.filter((proposal) => !isPrimaryStoryProposal(proposal));
-  const proposals = dedupeProposals([primaryStory, ...supporting]).slice(0, MAX_STORY_IMPORT_PROPOSALS);
+  const proposals = dedupeProposals([...normalizedStories, ...supporting]).slice(0, MAX_STORY_IMPORT_PROPOSALS);
 
   return {
     proposals,

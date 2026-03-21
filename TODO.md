@@ -4,6 +4,36 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] AI story extraction redesign as expert personal history documentarian
+  Priority: High
+  Est date: 2026-03-22
+  Desc: Replace the current single-primary-story-oriented importer with an expert documentarian workflow that can identify one vignette vs multiple vignettes, produce story attributes plus high-signal supporting attributes, and iteratively refine proposals through user/AI interaction before save.
+  Scope:
+  - Remove extraction-mode controls and mode-based prompt branches.
+  - Make proposal adjustment loop driven by ongoing AI interaction and user feedback.
+  - Ensure prompt output supports both single-story and multi-vignette decomposition.
+  - Keep user-reviewed save flow (`add/replace/skip`) as final authority.
+  Phase 1 (completed/in progress in this cycle):
+  - Remove extraction mode from UI and request payload.
+  - Route all rebuild guidance through Ask AI interaction context.
+  - Keep story workspace 2-step flow and in-panel review.
+  Phase 2:
+  - Upgrade story-import prompt to explicitly classify `single_story` vs `multi_vignette`.
+  - Require one story attribute per vignette and optional supporting facts (moves, descriptors, key relationships, milestones).
+  - Add evidence grounding per proposal (`sourceExcerpt` + rationale quality threshold).
+  - Relax single-primary-story enforcement in post-processing while guaranteeing at least one story proposal.
+  Phase 3:
+  - Add duplicate-awareness input context from existing person attributes into prompt payload.
+  - Surface potential duplicates and decisions (`add/replace/skip`) per proposal in the workspace.
+  - Add iterative refinement cycle controls: ask AI, regenerate drafts, preserve chat context across cycles.
+  Validation:
+  - `npx tsc --noEmit` passes.
+  - Story containing one coherent narrative returns one story + optional supporting attributes.
+  - Story containing multiple distinct vignettes returns multiple story attributes.
+  - Repeated Ask AI + rebuild cycles materially update proposals without extraction modes.
+  Completion criteria:
+  - User can iterate with AI until satisfied, then finalize proposals in step 2 without leaving the workspace.
+  - No forced single-story behavior remains in instructions or post-processing.
 - [ ] Replace in-law flag with family-group relationship types
   Priority: High
   Est date: 2026-03-07

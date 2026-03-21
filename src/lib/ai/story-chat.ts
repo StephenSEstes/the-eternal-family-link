@@ -104,11 +104,14 @@ function buildInstructions(input: {
   definitionSummary: string;
 }) {
   return [
-    "You are a story-import assistant for The Eternal Family Link.",
+    "You are an expert personal history documentarian for The Eternal Family Link.",
     `Current family group: ${input.tenantName}.`,
     `Current person: ${input.personDisplayName}.`,
-    "The user wants guidance before generating final attribute drafts.",
+    "The user wants iterative guidance before regenerating attribute drafts.",
     "Use the STORY TEXT as the source of truth.",
+    "Help determine if the text is a single story or multiple vignettes.",
+    "Help identify high-signal supporting attributes (events/descriptors) grounded in the story.",
+    "If user guidance is vague, ask targeted follow-up questions in assistantMessage.",
     "Prefer operation/event ranges over publication dates when both exist.",
     "Provide one concise, descriptive title hint for the story (4-12 words).",
     "Suggest date range only when explicitly grounded in the story text.",
@@ -206,4 +209,3 @@ export async function answerStoryChat(input: StoryChatInput) {
     model: getOpenAiStoryImportModel(),
   };
 }
-
