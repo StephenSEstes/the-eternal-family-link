@@ -5041,3 +5041,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Prompt field appears directly below `Generate Drafts` and is read-only.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-21 (person-centered story extraction prompt tightening)
+
+- `Change`: Updated the AI story-import prompt rules to enforce person-centered extraction, tighter story-scope control, stricter supporting-fact filtering, an explicit relevance test, and prioritization toward the subject's lived environment and formative context.
+- `Type`: AI Prompt Quality, Extraction Precision
+- `Why`: Root cause was over-extraction of side facts and insufficient subject-centering, which produced too many fragmented or context-only proposals that were not core to the current person's life narrative.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - Prompt text now includes `PERSON-CENTERED EXTRACTION RULES`, `STORY SCOPE CONTROL`, `RELEVANCE TEST`, and `PRIORITIZATION RULE`.
+  - Existing JSON response schema and allowed category/type constraints remain unchanged.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

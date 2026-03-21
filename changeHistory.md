@@ -166,6 +166,7 @@ This file is a quick release-log entry point.
 - 2026-03-20: Fixed AI Story Chat no-answer failures and improved multi-vignette story splitting guidance (including safer proposal dedupe so distinct stories are less likely to merge). See `docs/change-summary.md`.
 - 2026-03-20: Improved preview-media performance by routing avatar/list images to preview variants, optimized OCI media resolver lookup-by-file-id (no full-table scan), and reduced first-story bias in AI story post-processing for multi-vignette imports. See `docs/change-summary.md`.
 - 2026-03-21: Added Story Workspace visibility for the exact prompt sent to AI directly below Generate Drafts to support prompt diagnosis and refinement. See `docs/change-summary.md`.
+- 2026-03-21: Tightened AI story-import prompt to be person-centered with stricter scope/relevance filtering so extraction yields fewer, richer, subject-focused proposals. See `docs/change-summary.md`.
 - 2026-03-14: Added parent-based family-group access inheritance for new user creation and new-family provisioning while keeping `UserFamilyGroups` as the persisted access model. See `docs/change-summary.md`.
 - 2026-03-16: De-emphasized Google in the invite flow, made local the default path when available, and moved Manage User save/password feedback into the active modal. See `docs/change-summary.md`.
 - 2026-03-13: Added death as a canonical person event with `To Date` sync in person edit, `In Mem` birthday chips, calendar death anniversaries, and tree lifespan display. See `docs/change-summary.md`.
