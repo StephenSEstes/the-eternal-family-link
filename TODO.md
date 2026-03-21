@@ -34,6 +34,33 @@ I will update this list as we add, complete, or remove work.
   Completion criteria:
   - User can iterate with AI until satisfied, then finalize proposals in step 2 without leaving the workspace.
   - No forced single-story behavior remains in instructions or post-processing.
+- [ ] Migrate existing media assets to OCI Object Storage with generated thumbnails
+  Priority: High
+  Est date: 2026-03-23
+  Desc: Backfill all existing media files to OCI Object Storage by uploading full originals and generating thumbnail variants for images during migration, then persist OCI object pointers/metadata on media assets without breaking existing file associations.
+  Scope:
+  - Add migration tooling with dry-run + apply modes.
+  - Read legacy media bytes from current storage and upload originals to OCI bucket.
+  - Generate/store thumbnail objects for image media in OCI.
+  - Update `MediaAssets` metadata to include OCI original/thumbnail object keys and mark provider state for migrated assets.
+  - Keep migration idempotent and resumable across reruns.
+  Phase 1:
+  - Build script scaffolding and safety flags (`--apply`, `--limit`, optional tenant filtering).
+  - Add environment and auth validation for DB, Drive source access, and OCI bucket access.
+  Phase 2:
+  - Implement per-asset migration pipeline (read source, upload original, create/upload thumbnail, update metadata).
+  - Add robust per-item error capture and continue behavior.
+  - Add summary reporting (processed, migrated, skipped, failed, thumbnails created).
+  Phase 3:
+  - Verify parity counts and sample retrieval after migration.
+  - Add follow-up task for runtime cutover to serve OCI object storage content directly.
+  Validation:
+  - Dry-run reports candidate count and planned actions without DB writes.
+  - Apply run uploads originals + thumbnails and updates metadata pointers.
+  - Rerun does not duplicate work for already migrated assets.
+  Completion criteria:
+  - Existing media library items have OCI object metadata for original and thumbnail where applicable.
+  - Migration can be resumed safely after interruption.
 - [ ] Replace in-law flag with family-group relationship types
   Priority: High
   Est date: 2026-03-07

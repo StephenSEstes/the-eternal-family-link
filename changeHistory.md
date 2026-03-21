@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-20: Added OCI object-media migration tooling and TODO execution plan to backfill existing media as OCI originals plus generated thumbnails (`media:oci:migrate:dryrun` / `media:oci:migrate:apply`). See `docs/change-summary.md`.
 - 2026-03-20: AI story extraction now follows an expert-documentarian workflow (single-story vs multi-vignette support), extraction modes were removed, and draft regeneration now follows iterative AI/user guidance. Also added the AGENTS rule requiring agreed multi-step plans to be captured in `TODO.md` before implementation. See `docs/change-summary.md`.
 - 2026-03-20: Attribute definitions now support `No Date`, `Date`, and `Range` modes across admin/editor/runtime, and Story Workspace Step 1 guidance is consolidated into a single `Ask AI` input + response area. See `docs/change-summary.md`.
 - 2026-03-20: Story workspace now uses a guided right-side Step 1/Step 2 flow (identify/consolidate + draft-entry/save), moves `Close` to the bottom action area, and strips `Top-level ...` metadata from default story text seed. See `docs/change-summary.md`.

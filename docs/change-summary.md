@@ -4928,3 +4928,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npx tsc --noEmit` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (oci media migration tooling + todo execution plan)
+
+- `Change`: Added a detailed TODO execution plan for migrating existing media to OCI Object Storage with thumbnail generation, and added a new migration script plus npm commands for dry-run/apply execution.
+- `Type`: Infra Tooling, Process
+- `Why`: Existing uploads can generate thumbnails, but legacy files were not migrated to OCI originals + thumbnails. A controlled migration tool is needed to backfill safely and idempotently.
+- `Files`:
+  - `TODO.md`
+  - `package.json`
+  - `scripts/oci-object-media-migrate.cjs`
+- `Data Changes`: No direct schema change. Script updates `MediaAssets` metadata and storage provider during apply runs.
+- `Verify`:
+  - `npm run media:oci:migrate:dryrun` executes and reports scan summary without DB writes.
+  - `npm run media:oci:migrate:apply` is available for controlled migration execution.
+  - Script supports `--limit` and optional `--tenant` filtering.
+- `Rollback Notes`: Revert commit; no runtime path cutover is included in this change.
+- `Design Decision Change`: No design decision change.

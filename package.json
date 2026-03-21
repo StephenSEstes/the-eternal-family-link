@@ -10,8 +10,10 @@
     "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts",
     "test:media": "node --experimental-strip-types --test src/lib/media/upload.test.ts",
     "db:preflight": "node scripts/oci-db-preflight.cjs",
-    "media:migrate:backfill": "node oci-media-backfill.cjs",
-    "media:migrate:parity": "node oci-media-parity.cjs",
+    "media:migrate:backfill": "node scripts/oci-media-backfill.cjs",
+    "media:migrate:parity": "node scripts/oci-media-parity.cjs",
+    "media:oci:migrate:dryrun": "node scripts/oci-object-media-migrate.cjs",
+    "media:oci:migrate:apply": "node scripts/oci-object-media-migrate.cjs --apply",
     "attributes:reset-schema": "node scripts/reset-attributes-schema.cjs"
   },
   "dependencies": {
