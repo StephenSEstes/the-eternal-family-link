@@ -1096,14 +1096,21 @@ export function PersonEditModal({
       return;
     }
 
-    setStoryImportStatus("");
+    setStoryImportDrafts(proposals);
+    setStoryImportDraftIndex(0);
+    setStoryImportStatus(`AI prepared ${proposals.length} potential attributes/stories below. Review them here, then open draft review when ready.`);
+  };
+
+  const openStoryDraftReview = () => {
+    if (storyImportDrafts.length === 0) {
+      setStoryImportStatus("Generate drafts first.");
+      return;
+    }
     setShowStoryImportModal(false);
     setSelectedAboutAttributeId("");
     setAttributeLaunchSource("stories");
-    setStoryImportDrafts(proposals);
-    setStoryImportDraftIndex(0);
     setShowAttributeAddModal(true);
-    setStatus(`AI prepared ${proposals.length} attribute drafts. Review and save them one at a time.`);
+    setStatus(`AI prepared ${storyImportDrafts.length} attribute drafts. Review and save them one at a time.`);
   };
 
   const requestStoryChatSuggestion = async () => {
@@ -3430,7 +3437,7 @@ export function PersonEditModal({
                   <div className="story-workspace-controls">
                     <div>
                       <label className="label" style={{ marginBottom: "0.35rem" }}>Extraction Mode</label>
-                      <div className="settings-chip-list">
+                      <div className="settings-chip-list story-mode-row">
                         <button
                           type="button"
                           className={`tab-pill ${storyExtractionMode === "story" ? "active" : ""}`}
@@ -3466,6 +3473,39 @@ export function PersonEditModal({
                       {storyImportBusy ? "Generating..." : "Generate Drafts"}
                     </button>
                   </div>
+                  {storyImportDrafts.length > 0 ? (
+                    <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
+                      <div className="story-workspace-section-head">
+                        <h5 style={{ margin: 0 }}>Potential Attributes / Stories</h5>
+                        <span className="status-chip status-chip--neutral">{storyImportDrafts.length}</span>
+                      </div>
+                      <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.5rem", maxHeight: "280px", overflowY: "auto" }}>
+                        {storyImportDrafts.map((proposal, index) => (
+                          <div key={proposal.proposalId || `draft-${index}`} style={{ border: "1px solid #E7EAF0", borderRadius: "0.6rem", padding: "0.55rem" }}>
+                            <p style={{ margin: 0, fontWeight: 700 }}>
+                              {index + 1}. {proposal.attributeDetail || proposal.label || "(no title)"}
+                            </p>
+                            <p className="page-subtitle" style={{ margin: "0.2rem 0 0" }}>
+                              {proposal.attributeKind} / {proposal.attributeType}{proposal.attributeTypeCategory ? ` / ${proposal.attributeTypeCategory}` : ""}
+                            </p>
+                            <p className="page-subtitle" style={{ margin: "0.2rem 0 0" }}>
+                              Date: {proposal.attributeDate || "-"}{proposal.endDate ? ` to ${proposal.endDate}` : ""}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="settings-chip-list" style={{ marginTop: "0.6rem" }}>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={openStoryDraftReview}
+                          disabled={storyImportBusy || storyChatBusy}
+                        >
+                          Open Draft Review
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="story-workspace-side">
               <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>

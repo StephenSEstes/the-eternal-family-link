@@ -3159,7 +3159,7 @@ main,
 
 .story-workspace-panel {
   width: min(1500px, 98vw);
-  max-height: 94vh;
+  max-height: 97vh;
   overflow: auto;
   background: #fff;
   border: 1px solid #d8e1eb;
@@ -3206,6 +3206,11 @@ main,
   align-items: end;
   justify-content: space-between;
   gap: 0.65rem;
+}
+
+.story-mode-row {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
 }
 
 @media (max-width: 950px) {

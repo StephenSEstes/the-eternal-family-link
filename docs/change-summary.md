@@ -175,6 +175,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert `PersonEditModal` story modal structure and the new `.story-workspace-*` styles in `globals.css`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-20 (story workspace layout refinements: one-row mode + inline proposal preview)
+
+- `Date`: 2026-03-20
+- `Change`: Refined the Story Workspace so extraction mode chips stay on one row, increased workspace height, and added inline “Potential Attributes / Stories” preview cards in the same screen after generation.
+- `Type`: UI
+- `Why`: Root cause was a `workflow/UX issue`. The extraction-mode selector wrapped inconsistently and generated proposals immediately left the workspace, making it hard to evaluate results in-context.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - Extraction mode chips (`Story`, `Balanced`, `Resume`) remain on one row in desktop workspace.
+  - Story workspace panel opens taller and shows more content without early scrolling.
+  - After `Generate Drafts`, proposal cards render in the same screen under “Potential Attributes / Stories”.
+  - `Open Draft Review` moves from workspace preview into existing per-draft add/edit flow.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert the proposal-preview section and `openStoryDraftReview` behavior in `PersonEditModal`, plus `.story-mode-row` and panel-height changes in `globals.css`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19
