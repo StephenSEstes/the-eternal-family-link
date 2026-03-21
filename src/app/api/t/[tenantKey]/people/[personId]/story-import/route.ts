@@ -72,6 +72,7 @@ export async function POST(
       tenantKey: resolved.tenant.tenantKey,
       personId,
       model: result.model,
+      prompt: result.promptDebug,
       proposals: result.proposals,
     });
   } catch (error) {

@@ -5025,3 +5025,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Multi-vignette story imports preserve proposal-specific titles/details more reliably and avoid first-story-only hint overrides when multiple stories are present.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-21 (story workspace exact prompt visibility)
+
+- `Change`: Added a read-only "Exact Prompt Sent To AI" field directly under the Story Workspace `Generate Drafts` action so users can inspect the full instructions and input payload used for each story-import request.
+- `Type`: UX Transparency, AI Debuggability
+- `Why`: Root cause was opaque AI behavior during extraction tuning. Users could not verify the exact prompt being sent, making prompt-quality diagnosis and iterative refinement difficult.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-import/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - Story Workspace shows full prompt text after `Generate Drafts` runs.
+  - Prompt field appears directly below `Generate Drafts` and is read-only.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

@@ -764,6 +764,7 @@ export function PersonEditModal({
   const [storyImportText, setStoryImportText] = useState("");
   const [storyImportBusy, setStoryImportBusy] = useState(false);
   const [storyImportStatus, setStoryImportStatus] = useState("");
+  const [storyImportPromptPreview, setStoryImportPromptPreview] = useState("");
   const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
   const [storyWorkspaceStep, setStoryWorkspaceStep] = useState<StoryWorkspaceStep>(1);
@@ -1167,6 +1168,7 @@ export function PersonEditModal({
   const openStoryImportModal = () => {
     setStoryImportText(stripStorySeedPrefix(notes.trim() || person?.notes || ""));
     setStoryImportStatus("");
+    setStoryImportPromptPreview("");
     clearStoryChatState();
     setShowStoryImportModal(true);
   };
@@ -1214,6 +1216,7 @@ export function PersonEditModal({
       },
     );
     const body = await res.json().catch(() => null);
+    setStoryImportPromptPreview(String(body?.prompt ?? "").trim());
     if (!res.ok) {
       setStoryImportBusy(false);
       setStoryImportStatus(String(body?.message || body?.error || `Story import failed (${res.status}).`).slice(0, 220));
@@ -3650,6 +3653,16 @@ export function PersonEditModal({
                     >
                       {storyImportBusy ? "Generating..." : "Generate Drafts"}
                     </button>
+                  </div>
+                  <div style={{ marginTop: "0.65rem" }}>
+                    <label className="label">Exact Prompt Sent To AI</label>
+                    <textarea
+                      className="textarea"
+                      value={storyImportPromptPreview}
+                      readOnly
+                      placeholder="Generate Drafts to view the full prompt sent to AI."
+                      style={{ minHeight: "11rem", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                    />
                   </div>
                   {storyImportDrafts.length > 0 ? (
                     <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>

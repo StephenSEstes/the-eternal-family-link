@@ -31,6 +31,13 @@ type AllowedDefinitionMap = {
   summary: string;
 };
 
+type StoryImportPromptDebugInput = {
+  model: string;
+  instructions: string;
+  sourceText: string;
+  maxOutputTokens: number;
+};
+
 const MAX_STORY_IMPORT_PROPOSALS = 10;
 const STORY_DETAIL_MAX_CHARS = 180;
 const MONTH_INDEX: Record<string, number> = {
@@ -543,6 +550,21 @@ function dedupeProposals(proposals: AiStoryImportProposal[]) {
   return output;
 }
 
+function buildStoryImportPromptDebug(input: StoryImportPromptDebugInput) {
+  return [
+    `model: ${input.model}`,
+    `max_output_tokens: ${String(input.maxOutputTokens)}`,
+    "",
+    "instructions:",
+    input.instructions,
+    "",
+    "input[0].role: user",
+    "input[0].content[0].type: input_text",
+    "input[0].content[0].text:",
+    input.sourceText,
+  ].join("\n");
+}
+
 export async function generateStoryImportProposals(input: StoryImportInput) {
   if (!isOpenAiConfigured()) {
     throw new Error("AI story import is not configured.");
@@ -556,15 +578,17 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
   const definitions = await getAttributeEventDefinitions(input.tenantKey);
   const allowed = buildAllowedDefinitionsSummary(definitions);
   const hints = sanitizeStoryImportHints(input.hints);
+  const model = getOpenAiStoryImportModel();
+  const instructions = buildInstructions({
+    tenantName: input.tenantName,
+    personDisplayName: input.personDisplayName,
+    definitionSummary: allowed.summary,
+    hints,
+  });
   const client = getOpenAiClient();
   const response = await client.responses.create({
-    model: getOpenAiStoryImportModel(),
-    instructions: buildInstructions({
-      tenantName: input.tenantName,
-      personDisplayName: input.personDisplayName,
-      definitionSummary: allowed.summary,
-      hints,
-    }),
+    model,
+    instructions,
     input: [
       {
         role: "user",
@@ -624,6 +648,12 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
 
   return {
     proposals,
-    model: getOpenAiStoryImportModel(),
+    model,
+    promptDebug: buildStoryImportPromptDebug({
+      model,
+      instructions,
+      sourceText,
+      maxOutputTokens: 3200,
+    }),
   };
 }
