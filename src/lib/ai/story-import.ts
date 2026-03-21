@@ -272,14 +272,14 @@ function extractDateFromStoryText(value: string) {
   return "";
 }
 
-function buildPrimaryStoryNotes(sourceText: string, existingNotes: string) {
+function buildPrimaryStoryNotes(sourceText: string, existingNotes: string, includeSourceNarrative = true) {
   const normalizedSource = normalizeWhitespace(sourceText);
   const normalizedExisting = normalizeWhitespace(existingNotes);
   const pieces: string[] = [];
   if (normalizedExisting) {
     pieces.push(normalizedExisting);
   }
-  if (normalizedSource) {
+  if (includeSourceNarrative && normalizedSource) {
     const alreadyContainsSource =
       normalizedExisting.length > 0 &&
       normalizedSource.length > 0 &&
@@ -291,27 +291,37 @@ function buildPrimaryStoryNotes(sourceText: string, existingNotes: string) {
   return clampText(pieces.join("\n\n").trim(), 4000);
 }
 
-function normalizeStoryProposalFromSource(proposal: AiStoryImportProposal, sourceText: string): AiStoryImportProposal {
+function normalizeStoryProposalFromSource(
+  proposal: AiStoryImportProposal,
+  sourceText: string,
+  options?: { multiStoryMode?: boolean },
+): AiStoryImportProposal {
   const normalizedSource = normalizeWhitespace(sourceText);
-  const detailSource = proposal.attributeDetail || proposal.label || normalizedSource;
+  const normalizedExcerpt = normalizeWhitespace(proposal.sourceExcerpt || "");
+  const storyScopeText = options?.multiStoryMode ? (normalizedExcerpt || proposal.attributeDetail || proposal.label || normalizedSource) : normalizedSource;
+  const detailSource = proposal.attributeDetail || proposal.label || storyScopeText;
   const preferredSourceTitle = deriveStoryTitleFromSource(normalizedSource);
   const aiLabel = clampText(proposal.label || "", 120);
   const label = isWeakStoryLabel(aiLabel)
-    ? (preferredSourceTitle || buildStoryLabel(proposal.attributeDetail || normalizedSource))
+    ? (
+      options?.multiStoryMode
+        ? buildStoryLabel(proposal.attributeDetail || normalizedExcerpt || normalizedSource)
+        : (preferredSourceTitle || buildStoryLabel(proposal.attributeDetail || normalizedSource))
+    )
     : aiLabel;
   const aiDetail = buildDetailTitle(proposal.attributeDetail || "");
   const labelAsDetail = buildDetailTitle(label);
   const sourceAsDetail = titleFromClauseStart(detailSource);
-  const preferredAsDetail = buildDetailTitle(preferredSourceTitle || "");
+  const preferredAsDetail = buildDetailTitle(options?.multiStoryMode ? "" : (preferredSourceTitle || ""));
   const detail =
     (aiDetail && !looksSentenceLikeTitle(aiDetail) ? aiDetail : "") ||
     (labelAsDetail && !looksSentenceLikeTitle(labelAsDetail) ? labelAsDetail : "") ||
     (preferredAsDetail && !looksSentenceLikeTitle(preferredAsDetail) ? preferredAsDetail : "") ||
     sourceAsDetail ||
     buildConciseStoryDetail(detailSource);
-  const inferredRange = extractStoryDateRangeFromText(normalizedSource);
+  const inferredRange = extractStoryDateRangeFromText(storyScopeText);
   const attributeDate = clampText(
-    (inferredRange?.startDate || proposal.attributeDate.trim() || extractDateFromStoryText(normalizedSource)),
+    (inferredRange?.startDate || proposal.attributeDate.trim() || extractDateFromStoryText(storyScopeText)),
     32,
   );
   const endDate = clampText(
@@ -322,10 +332,14 @@ function normalizeStoryProposalFromSource(proposal: AiStoryImportProposal, sourc
     ...proposal,
     label,
     attributeDetail: detail,
-    attributeNotes: buildPrimaryStoryNotes(normalizedSource, proposal.attributeNotes || proposal.sourceExcerpt || ""),
+    attributeNotes: buildPrimaryStoryNotes(
+      options?.multiStoryMode ? storyScopeText : normalizedSource,
+      proposal.attributeNotes || proposal.sourceExcerpt || "",
+      !options?.multiStoryMode,
+    ),
     attributeDate,
     endDate,
-    sourceExcerpt: clampText(normalizedSource, 1000),
+    sourceExcerpt: clampText(normalizedExcerpt || storyScopeText, 1000),
     rationale: clampText(proposal.rationale || "Primary narrative story captured from the original text.", 500),
   };
 }
@@ -421,6 +435,8 @@ function buildInstructions(input: {
     "First decide whether the text is one story or multiple distinct vignettes.",
     "If one story, output one story proposal.",
     "If multiple vignettes, output one story proposal per vignette.",
+    "Do not force a single combined story when there are distinct arcs with different themes, settings, or time periods.",
+    "If narrative includes both a hardship period (for example depression era context) and a separate place/home narrative, split into at least two story proposals.",
     "Each story proposal must be: attributeKind=event, attributeType=life_event, attributeTypeCategory=story.",
     "Do NOT split a single vignette into sentence-level proposals.",
     "Also extract supporting proposals for high-signal reusable facts when explicitly grounded in the text.",
@@ -517,6 +533,7 @@ function dedupeProposals(proposals: AiStoryImportProposal[]) {
       normalizeAttributeTypeKey(proposal.attributeTypeCategory),
       proposal.attributeDate.trim(),
       proposal.endDate.trim(),
+      proposal.label.trim().toLowerCase(),
       proposal.attributeDetail.trim().toLowerCase(),
     ].join("|");
     if (seen.has(key)) continue;
@@ -584,10 +601,11 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
 
   const storyProposals = normalizedProposals.filter((proposal) => isStoryProposal(proposal));
   const supporting = normalizedProposals.filter((proposal) => !isStoryProposal(proposal));
+  const hasMultipleStories = storyProposals.length > 1;
   const normalizedStories = (storyProposals.length > 0 ? storyProposals : [buildFallbackStoryProposalFromSource(sourceText)])
-    .map((proposal) => normalizeStoryProposalFromSource(proposal, sourceText));
+    .map((proposal) => normalizeStoryProposalFromSource(proposal, sourceText, { multiStoryMode: hasMultipleStories }));
 
-  if (hints.titleHint) {
+  if (hints.titleHint && normalizedStories.length === 1) {
     const titleHint = clampText(hints.titleHint, 120);
     normalizedStories[0] = {
       ...normalizedStories[0],
@@ -595,7 +613,7 @@ export async function generateStoryImportProposals(input: StoryImportInput) {
       attributeDetail: buildDetailTitle(titleHint) || normalizedStories[0].attributeDetail,
     };
   }
-  if (hints.startDate || hints.endDate) {
+  if ((hints.startDate || hints.endDate) && normalizedStories.length === 1) {
     normalizedStories[0] = {
       ...normalizedStories[0],
       attributeDate: hints.startDate || normalizedStories[0].attributeDate,

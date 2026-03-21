@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { AddPersonCard } from "@/components/AddPersonCard";
 import { HouseholdEditModal } from "@/components/HouseholdEditModal";
 import { PersonEditModal } from "@/components/PersonEditModal";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoAvatarProxyPath } from "@/lib/google/photo-path";
 
 type PersonItem = {
   personId: string;
@@ -226,7 +226,7 @@ export function PeopleDirectory({
                       >
                         <div className="person-photo-wrap">
                           <img
-                            src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
+                            src={photoFileId ? getPhotoAvatarProxyPath(photoFileId, tenantKey) : fallbackAvatar}
                             alt={person.displayName}
                             className="person-photo"
                           />
@@ -273,7 +273,7 @@ export function PeopleDirectory({
               >
                 <div className="person-photo-wrap">
                   <img
-                    src={photoFileId ? getPhotoProxyPath(photoFileId, tenantKey) : fallbackAvatar}
+                    src={photoFileId ? getPhotoAvatarProxyPath(photoFileId, tenantKey) : fallbackAvatar}
                     alt={person.displayName}
                     className="person-photo"
                   />

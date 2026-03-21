@@ -67,6 +67,35 @@ function clampText(value: string, max: number) {
   return trimmed.slice(0, max).trim();
 }
 
+function extractResponseText(response: unknown) {
+  const direct = String((response as { output_text?: string } | null)?.output_text ?? "").trim();
+  if (direct) {
+    return direct;
+  }
+  const output = (response as { output?: Array<{ content?: Array<Record<string, unknown>> }> } | null)?.output ?? [];
+  const parts: string[] = [];
+  for (const item of output) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const chunk of content) {
+      const type = String(chunk?.type ?? "").trim().toLowerCase();
+      if (type === "output_text" || type === "text") {
+        const text = String(chunk?.text ?? "").trim();
+        if (text) {
+          parts.push(text);
+          continue;
+        }
+      }
+      if (type === "refusal") {
+        const refusal = String(chunk?.refusal ?? "").trim();
+        if (refusal) {
+          parts.push(refusal);
+        }
+      }
+    }
+  }
+  return parts.join("\n").trim();
+}
+
 function buildAllowedDefinitionsSummary(definitions: Awaited<ReturnType<typeof getAttributeEventDefinitions>>): AllowedDefinitionMap {
   const enabledCategories = definitions.categories.filter((item) => item.isEnabled);
   const enabledTypes = definitions.types.filter((item) => item.isEnabled);
@@ -110,6 +139,7 @@ function buildInstructions(input: {
     "The user wants iterative guidance before regenerating attribute drafts.",
     "Use the STORY TEXT as the source of truth.",
     "Help determine if the text is a single story or multiple vignettes.",
+    "If the user asks why two stories are not split, answer directly and state which two candidate stories should be separate.",
     "Help identify high-signal supporting attributes (events/descriptors) grounded in the story.",
     "If user guidance is vague, ask targeted follow-up questions in assistantMessage.",
     "Prefer operation/event ranges over publication dates when both exist.",
@@ -161,6 +191,10 @@ export async function answerStoryChat(input: StoryChatInput) {
 
   const definitions = await getAttributeEventDefinitions(input.tenantKey);
   const allowed = buildAllowedDefinitionsSummary(definitions);
+  const transcript = input.messages
+    .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.content.trim()}`)
+    .filter((line) => line.length > 0)
+    .join("\n");
   const client = getOpenAiClient();
   const response = await client.responses.create({
     model: getOpenAiStoryImportModel(),
@@ -170,14 +204,21 @@ export async function answerStoryChat(input: StoryChatInput) {
       storyText,
       definitionSummary: allowed.summary,
     }),
-    input: input.messages.map((message) => ({
-      role: message.role,
-      content: [{ type: "input_text", text: message.content.trim() }],
-    })),
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: transcript,
+          },
+        ],
+      },
+    ],
     max_output_tokens: 900,
   });
 
-  const outputText = stripMarkdownFence(response.output_text ?? "");
+  const outputText = stripMarkdownFence(extractResponseText(response));
   if (!outputText) {
     throw new Error("AI story chat returned no answer.");
   }

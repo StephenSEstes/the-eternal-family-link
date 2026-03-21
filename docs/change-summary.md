@@ -4986,3 +4986,42 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Full-size views still resolve to original object content.
 - `Rollback Notes`: Revert commit to restore previous upload/write and resolver behavior.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (ai story chat empty-answer fix + stronger multi-vignette split guidance)
+
+- `Change`: Fixed AI Story Chat no-answer failures by using resilient response text extraction across response shapes and by sending chat context as a normalized transcript input. Also strengthened story-import prompt guidance for multi-vignette splitting and adjusted proposal dedupe so distinct story titles are less likely to collapse into one proposal.
+- `Type`: Bugfix, AI Workflow
+- `Why`: Root cause was mixed API-shape fragility. Story chat depended only on `response.output_text` and could return empty despite valid model output in other response content shapes; additionally, story extraction could still under-split by prompt ambiguity and over-aggressive dedupe keys.
+- `Files`:
+  - `src/lib/ai/story-chat.ts`
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: No schema or data migration changes.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - Story chat requests return an answer even when model output is surfaced outside `output_text` convenience field.
+  - Multi-vignette prompts now explicitly request separate stories for distinct arcs (e.g., depression context vs home narrative).
+  - Story proposal dedupe now includes label, reducing accidental merge of distinct story proposals.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+## 2026-03-20 (preview-avatar routing + resolver query optimization + reduced first-story bias)
+
+- `Change`: Added avatar/list preview path helper and switched key people surfaces to request preview variants; replaced OCI media lookup full-table cache scans with direct lookup-by-file-id query + per-file TTL cache; reduced first-story bias in AI story post-processing for multi-vignette imports by using proposal-scoped normalization and only applying title/date hints automatically when a single story proposal exists.
+- `Type`: Performance, AI Workflow, Runtime Optimization
+- `Why`: Root causes were (1) multiple avatar/list paths still requesting original media payloads, (2) resolver cache rebuild scanning all `MediaAssets`, and (3) story normalization/hinting logic privileging first-story behavior even when multiple vignettes were returned.
+- `Files`:
+  - `src/lib/google/photo-path.ts`
+  - `src/components/home/BirthdaysSection.tsx`
+  - `src/components/PeopleDirectory.tsx`
+  - `src/components/ViewerPeopleGrid.tsx`
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/google/photo-resolver.ts`
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes.
+  - Avatar/list requests now call preview route variant in updated components.
+  - OCI object resolution no longer relies on periodic full-table media scans.
+  - Multi-vignette story imports preserve proposal-specific titles/details more reliably and avoid first-story-only hint overrides when multiple stories are present.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

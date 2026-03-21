@@ -3,20 +3,21 @@ import "server-only";
 import { getPhotoContent } from "@/lib/google/drive";
 import { getTableRecords, getTenantConfig } from "@/lib/data/runtime";
 import { getOciObjectContentByKey, isOciObjectStorageConfigured } from "@/lib/oci/object-storage";
+import { getOciMediaAssetByFileId } from "@/lib/oci/tables";
 
 type FolderCache = {
   expiresAt: number;
   folderIds: string[];
 };
-type ObjectKeyCache = {
+type ObjectKeyCacheEntry = {
   expiresAt: number;
-  byFileId: Map<string, { originalObjectKey: string; thumbnailObjectKey: string; mimeType: string }>;
+  value: { originalObjectKey: string; thumbnailObjectKey: string; mimeType: string } | null;
 };
 
 const FOLDER_CACHE_TTL_MS = 5 * 60 * 1000;
 const OBJECT_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 let folderCache: FolderCache | null = null;
-let objectKeyCache: ObjectKeyCache | null = null;
+const objectKeyCache = new Map<string, ObjectKeyCacheEntry>();
 
 function normalizeFolderId(value: string | undefined) {
   return String(value ?? "").trim();
@@ -79,28 +80,31 @@ async function getObjectKeyByFileId(fileId: string) {
   const normalizedFileId = String(fileId ?? "").trim();
   if (!normalizedFileId) return null;
   const now = Date.now();
-  if (!objectKeyCache || objectKeyCache.expiresAt <= now) {
-    const rows = await getTableRecords("MediaAssets").catch(() => []);
-    const byFileId = new Map<string, { originalObjectKey: string; thumbnailObjectKey: string; mimeType: string }>();
-    for (const row of rows) {
-      const fileIdKey = String(row.data.file_id ?? "").trim();
-      if (!fileIdKey) continue;
-      const storageProvider = String(row.data.storage_provider ?? "").trim().toLowerCase();
-      if (storageProvider !== "oci_object") continue;
-      const objectStorageMetadata = normalizeObjectStorageMetadata(String(row.data.media_metadata ?? ""));
-      if (!objectStorageMetadata.originalObjectKey) continue;
-      byFileId.set(fileIdKey, {
-        originalObjectKey: objectStorageMetadata.originalObjectKey,
-        thumbnailObjectKey: objectStorageMetadata.thumbnailObjectKey,
-        mimeType: String(row.data.mime_type ?? "").trim() || "application/octet-stream",
-      });
-    }
-    objectKeyCache = {
-      expiresAt: now + OBJECT_KEY_CACHE_TTL_MS,
-      byFileId,
-    };
+  const cacheEntry = objectKeyCache.get(normalizedFileId);
+  if (cacheEntry && cacheEntry.expiresAt > now) {
+    return cacheEntry.value;
   }
-  return objectKeyCache.byFileId.get(normalizedFileId) ?? null;
+  const asset = await getOciMediaAssetByFileId(normalizedFileId).catch(() => null);
+  const storageProvider = String(asset?.storageProvider ?? "").trim().toLowerCase();
+  const resolvedValue =
+    asset && storageProvider === "oci_object"
+      ? (() => {
+          const objectStorageMetadata = normalizeObjectStorageMetadata(String(asset.mediaMetadata ?? ""));
+          if (!objectStorageMetadata.originalObjectKey) {
+            return null;
+          }
+          return {
+            originalObjectKey: objectStorageMetadata.originalObjectKey,
+            thumbnailObjectKey: objectStorageMetadata.thumbnailObjectKey,
+            mimeType: String(asset.mimeType ?? "").trim() || "application/octet-stream",
+          };
+        })()
+      : null;
+  objectKeyCache.set(normalizedFileId, {
+    expiresAt: now + OBJECT_KEY_CACHE_TTL_MS,
+    value: resolvedValue,
+  });
+  return resolvedValue;
 }
 
 export async function resolvePhotoContentAcrossFamilies(

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoAvatarProxyPath } from "@/lib/google/photo-path";
 
 type BirthdayRange = "today" | "week" | "month";
 
@@ -107,7 +107,7 @@ function buildPersonHref(basePath: string, personId: string, returnToPath: strin
 
 function getAvatarUrl(person: BirthdayPerson, tenantKey: string) {
   if (person.photoFileId?.trim()) {
-    return getPhotoProxyPath(person.photoFileId.trim(), tenantKey);
+    return getPhotoAvatarProxyPath(person.photoFileId.trim(), tenantKey);
   }
   return person.gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }

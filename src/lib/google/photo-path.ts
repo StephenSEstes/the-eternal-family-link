@@ -31,3 +31,8 @@ export function getPhotoPreviewProxyPath(fileId: string, rawMetadata?: string, t
   }
   return basePath;
 }
+
+export function getPhotoAvatarProxyPath(fileId: string, tenantKey?: string) {
+  const basePath = getPhotoProxyPath(fileId, tenantKey);
+  return `${basePath}${basePath.includes("?") ? "&" : "?"}variant=preview`;
+}

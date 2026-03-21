@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PersonRecord } from "@/lib/google/types";
-import { getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoAvatarProxyPath } from "@/lib/google/photo-path";
 
 type ViewerPeopleGridProps = {
   people: PersonRecord[];
@@ -40,7 +40,7 @@ export function ViewerPeopleGrid({ people, tenantKey }: ViewerPeopleGridProps) {
             <img
               src={
                 person.photoFileId
-                  ? getPhotoProxyPath(person.photoFileId, tenantKey)
+                  ? getPhotoAvatarProxyPath(person.photoFileId, tenantKey)
                   : person.gender === "female"
                     ? "/placeholders/avatar-female.png"
                     : "/placeholders/avatar-male.png"

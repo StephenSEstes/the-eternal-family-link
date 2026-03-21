@@ -1039,6 +1039,13 @@ export type OciMediaLinkRow = {
   createdAt: string;
 };
 
+export type OciMediaAssetLookup = {
+  fileId: string;
+  storageProvider: string;
+  mimeType: string;
+  mediaMetadata: string;
+};
+
 export type OciPersonMediaAttributeRow = {
   attributeId: string;
   entityType: string;
@@ -2120,6 +2127,41 @@ export async function getOciMediaLinksForFile(input: {
        AND TRIM(a.file_id) = :fileId`,
     { familyGroupKey, fileId },
   );
+}
+
+export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMediaAssetLookup | null> {
+  const normalizedFileId = fileId.trim();
+  if (!normalizedFileId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT
+         a.file_id,
+         a.storage_provider,
+         a.mime_type,
+         a.media_metadata
+       FROM media_assets a
+       WHERE TRIM(a.file_id) = :fileId
+       ORDER BY CASE
+         WHEN LOWER(TRIM(NVL(a.storage_provider, ''))) = 'oci_object' THEN 0
+         ELSE 1
+       END
+       FETCH FIRST 1 ROWS ONLY`,
+      { fileId: normalizedFileId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows ?? [])[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      fileId: fromDbValue(row.FILE_ID),
+      storageProvider: fromDbValue(row.STORAGE_PROVIDER),
+      mimeType: fromDbValue(row.MIME_TYPE),
+      mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+    };
+  });
 }
 
 export async function getOciPersonMediaAttributeRowsForTenant(

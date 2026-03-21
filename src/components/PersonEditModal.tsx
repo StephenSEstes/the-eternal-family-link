@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
+import { getPhotoAvatarProxyPath, getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import {
   AsyncActionButton,
   ModalActionBar,
@@ -1121,7 +1121,7 @@ export function PersonEditModal({
   const fallbackAvatar = (person?.gender ?? "unspecified") === "female"
     ? "/placeholders/avatar-female.png"
     : "/placeholders/avatar-male.png";
-  const headerAvatar = person?.photoFileId ? getPhotoProxyPath(person.photoFileId, activeTenantKey) : fallbackAvatar;
+  const headerAvatar = person?.photoFileId ? getPhotoAvatarProxyPath(person.photoFileId, activeTenantKey) : fallbackAvatar;
   const allMediaAttributes = attributes.filter((item) => {
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
