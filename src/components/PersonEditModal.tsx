@@ -113,6 +113,13 @@ type StoryImportHints = {
   attributeTypeCategory: string;
 };
 type StoryExtractionMode = "story" | "balanced" | "resume";
+type StoryWorkspaceStep = 1 | 2;
+type StoryWorkspaceDraft = AiStoryImportProposal & {
+  localId: string;
+  selected: boolean;
+  saveBusy: boolean;
+  saveStatus: string;
+};
 
 type Props = {
   open: boolean;
@@ -167,6 +174,17 @@ function firstNameFromDisplayName(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "Person";
   return trimmed.split(/\s+/)[0] || "Person";
+}
+
+function stripStorySeedPrefix(value: string) {
+  const normalized = value.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+  const lines = normalized.split("\n");
+  const first = lines[0]?.trim() ?? "";
+  if (/^top-level\b/i.test(first) && /\b(matriarch|patriarch|ancestor|founder)\b/i.test(first)) {
+    return lines.slice(1).join("\n").trim();
+  }
+  return normalized;
 }
 
 function buildSwitchedFamilyPath(currentPath: string, nextTenantKey: string) {
@@ -746,6 +764,11 @@ export function PersonEditModal({
   const [storyImportDrafts, setStoryImportDrafts] = useState<AiStoryImportProposal[]>([]);
   const [storyImportDraftIndex, setStoryImportDraftIndex] = useState(0);
   const [storyExtractionMode, setStoryExtractionMode] = useState<StoryExtractionMode>("balanced");
+  const [storyWorkspaceStep, setStoryWorkspaceStep] = useState<StoryWorkspaceStep>(1);
+  const [storyWorkspaceGuidance, setStoryWorkspaceGuidance] = useState("");
+  const [storyWorkspaceMissingFacts, setStoryWorkspaceMissingFacts] = useState("");
+  const [storyWorkspaceDrafts, setStoryWorkspaceDrafts] = useState<StoryWorkspaceDraft[]>([]);
+  const [storyWorkspaceDraftIndex, setStoryWorkspaceDraftIndex] = useState(0);
   const [storyImportHints, setStoryImportHints] = useState<StoryImportHints>({
     titleHint: "",
     startDate: "",
@@ -915,6 +938,10 @@ export function PersonEditModal({
     }
     return `Review AI Draft ${storyImportDraftIndex + 1} of ${storyImportDrafts.length}`;
   }, [attributeLaunchMeta.addTitle, currentStoryImportDraft, storyImportDraftIndex, storyImportDrafts.length]);
+  const currentWorkspaceDraft = useMemo(
+    () => storyWorkspaceDrafts[storyWorkspaceDraftIndex] ?? null,
+    [storyWorkspaceDraftIndex, storyWorkspaceDrafts],
+  );
 
   const resetProfileEditorState = (nextPerson: PersonItem, clearStatus = true) => {
     setDisplayName(nextPerson.displayName || "");
@@ -1027,6 +1054,8 @@ export function PersonEditModal({
   const clearStoryImportQueue = () => {
     setStoryImportDrafts([]);
     setStoryImportDraftIndex(0);
+    setStoryWorkspaceDrafts([]);
+    setStoryWorkspaceDraftIndex(0);
   };
 
   const clearStoryChatState = () => {
@@ -1043,10 +1072,13 @@ export function PersonEditModal({
       attributeTypeCategory: "",
     });
     setStoryExtractionMode("balanced");
+    setStoryWorkspaceStep(1);
+    setStoryWorkspaceGuidance("");
+    setStoryWorkspaceMissingFacts("");
   };
 
   const openStoryImportModal = () => {
-    setStoryImportText(notes.trim() || person?.notes || "");
+    setStoryImportText(stripStorySeedPrefix(notes.trim() || person?.notes || ""));
     setStoryImportStatus("");
     clearStoryChatState();
     setShowStoryImportModal(true);
@@ -1071,6 +1103,7 @@ export function PersonEditModal({
 
     setStoryImportBusy(true);
     setStoryImportStatus("Generating drafts...");
+    const guidanceText = [storyWorkspaceGuidance.trim(), storyWorkspaceMissingFacts.trim()].filter(Boolean).join("\n");
     const res = await fetch(
       `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/story-import`,
       {
@@ -1078,7 +1111,11 @@ export function PersonEditModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceText,
-          hints: storyImportHints,
+          hints: {
+            ...storyImportHints,
+            extractionMode: storyExtractionMode,
+            refinementPrompt: guidanceText,
+          },
         }),
       },
     );
@@ -1098,19 +1135,138 @@ export function PersonEditModal({
 
     setStoryImportDrafts(proposals);
     setStoryImportDraftIndex(0);
+    setStoryWorkspaceDrafts(
+      proposals.map((proposal, index) => ({
+        ...proposal,
+        localId: `${proposal.proposalId || "proposal"}-${index}`,
+        selected: true,
+        saveBusy: false,
+        saveStatus: "",
+      })),
+    );
+    setStoryWorkspaceDraftIndex(0);
     setStoryImportStatus(`AI prepared ${proposals.length} potential attributes/stories below. Review them here, then open draft review when ready.`);
   };
 
+  const updateStoryWorkspaceDraft = (localId: string, patch: Partial<StoryWorkspaceDraft>) => {
+    setStoryWorkspaceDrafts((current) =>
+      current.map((draft) => (draft.localId === localId ? { ...draft, ...patch } : draft)),
+    );
+  };
+
+  const consolidateSelectedWorkspaceDrafts = () => {
+    const selected = storyWorkspaceDrafts.filter((item) => item.selected);
+    if (selected.length < 2) {
+      setStoryImportStatus("Select at least two items to consolidate.");
+      return;
+    }
+    const first = selected[0];
+    const mergedNotes = selected
+      .map((item, index) => `Item ${index + 1}: ${item.attributeNotes || item.attributeDetail || item.label || ""}`)
+      .join("\n\n");
+    const keepIds = new Set(storyWorkspaceDrafts.filter((item) => !item.selected).map((item) => item.localId));
+    keepIds.add(first.localId);
+    setStoryWorkspaceDrafts((current) =>
+      current
+        .filter((item) => keepIds.has(item.localId))
+        .map((item) =>
+          item.localId === first.localId
+            ? {
+                ...item,
+                attributeKind: "event",
+                attributeType: "life_event",
+                attributeTypeCategory: "story",
+                attributeDetail: first.attributeDetail || first.label || "Combined Story",
+                attributeNotes: mergedNotes,
+                selected: false,
+              }
+            : item,
+        ),
+    );
+    setStoryImportStatus(`Consolidated ${selected.length} selected items into one story draft.`);
+  };
+
   const openStoryDraftReview = () => {
-    if (storyImportDrafts.length === 0) {
+    const selectedDrafts = storyWorkspaceDrafts.filter((item) => item.selected || storyWorkspaceDrafts.length === 1);
+    const nextDrafts = selectedDrafts.length > 0 ? selectedDrafts : storyWorkspaceDrafts;
+    if (nextDrafts.length === 0) {
       setStoryImportStatus("Generate drafts first.");
       return;
     }
+    const mapped = nextDrafts.map((item) => ({
+      proposalId: item.proposalId,
+      attributeKind: item.attributeKind,
+      attributeType: item.attributeType,
+      attributeTypeCategory: item.attributeTypeCategory,
+      attributeDate: item.attributeDate,
+      endDate: item.endDate,
+      dateIsEstimated: item.dateIsEstimated,
+      estimatedTo: item.estimatedTo,
+      label: item.label,
+      attributeDetail: item.attributeDetail,
+      attributeNotes: item.attributeNotes,
+      sourceExcerpt: item.sourceExcerpt,
+      rationale: item.rationale,
+    })) satisfies AiStoryImportProposal[];
+    setStoryImportDrafts(mapped);
+    setStoryImportDraftIndex(0);
     setShowStoryImportModal(false);
     setSelectedAboutAttributeId("");
     setAttributeLaunchSource("stories");
     setShowAttributeAddModal(true);
-    setStatus(`AI prepared ${storyImportDrafts.length} attribute drafts. Review and save them one at a time.`);
+    setStatus(`AI prepared ${mapped.length} attribute drafts. Review and save them one at a time.`);
+  };
+
+  const saveWorkspaceDraft = async (localId: string) => {
+    if (!person?.personId) return;
+    const draft = storyWorkspaceDrafts.find((item) => item.localId === localId);
+    if (!draft) return;
+    if (!draft.attributeDetail.trim()) {
+      updateStoryWorkspaceDraft(localId, { saveStatus: "Detail is required." });
+      return;
+    }
+    if (draft.attributeKind === "event" && !draft.attributeDate.trim()) {
+      updateStoryWorkspaceDraft(localId, { saveStatus: "Date is required for event." });
+      return;
+    }
+    updateStoryWorkspaceDraft(localId, { saveBusy: true, saveStatus: "Saving..." });
+    const payload = {
+      entityType: "person",
+      entityId: person.personId,
+      category: draft.attributeKind,
+      attributeKind: draft.attributeKind,
+      isDateRelated: draft.attributeKind === "event",
+      attributeType: draft.attributeType,
+      attributeTypeCategory: draft.attributeTypeCategory,
+      attributeDate: draft.attributeDate,
+      dateIsEstimated: draft.dateIsEstimated,
+      ...(draft.dateIsEstimated && draft.estimatedTo ? { estimatedTo: draft.estimatedTo } : {}),
+      attributeDetail: draft.attributeDetail,
+      attributeNotes: draft.attributeNotes,
+      endDate: draft.endDate,
+      typeKey: draft.attributeType,
+      label: draft.label,
+      valueText: draft.attributeDetail,
+      dateStart: draft.attributeDate,
+      dateEnd: draft.endDate,
+      notes: draft.attributeNotes,
+    };
+    const res = await fetch("/api/attributes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      updateStoryWorkspaceDraft(localId, {
+        saveBusy: false,
+        saveStatus: String(body?.message || body?.error || `Save failed (${res.status})`).slice(0, 180),
+      });
+      return;
+    }
+    updateStoryWorkspaceDraft(localId, { saveBusy: false, saveStatus: "Saved." });
+    void loadPersonAttributeState(person.personId);
+    onSaved();
   };
 
   const requestStoryChatSuggestion = async () => {
@@ -1191,7 +1347,7 @@ export function PersonEditModal({
     previousPersonIdRef.current = person.personId;
     resetProfileEditorState(person);
     setShowStoryImportModal(false);
-    setStoryImportText(person.notes || "");
+    setStoryImportText(stripStorySeedPrefix(person.notes || ""));
     setStoryImportStatus("");
     clearStoryChatState();
     clearStoryImportQueue();
@@ -3404,17 +3560,6 @@ export function PersonEditModal({
             >
               <div className="story-workspace-header">
                 <h4 style={{ margin: 0 }}>Story Import Workspace (testing)</h4>
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  disabled={storyImportBusy || storyChatBusy}
-                  onClick={() => {
-                    setShowStoryImportModal(false);
-                    setStoryImportStatus("");
-                  }}
-                >
-                  Close
-                </button>
               </div>
               <p className="page-subtitle" style={{ marginTop: "-0.25rem" }}>
                 Desktop-first review layout for story extraction. Nothing is saved until you review each generated draft.
@@ -3435,34 +3580,32 @@ export function PersonEditModal({
                 disabled={storyImportBusy || storyChatBusy}
               />
                   <div className="story-workspace-controls">
-                    <div>
-                      <label className="label" style={{ marginBottom: "0.35rem" }}>Extraction Mode</label>
-                      <div className="settings-chip-list story-mode-row">
-                        <button
-                          type="button"
-                          className={`tab-pill ${storyExtractionMode === "story" ? "active" : ""}`}
-                          onClick={() => setStoryExtractionMode("story")}
-                          disabled={storyImportBusy || storyChatBusy}
-                        >
-                          Story
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-pill ${storyExtractionMode === "balanced" ? "active" : ""}`}
-                          onClick={() => setStoryExtractionMode("balanced")}
-                          disabled={storyImportBusy || storyChatBusy}
-                        >
-                          Balanced
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-pill ${storyExtractionMode === "resume" ? "active" : ""}`}
-                          onClick={() => setStoryExtractionMode("resume")}
-                          disabled={storyImportBusy || storyChatBusy}
-                        >
-                          Resume
-                        </button>
-                      </div>
+                    <label className="label" style={{ marginBottom: "0.35rem" }}>Extraction Mode</label>
+                    <div className="settings-chip-list story-mode-row">
+                      <button
+                        type="button"
+                        className={`tab-pill ${storyExtractionMode === "story" ? "active" : ""}`}
+                        onClick={() => setStoryExtractionMode("story")}
+                        disabled={storyImportBusy || storyChatBusy}
+                      >
+                        Story
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-pill ${storyExtractionMode === "balanced" ? "active" : ""}`}
+                        onClick={() => setStoryExtractionMode("balanced")}
+                        disabled={storyImportBusy || storyChatBusy}
+                      >
+                        Balanced
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-pill ${storyExtractionMode === "resume" ? "active" : ""}`}
+                        onClick={() => setStoryExtractionMode("resume")}
+                        disabled={storyImportBusy || storyChatBusy}
+                      >
+                        Resume
+                      </button>
                     </div>
                     <button
                       type="button"
@@ -3508,80 +3651,235 @@ export function PersonEditModal({
                   ) : null}
                 </div>
                 <div className="story-workspace-side">
-              <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
-                <h5 style={{ marginTop: 0, marginBottom: "0.45rem" }}>Story AI Chat (passthrough)</h5>
-                <p className="page-subtitle" style={{ marginTop: 0 }}>
-                  Ask AI about title/date/type choices before generating drafts. Nothing is saved automatically.
-                </p>
-                <div style={{ border: "1px solid #E7EAF0", borderRadius: "0.7rem", padding: "0.6rem", maxHeight: "180px", overflowY: "auto", background: "#FAFBFD" }}>
-                  {storyChatMessages.length === 0 ? (
-                    <p className="page-subtitle" style={{ margin: 0 }}>No chat yet.</p>
-                  ) : (
-                    <div style={{ display: "grid", gap: "0.45rem" }}>
-                      {storyChatMessages.map((message, index) => (
-                        <div key={`story-chat-${index}`} style={{ fontSize: "0.9rem" }}>
-                          <strong>{message.role === "user" ? "You" : "AI"}:</strong> {message.content}
+                  <div className="card" style={{ border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
+                    <div className="settings-chip-list" style={{ justifyContent: "space-between" }}>
+                      <h5 style={{ margin: 0 }}>Guided Workflow</h5>
+                      <div className="settings-chip-list">
+                        <button
+                          type="button"
+                          className={`tab-pill ${storyWorkspaceStep === 1 ? "active" : ""}`}
+                          onClick={() => setStoryWorkspaceStep(1)}
+                        >
+                          Step 1
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-pill ${storyWorkspaceStep === 2 ? "active" : ""}`}
+                          onClick={() => setStoryWorkspaceStep(2)}
+                          disabled={storyWorkspaceDrafts.length === 0}
+                        >
+                          Step 2
+                        </button>
+                      </div>
+                    </div>
+
+                    {storyWorkspaceStep === 1 ? (
+                      <div style={{ marginTop: "0.6rem", display: "grid", gap: "0.55rem" }}>
+                        <p className="page-subtitle" style={{ margin: 0 }}>
+                          Step 1: identify attributes/stories, consolidate related facts, and add AI guidance for missing or too-granular discovery.
+                        </p>
+                        <div style={{ maxHeight: "210px", overflowY: "auto", display: "grid", gap: "0.45rem" }}>
+                          {storyWorkspaceDrafts.length > 0 ? storyWorkspaceDrafts.map((draft) => (
+                            <label key={draft.localId} style={{ border: "1px solid #E7EAF0", borderRadius: "0.6rem", padding: "0.5rem", display: "grid", gap: "0.35rem" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={draft.selected}
+                                  onChange={(event) => updateStoryWorkspaceDraft(draft.localId, { selected: event.target.checked })}
+                                />
+                                <strong>{draft.attributeDetail || draft.label || "(untitled)"}</strong>
+                              </span>
+                              <span className="page-subtitle">{draft.attributeKind} / {draft.attributeType}{draft.attributeTypeCategory ? ` / ${draft.attributeTypeCategory}` : ""}</span>
+                            </label>
+                          )) : <p className="page-subtitle" style={{ margin: 0 }}>Generate drafts to begin Step 1.</p>}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <label className="label" style={{ marginTop: "0.65rem" }}>Ask AI</label>
-                <textarea
-                  className="textarea"
-                  value={storyChatInput}
-                  onChange={(event) => setStoryChatInput(event.target.value)}
-                  placeholder="Example: Suggest a better title and the correct operation date range for this story."
-                  style={{ minHeight: "4.8rem" }}
-                  disabled={storyChatBusy || storyImportBusy}
-                />
-                <div className="settings-chip-list" style={{ marginTop: "0.55rem" }}>
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={() => void requestStoryChatSuggestion()}
-                    disabled={storyChatBusy || storyImportBusy}
-                  >
-                    {storyChatBusy ? "Asking..." : "Ask AI"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    onClick={clearStoryChatState}
-                    disabled={storyChatBusy || storyImportBusy}
-                  >
-                    Clear Chat
-                  </button>
-                </div>
-                {storyChatSuggestion ? (
-                  <div style={{ marginTop: "0.65rem", border: "1px solid #E7EAF0", borderRadius: "0.65rem", padding: "0.6rem", background: "#FFFFFF" }}>
-                    <strong>Latest AI Suggestion</strong>
-                    <p style={{ margin: "0.4rem 0 0" }}><strong>Title:</strong> {storyChatSuggestion.titleHint || "-"}</p>
-                    <p style={{ margin: "0.25rem 0 0" }}><strong>Dates:</strong> {(storyChatSuggestion.startDate || "-")} {(storyChatSuggestion.endDate ? `to ${storyChatSuggestion.endDate}` : "")}</p>
-                    <p style={{ margin: "0.25rem 0 0" }}><strong>Type:</strong> {storyChatSuggestion.attributeType || "-"} {storyChatSuggestion.attributeTypeCategory ? `/ ${storyChatSuggestion.attributeTypeCategory}` : ""}</p>
-                    {storyChatSuggestion.reasoning ? (
-                      <p className="page-subtitle" style={{ margin: "0.4rem 0 0" }}>{storyChatSuggestion.reasoning}</p>
-                    ) : null}
-                    <div className="settings-chip-list" style={{ marginTop: "0.45rem" }}>
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        onClick={applyStoryChatSuggestion}
-                        disabled={storyChatBusy || storyImportBusy}
-                      >
-                        Apply Suggestion
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={consolidateSelectedWorkspaceDrafts}
+                          disabled={storyImportBusy || storyChatBusy || storyWorkspaceDrafts.filter((item) => item.selected).length < 2}
+                        >
+                          Consolidate Selected Into One Story
+                        </button>
+                        <label className="label">Additional AI Guidance</label>
+                        <textarea
+                          className="textarea"
+                          value={storyWorkspaceGuidance}
+                          onChange={(event) => setStoryWorkspaceGuidance(event.target.value)}
+                          placeholder="Example: Keep this as one story and extract only high-signal attributes."
+                          style={{ minHeight: "5rem" }}
+                        />
+                        <label className="label">Missing Facts To Add</label>
+                        <textarea
+                          className="textarea"
+                          value={storyWorkspaceMissingFacts}
+                          onChange={(event) => setStoryWorkspaceMissingFacts(event.target.value)}
+                          placeholder="Add any missing facts the story should include."
+                          style={{ minHeight: "4.5rem" }}
+                        />
+                        <label className="label">Ask AI (Step 1)</label>
+                        <textarea
+                          className="textarea"
+                          value={storyChatInput}
+                          onChange={(event) => setStoryChatInput(event.target.value)}
+                          placeholder="Example: This is too granular. Merge to one story with only major supporting attributes."
+                          style={{ minHeight: "4.8rem" }}
+                          disabled={storyChatBusy || storyImportBusy}
+                        />
+                        {storyChatSuggestion ? (
+                          <div style={{ border: "1px solid #E7EAF0", borderRadius: "0.6rem", padding: "0.55rem", background: "#fff" }}>
+                            <p style={{ margin: 0 }}><strong>Latest AI Suggestion</strong></p>
+                            <p className="page-subtitle" style={{ margin: "0.25rem 0 0" }}>
+                              Title: {storyChatSuggestion.titleHint || "-"} | Dates: {storyChatSuggestion.startDate || "-"}{storyChatSuggestion.endDate ? ` to ${storyChatSuggestion.endDate}` : ""} | Type: {storyChatSuggestion.attributeType || "-"}{storyChatSuggestion.attributeTypeCategory ? `/${storyChatSuggestion.attributeTypeCategory}` : ""}
+                            </p>
+                            <div className="settings-chip-list" style={{ marginTop: "0.45rem" }}>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={applyStoryChatSuggestion}
+                                disabled={storyChatBusy || storyImportBusy}
+                              >
+                                Apply Suggestion
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                        {storyChatMessages.length > 0 ? (
+                          <div style={{ border: "1px solid #E7EAF0", borderRadius: "0.6rem", padding: "0.55rem", maxHeight: "140px", overflowY: "auto" }}>
+                            {storyChatMessages.map((message, index) => (
+                              <p key={`step1-chat-${index}`} className="page-subtitle" style={{ margin: "0.15rem 0" }}>
+                                <strong>{message.role === "user" ? "You" : "AI"}:</strong> {message.content}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="settings-chip-list">
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => void requestStoryChatSuggestion()}
+                            disabled={storyChatBusy || storyImportBusy}
+                          >
+                            {storyChatBusy ? "Asking..." : "Ask AI About Step 1"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => void generateStoryImportDrafts()}
+                            disabled={storyImportBusy || storyChatBusy}
+                          >
+                            {storyImportBusy ? "Rebuilding..." : "Apply Guidance + Rebuild"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button tap-button"
+                            onClick={() => setStoryWorkspaceStep(2)}
+                            disabled={storyWorkspaceDrafts.length === 0}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: "0.6rem", display: "grid", gap: "0.55rem" }}>
+                        <p className="page-subtitle" style={{ margin: 0 }}>
+                          Step 2: review draft attribute form fields, edit as needed, then save.
+                        </p>
+                        {currentWorkspaceDraft ? (
+                          <div style={{ border: "1px solid #E7EAF0", borderRadius: "0.7rem", padding: "0.6rem", display: "grid", gap: "0.45rem" }}>
+                            <div className="settings-chip-list" style={{ justifyContent: "space-between" }}>
+                              <strong>Draft {storyWorkspaceDraftIndex + 1} of {storyWorkspaceDrafts.length}</strong>
+                              <span className="status-chip status-chip--neutral">{currentWorkspaceDraft.attributeKind}</span>
+                            </div>
+                            <label className="label">Attribute Type</label>
+                            <input
+                              className="input"
+                              value={currentWorkspaceDraft.attributeType}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeType: event.target.value })}
+                            />
+                            <label className="label">Type Category</label>
+                            <input
+                              className="input"
+                              value={currentWorkspaceDraft.attributeTypeCategory}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeTypeCategory: event.target.value })}
+                            />
+                            <label className="label">Title / Detail</label>
+                            <input
+                              className="input"
+                              value={currentWorkspaceDraft.attributeDetail}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeDetail: event.target.value })}
+                            />
+                            <label className="label">Date</label>
+                            <input
+                              className="input"
+                              type="date"
+                              value={currentWorkspaceDraft.attributeDate}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeDate: event.target.value })}
+                            />
+                            <label className="label">End Date</label>
+                            <input
+                              className="input"
+                              type="date"
+                              value={currentWorkspaceDraft.endDate}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { endDate: event.target.value })}
+                            />
+                            <label className="label">Notes</label>
+                            <textarea
+                              className="textarea"
+                              value={currentWorkspaceDraft.attributeNotes}
+                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeNotes: event.target.value })}
+                              style={{ minHeight: "8rem" }}
+                            />
+                            <div className="settings-chip-list">
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={() => setStoryWorkspaceDraftIndex((idx) => Math.max(0, idx - 1))}
+                                disabled={storyWorkspaceDraftIndex === 0}
+                              >
+                                Previous Draft
+                              </button>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={() => setStoryWorkspaceDraftIndex((idx) => Math.min(storyWorkspaceDrafts.length - 1, idx + 1))}
+                                disabled={storyWorkspaceDraftIndex >= storyWorkspaceDrafts.length - 1}
+                              >
+                                Next Draft
+                              </button>
+                              <button
+                                type="button"
+                                className="button tap-button"
+                                onClick={() => void saveWorkspaceDraft(currentWorkspaceDraft.localId)}
+                                disabled={currentWorkspaceDraft.saveBusy}
+                              >
+                                {currentWorkspaceDraft.saveBusy ? "Saving..." : "Save Draft"}
+                              </button>
+                            </div>
+                            {currentWorkspaceDraft.saveStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{currentWorkspaceDraft.saveStatus}</p> : null}
+                          </div>
+                        ) : <p className="page-subtitle" style={{ margin: 0 }}>No drafts available yet.</p>}
+                        <div className="settings-chip-list">
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={() => setStoryWorkspaceStep(1)}
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            onClick={openStoryDraftReview}
+                            disabled={storyWorkspaceDrafts.length === 0}
+                          >
+                            Open Classic Draft Review
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {storyChatStatus ? <p style={{ marginTop: "0.55rem", marginBottom: 0 }}>{storyChatStatus}</p> : null}
                   </div>
-                ) : null}
-                {storyChatStatus ? <p style={{ marginTop: "0.55rem", marginBottom: 0 }}>{storyChatStatus}</p> : null}
-              </div>
-              <div className="card" style={{ marginTop: "0.85rem", border: "1px solid #E7EAF0", borderRadius: "0.8rem" }}>
-                <h5 style={{ marginTop: 0, marginBottom: "0.45rem" }}>Potential Duplicates</h5>
-                <p className="page-subtitle" style={{ margin: 0 }}>
-                  Placeholder for duplicate-candidate review and decision controls (`Add New`, `Replace`, `Skip`) in the next extraction phase.
-                </p>
-              </div>
                 </div>
               </div>
               {(storyImportHints.titleHint || storyImportHints.startDate || storyImportHints.endDate || storyImportHints.attributeType || storyImportHints.attributeTypeCategory) ? (
@@ -3590,6 +3888,19 @@ export function PersonEditModal({
                 </p>
               ) : null}
               {storyImportStatus ? <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>{storyImportStatus}</p> : null}
+              <div className="settings-chip-list" style={{ marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  disabled={storyImportBusy || storyChatBusy}
+                  onClick={() => {
+                    setShowStoryImportModal(false);
+                    setStoryImportStatus("");
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         ) : null}

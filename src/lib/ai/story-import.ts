@@ -21,6 +21,8 @@ type StoryImportInput = {
     endDate?: string;
     attributeType?: string;
     attributeTypeCategory?: string;
+    extractionMode?: "story" | "balanced" | "resume";
+    refinementPrompt?: string;
   };
 };
 
@@ -58,6 +60,8 @@ function sanitizeStoryImportHints(input?: StoryImportInput["hints"]) {
     endDate: clampText(String(input?.endDate ?? "").trim(), 32),
     attributeType: clampText(normalizeAttributeTypeKey(String(input?.attributeType ?? "").trim()), 120),
     attributeTypeCategory: clampText(normalizeAttributeTypeKey(String(input?.attributeTypeCategory ?? "").trim()), 120),
+    extractionMode: input?.extractionMode === "story" || input?.extractionMode === "resume" ? input.extractionMode : "balanced",
+    refinementPrompt: clampText(String(input?.refinementPrompt ?? "").trim(), 1200),
   };
 }
 
@@ -409,7 +413,14 @@ function buildInstructions(input: {
     input.hints.endDate ? `Preferred end date hint from user: ${input.hints.endDate}` : "",
     input.hints.attributeType ? `Preferred attributeType hint from user: ${input.hints.attributeType}` : "",
     input.hints.attributeTypeCategory ? `Preferred attributeTypeCategory hint from user: ${input.hints.attributeTypeCategory}` : "",
+    input.hints.refinementPrompt ? `Additional user guidance: ${input.hints.refinementPrompt}` : "",
   ].filter(Boolean);
+  const modeGuidance =
+    input.hints.extractionMode === "story"
+      ? "Extraction mode is STORY: prefer fewer records, preserve narrative coherence, and avoid over-fragmenting."
+      : input.hints.extractionMode === "resume"
+        ? "Extraction mode is RESUME: extract more concrete standalone records when facts support them."
+        : "Extraction mode is BALANCED: preserve core stories and extract only high-signal supporting facts.";
   return [
     "You extract canonical attribute drafts for The Eternal Family Link.",
     `Current family group: ${input.tenantName}.`,
@@ -424,6 +435,7 @@ function buildInstructions(input: {
     "Do not invent facts, relationships, names, dates, or places.",
     "Use descriptor for timeless facts, hobbies, talents, physical details, and recurring personal facts.",
     "Use event for dated or time-bound milestones and for story vignettes.",
+    modeGuidance,
     "If sibling/family context is mentioned, prefer family_relationship event proposals only when a concrete relationship fact is present.",
     "If address/home location is mentioned, prefer moved event proposals for concrete move/location facts.",
     "If no subtype clearly matches an allowed subtype for a category, leave attributeTypeCategory empty.",

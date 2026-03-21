@@ -3203,8 +3203,8 @@ main,
 
 .story-workspace-controls {
   display: flex;
-  align-items: end;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.65rem;
 }
 

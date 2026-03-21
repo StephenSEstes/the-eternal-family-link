@@ -15,6 +15,8 @@ const payloadSchema = z.object({
       endDate: z.string().trim().max(32).default(""),
       attributeType: z.string().trim().max(120).default(""),
       attributeTypeCategory: z.string().trim().max(120).default(""),
+      extractionMode: z.enum(["story", "balanced", "resume"]).optional(),
+      refinementPrompt: z.string().trim().max(1200).optional(),
     })
     .optional(),
 });

@@ -194,6 +194,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the proposal-preview section and `openStoryDraftReview` behavior in `PersonEditModal`, plus `.story-mode-row` and panel-height changes in `globals.css`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-20 (guided two-step workspace flow + bottom close + clean story seed)
+
+- `Date`: 2026-03-20
+- `Change`: Converted the story workspace right side into a guided two-step flow: Step 1 identifies/consolidates candidate attributes and accepts additional AI guidance/missing facts; Step 2 provides add-attribute-style draft entry forms for review and direct save. Moved workspace `Close` action to the bottom and removed metadata-style `Top-level ...` preface text from default story seed.
+- `Type`: UI | API
+- `Why`: Root cause was a `workflow issue`. The prior layout mixed controls and did not support staged refinement before final attribute-entry, while default story seed could include non-narrative profile metadata.
+- `Files`:
+  - `src/components/PersonEditModal.tsx`
+  - `src/lib/ai/story-import.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/story-import/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - Open story workspace and confirm `Close` appears only in bottom action area.
+  - Confirm extraction mode appears above `Generate Drafts`.
+  - Confirm right panel Step 1/Step 2 navigation (`Next`, `Back`) works.
+  - Confirm Step 1 supports candidate selection + consolidate + additional AI guidance.
+  - Confirm Step 2 shows editable draft form fields and supports direct save per draft.
+  - Confirm default story text no longer starts with `Top-level ...` metadata preface.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Revert guided step state/functions and story seed strip helper in `PersonEditModal`, and story-import hint extensions in the API/backend.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (AI story import notes-first narrative shaping)
 
 - `Date`: 2026-03-19
