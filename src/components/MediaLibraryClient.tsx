@@ -914,6 +914,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       <span className="page-subtitle" style={{ margin: 0 }}>
                         Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
                       </span>
+                      {selectedPhotoIntelligenceSuggestion.visionLabels && selectedPhotoIntelligenceSuggestion.visionLabels.length > 0 ? (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          Vision labels: {selectedPhotoIntelligenceSuggestion.visionLabels.slice(0, 4).join(", ")}
+                        </span>
+                      ) : null}
+                      {typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" ? (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          Faces detected: {selectedPhotoIntelligenceSuggestion.detectedFaceCount}
+                        </span>
+                      ) : null}
                       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                         {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
                           <button

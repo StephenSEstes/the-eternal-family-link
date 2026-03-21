@@ -3,11 +3,13 @@ import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildPhotoIntelligenceSuggestion, canRunPhotoIntelligence, readPhotoIntelligenceSuggestion } from "@/lib/media/photo-intelligence";
+import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
   getOciMediaAssetByFileId,
   getOciMediaLinksForFile,
   updateOciMediaMetadataForFile,
 } from "@/lib/oci/tables";
+import { analyzeInlineImageWithVision, isOciVisionConfigured, type OciVisionInsight } from "@/lib/oci/vision";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;
@@ -25,6 +27,16 @@ function parseMetadata(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function readOriginalObjectKey(metadata: Record<string, unknown>) {
+  const objectStorage = metadata.objectStorage;
+  if (objectStorage && typeof objectStorage === "object") {
+    const key = String((objectStorage as Record<string, unknown>).originalObjectKey ?? "").trim();
+    if (key) return key;
+  }
+  const fallback = String(metadata.originalObjectKey ?? "").trim();
+  return fallback;
 }
 
 export async function POST(request: Request, { params }: RouteProps) {
@@ -83,12 +95,28 @@ export async function POST(request: Request, { params }: RouteProps) {
     .map((item) => peopleById.get(item.entityId) || item.entityId)
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 
+  let vision: OciVisionInsight | null = null;
+  if (isOciVisionConfigured()) {
+    try {
+      const originalObjectKey = readOriginalObjectKey(parsedMetadata);
+      if (originalObjectKey) {
+        const source = await getOciObjectContentByKey(originalObjectKey);
+        vision = await analyzeInlineImageWithVision({
+          imageBytes: Buffer.from(source.data),
+        });
+      }
+    } catch (visionError) {
+      console.warn("[photo-intelligence] vision analysis failed; falling back to heuristic suggestion", visionError);
+    }
+  }
+
   const generated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
     fileName: String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId,
     createdAt: String(parsedMetadata.createdAt ?? "").trim(),
     linkedPeople,
     existingMetadata: baseMetadata,
+    vision,
   });
 
   await updateOciMediaMetadataForFile({

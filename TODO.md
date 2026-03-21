@@ -117,7 +117,8 @@ I will update this list as we add, complete, or remove work.
     - Save all
   Phase 1:
   - 2026-03-21 progress: Added deterministic image suggestion generation endpoint (`/photos/[fileId]/intelligence`), persisted `photoIntelligence` metadata, and media-editor apply controls (`Use Title/Description/Date`).
-  - Remaining for full Phase 1: add EXIF parser-backed date extraction and optional AI caption enrichment beyond filename/linked-person heuristics.
+  - 2026-03-21 progress: Switched generation to OCI Vision-first analysis (labels/objects/faces) with deterministic fallback when Vision is unavailable.
+  - Remaining for full Phase 1: add EXIF parser-backed date extraction and optional OpenAI caption refinement using Vision outputs.
   - Implement caption + EXIF date extraction and persist suggestions.
   - Render suggestions in media detail panel with accept/edit controls.
   Validation:

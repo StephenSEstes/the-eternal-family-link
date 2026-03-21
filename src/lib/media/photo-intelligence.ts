@@ -1,5 +1,11 @@
 import { inferStoredMediaKind, parseMediaMetadata } from "@/lib/media/upload";
 
+export type PhotoVisionInsight = {
+  labels: Array<{ name: string; confidence: number }>;
+  objects: Array<{ name: string; confidence: number }>;
+  faceCount: number;
+};
+
 export type PhotoIntelligenceSuggestion = {
   status: "completed" | "failed";
   generatedAt: string;
@@ -9,6 +15,9 @@ export type PhotoIntelligenceSuggestion = {
   dateSource: "filename" | "capture_timestamp" | "none";
   dateConfidence: "high" | "medium" | "low";
   notes: string;
+  visionLabels?: string[];
+  visionObjects?: string[];
+  detectedFaceCount?: number;
 };
 
 type BuildPhotoIntelligenceInput = {
@@ -17,6 +26,7 @@ type BuildPhotoIntelligenceInput = {
   createdAt: string;
   linkedPeople: string[];
   existingMetadata: string;
+  vision?: PhotoVisionInsight | null;
 };
 
 const GENERIC_NAME_PATTERNS = [
@@ -85,6 +95,21 @@ function buildLabel(fileName: string) {
   return titleCaseWords(stem).slice(0, 80);
 }
 
+function buildLabelFromVision(vision: PhotoVisionInsight | null | undefined) {
+  if (!vision) return "";
+  const candidates = [...vision.labels, ...vision.objects]
+    .filter((item) => item.confidence >= 0.5)
+    .map((item) => item.name.trim())
+    .filter(Boolean);
+  if (candidates.length === 0) return "";
+  const distinct = Array.from(new Set(candidates.map((item) => item.toLowerCase())));
+  const preferred = distinct.slice(0, 2).map((item) => titleCaseWords(item));
+  if (preferred.length === 1) {
+    return `${preferred[0]} Memory`;
+  }
+  return `${preferred[0]} and ${preferred[1]}`;
+}
+
 function buildDescription(label: string, linkedPeople: string[]) {
   const people = linkedPeople.map((item) => item.trim()).filter(Boolean);
   if (people.length === 0) {
@@ -106,7 +131,8 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
   const current = parseMediaMetadata(input.existingMetadata) ?? {};
   const existing = current as Record<string, unknown>;
   const fileName = input.fileName.trim() || input.fileId.trim();
-  const label = buildLabel(fileName);
+  const labelFromVision = buildLabelFromVision(input.vision);
+  const label = labelFromVision || buildLabel(fileName);
   const description = buildDescription(label, input.linkedPeople);
   const fileNameDate = parseDateFromFileName(fileName);
   const createdAtDate = normalizeDate(input.createdAt);
@@ -136,6 +162,9 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
         : dateSource === "filename"
           ? "Date inferred from file name pattern."
           : "Date inferred from capture timestamp metadata.",
+    visionLabels: input.vision?.labels?.map((item) => item.name).slice(0, 6) ?? [],
+    visionObjects: input.vision?.objects?.map((item) => item.name).slice(0, 8) ?? [],
+    detectedFaceCount: input.vision?.faceCount ?? 0,
   };
 
   const merged = {
@@ -175,6 +204,15 @@ export function readPhotoIntelligenceSuggestion(rawMetadata: string | undefined)
       ? (String(suggestion.dateConfidence) as PhotoIntelligenceSuggestion["dateConfidence"])
       : "low",
     notes: String(suggestion.notes ?? "").trim(),
+    visionLabels: Array.isArray(suggestion.visionLabels)
+      ? suggestion.visionLabels.map((item) => String(item ?? "").trim()).filter(Boolean)
+      : [],
+    visionObjects: Array.isArray(suggestion.visionObjects)
+      ? suggestion.visionObjects.map((item) => String(item ?? "").trim()).filter(Boolean)
+      : [],
+    detectedFaceCount: Number.isFinite(Number(suggestion.detectedFaceCount ?? 0))
+      ? Number(suggestion.detectedFaceCount)
+      : 0,
   };
   return output;
 }

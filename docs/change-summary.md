@@ -1200,6 +1200,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-21 (photo intelligence switched to OCI Vision-first analysis)
+
+- `Change`: Updated photo-intelligence generation to call OCI Vision (`analyzeImage`) against OCI-stored originals and feed returned labels/objects/faces into suggestion generation, with heuristic fallback retained when Vision is unavailable or fails.
+- `Type`: OCI Integration, AI/Media Suggestions
+- `Why`: Root cause was low-quality suggestion output from filename-only heuristics. The pipeline now uses actual image content signals before applying naming/date heuristics.
+- `Files`:
+  - `src/lib/oci/vision.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - `npx tsc --noEmit` passes.
+  - Image suggestion payload now includes Vision-derived labels/object names and face-count metadata when Vision succeeds.
+  - UI suggestion panel displays Vision labels and face count.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (parent-based family-group access inheritance)
 
 - `Change`: Added shared parent-based family-group access inheritance for new user provisioning. Local-user creation, Google access creation, and new family-group provisioning now derive additional family-group access from enabled parent access rows intersected with the child's enabled family memberships, while keeping `UserFamilyGroups` as the canonical persisted access model.
