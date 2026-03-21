@@ -4962,3 +4962,27 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Runtime keeps Drive fallback if OCI object read fails.
 - `Rollback Notes`: Revert code commit; data rollback would require a dedicated reverse migration if needed.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (oci upload write cutover + thumbnail/object variant delivery)
+
+- `Change`: Switched new person/household media uploads from Drive writes to OCI object writes (original + generated thumbnail), persisted OCI object pointers in media metadata, stored new assets as `storage_provider=oci_object`, and updated photo delivery to request preview variants so compact surfaces use OCI thumbnails while detail views continue using originals.
+- `Type`: Runtime, Media Storage, Performance
+- `Why`: Root cause was partial cutover. Existing code only migrated old assets and used OCI-first reads, but new uploads still wrote to Drive and preview routing could not select OCI thumbnail objects for list/grid usage.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/lib/attributes/person-media.ts`
+  - `src/lib/oci/object-storage.ts`
+  - `src/lib/google/photo-resolver.ts`
+  - `src/lib/google/photo-path.ts`
+  - `src/app/viewer/photo/[fileId]/route.ts`
+  - `src/app/t/[tenantKey]/viewer/photo/[fileId]/route.ts`
+  - `src/lib/media/ids.ts`
+- `Data Changes`: No schema change. New upload rows now persist OCI object metadata (`objectStorage.originalObjectKey`, `objectStorage.thumbnailObjectKey`) and `storage_provider=oci_object`.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes.
+  - New person/household uploads produce OCI-backed media metadata and media assets with `storage_provider=oci_object`.
+  - Preview image URLs use `variant=preview` when OCI thumbnail object metadata exists.
+  - Full-size views still resolve to original object content.
+- `Rollback Notes`: Revert commit to restore previous upload/write and resolver behavior.
+- `Design Decision Change`: No design decision change.

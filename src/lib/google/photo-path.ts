@@ -11,5 +11,23 @@ export function getPhotoProxyPath(fileId: string, tenantKey?: string) {
 
 export function getPhotoPreviewProxyPath(fileId: string, rawMetadata?: string, tenantKey?: string) {
   const previewFileId = resolvePreviewFileId(fileId, rawMetadata);
-  return getPhotoProxyPath(previewFileId || fileId, tenantKey);
+  const basePath = getPhotoProxyPath(previewFileId || fileId, tenantKey);
+  const metadataText = String(rawMetadata ?? "").trim();
+  if (previewFileId && previewFileId !== fileId) {
+    return basePath;
+  }
+  if (!metadataText || (!metadataText.startsWith("{") && !metadataText.startsWith("["))) {
+    return basePath;
+  }
+  try {
+    const parsed = JSON.parse(metadataText) as Record<string, unknown>;
+    const objectStorage = parsed.objectStorage as Record<string, unknown> | undefined;
+    const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? "").trim();
+    if (thumbnailObjectKey) {
+      return `${basePath}${basePath.includes("?") ? "&" : "?"}variant=preview`;
+    }
+  } catch {
+    // Ignore malformed metadata and fall back to base path.
+  }
+  return basePath;
 }

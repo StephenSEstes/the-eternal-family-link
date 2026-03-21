@@ -9,17 +9,17 @@ import {
   getAttributesForEntityWithMedia,
   getPrimaryPhotoFileIdForPerson,
 } from "@/lib/attributes/store";
-import { uploadPhotoToFolder } from "@/lib/google/drive";
 import {
   buildMediaMetadata,
   fallbackUploadExtension,
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { buildMediaFileId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
+import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
 import {
   getPersonById,
-  getTenantConfig,
   PEOPLE_TABLE,
   updateTableRecordById,
 } from "@/lib/data/runtime";
@@ -35,6 +35,14 @@ function normalizeDateFromTimestamp(raw: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
   return parsed.toISOString().slice(0, 10);
+}
+
+function sanitizeObjectNameSegment(value: string) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120) || "file";
 }
 
 export async function POST(request: Request, { params }: UploadRouteProps) {
@@ -80,22 +88,28 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
 
-    const tenantConfig = await getTenantConfig(resolved.tenant.tenantKey);
+    const objectStorage = getOciObjectStorageLocation();
+    if (!objectStorage) {
+      return NextResponse.json(
+        { error: "storage_not_configured", message: "OCI object storage is not configured for uploads." },
+        { status: 500 },
+      );
+    }
     const safeFileName = sanitizeUploadFileName(
       file.name || "",
       `${personId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,
     );
-    const uploaded = await uploadPhotoToFolder({
-      folderId: tenantConfig.photosFolderId,
-      filename: safeFileName,
-      mimeType: validated.mimeType,
+    const fileId = buildMediaFileId();
+    const originalObjectKey = `${objectStorage.objectPrefix}/original/${sanitizeObjectNameSegment(resolved.tenant.tenantKey)}/${sanitizeObjectNameSegment(personId)}/${sanitizeObjectNameSegment(fileId)}/${safeFileName}`;
+    await putOciObjectByKey({
+      objectKey: originalObjectKey,
       data: bytes,
+      mimeType: validated.mimeType,
     });
 
     let thumbnailUpload:
       | {
-        fileId: string;
-        fileName: string;
+        objectKey: string;
         mimeType: string;
         width: number;
         height: number;
@@ -109,19 +123,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
           mimeType: validated.mimeType,
         });
         if (thumbVariant) {
-          const thumbName = sanitizeUploadFileName(
+          const thumbName = sanitizeObjectNameSegment(
             safeFileName.replace(/\.[^.]+$/, "") + `-thumb.${thumbVariant.extension}`,
-            `${personId}-${Date.now()}-thumb.${thumbVariant.extension}`,
           );
-          const uploadedThumb = await uploadPhotoToFolder({
-            folderId: tenantConfig.photosFolderId,
-            filename: thumbName,
+          const thumbObjectKey = `${objectStorage.objectPrefix}/thumb/${sanitizeObjectNameSegment(resolved.tenant.tenantKey)}/${sanitizeObjectNameSegment(personId)}/${sanitizeObjectNameSegment(fileId)}/${thumbName}`;
+          await putOciObjectByKey({
+            objectKey: thumbObjectKey,
             mimeType: thumbVariant.mimeType,
             data: thumbVariant.buffer,
           });
           thumbnailUpload = {
-            fileId: uploadedThumb.fileId,
-            fileName: thumbName,
+            objectKey: thumbObjectKey,
             mimeType: thumbVariant.mimeType,
             width: thumbVariant.width,
             height: thumbVariant.height,
@@ -149,8 +161,16 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       captureSource,
       extra: {
         checksumSha256: createHash("sha256").update(bytes).digest("hex"),
-        thumbnailFileId: thumbnailUpload?.fileId,
-        thumbnailFileName: thumbnailUpload?.fileName,
+        objectStorage: {
+          provider: "oci_object",
+          namespace: objectStorage.namespace,
+          bucketName: objectStorage.bucketName,
+          originalObjectKey,
+          thumbnailObjectKey: thumbnailUpload?.objectKey || "",
+          migratedAt: new Date().toISOString(),
+          sourceFileId: fileId,
+        },
+        thumbnailObjectKey: thumbnailUpload?.objectKey,
         thumbnailMimeType: thumbnailUpload?.mimeType,
         thumbnailWidth: thumbnailUpload?.width,
         thumbnailHeight: thumbnailUpload?.height,
@@ -180,12 +200,12 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         attributeDate: effectivePhotoDate,
         dateIsEstimated: false,
         estimatedTo: "",
-        attributeDetail: uploaded.fileId,
+        attributeDetail: fileId,
         attributeNotes: description,
         endDate: "",
         typeKey: attributeType,
         label: shouldBePrimary ? "headshot" : label,
-        valueText: uploaded.fileId,
+        valueText: fileId,
         dateStart: effectivePhotoDate,
         dateEnd: "",
         location: "",
@@ -204,20 +224,24 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       personId,
       attributeId,
       attributeType,
-      fileId: uploaded.fileId,
+      fileId,
       label: shouldBePrimary ? "headshot" : label,
       description,
       photoDate: effectivePhotoDate,
       isPrimary: shouldBePrimary,
       sortOrder: 0,
       mediaMetadata,
+      storageProvider: "oci_object",
+      mimeType: validated.mimeType,
+      fileName: safeFileName,
+      fileSizeBytes: String(bytes.length),
       createdAt: createdAtIso,
       replaceAttributeLinks: !targetAttributeId,
     });
 
     if (attributeType === "photo") {
       const primaryPhotoFileId = shouldBePrimary
-        ? uploaded.fileId
+        ? fileId
         : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
       await updateTableRecordById(
         PEOPLE_TABLE,
@@ -231,7 +255,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     await appendSessionAuditLog(resolved.session, {
       action: "UPLOAD",
       entityType: "PERSON_MEDIA",
-      entityId: uploaded.fileId,
+      entityId: fileId,
       familyGroupKey: resolved.tenant.tenantKey,
       status: "SUCCESS",
       details: `Uploaded ${attributeType} for person=${personId}, attribute=${attributeId}, primary=${String(shouldBePrimary)}.`,
@@ -241,7 +265,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       ok: true,
       tenantKey: resolved.tenant.tenantKey,
       personId,
-      fileId: uploaded.fileId,
+      fileId,
       isHeadshot: shouldBePrimary,
       attributeType,
       attributeId,
@@ -254,7 +278,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       {
         error: "upload_failed",
         message,
-        hint: "Confirm service account Drive access to the target photos folder.",
+        hint: "Confirm OCI object storage configuration and write permissions.",
       },
       { status: 500 },
     );

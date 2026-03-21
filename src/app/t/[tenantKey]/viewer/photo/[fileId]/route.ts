@@ -10,7 +10,7 @@ type TenantPhotoRouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;
 };
 
-export async function GET(_: Request, { params }: TenantPhotoRouteProps) {
+export async function GET(request: Request, { params }: TenantPhotoRouteProps) {
   try {
     const { fileId, tenantKey } = await params;
     const normalizedTenantKey = normalizeTenantRouteKey(tenantKey);
@@ -22,7 +22,9 @@ export async function GET(_: Request, { params }: TenantPhotoRouteProps) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    const photo = await resolvePhotoContentAcrossFamilies(fileId, normalizedTenantKey);
+    const requestUrl = new URL(request.url);
+    const variant = requestUrl.searchParams.get("variant")?.trim().toLowerCase() === "preview" ? "preview" : "original";
+    const photo = await resolvePhotoContentAcrossFamilies(fileId, normalizedTenantKey, { variant });
     const blob = new Blob([photo.data], { type: photo.mimeType });
 
     return new NextResponse(blob, {

@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 function shortHash(seed: string) {
   return createHash("sha1").update(seed.trim().toLowerCase()).digest("hex").slice(0, 8);
@@ -6,6 +6,10 @@ function shortHash(seed: string) {
 
 export function buildMediaId(fileId: string) {
   return `media-${shortHash(`file|${fileId}`)}`;
+}
+
+export function buildMediaFileId() {
+  return `mfile-${randomBytes(8).toString("hex")}`;
 }
 
 export function buildMediaLinkId(

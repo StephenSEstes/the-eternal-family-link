@@ -17,6 +17,12 @@ type ObjectContent = {
   data: ArrayBuffer;
 };
 
+type PutObjectInput = {
+  objectKey: string;
+  data: Buffer | Uint8Array;
+  mimeType?: string;
+};
+
 let cachedClient: ObjectStorageClient | null = null;
 let cachedConfigKey = "";
 
@@ -56,6 +62,19 @@ function getClient(config: OciObjectConfig) {
 
 export function isOciObjectStorageConfigured() {
   return readConfig() != null;
+}
+
+export function getOciObjectStorageLocation() {
+  const config = readConfig();
+  if (!config) {
+    return null;
+  }
+  return {
+    region: config.region,
+    namespace: config.namespace,
+    bucketName: config.bucketName,
+    objectPrefix: readOptionalEnv("OCI_OBJECT_MEDIA_PREFIX") || "efl-media",
+  };
 }
 
 export async function getOciObjectContentByKey(objectKey: string, fallbackMimeType = "application/octet-stream"): Promise<ObjectContent> {
@@ -101,4 +120,25 @@ export async function getOciObjectContentByKey(objectKey: string, fallbackMimeTy
     mimeType: contentType,
     data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
   };
+}
+
+export async function putOciObjectByKey(input: PutObjectInput): Promise<void> {
+  const config = readConfig();
+  if (!config) {
+    throw new Error("OCI object storage is not configured for runtime writes.");
+  }
+  const key = String(input.objectKey ?? "").trim();
+  if (!key) {
+    throw new Error("Object key is required.");
+  }
+  const bytes = Buffer.isBuffer(input.data) ? input.data : Buffer.from(input.data);
+  const client = getClient(config);
+  await client.putObject({
+    namespaceName: config.namespace,
+    bucketName: config.bucketName,
+    objectName: key,
+    putObjectBody: bytes,
+    contentType: String(input.mimeType ?? "").trim() || "application/octet-stream",
+    contentLength: bytes.length,
+  });
 }

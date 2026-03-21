@@ -9,7 +9,7 @@ type PhotoRouteProps = {
   params: Promise<{ fileId: string }>;
 };
 
-export async function GET(_: Request, { params }: PhotoRouteProps) {
+export async function GET(request: Request, { params }: PhotoRouteProps) {
   try {
     const { fileId } = await params;
     const session = await getServerSession(authOptions);
@@ -20,7 +20,9 @@ export async function GET(_: Request, { params }: PhotoRouteProps) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    const photo = await resolvePhotoContentAcrossFamilies(fileId, DEFAULT_TENANT_KEY);
+    const requestUrl = new URL(request.url);
+    const variant = requestUrl.searchParams.get("variant")?.trim().toLowerCase() === "preview" ? "preview" : "original";
+    const photo = await resolvePhotoContentAcrossFamilies(fileId, DEFAULT_TENANT_KEY, { variant });
     const blob = new Blob([photo.data], { type: photo.mimeType });
 
     return new NextResponse(blob, {

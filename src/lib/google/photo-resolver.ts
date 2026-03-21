@@ -10,7 +10,7 @@ type FolderCache = {
 };
 type ObjectKeyCache = {
   expiresAt: number;
-  byFileId: Map<string, { objectKey: string; mimeType: string }>;
+  byFileId: Map<string, { originalObjectKey: string; thumbnailObjectKey: string; mimeType: string }>;
 };
 
 const FOLDER_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -36,16 +36,19 @@ function dedupe(values: string[]) {
   return out;
 }
 
-function normalizeObjectStorageObjectKey(rawMetadata: string) {
+function normalizeObjectStorageMetadata(rawMetadata: string) {
   const raw = String(rawMetadata ?? "").trim();
-  if (!raw || (!raw.startsWith("{") && !raw.startsWith("["))) return "";
+  if (!raw || (!raw.startsWith("{") && !raw.startsWith("["))) {
+    return { originalObjectKey: "", thumbnailObjectKey: "" };
+  }
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const objectStorage = parsed.objectStorage as Record<string, unknown> | undefined;
-    const value = String(objectStorage?.originalObjectKey ?? "").trim();
-    return value;
+    const originalObjectKey = String(objectStorage?.originalObjectKey ?? "").trim();
+    const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? "").trim();
+    return { originalObjectKey, thumbnailObjectKey };
   } catch {
-    return "";
+    return { originalObjectKey: "", thumbnailObjectKey: "" };
   }
 }
 
@@ -78,16 +81,17 @@ async function getObjectKeyByFileId(fileId: string) {
   const now = Date.now();
   if (!objectKeyCache || objectKeyCache.expiresAt <= now) {
     const rows = await getTableRecords("MediaAssets").catch(() => []);
-    const byFileId = new Map<string, { objectKey: string; mimeType: string }>();
+    const byFileId = new Map<string, { originalObjectKey: string; thumbnailObjectKey: string; mimeType: string }>();
     for (const row of rows) {
       const fileIdKey = String(row.data.file_id ?? "").trim();
       if (!fileIdKey) continue;
       const storageProvider = String(row.data.storage_provider ?? "").trim().toLowerCase();
       if (storageProvider !== "oci_object") continue;
-      const objectKey = normalizeObjectStorageObjectKey(String(row.data.media_metadata ?? ""));
-      if (!objectKey) continue;
+      const objectStorageMetadata = normalizeObjectStorageMetadata(String(row.data.media_metadata ?? ""));
+      if (!objectStorageMetadata.originalObjectKey) continue;
       byFileId.set(fileIdKey, {
-        objectKey,
+        originalObjectKey: objectStorageMetadata.originalObjectKey,
+        thumbnailObjectKey: objectStorageMetadata.thumbnailObjectKey,
         mimeType: String(row.data.mime_type ?? "").trim() || "application/octet-stream",
       });
     }
@@ -99,11 +103,19 @@ async function getObjectKeyByFileId(fileId: string) {
   return objectKeyCache.byFileId.get(normalizedFileId) ?? null;
 }
 
-export async function resolvePhotoContentAcrossFamilies(fileId: string, preferredTenantKey?: string) {
+export async function resolvePhotoContentAcrossFamilies(
+  fileId: string,
+  preferredTenantKey?: string,
+  options?: { variant?: "original" | "preview" },
+) {
   const objectTarget = await getObjectKeyByFileId(fileId);
   if (objectTarget) {
     try {
-      return await getOciObjectContentByKey(objectTarget.objectKey, objectTarget.mimeType);
+      const objectKey =
+        options?.variant === "preview" && objectTarget.thumbnailObjectKey
+          ? objectTarget.thumbnailObjectKey
+          : objectTarget.originalObjectKey;
+      return await getOciObjectContentByKey(objectKey, objectTarget.mimeType);
     } catch {
       // Fall back to legacy Drive retrieval.
     }

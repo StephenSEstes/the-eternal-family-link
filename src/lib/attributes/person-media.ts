@@ -59,6 +59,10 @@ export async function syncPersonMediaAssociations(input: {
   isPrimary?: boolean;
   sortOrder?: number;
   mediaMetadata?: string;
+  storageProvider?: string;
+  mimeType?: string;
+  fileName?: string;
+  fileSizeBytes?: string;
   createdAt?: string;
   replaceAttributeLinks?: boolean;
   replacePersonLinksForFileIds?: string[];
@@ -100,7 +104,10 @@ export async function syncPersonMediaAssociations(input: {
   await upsertOciMediaAsset({
     mediaId,
     fileId,
-    storageProvider: "gdrive",
+    storageProvider: (input.storageProvider ?? "gdrive").trim(),
+    mimeType: (input.mimeType ?? "").trim(),
+    fileName: (input.fileName ?? "").trim(),
+    fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
     mediaMetadata,
     createdAt,
   });
