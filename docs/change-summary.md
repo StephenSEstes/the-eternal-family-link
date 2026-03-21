@@ -4944,3 +4944,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Script supports `--limit` and optional `--tenant` filtering.
 - `Rollback Notes`: Revert commit; no runtime path cutover is included in this change.
 - `Design Decision Change`: No design decision change.
+## 2026-03-20 (oci media migration execution + safe oci-first photo reads)
+
+- `Change`: Fixed migration candidate detection in OCI media migration script, executed staged + full migration for existing media assets, propagated migrated metadata to media links, and added runtime OCI-first media read resolution with Drive fallback for safe transition.
+- `Type`: Infra, Migration, Runtime Fallback
+- `Why`: Root cause was mixed storage state. Existing media had not been backfilled to OCI originals/thumbnails, and runtime retrieval still assumed legacy source-only reads.
+- `Files`:
+  - `scripts/oci-object-media-migrate.cjs`
+  - `src/lib/oci/object-storage.ts`
+  - `src/lib/google/photo-resolver.ts`
+- `Data Changes`: Existing `MediaAssets` rows and linked `MediaLinks.media_metadata` were updated during migration apply runs to include OCI object pointers (`originalObjectKey`, `thumbnailObjectKey`) and `storage_provider=oci_object`.
+- `Verify`:
+  - Dry-run staged check succeeded with candidates detected.
+  - Apply batch (`--limit 10`) succeeded.
+  - Full apply succeeded.
+  - Post-run DB verification showed all assets migrated (`73/73`) with original and thumbnail object metadata present.
+  - Runtime keeps Drive fallback if OCI object read fails.
+- `Rollback Notes`: Revert code commit; data rollback would require a dedicated reverse migration if needed.
+- `Design Decision Change`: No design decision change.

@@ -188,6 +188,19 @@ async function queryRows(conn, sql, binds = {}) {
   return result.rows || [];
 }
 
+async function updateMediaLinkMetadata(conn, mediaId, mediaMetadataJson) {
+  await conn.execute(
+    `UPDATE media_links
+     SET media_metadata = :mediaMetadata
+     WHERE TRIM(media_id) = :mediaId`,
+    {
+      mediaMetadata: mediaMetadataJson,
+      mediaId,
+    },
+    { autoCommit: false },
+  );
+}
+
 async function main() {
   loadDotEnv(path.join(process.cwd(), ".env.local"));
   const options = parseArgs();
@@ -253,7 +266,8 @@ async function main() {
          NVL(TRIM(a.file_size_bytes), '') AS file_size_bytes,
          NVL(TRIM(a.media_metadata), '') AS media_metadata
        FROM media_assets a
-       WHERE TRIM(NVL(a.file_id, '')) <> ''
+       WHERE a.file_id IS NOT NULL
+         AND LENGTH(a.file_id) > 0
          ${whereTenant}
        ORDER BY a.media_id`,
       binds,
@@ -359,10 +373,11 @@ async function main() {
               fileName: sourceFileName,
               fileSizeBytes: String(sourceSizeBytes),
               mediaMetadata: JSON.stringify(mergedMetadata),
-              mediaId,
+                mediaId,
             },
             { autoCommit: false },
           );
+          await updateMediaLinkMetadata(connection, mediaId, JSON.stringify(mergedMetadata));
         }
 
         if (thumbnail) {
@@ -403,4 +418,3 @@ main().catch((error) => {
   console.error("[oci-object-media-migrate] fatal", error);
   process.exit(1);
 });
-
