@@ -756,7 +756,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         </div>
       </div>
       {showPhotoEditor && selectedPhotoDetail ? (
-        <div className="person-modal-backdrop" onClick={() => setShowPhotoEditor(false)}>
+        <div className="person-modal-backdrop" onClick={(event) => event.stopPropagation()}>
           <div
             className="person-modal-panel"
             onClick={(event) => event.stopPropagation()}

@@ -2204,10 +2204,7 @@ export function SettingsClient({
             {showAddUserForm ? (
               <div
                 className="person-modal-backdrop"
-                onClick={() => {
-                  if (createUserPending) return;
-                  closeAddUserModal();
-                }}
+                onClick={(event) => event.stopPropagation()}
               >
                 <div
                   className="person-modal-panel"
@@ -2311,10 +2308,7 @@ export function SettingsClient({
             {selectedDirectoryPerson ? (
               <div
                 className="person-modal-backdrop"
-                onClick={() => {
-                  if (isManageUserActionPending || isInvitePending) return;
-                  closeManageUserModal();
-                }}
+                onClick={(event) => event.stopPropagation()}
               >
                 <div
                   className="person-modal-panel"

@@ -4,6 +4,135 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Face recognition architecture and phased implementation for media upload
+  Priority: High
+  Est date: 2026-04-20
+  Desc: Add reviewed face-recognition suggestions in media flows so uploads can propose likely people matches across accessible family groups, with strict permission filtering and no silent auto-assignment.
+  Scope:
+  - Detect faces from uploaded images and create per-face records.
+  - Generate embeddings and query nearest candidates from a face index.
+  - Return ranked match suggestions with confidence for user review.
+  - Allow confirm/reject actions to improve matching quality over time.
+  - Enforce access controls so suggestions only include people the current user can access.
+  - Add biometric/privacy controls (retention, delete cascade, audit).
+  Architecture:
+  - Services
+    - `FaceDetector`: extracts face bounding boxes from image bytes.
+    - `FaceEmbedder`: generates embedding vectors for each detected face crop.
+    - `FaceMatchEngine`: similarity search + score normalization + thresholding.
+    - `FaceReviewService`: confirm/reject lifecycle and profile update logic.
+  - Processing model
+    - Upload is write-fast and enqueues async face processing job.
+    - Worker pipeline: load image -> detect faces -> embed -> match -> persist suggestions.
+    - Existing media backfill runs as resumable batch jobs.
+  - Suggested data model
+    - `face_instances`
+      - `face_id` (PK), `media_id`, `family_group_key`, `bbox_x`, `bbox_y`, `bbox_w`, `bbox_h`,
+      - `embedding_vector` (or `embedding_ref`), `quality_score`, `created_at`, `updated_at`.
+    - `face_matches`
+      - `match_id` (PK), `face_id`, `candidate_person_id`, `confidence_score`,
+      - `match_status` (`suggested|confirmed|rejected`), `reviewed_by`, `reviewed_at`, `created_at`.
+    - `person_face_profiles`
+      - `profile_id` (PK), `person_id`, `embedding_centroid` (or references), `sample_count`, `updated_at`.
+    - `face_review_audit`
+      - `audit_id` (PK), `face_id`, `person_id`, `action`, `actor_user_id/email`, `family_group_key`, `created_at`.
+  - Access model
+    - Candidate search scope is all people in family groups user can access.
+    - Response filter enforces user access before returning candidates.
+    - No cross-tenant leakage; hard partition by tenant/family-group access rules.
+  - UX model
+    - Upload card shows `Face analysis in progress`.
+    - Suggestions panel per photo: face chips + top candidates + confidence bands.
+    - Actions: `Confirm`, `Reject`, `Not sure`, `Create person`.
+    - Never auto-link without explicit confirmation.
+  Phase 1 (MVP suggest-only):
+  - Add schema tables + migration.
+  - Add worker scaffold + queue trigger from upload routes.
+  - Persist face instances and raw candidate suggestions.
+  - Add read-only suggestion UI.
+  Validation:
+  - Uploading an image with faces produces `face_instances` and `face_matches`.
+  - Only accessible people appear in suggestions.
+  Phase 2 (review + learning loop):
+  - Add confirm/reject APIs and UI actions.
+  - Persist review actions + audit rows.
+  - Update `person_face_profiles` from confirmed samples.
+  Validation:
+  - Confirmed suggestions create durable person links and improve future ranking.
+  - Rejected suggestions are suppressed for the same face/profile pair.
+  Phase 3 (backfill + quality controls):
+  - Backfill existing media in batches with resumable checkpoints.
+  - Add confidence thresholds and false-positive guardrails.
+  - Add admin settings for enable/disable and confidence tuning.
+  Validation:
+  - Backfill completes without blocking normal uploads.
+  - Precision/recall metrics are captured for tuning.
+  Phase 4 (privacy + lifecycle hardening):
+  - Add delete cascade for person/media removal.
+  - Add retention rules and optional reprocessing controls.
+  - Document biometric handling in help/admin policy surfaces.
+  Validation:
+  - Deleting person/media removes or invalidates associated face artifacts.
+  - Audit shows who confirmed/rejected each suggestion.
+- [ ] Photo intelligence pipeline: people tagging + AI description + date inference
+  Priority: High
+  Est date: 2026-04-24
+  Desc: Enrich uploaded photos with reviewed people tags, AI-generated human-friendly descriptions (for example "Fun with cousins at the beach"), and best-available photo date (explicit or estimated), then persist all outputs in existing media entities and audit trails.
+  Scope:
+  - Add caption generation for photos after upload.
+  - Add date extraction/inference with confidence and estimated flag behavior.
+  - Integrate face-tag suggestions with person-link confirmation UI.
+  - Persist outputs in existing app storage shape (`MediaAssets`, `MediaLinks`, media detail fields) without schema drift from current model.
+  Data mapping (current app model):
+  - `MediaLinks.label`: short title/caption (editable, user-facing).
+  - `MediaLinks.description`: richer AI photo description (editable).
+  - `MediaLinks.photo_date`: resolved date (explicit or inferred).
+  - `MediaLinks.media_metadata`: inference details (caption confidence, date source, date confidence, OCR clues, face candidate metadata).
+  - `MediaAssets.media_metadata`: technical extraction payload (model/version, EXIF read result, processing hashes/checkpoints).
+  - `Audit`: log AI suggestion generation and user confirm/reject/edit actions.
+  Date resolution policy:
+  - Priority order:
+    1. User-entered date (always wins)
+    2. EXIF capture timestamp (when valid)
+    3. OCR/date text found in image
+    4. Contextual inference (linked people/events/location hints)
+  - Store inferred dates with:
+    - `photo_date` set to inferred value
+    - metadata flags: `dateIsEstimated=true`, `estimatedTo=year|month` as applicable
+    - `dateInferenceSource` and `dateConfidence`
+  Caption policy:
+  - Generate short, human-friendly caption for `label` (about 3-10 words).
+  - Generate optional fuller sentence/phrase for `description`.
+  - Never overwrite user-edited caption/description without explicit user action.
+  UX behavior:
+  - Upload response state: `Processing photo intelligence...`.
+  - Suggestions panel:
+    - Suggested people tags with confidence
+    - Suggested caption + description
+    - Suggested date with source and confidence
+  - User actions:
+    - Confirm/reject each person suggestion
+    - Accept/edit caption
+    - Accept/edit/clear date suggestion
+    - Save all
+  Phase 1:
+  - Implement caption + EXIF date extraction and persist suggestions.
+  - Render suggestions in media detail panel with accept/edit controls.
+  Validation:
+  - New uploads show suggested caption/date.
+  - Accepted values save to `MediaLinks` and display in media search/detail.
+  Phase 2:
+  - Integrate face candidate suggestions from face pipeline and confirmation actions.
+  - Persist confirmed people tags as canonical media links.
+  Validation:
+  - Confirmed people appear immediately in linked entities.
+  - Rejected candidates are recorded and suppressed.
+  Phase 3:
+  - Add OCR/context date inference fallback and confidence display.
+  - Add admin controls for enabling/disabling auto-suggestion categories.
+  Validation:
+  - Date source is visible and auditable.
+  - Low-confidence suggestions are clearly marked and not auto-accepted.
 - [ ] AI story extraction redesign as expert personal history documentarian
   Priority: High
   Est date: 2026-03-22

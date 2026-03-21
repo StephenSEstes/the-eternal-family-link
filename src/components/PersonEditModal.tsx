@@ -3935,20 +3935,26 @@ export function PersonEditModal({
                                 ))}
                               </datalist>
                             ) : null}
-                            <label className="label">Date</label>
-                            <input
-                              className="input"
-                              type="date"
-                              value={currentWorkspaceDraft.attributeDate}
-                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeDate: event.target.value })}
-                            />
-                            <label className="label">End Date</label>
-                            <input
-                              className="input"
-                              type="date"
-                              value={currentWorkspaceDraft.endDate}
-                              onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { endDate: event.target.value })}
-                            />
+                            <div className="settings-chip-list" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <label className="label">Date</label>
+                                <input
+                                  className="input"
+                                  type="date"
+                                  value={currentWorkspaceDraft.attributeDate}
+                                  onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { attributeDate: event.target.value })}
+                                />
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <label className="label">End Date</label>
+                                <input
+                                  className="input"
+                                  type="date"
+                                  value={currentWorkspaceDraft.endDate}
+                                  onChange={(event) => updateStoryWorkspaceDraft(currentWorkspaceDraft.localId, { endDate: event.target.value })}
+                                />
+                              </div>
+                            </div>
                             <label className="label">Notes</label>
                             <textarea
                               className="textarea"

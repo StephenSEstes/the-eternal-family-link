@@ -1308,7 +1308,7 @@ export function MediaAttachWizard({
   );
 
   return (
-    <div className="person-modal-backdrop" onClick={() => !busy && onClose()}>
+    <div className="person-modal-backdrop" onClick={(event) => event.stopPropagation()}>
       <div className="person-modal-panel" onClick={(event) => event.stopPropagation()} style={{ maxWidth: "900px", width: "min(900px, 96vw)" }}>
         <div className="person-modal-sticky-head">
           <div className="person-modal-header">

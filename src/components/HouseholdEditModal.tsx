@@ -722,10 +722,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   return (
     <div
       className="person-modal-backdrop"
-      onClick={() => {
-        if (loading || saving) return;
-        onClose();
-      }}
+      onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div

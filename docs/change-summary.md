@@ -1154,6 +1154,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-21 (story extraction controls + date row alignment + OCI local test helper)
+
+- `Change`: Tightened story-extraction prompt controls to cap over-splitting, added date inference guidance for missing exact dates, aligned Step 2 Date/End Date fields onto one row in Story Workspace, and added local OCI config/test helper files under `lib/` for object storage connectivity diagnostics.
+- `Type`: AI Prompt Quality, UX Layout Consistency, Developer Tooling
+- `Why`: Root cause was inconsistent extraction granularity (too many fragments), missing date inference behavior when context exists, and a Step 2 layout request for date-field compactness; OCI helper files were needed to standardize repeatable local connectivity checks.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `src/components/SettingsClient.tsx`
+  - `src/components/HouseholdEditModal.tsx`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `lib/ociConfig.ts`
+  - `lib/ociTest.ts`
+  - `TODO.md`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - `npx tsc --noEmit` passes.
+  - Story Workspace Step 2 renders `Date` and `End Date` in the same row.
+  - Story prompt now includes over-splitting limits and date-inference instructions.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (parent-based family-group access inheritance)
 
 - `Change`: Added shared parent-based family-group access inheritance for new user provisioning. Local-user creation, Google access creation, and new family-group provisioning now derive additional family-group access from enabled parent access rows intersected with the child's enabled family memberships, while keeping `UserFamilyGroups` as the canonical persisted access model.
