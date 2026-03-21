@@ -2302,6 +2302,51 @@ export async function updateOciMediaLinksForFile(input: {
   });
 }
 
+export async function updateOciMediaMetadataForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+  mediaMetadata: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return { assetsUpdated: 0, linksUpdated: 0 };
+  }
+  return withConnection(async (connection) => {
+    const assetUpdate = await connection.execute(
+      `UPDATE media_assets
+       SET media_metadata = :mediaMetadata
+       WHERE TRIM(file_id) = :fileId`,
+      {
+        fileId,
+        mediaMetadata: input.mediaMetadata.trim(),
+      },
+      { autoCommit: false },
+    );
+    const linkUpdate = await connection.execute(
+      `UPDATE media_links
+       SET media_metadata = :mediaMetadata
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(media_id) IN (
+           SELECT TRIM(file_id_media.media_id)
+           FROM media_assets file_id_media
+           WHERE TRIM(file_id_media.file_id) = :fileId
+         )`,
+      {
+        familyGroupKey,
+        fileId,
+        mediaMetadata: input.mediaMetadata.trim(),
+      },
+      { autoCommit: false },
+    );
+    await connection.commit();
+    return {
+      assetsUpdated: assetUpdate.rowsAffected ?? 0,
+      linksUpdated: linkUpdate.rowsAffected ?? 0,
+    };
+  });
+}
+
 export async function deleteOciMediaLink(linkId: string) {
   const normalized = linkId.trim();
   if (!normalized) {

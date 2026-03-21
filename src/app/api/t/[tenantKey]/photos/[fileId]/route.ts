@@ -5,6 +5,7 @@ import { ATTRIBUTES_TABLE } from "@/lib/attributes/store";
 import { getPeople, updateTableRecordById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
+  getOciMediaAssetByFileId,
   getOciHouseholdsForTenant,
   getOciMediaLinksForFile,
   getOciPersonMediaAttributeRowsForFile,
@@ -42,11 +43,12 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
 }
 
 async function buildMediaDetail(tenantKey: string, fileId: string) {
-  const [people, householdRows, mediaLinks, personMediaAttributes] = await Promise.all([
+  const [people, householdRows, mediaLinks, personMediaAttributes, mediaAsset] = await Promise.all([
     getPeople(tenantKey),
     getOciHouseholdsForTenant(tenantKey).catch(() => []),
     getOciMediaLinksForFile({ familyGroupKey: tenantKey, fileId }).catch(() => []),
     getOciPersonMediaAttributeRowsForFile({ familyGroupKey: tenantKey, fileId }).catch(() => []),
+    getOciMediaAssetByFileId(fileId).catch(() => null),
   ]);
 
   const peopleById = new Map(people.map((person) => [person.personId, person.displayName] as const));
@@ -114,6 +116,10 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
         displayName: peopleById.get(person.personId) || person.personId,
       });
     }
+  }
+
+  if (!detail.mediaMetadata && mediaAsset?.mediaMetadata) {
+    detail.mediaMetadata = mediaAsset.mediaMetadata.trim();
   }
 
   detail.people.sort((a, b) => a.displayName.localeCompare(b.displayName));

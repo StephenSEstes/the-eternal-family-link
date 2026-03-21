@@ -1178,6 +1178,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-21 (photo intelligence phase 1 foundation)
+
+- `Change`: Added a first-pass photo-intelligence workflow for image media with deterministic suggestion generation and review controls.
+- `Type`: Media Metadata, API, UX
+- `Why`: Root cause was no backend/photo-detail contract for generating, persisting, and applying photo caption/date suggestions. Media uploads and edits had no suggestion pipeline to review before save.
+- `Files`:
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/components/MediaLibraryClient.tsx`
+  - `TODO.md`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - `npx tsc --noEmit` passes.
+  - Media editor now exposes `Generate Suggestions` for images.
+  - Suggestions are persisted to media metadata and surfaced in the media editor with `Use Title`, `Use Description`, and `Use Date` actions.
+  - Suggestions never auto-overwrite saved fields; users apply and then save.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (parent-based family-group access inheritance)
 
 - `Change`: Added shared parent-based family-group access inheritance for new user provisioning. Local-user creation, Google access creation, and new family-group provisioning now derive additional family-group access from enabled parent access rows intersected with the child's enabled family memberships, while keeping `UserFamilyGroups` as the canonical persisted access model.

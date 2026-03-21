@@ -6,6 +6,11 @@ import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/me
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { inferStoredMediaKind } from "@/lib/media/upload";
+import {
+  canRunPhotoIntelligence,
+  readPhotoIntelligenceSuggestion,
+  type PhotoIntelligenceSuggestion,
+} from "@/lib/media/photo-intelligence";
 
 type MediaLibraryClientProps = {
   tenantKey: string;
@@ -114,6 +119,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   }>({ people: [], households: [] });
   const [photoAssociationBusy, setPhotoAssociationBusy] = useState(false);
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
+  const [photoIntelligenceBusy, setPhotoIntelligenceBusy] = useState(false);
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
@@ -281,6 +287,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     });
   }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds]);
 
+  const selectedPhotoIntelligenceSuggestion = useMemo<PhotoIntelligenceSuggestion | null>(() => {
+    if (!selectedPhotoDetail) return null;
+    return readPhotoIntelligenceSuggestion(selectedPhotoDetail.mediaMetadata);
+  }, [selectedPhotoDetail]);
+
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
       setLinkedFilterPersonIds((current) => (current.includes(candidate.personId) ? current : [...current, candidate.personId]));
@@ -393,6 +404,37 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setPhotoAssociationBusy(false);
     }
   };
+
+  const runPhotoIntelligence = async (force = false) => {
+    if (!selectedPhotoDetail) return;
+    if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
+    setPhotoIntelligenceBusy(true);
+    setPhotoAssociationStatus(force ? "Regenerating photo suggestions..." : "Generating photo suggestions...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/intelligence`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        },
+      );
+      await assertOk(res, "Failed to generate photo suggestions");
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      setPhotoAssociationStatus("Photo suggestions ready.");
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "Photo suggestion failed");
+    } finally {
+      setPhotoIntelligenceBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showPhotoEditor || !selectedPhotoDetail) return;
+    if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
+    if (selectedPhotoIntelligenceSuggestion) return;
+    void runPhotoIntelligence(false);
+  }, [showPhotoEditor, selectedPhotoDetail?.fileId, selectedPhotoDetail?.mediaMetadata, selectedPhotoIntelligenceSuggestion]);
 
   const linkPhotoToPerson = async (personId: string) => {
     if (!selectedPhotoDetail) return;
@@ -767,11 +809,21 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 <div className="person-photo-detail-head">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Media</h4>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
+                    {canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) ? (
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => void runPhotoIntelligence(true)}
+                        disabled={photoAssociationBusy || photoIntelligenceBusy}
+                      >
+                        {photoIntelligenceBusy ? "Generating..." : "Generate Suggestions"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="button tap-button"
                       onClick={() => void saveSelectedPhotoMetadata()}
-                      disabled={photoAssociationBusy || !selectedPhotoEditable}
+                      disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
                     >
                       Save
                     </button>
@@ -846,6 +898,56 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     onChange={(event) => setSelectedPhotoDate(event.target.value)}
                     disabled={photoAssociationBusy || !selectedPhotoEditable}
                   />
+                  {selectedPhotoIntelligenceSuggestion ? (
+                    <div
+                      style={{
+                        marginTop: "0.65rem",
+                        padding: "0.6rem",
+                        border: "1px solid var(--border)",
+                        borderRadius: "10px",
+                        background: "#f8fafc",
+                        display: "grid",
+                        gap: "0.45rem",
+                      }}
+                    >
+                      <strong style={{ fontSize: "0.9rem" }}>Photo Suggestions</strong>
+                      <span className="page-subtitle" style={{ margin: 0 }}>
+                        Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
+                      </span>
+                      <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                        {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoCanEditName}
+                            onClick={() => setSelectedPhotoName(selectedPhotoIntelligenceSuggestion.labelSuggestion)}
+                          >
+                            Use Title
+                          </button>
+                        ) : null}
+                        {selectedPhotoIntelligenceSuggestion.descriptionSuggestion ? (
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
+                            onClick={() => setSelectedPhotoDescription(selectedPhotoIntelligenceSuggestion.descriptionSuggestion)}
+                          >
+                            Use Description
+                          </button>
+                        ) : null}
+                        {selectedPhotoIntelligenceSuggestion.dateSuggestion ? (
+                          <button
+                            type="button"
+                            className="button secondary tap-button"
+                            disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
+                            onClick={() => setSelectedPhotoDate(selectedPhotoIntelligenceSuggestion.dateSuggestion)}
+                          >
+                            Use Date
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   {!selectedPhotoEditable ? (
                     <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
                       Link this file to a person or household before editing app metadata.
