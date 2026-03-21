@@ -20,6 +20,19 @@ export type PhotoIntelligenceSuggestion = {
   detectedFaceCount?: number;
 };
 
+export type PhotoIntelligenceDebug = {
+  generatedAt: string;
+  visionConfigured: boolean;
+  visionAttempted: boolean;
+  visionSucceeded: boolean;
+  visionErrorMessage: string;
+  visionErrorCode: string;
+  visionStatusCode: string;
+  visionServiceCode: string;
+  visionOpcRequestId: string;
+  visionRawResult: string;
+};
+
 type BuildPhotoIntelligenceInput = {
   fileId: string;
   fileName: string;
@@ -27,6 +40,7 @@ type BuildPhotoIntelligenceInput = {
   linkedPeople: string[];
   existingMetadata: string;
   vision?: PhotoVisionInsight | null;
+  debug?: PhotoIntelligenceDebug | null;
 };
 
 const GENERIC_NAME_PATTERNS = [
@@ -170,6 +184,7 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
   const merged = {
     ...existing,
     photoIntelligence: suggestion,
+    photoIntelligenceDebug: input.debug ?? null,
   };
   return {
     suggestion,
@@ -215,6 +230,30 @@ export function readPhotoIntelligenceSuggestion(rawMetadata: string | undefined)
       : 0,
   };
   return output;
+}
+
+export function readPhotoIntelligenceDebug(rawMetadata: string | undefined): PhotoIntelligenceDebug | null {
+  const parsed = parseMediaMetadata(rawMetadata);
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+  const debugRaw = (parsed as Record<string, unknown>).photoIntelligenceDebug;
+  if (!debugRaw || typeof debugRaw !== "object") {
+    return null;
+  }
+  const debug = debugRaw as Record<string, unknown>;
+  return {
+    generatedAt: String(debug.generatedAt ?? "").trim(),
+    visionConfigured: String(debug.visionConfigured ?? "").trim().toLowerCase() === "true",
+    visionAttempted: String(debug.visionAttempted ?? "").trim().toLowerCase() === "true",
+    visionSucceeded: String(debug.visionSucceeded ?? "").trim().toLowerCase() === "true",
+    visionErrorMessage: String(debug.visionErrorMessage ?? "").trim(),
+    visionErrorCode: String(debug.visionErrorCode ?? "").trim(),
+    visionStatusCode: String(debug.visionStatusCode ?? "").trim(),
+    visionServiceCode: String(debug.visionServiceCode ?? "").trim(),
+    visionOpcRequestId: String(debug.visionOpcRequestId ?? "").trim(),
+    visionRawResult: String(debug.visionRawResult ?? "").trim(),
+  };
 }
 
 export function canRunPhotoIntelligence(fileId: string, rawMetadata?: string) {

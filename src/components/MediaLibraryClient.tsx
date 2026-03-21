@@ -8,7 +8,9 @@ import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrato
 import { inferStoredMediaKind } from "@/lib/media/upload";
 import {
   canRunPhotoIntelligence,
+  readPhotoIntelligenceDebug,
   readPhotoIntelligenceSuggestion,
+  type PhotoIntelligenceDebug,
   type PhotoIntelligenceSuggestion,
 } from "@/lib/media/photo-intelligence";
 
@@ -120,6 +122,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [photoAssociationBusy, setPhotoAssociationBusy] = useState(false);
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [photoIntelligenceBusy, setPhotoIntelligenceBusy] = useState(false);
+  const [photoIntelligenceDebug, setPhotoIntelligenceDebug] = useState<PhotoIntelligenceDebug | null>(null);
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
@@ -291,6 +294,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail) return null;
     return readPhotoIntelligenceSuggestion(selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail]);
+  const selectedPhotoIntelligenceDebug = useMemo<PhotoIntelligenceDebug | null>(() => {
+    if (!selectedPhotoDetail) return photoIntelligenceDebug;
+    return readPhotoIntelligenceDebug(selectedPhotoDetail.mediaMetadata) ?? photoIntelligenceDebug;
+  }, [selectedPhotoDetail, photoIntelligenceDebug]);
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -338,6 +345,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const openPhotoEditor = async (fileId: string) => {
+    setPhotoIntelligenceDebug(null);
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -420,6 +428,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         },
       );
       await assertOk(res, "Failed to generate photo suggestions");
+      const body = (await res.json().catch(() => null)) as { debug?: PhotoIntelligenceDebug | null } | null;
+      setPhotoIntelligenceDebug(body?.debug ?? null);
       await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Photo suggestions ready.");
     } catch (error) {
@@ -956,6 +966,33 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                           </button>
                         ) : null}
                       </div>
+                      {selectedPhotoIntelligenceDebug ? (
+                        <details style={{ marginTop: "0.25rem" }}>
+                          <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>
+                          <div style={{ marginTop: "0.45rem", display: "grid", gap: "0.3rem" }}>
+                            <span className="page-subtitle" style={{ margin: 0 }}>
+                              configured={String(selectedPhotoIntelligenceDebug.visionConfigured)} attempted={String(selectedPhotoIntelligenceDebug.visionAttempted)} succeeded={String(selectedPhotoIntelligenceDebug.visionSucceeded)}
+                            </span>
+                            {selectedPhotoIntelligenceDebug.visionErrorMessage ? (
+                              <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
+                                {selectedPhotoIntelligenceDebug.visionErrorMessage}
+                              </span>
+                            ) : null}
+                            {(selectedPhotoIntelligenceDebug.visionErrorCode || selectedPhotoIntelligenceDebug.visionStatusCode || selectedPhotoIntelligenceDebug.visionServiceCode || selectedPhotoIntelligenceDebug.visionOpcRequestId) ? (
+                              <span className="page-subtitle" style={{ margin: 0 }}>
+                                code={selectedPhotoIntelligenceDebug.visionErrorCode || "-"} status={selectedPhotoIntelligenceDebug.visionStatusCode || "-"} service={selectedPhotoIntelligenceDebug.visionServiceCode || "-"} requestId={selectedPhotoIntelligenceDebug.visionOpcRequestId || "-"}
+                              </span>
+                            ) : null}
+                            {selectedPhotoIntelligenceDebug.visionRawResult ? (
+                              <textarea className="textarea" readOnly value={selectedPhotoIntelligenceDebug.visionRawResult} style={{ minHeight: "120px" }} />
+                            ) : (
+                              <span className="page-subtitle" style={{ margin: 0 }}>
+                                No raw Vision result captured.
+                              </span>
+                            )}
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                   ) : null}
                   {!selectedPhotoEditable ? (

@@ -1219,6 +1219,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-21 (vision troubleshooting visibility for photo suggestions)
+
+- `Change`: Exposed OCI Vision troubleshooting details for photo suggestions in both API response and UI, including attempted/succeeded flags, error/status/service/request IDs, and raw Vision result payload.
+- `Type`: Diagnostics, UX Debuggability
+- `Why`: Root cause was inability to distinguish Vision success from fallback behavior when suggestion quality was weak. Users needed direct visibility into Vision response/error data to troubleshoot configuration/runtime issues.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - `npx tsc --noEmit` passes.
+  - Media editor now shows a `Vision Debug` expander with run status and raw Vision output/error metadata.
+  - `POST /api/t/[tenantKey]/photos/[fileId]/intelligence` includes `debug` in response.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-14 (parent-based family-group access inheritance)
 
 - `Change`: Added shared parent-based family-group access inheritance for new user provisioning. Local-user creation, Google access creation, and new family-group provisioning now derive additional family-group access from enabled parent access rows intersected with the child's enabled family memberships, while keeping `UserFamilyGroups` as the canonical persisted access model.

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { buildPhotoIntelligenceSuggestion, canRunPhotoIntelligence, readPhotoIntelligenceSuggestion } from "@/lib/media/photo-intelligence";
+import {
+  buildPhotoIntelligenceSuggestion,
+  canRunPhotoIntelligence,
+  readPhotoIntelligenceDebug,
+  readPhotoIntelligenceSuggestion,
+  type PhotoIntelligenceDebug,
+} from "@/lib/media/photo-intelligence";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
   getOciMediaAssetByFileId,
@@ -81,10 +87,12 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   const existing = readPhotoIntelligenceSuggestion(baseMetadata);
   if (existing && !force) {
+    const debug = readPhotoIntelligenceDebug(baseMetadata);
     return NextResponse.json({
       ok: true,
       fileId: normalizedFileId,
       suggestion: existing,
+      debug,
       cached: true,
     });
   }
@@ -95,20 +103,66 @@ export async function POST(request: Request, { params }: RouteProps) {
     .map((item) => peopleById.get(item.entityId) || item.entityId)
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 
+  const visionConfigured = isOciVisionConfigured();
   let vision: OciVisionInsight | null = null;
-  if (isOciVisionConfigured()) {
+  let visionAttempted = false;
+  let visionSucceeded = false;
+  let visionErrorMessage = "";
+  let visionErrorCode = "";
+  let visionStatusCode = "";
+  let visionServiceCode = "";
+  let visionOpcRequestId = "";
+  let visionRawResult = "";
+  if (visionConfigured) {
     try {
       const originalObjectKey = readOriginalObjectKey(parsedMetadata);
       if (originalObjectKey) {
+        visionAttempted = true;
         const source = await getOciObjectContentByKey(originalObjectKey);
         vision = await analyzeInlineImageWithVision({
           imageBytes: Buffer.from(source.data),
         });
+        visionSucceeded = true;
+        visionRawResult = JSON.stringify(
+          {
+            labels: vision.labels,
+            objects: vision.objects,
+            faceCount: vision.faceCount,
+          },
+          null,
+          2,
+        );
+      } else {
+        visionErrorMessage = "Missing originalObjectKey in media metadata.";
       }
     } catch (visionError) {
+      const typed = visionError as {
+        message?: string;
+        code?: string;
+        statusCode?: number;
+        serviceCode?: string;
+        opcRequestId?: string;
+      };
+      visionErrorMessage = String(typed?.message ?? "Vision analysis failed");
+      visionErrorCode = String(typed?.code ?? "");
+      visionStatusCode = String(typed?.statusCode ?? "");
+      visionServiceCode = String(typed?.serviceCode ?? "");
+      visionOpcRequestId = String(typed?.opcRequestId ?? "");
       console.warn("[photo-intelligence] vision analysis failed; falling back to heuristic suggestion", visionError);
     }
   }
+  const debug: PhotoIntelligenceDebug = {
+    generatedAt: new Date().toISOString(),
+    visionConfigured,
+    visionAttempted,
+    visionSucceeded,
+    visionErrorMessage,
+    visionErrorCode,
+    visionStatusCode,
+    visionServiceCode,
+    visionOpcRequestId,
+    visionRawResult,
+  };
 
   const generated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
@@ -117,6 +171,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     linkedPeople,
     existingMetadata: baseMetadata,
     vision,
+    debug,
   });
 
   await updateOciMediaMetadataForFile({
@@ -138,6 +193,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     ok: true,
     fileId: normalizedFileId,
     suggestion: generated.suggestion,
+    debug,
     cached: false,
   });
 }
