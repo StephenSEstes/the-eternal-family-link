@@ -5055,3 +5055,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Existing JSON response schema and allowed category/type constraints remain unchanged.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-21 (vignette segmentation anti-merging prompt update)
+
+- `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.
+- `Type`: AI Prompt Quality, Segmentation Precision
+- `Why`: Root cause was over-merging adjacent but distinct narrative sections into one broad story proposal, reducing extract quality for multi-part narratives.
+- `Files`:
+  - `src/lib/ai/story-import.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npx tsc --noEmit` passes.
+  - Prompt text now includes section/theme splitting and anti-merging rule blocks.
+  - Existing JSON schema and attribute/category constraints remain unchanged.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
