@@ -46,6 +46,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the Vision image preparation normalization and the related error-context expansion together so format handling and diagnostics stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (remove synchronous face-profile bootstrap from Generate Suggestions)
+
+- `Date`: 2026-03-22
+- `Change`: Stopped the interactive `Generate Suggestions` request from bootstrapping missing person face profiles inline and skipped candidate-profile loading entirely when the current photo has no matchable face embeddings.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The photo-intelligence route called `buildAndPersistFaceSuggestions()` synchronously inside the button request, and that helper could read missing primary headshots and make extra Vision calls for up to 12 people before returning. It did that even when the current photo had no matchable face embeddings, which could leave the modal sitting on `Generating suggestions for this photo...` for an excessive time. The upload flow already seeds primary headshot face profiles asynchronously, so doing the same bootstrap inline on the interactive route was redundant and unbounded.
+- `Files`:
+  - `src/lib/media/face-recognition.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `Generate Suggestions` returns promptly on photos that previously sat on the loading state for an excessive time.
+  - Photos with existing person face profiles still return candidate matches normally.
+- `Rollback Notes`: Revert the interactive face-suggestion candidate loading change together so the request path does not resume synchronous profile bootstrap unexpectedly.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (person-global primary photo model + person attach name fix)
 
 - `Date`: 2026-03-22

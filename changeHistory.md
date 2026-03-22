@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Removed synchronous person-face profile bootstrap from the interactive `Generate Suggestions` route so photo intelligence no longer stalls while trying to backfill missing headshot embeddings inline. See `docs/change-summary.md`.
 - 2026-03-22: Normalized unsupported image formats to JPEG before OCI Vision analysis so smaller non-JPG/PNG photos no longer trip the opaque SDK `toLowerCase` crash path during `Generate Suggestions`. See `docs/change-summary.md`.
 - 2026-03-22: Fixed the media photo-intelligence modal so eligible first-run images always show the AI section, display an explicit loading state during auto-generation, and avoid redundant overlapping auto-start requests for the same photo. See `docs/change-summary.md`.
 - 2026-03-22: Added persisted normalized EXIF fields on `MediaAssets` and changed photo intelligence to reuse those stored EXIF values, skipping repeat EXIF parsing once collection has already been attempted for a file. See `docs/change-summary.md`.

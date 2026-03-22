@@ -36,7 +36,6 @@ export type PhotoFaceSuggestion = {
   matches: PhotoFaceSuggestionMatch[];
 };
 
-const PROFILE_BOOTSTRAP_LIMIT = 12;
 const MIN_MATCH_CONFIDENCE = 0.62;
 
 function hashId(prefix: string, seed: string) {
@@ -207,31 +206,34 @@ type CandidateProfile = {
 async function loadCandidateProfiles(input: {
   familyGroupKey: string;
   people: PersonRecord[];
+  bootstrapBudget?: number;
 }): Promise<CandidateProfile[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const existingProfiles = await getOciPersonFaceProfilesForTenant({ familyGroupKey }).catch(() => []);
   const profileByPersonId = new Map(existingProfiles.map((profile) => [profile.personId, profile] as const));
 
-  let bootstrapBudget = PROFILE_BOOTSTRAP_LIMIT;
-  for (const person of input.people) {
-    if (bootstrapBudget <= 0) {
-      break;
-    }
-    const photoFileId = person.photoFileId.trim();
-    if (!photoFileId) {
-      continue;
-    }
-    const current = profileByPersonId.get(person.personId);
-    if (current && current.sourceFileId.trim() === photoFileId && parseEmbeddingJson(current.embeddingJson).length > 0) {
-      continue;
-    }
-    const bootstrapped = await bootstrapPersonFaceProfileFromHeadshot({
-      familyGroupKey,
-      person,
-    });
-    bootstrapBudget -= 1;
-    if (bootstrapped) {
-      profileByPersonId.set(person.personId, bootstrapped);
+  let bootstrapBudget = Math.max(0, Math.trunc(input.bootstrapBudget ?? 0));
+  if (bootstrapBudget > 0) {
+    for (const person of input.people) {
+      if (bootstrapBudget <= 0) {
+        break;
+      }
+      const photoFileId = person.photoFileId.trim();
+      if (!photoFileId) {
+        continue;
+      }
+      const current = profileByPersonId.get(person.personId);
+      if (current && current.sourceFileId.trim() === photoFileId && parseEmbeddingJson(current.embeddingJson).length > 0) {
+        continue;
+      }
+      const bootstrapped = await bootstrapPersonFaceProfileFromHeadshot({
+        familyGroupKey,
+        person,
+      });
+      bootstrapBudget -= 1;
+      if (bootstrapped) {
+        profileByPersonId.set(person.personId, bootstrapped);
+      }
     }
   }
 
@@ -272,11 +274,17 @@ export async function buildAndPersistFaceSuggestions(input: {
     return [];
   }
 
-  const candidateProfiles = await loadCandidateProfiles({
-    familyGroupKey,
-    people: input.people,
-  });
   const timestamp = new Date().toISOString();
+  let candidateProfiles: CandidateProfile[] = [];
+  const hasMatchableFaces = input.faces.some((face) => face.embedding.length > 0);
+  if (hasMatchableFaces) {
+    candidateProfiles = await loadCandidateProfiles({
+      familyGroupKey,
+      people: input.people,
+      bootstrapBudget: 0,
+    });
+  }
+
   const suggestions = input.faces.map((face, index) => {
     const faceId = buildFaceInstanceId({
       fileId,
