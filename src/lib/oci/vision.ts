@@ -37,6 +37,7 @@ let cachedClient: AIServiceVisionClient | null = null;
 let cachedConfigKey = "";
 
 const OCI_VISION_INLINE_TARGET_BYTES = 4_500_000;
+const OCI_VISION_SUPPORTED_FORMATS = new Set(["jpeg", "jpg", "png"]);
 const OCI_VISION_PREPARE_STEPS = [
   { maxEdge: 2048, quality: 84 },
   { maxEdge: 1600, quality: 80 },
@@ -44,6 +45,13 @@ const OCI_VISION_PREPARE_STEPS = [
   { maxEdge: 960, quality: 72 },
   { maxEdge: 720, quality: 68 },
 ] as const;
+
+type PreparedVisionImage = {
+  imageBytes: Buffer;
+  originalFormat: string;
+  preparedFormat: string;
+  normalizedFormat: boolean;
+};
 
 function readOptionalEnv(name: string) {
   const value = String(process.env[name] ?? "").trim();
@@ -81,9 +89,17 @@ export function isOciVisionConfigured() {
   return readVisionConfig() != null;
 }
 
-async function prepareImageBytesForVision(imageBytes: Buffer) {
-  if (imageBytes.length <= OCI_VISION_INLINE_TARGET_BYTES) {
-    return imageBytes;
+async function prepareImageBytesForVision(imageBytes: Buffer): Promise<PreparedVisionImage> {
+  const metadata = await sharp(imageBytes, { failOn: "none", animated: false }).metadata();
+  const originalFormat = String(metadata.format ?? "").trim().toLowerCase();
+  const needsFormatNormalization = !OCI_VISION_SUPPORTED_FORMATS.has(originalFormat);
+  if (!needsFormatNormalization && imageBytes.length <= OCI_VISION_INLINE_TARGET_BYTES) {
+    return {
+      imageBytes,
+      originalFormat: originalFormat || "unknown",
+      preparedFormat: originalFormat || "unknown",
+      normalizedFormat: false,
+    };
   }
 
   let smallestCandidate = imageBytes;
@@ -102,25 +118,41 @@ async function prepareImageBytesForVision(imageBytes: Buffer) {
       smallestCandidate = candidate;
     }
     if (candidate.length <= OCI_VISION_INLINE_TARGET_BYTES) {
-      return candidate;
+      return {
+        imageBytes: candidate,
+        originalFormat: originalFormat || "unknown",
+        preparedFormat: "jpeg",
+        normalizedFormat: needsFormatNormalization || originalFormat !== "jpeg",
+      };
     }
   }
 
   if (smallestCandidate.length <= OCI_VISION_INLINE_TARGET_BYTES) {
-    return smallestCandidate;
+    return {
+      imageBytes: smallestCandidate,
+      originalFormat: originalFormat || "unknown",
+      preparedFormat: "jpeg",
+      normalizedFormat: needsFormatNormalization || originalFormat !== "jpeg",
+    };
   }
 
   throw new Error(
-    `OCI Vision inline image could not be reduced below ${OCI_VISION_INLINE_TARGET_BYTES} bytes (prepared=${smallestCandidate.length}).`,
+    `OCI Vision inline image could not be reduced below ${OCI_VISION_INLINE_TARGET_BYTES} bytes (originalFormat=${originalFormat || "unknown"} prepared=${smallestCandidate.length}).`,
   );
 }
 
-function normalizeVisionError(error: unknown, context: { originalBytes: number; preparedBytes: number }) {
+function normalizeVisionError(error: unknown, context: {
+  originalBytes: number;
+  preparedBytes: number;
+  originalFormat: string;
+  preparedFormat: string;
+  normalizedFormat: boolean;
+}) {
   const typed = error as { message?: string };
   const message = String(typed?.message ?? "");
   if (message.includes("toLowerCase is not a function")) {
     return new Error(
-      `OCI Vision request failed before returning a readable service error. originalBytes=${context.originalBytes} preparedBytes=${context.preparedBytes}`,
+      `OCI Vision request failed before returning a readable service error. originalFormat=${context.originalFormat} preparedFormat=${context.preparedFormat} normalizedFormat=${String(context.normalizedFormat)} originalBytes=${context.originalBytes} preparedBytes=${context.preparedBytes}`,
     );
   }
   return error;
@@ -228,7 +260,8 @@ export async function analyzeInlineImageWithVision(input: {
     throw new Error("OCI Vision is not configured.");
   }
   const client = getVisionClient(config);
-  const preparedImageBytes = await prepareImageBytesForVision(input.imageBytes);
+  const prepared = await prepareImageBytesForVision(input.imageBytes);
+  const preparedImageBytes = prepared.imageBytes;
 
   const primaryFeatures: models.ImageFeature[] = [
     { featureType: "IMAGE_CLASSIFICATION", maxResults: 6 } as models.ImageClassificationFeature,
@@ -254,6 +287,9 @@ export async function analyzeInlineImageWithVision(input: {
     throw normalizeVisionError(error, {
       originalBytes: input.imageBytes.length,
       preparedBytes: preparedImageBytes.length,
+      originalFormat: prepared.originalFormat,
+      preparedFormat: prepared.preparedFormat,
+      normalizedFormat: prepared.normalizedFormat,
     });
   }
   const result = response.analyzeImageResult;

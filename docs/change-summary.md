@@ -30,6 +30,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the `MediaLibraryClient` photo-intelligence in-flight guard and AI card conditional together so the request flow and modal states stay aligned.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (normalize Vision image formats before OCI analysis)
+
+- `Date`: 2026-03-22
+- `Change`: Normalized unsupported image formats to JPEG before OCI Vision analysis and expanded the opaque SDK crash message to include original/prepared image format details when Oracle still rejects the request.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The app accepts any `image/*` upload, but OCI Vision pretrained image analysis supports only JPG/PNG inputs. The existing prep path only re-encoded images when they exceeded the inline byte target, so smaller HEIC/WebP-style images could still be sent raw to OCI Vision. When Oracle rejected those inputs, the TypeScript SDK’s error builder crashed on `serviceCode.toLowerCase()`, masking the real rejection as `b.toLowerCase is not a function`.
+- `Files`:
+  - `src/lib/oci/vision.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Running `Generate Suggestions` on a previously failing non-JPG/PNG image no longer returns the opaque `b.toLowerCase is not a function` error.
+  - OCI Vision requests continue to work for previously successful JPG/PNG photos.
+- `Rollback Notes`: Revert the Vision image preparation normalization and the related error-context expansion together so format handling and diagnostics stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (person-global primary photo model + person attach name fix)
 
 - `Date`: 2026-03-22

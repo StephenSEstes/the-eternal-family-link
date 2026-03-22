@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Normalized unsupported image formats to JPEG before OCI Vision analysis so smaller non-JPG/PNG photos no longer trip the opaque SDK `toLowerCase` crash path during `Generate Suggestions`. See `docs/change-summary.md`.
 - 2026-03-22: Fixed the media photo-intelligence modal so eligible first-run images always show the AI section, display an explicit loading state during auto-generation, and avoid redundant overlapping auto-start requests for the same photo. See `docs/change-summary.md`.
 - 2026-03-22: Added persisted normalized EXIF fields on `MediaAssets` and changed photo intelligence to reuse those stored EXIF values, skipping repeat EXIF parsing once collection has already been attempted for a file. See `docs/change-summary.md`.
 - 2026-03-22: Switched face recognition to one global person/file identity model so canonical face profiles and analyzed face rows are no longer duplicated per family, while candidate visibility stays filtered by accessible people. See `docs/change-summary.md`.
