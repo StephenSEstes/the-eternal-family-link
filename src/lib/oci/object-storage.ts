@@ -43,13 +43,102 @@ function readConfig(): OciObjectConfig | null {
   };
 }
 
-function isWebReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
-  return typeof ReadableStream !== "undefined" && value instanceof ReadableStream;
+type ArrayBufferViewLike = {
+  buffer: ArrayBufferLike;
+  byteOffset: number;
+  byteLength: number;
+};
+
+function isArrayBufferViewLike(value: unknown): value is ArrayBufferViewLike {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "buffer" in value
+    && "byteOffset" in value
+    && "byteLength" in value,
+  );
+}
+
+function isWebReadableStreamLike(value: unknown): value is ReadableStream<Uint8Array> {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "getReader" in value
+    && typeof (value as { getReader?: unknown }).getReader === "function",
+  );
+}
+
+function isNodeReadableLike(value: unknown): value is Readable {
+  return value instanceof Readable;
+}
+
+function describeBodyType(value: unknown) {
+  if (value == null) {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return "string";
+  }
+  if (typeof value !== "object") {
+    return typeof value;
+  }
+  return value.constructor?.name || "object";
+}
+
+async function coerceChunkToBuffer(chunk: unknown): Promise<Buffer> {
+  if (Buffer.isBuffer(chunk)) {
+    return chunk;
+  }
+
+  if (typeof chunk === "string") {
+    return Buffer.from(chunk);
+  }
+
+  if (chunk instanceof ArrayBuffer) {
+    return Buffer.from(chunk);
+  }
+
+  if (ArrayBuffer.isView(chunk) || isArrayBufferViewLike(chunk)) {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+
+  const chunkAny = chunk as {
+    arrayBuffer?: () => Promise<ArrayBuffer>;
+  };
+  if (typeof chunkAny.arrayBuffer === "function") {
+    return Buffer.from(await chunkAny.arrayBuffer());
+  }
+
+  if (isWebReadableStreamLike(chunk)) {
+    return Buffer.from(await new Response(chunk).arrayBuffer());
+  }
+
+  if (isNodeReadableLike(chunk)) {
+    const chunks: Buffer[] = [];
+    for await (const nestedChunk of chunk) {
+      chunks.push(await coerceChunkToBuffer(nestedChunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  throw new Error(`Unsupported OCI object body chunk type: ${describeBodyType(chunk)}`);
 }
 
 async function readObjectBodyBytes(body: unknown) {
   if (Buffer.isBuffer(body)) {
     return body;
+  }
+
+  if (typeof body === "string") {
+    return Buffer.from(body);
+  }
+
+  if (body instanceof ArrayBuffer) {
+    return Buffer.from(body);
+  }
+
+  if (ArrayBuffer.isView(body) || isArrayBufferViewLike(body)) {
+    return Buffer.from(body.buffer, body.byteOffset, body.byteLength);
   }
 
   const bodyAny = body as {
@@ -59,19 +148,19 @@ async function readObjectBodyBytes(body: unknown) {
     return Buffer.from(await bodyAny.arrayBuffer());
   }
 
-  if (body instanceof Readable) {
+  if (isNodeReadableLike(body)) {
     const chunks: Buffer[] = [];
     for await (const chunk of body) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      chunks.push(await coerceChunkToBuffer(chunk));
     }
     return Buffer.concat(chunks);
   }
 
-  if (isWebReadableStream(body)) {
+  if (isWebReadableStreamLike(body)) {
     return Buffer.from(await new Response(body).arrayBuffer());
   }
 
-  return Buffer.from(body as Uint8Array);
+  throw new Error(`Unsupported OCI object body type: ${describeBodyType(body)}`);
 }
 
 function getClient(config: OciObjectConfig) {

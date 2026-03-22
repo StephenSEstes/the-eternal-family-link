@@ -34,9 +34,9 @@ Concise release notes for what changed, why it changed, and what to verify.
 ## 2026-03-21 (OCI object read handles web ReadableStream)
 
 - `Date`: 2026-03-21
-- `Change`: Updated OCI object-storage runtime reads to consume web `ReadableStream` bodies in addition to Node `Readable`, `Buffer`, and `arrayBuffer()` response shapes.
+- `Change`: Hardened OCI object-storage runtime reads to consume multiple streamed body shapes, including cross-realm web `ReadableStream` objects and nested streamed chunks, in addition to Node `Readable`, `Buffer`, and `arrayBuffer()` response shapes.
 - `Type`: API | Infra
-- `Why`: Root cause was a `code/runtime issue`. After the deploy-safe OCI auth fix, production advanced into the object read path, but Vercel returned `response.value` from OCI Object Storage as a web `ReadableStream`. `getOciObjectContentByKey()` only handled Node streams and byte-like bodies, so it fell through to `Buffer.from(...)` and threw `ERR_INVALID_ARG_TYPE` before Vision could analyze the image.
+- `Why`: Root cause was a `code/runtime issue`. After the deploy-safe OCI auth fix, production advanced into the object read path, but the OCI SDK returned a streamed body shape that did not satisfy the original `instanceof ReadableStream` check in Vercel. `getOciObjectContentByKey()` therefore still fell through to `Buffer.from(...)` and threw `ERR_INVALID_ARG_TYPE` before Vision could analyze the image.
 - `Files`:
   - `src/lib/oci/object-storage.ts`
 - `Data Changes`: None.
