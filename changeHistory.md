@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Added the first persisted face-suggestion MVP for media: OCI Vision now stores detected faces, suggest-only candidate matches, and cached person face profiles, and the media editor shows those face suggestions read-only from media metadata. See `docs/change-summary.md`.
 - 2026-03-22: Photo intelligence Phase 1 now adds EXIF-backed date extraction and optional OpenAI caption refinement from OCI Vision signals while keeping deterministic fallback and the existing media-editor apply workflow. See `docs/change-summary.md`.
 - 2026-03-21: Hardened OCI object-storage runtime reads so production can consume cross-realm web `ReadableStream` bodies and nested streamed chunks from OCI instead of falling through to `Buffer.from(...)` with `ERR_INVALID_ARG_TYPE`. See `docs/change-summary.md`.
 - 2026-03-21: Switched OCI Vision/Object Storage runtime auth to a deploy-safe shared helper that prefers API-key env credentials and only falls back to config-file auth when a real OCI config file exists. See `docs/change-summary.md`.

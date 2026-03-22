@@ -6,6 +6,26 @@ export type PhotoVisionInsight = {
   faceCount: number;
 };
 
+export type PhotoFaceSuggestionMatch = {
+  personId: string;
+  displayName: string;
+  confidenceScore: number;
+  confidenceBand: "high" | "medium" | "low";
+};
+
+export type PhotoFaceSuggestion = {
+  faceId: string;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  detectionConfidence: number;
+  qualityScore: number;
+  matches: PhotoFaceSuggestionMatch[];
+};
+
 export type PhotoIntelligenceSuggestion = {
   status: "completed" | "failed";
   generatedAt: string;
@@ -20,6 +40,7 @@ export type PhotoIntelligenceSuggestion = {
   visionLabels?: string[];
   visionObjects?: string[];
   detectedFaceCount?: number;
+  faceSuggestions?: PhotoFaceSuggestion[];
 };
 
 export type PhotoIntelligenceDebug = {
@@ -59,6 +80,7 @@ type BuildPhotoIntelligenceInput = {
   dateSignal?: PhotoIntelligenceDateSignal | null;
   captionRefinement?: PhotoIntelligenceCaptionRefinement | null;
   vision?: PhotoVisionInsight | null;
+  faceSuggestions?: PhotoFaceSuggestion[] | null;
   debug?: PhotoIntelligenceDebug | null;
 };
 
@@ -238,6 +260,7 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
     visionLabels: input.vision?.labels?.map((item) => item.name).slice(0, 6) ?? [],
     visionObjects: input.vision?.objects?.map((item) => item.name).slice(0, 8) ?? [],
     detectedFaceCount: input.vision?.faceCount ?? 0,
+    faceSuggestions: Array.isArray(input.faceSuggestions) ? input.faceSuggestions : [],
   };
 
   const merged = {
@@ -291,6 +314,44 @@ export function readPhotoIntelligenceSuggestion(rawMetadata: string | undefined)
     detectedFaceCount: Number.isFinite(Number(suggestion.detectedFaceCount ?? 0))
       ? Number(suggestion.detectedFaceCount)
       : 0,
+    faceSuggestions: Array.isArray(suggestion.faceSuggestions)
+      ? suggestion.faceSuggestions
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const record = item as Record<string, unknown>;
+          const bboxRaw = record.bbox;
+          const bboxRecord = bboxRaw && typeof bboxRaw === "object" ? (bboxRaw as Record<string, unknown>) : null;
+          return {
+            faceId: String(record.faceId ?? "").trim(),
+            bbox: {
+              x: Number(bboxRecord?.x ?? 0),
+              y: Number(bboxRecord?.y ?? 0),
+              width: Number(bboxRecord?.width ?? 0),
+              height: Number(bboxRecord?.height ?? 0),
+            },
+            detectionConfidence: Number(record.detectionConfidence ?? 0),
+            qualityScore: Number(record.qualityScore ?? 0),
+            matches: Array.isArray(record.matches)
+              ? record.matches
+                .map((match) => {
+                  if (!match || typeof match !== "object") return null;
+                  const matchRecord = match as Record<string, unknown>;
+                  const confidenceBand = String(matchRecord.confidenceBand ?? "").trim().toLowerCase();
+                  return {
+                    personId: String(matchRecord.personId ?? "").trim(),
+                    displayName: String(matchRecord.displayName ?? "").trim(),
+                    confidenceScore: Number(matchRecord.confidenceScore ?? 0),
+                    confidenceBand: confidenceBand === "high" || confidenceBand === "medium" || confidenceBand === "low"
+                      ? (confidenceBand as PhotoFaceSuggestionMatch["confidenceBand"])
+                      : "low",
+                  } satisfies PhotoFaceSuggestionMatch;
+                })
+                .filter((match): match is PhotoFaceSuggestionMatch => Boolean(match))
+              : [],
+          } satisfies PhotoFaceSuggestion;
+        })
+        .filter((item): item is PhotoFaceSuggestion => Boolean(item?.faceId))
+      : [],
   };
   return output;
 }

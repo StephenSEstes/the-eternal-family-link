@@ -10,7 +10,7 @@ Canonical data structure reference for The Eternal Family Link.
   - OCI is the runtime source of truth and naming baseline for this document.
   - "Indexes" below are logical lookup keys and uniqueness rules enforced by app logic.
 
-## Focused Model: Person + Attributes + Media
+## Focused Model: Person + Attributes + Media + Face Suggestions
 
 This section is a quick reference for the three data areas that drive profile/media behavior.
 
@@ -40,13 +40,28 @@ This section is a quick reference for the three data areas that drive profile/me
   - Link to file: `media_id -> MediaAssets.media_id`
   - Display semantics: `usage_type`, `label`, `description`, `photo_date`, `is_primary`
 
-### 4) How One Media File Can Appear In Multiple Families
+### 4) Face Suggestions
+
+- Detected faces per analyzed image: `FaceInstances`
+  - Key: `face_id`
+  - Scope: `family_group_key`
+  - Image join: `file_id -> MediaAssets.file_id`
+  - Stores normalized bounding box, detection score, quality score, and embedding payload
+- Suggested candidate people per detected face: `FaceMatches`
+  - Key: `match_id`
+  - Parent: `face_id -> FaceInstances.face_id`
+  - Stores ranked candidate person rows and review status (`suggested|confirmed|rejected`)
+- Cached per-person reference embedding: `PersonFaceProfiles`
+  - One profile per (`family_group_key`, `person_id`) for the current face-suggestion phase
+  - Seeded from the person's current primary headshot when available
+
+### 5) How One Media File Can Appear In Multiple Families
 
 - File is shared at asset level (`MediaAssets`).
 - Visibility is family-scoped at link level (`MediaLinks.family_group_key`).
 - Same file can appear in multiple family groups by having multiple `MediaLinks` rows (one per family scope/entity association).
 
-### 5) Practical Join Paths
+### 6) Practical Join Paths
 
 - Person profile photo:
   - `People.photo_file_id` -> `MediaAssets.file_id` (or direct Drive proxy by file ID)
@@ -58,8 +73,12 @@ This section is a quick reference for the three data areas that drive profile/me
 - Attribute-attached media:
   - `MediaLinks.entity_type = 'attribute'`
   - `MediaLinks.entity_id = Attributes.attribute_id`
+- Face suggestions:
+  - `FaceInstances.file_id` -> `MediaAssets.file_id`
+  - `FaceMatches.face_id` -> `FaceInstances.face_id`
+  - `PersonFaceProfiles.person_id` -> `People.person_id`
 
-### 6) Suggested Integrity Rules (Logical)
+### 7) Suggested Integrity Rules (Logical)
 
 - Asset uniqueness:
   - Unique `MediaAssets.file_id` (or strict dedupe by checksum + file_id policy)
@@ -323,6 +342,62 @@ This section is a quick reference for the three data areas that drive profile/me
   - Unique: `link_id`
   - Common lookup: (`family_group_key`, `entity_type`, `entity_id`, `usage_type`)
 
+## FaceInstances
+
+- Columns:
+  - `family_group_key`
+  - `face_id`
+  - `file_id`
+  - `bbox_x`
+  - `bbox_y`
+  - `bbox_w`
+  - `bbox_h`
+  - `detection_confidence`
+  - `quality_score`
+  - `embedding_json`
+  - `created_at`
+  - `updated_at`
+- Purpose:
+  - Persist normalized per-face detections for analyzed images so reruns can replace a canonical face set for each file.
+- Logical index/key:
+  - Unique: `face_id`
+  - Common lookup: (`family_group_key`, `file_id`)
+
+## FaceMatches
+
+- Columns:
+  - `family_group_key`
+  - `match_id`
+  - `face_id`
+  - `candidate_person_id`
+  - `confidence_score`
+  - `match_status`
+  - `reviewed_by`
+  - `reviewed_at`
+  - `created_at`
+  - `match_metadata`
+- Purpose:
+  - Persist suggest-only or reviewed candidate-person matches for each detected face.
+- Logical index/key:
+  - Unique: `match_id`
+  - Common lookup: (`face_id`), (`candidate_person_id`), (`family_group_key`, `match_status`)
+
+## PersonFaceProfiles
+
+- Columns:
+  - `family_group_key`
+  - `profile_id`
+  - `person_id`
+  - `source_file_id`
+  - `sample_count`
+  - `embedding_json`
+  - `updated_at`
+- Purpose:
+  - Cache the current per-person reference embedding used for suggest-only face matching, seeded from the person's primary headshot.
+- Logical index/key:
+  - Unique: `profile_id`
+  - Recommended unique: (`family_group_key`, `person_id`)
+
 ## ImportantDates
 
 - Columns:
@@ -391,6 +466,11 @@ This section is a quick reference for the three data areas that drive profile/me
 - Media:
   - `MediaLinks.media_id` -> `MediaAssets.media_id`
   - `MediaLinks.entity_type/entity_id` links to person, household, or attribute rows
+- Face suggestions:
+  - `FaceInstances.file_id` -> `MediaAssets.file_id`
+  - `FaceMatches.face_id` -> `FaceInstances.face_id`
+  - `FaceMatches.candidate_person_id` -> `People.person_id`
+  - `PersonFaceProfiles.person_id` -> `People.person_id`
 
 ## Media Link Design
 
@@ -409,6 +489,7 @@ This section is a quick reference for the three data areas that drive profile/me
     - `width`
     - `height`
     - `captureSource`
+    - `photoIntelligence.faceSuggestions` (compact read model derived from `FaceInstances`/`FaceMatches`)
 - Media storage:
   - Files uploaded to Google Drive folder from `FamilyConfig.photos_folder_id`.
 - Media delivery:

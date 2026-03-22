@@ -13,6 +13,31 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
+
+- `Date`: 2026-03-22
+- `Change`: Added the first persisted face-suggestion slice for media. OCI Vision photo intelligence now requests face embeddings, persists detected faces plus ranked candidate matches in OCI tables, seeds cached person face profiles from primary headshots, and writes a compact face-suggestion read model into media metadata for the existing media editor to display read-only.
+- `Type`: API | Schema | UI
+- `Why`: Root cause was a `code/schema gap`. The project’s next blocked phase required reviewed face suggestions, but the runtime only surfaced a face count inside photo intelligence. There was no persisted face-analysis schema, no reusable person-profile embedding cache, and no UI surface for candidate people on detected faces.
+- `Files`:
+  - `TODO.md`
+  - `docs/data-schema.md`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/oci/vision.ts`
+  - `src/lib/media/face-recognition.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: New OCI tables auto-create on first use: `face_instances`, `face_matches`, and `person_face_profiles`.
+- `Verify`:
+  - `npm run build` passes.
+  - Running `Generate Suggestions` on an image with faces now persists face detections/matches and shows a `Face Suggestions` section in the media editor.
+  - Candidate people are limited to accessible people in the current family group and come from cached primary-headshot profiles.
+  - Uploading or replacing a primary person photo can seed or refresh that person’s cached face profile without breaking the upload flow.
+- `Rollback Notes`: Revert the face table/bootstrap additions, the face-recognition helper, the Vision face-embedding request change, the intelligence/upload route hooks, and the media editor face-suggestions UI together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (photo intelligence phase 1: EXIF dates + optional AI caption refinement)
 
 - `Date`: 2026-03-22

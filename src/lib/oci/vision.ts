@@ -3,9 +3,22 @@ import "server-only";
 import { AIServiceVisionClient, models } from "oci-aivision";
 import { getOciAuthenticationProvider } from "@/lib/oci/auth";
 
+export type OciVisionFace = {
+  confidence: number;
+  qualityScore: number;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  embedding: number[];
+};
+
 export type OciVisionInsight = {
   labels: Array<{ name: string; confidence: number }>;
   objects: Array<{ name: string; confidence: number }>;
+  faces: OciVisionFace[];
   faceCount: number;
 };
 
@@ -62,17 +75,19 @@ export async function analyzeInlineImageWithVision(input: {
   }
   const client = getVisionClient(config);
 
+  const features: models.ImageFeature[] = [
+    { featureType: "IMAGE_CLASSIFICATION", maxResults: 6 } as models.ImageClassificationFeature,
+    { featureType: "OBJECT_DETECTION", maxResults: 8 } as models.ImageObjectDetectionFeature,
+    { featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: false } as models.FaceEmbeddingFeature,
+  ];
+
   const request: models.AnalyzeImageDetails = {
     compartmentId: config.compartmentId,
     image: {
       source: "INLINE",
       data: input.imageBytes.toString("base64"),
     },
-    features: [
-      { featureType: "IMAGE_CLASSIFICATION", maxResults: 6 },
-      { featureType: "OBJECT_DETECTION", maxResults: 8 },
-      { featureType: "FACE_DETECTION" },
-    ] as models.ImageFeature[],
+    features,
   };
 
   const response = await client.analyzeImage({
@@ -99,6 +114,41 @@ export async function analyzeInlineImageWithVision(input: {
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 8)
     : [];
-  const faceCount = Array.isArray(result?.detectedFaces) ? result.detectedFaces.length : 0;
-  return { labels, objects, faceCount };
+  const faces = Array.isArray(result?.detectedFaces)
+    ? result.detectedFaces
+      .map((item) => {
+        const vertices = Array.isArray(item?.boundingPolygon?.normalizedVertices)
+          ? item.boundingPolygon.normalizedVertices
+            .map((vertex) => ({
+              x: Number(vertex?.x ?? 0),
+              y: Number(vertex?.y ?? 0),
+            }))
+            .filter((vertex) => Number.isFinite(vertex.x) && Number.isFinite(vertex.y))
+          : [];
+        const minX = vertices.length > 0 ? Math.min(...vertices.map((vertex) => vertex.x)) : 0;
+        const minY = vertices.length > 0 ? Math.min(...vertices.map((vertex) => vertex.y)) : 0;
+        const maxX = vertices.length > 0 ? Math.max(...vertices.map((vertex) => vertex.x)) : 0;
+        const maxY = vertices.length > 0 ? Math.max(...vertices.map((vertex) => vertex.y)) : 0;
+        const embedding = Array.isArray(item?.embeddings)
+          ? item.embeddings
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value))
+          : [];
+        return {
+          confidence: Number(item?.confidence ?? 0),
+          qualityScore: Number(item?.qualityScore ?? 0),
+          boundingBox: {
+            x: minX,
+            y: minY,
+            width: Math.max(0, maxX - minX),
+            height: Math.max(0, maxY - minY),
+          },
+          embedding,
+        } satisfies OciVisionFace;
+      })
+      .filter((item) => item.boundingBox.width > 0 && item.boundingBox.height > 0)
+      .sort((a, b) => b.qualityScore - a.qualityScore)
+    : [];
+  const faceCount = faces.length;
+  return { labels, objects, faces, faceCount };
 }

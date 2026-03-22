@@ -53,6 +53,14 @@ I will update this list as we add, complete, or remove work.
   Validation:
   - Uploading an image with faces produces `face_instances` and `face_matches`.
   - Only accessible people appear in suggestions.
+  - 2026-03-22 implementation plan:
+    - Use the existing `/api/t/[tenantKey]/photos/[fileId]/intelligence` route as the first persisted face-analysis trigger so the app reuses the already-working OCI object-byte load, auth, and media metadata update path before adding a separate worker queue.
+    - Add OCI bootstrap support plus schema/docs entries for `face_instances`, `face_matches`, and `person_face_profiles`, with face detections and candidate matches partitioned by `family_group_key`.
+    - Extend OCI Vision image analysis to request face embeddings in addition to labels/objects, then persist detected face boxes, quality/confidence scores, and embedding payloads for the analyzed image.
+    - Seed or refresh `person_face_profiles` from accessible person headshots, preferring cached profile rows and opportunistically updating profiles when a primary person photo upload provides fresh image bytes.
+    - Generate suggest-only candidate matches by comparing detected face embeddings against accessible cached person profiles, persist the ranked results in `face_matches`, and write a compact read model back into `media_metadata` for the existing media editor.
+    - Render a read-only face suggestions section in the media detail modal that shows each detected face plus top candidate people/confidence bands without auto-linking or creating person relationships yet.
+    - Validate with `npm run build`, then regenerate production photo intelligence on images with and without faces and confirm table persistence plus metadata-backed UI rendering.
   Phase 2 (review + learning loop):
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.

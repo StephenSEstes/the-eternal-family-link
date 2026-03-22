@@ -11,6 +11,7 @@ import {
   type PhotoIntelligenceDebug,
 } from "@/lib/media/photo-intelligence";
 import { extractExifDateSignal } from "@/lib/media/exif";
+import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
   getOciMediaAssetByFileId,
@@ -141,6 +142,12 @@ export async function POST(request: Request, { params }: RouteProps) {
           {
             labels: vision.labels,
             objects: vision.objects,
+            faces: vision.faces.map((face) => ({
+              confidence: face.confidence,
+              qualityScore: face.qualityScore,
+              boundingBox: face.boundingBox,
+              embeddingLength: face.embedding.length,
+            })),
             faceCount: vision.faceCount,
           },
           null,
@@ -180,6 +187,21 @@ export async function POST(request: Request, { params }: RouteProps) {
     visionRawResult,
   };
 
+  const previousSuggestion = readPhotoIntelligenceSuggestion(baseMetadata);
+  let faceSuggestions = previousSuggestion?.faceSuggestions ?? [];
+  if (visionSucceeded && vision) {
+    try {
+      faceSuggestions = await buildAndPersistFaceSuggestions({
+        familyGroupKey: resolved.tenant.tenantKey,
+        fileId: normalizedFileId,
+        faces: vision.faces,
+        people,
+      });
+    } catch (faceError) {
+      console.warn("[photo-intelligence] face suggestion persistence skipped", faceError);
+    }
+  }
+
   const fileName = String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId;
   const initialGenerated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
@@ -189,6 +211,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     existingMetadata: baseMetadata,
     dateSignal: exifDateSignal,
     vision,
+    faceSuggestions,
     debug,
   });
   let generated = initialGenerated;
@@ -212,6 +235,7 @@ export async function POST(request: Request, { params }: RouteProps) {
           dateSignal: exifDateSignal,
           captionRefinement,
           vision,
+          faceSuggestions,
           debug,
         });
       }

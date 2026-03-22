@@ -38,6 +38,9 @@ let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
 let passwordResetsTableCompatEnsured = false;
 let auditLogTableCompatEnsured = false;
+let faceInstancesTableCompatEnsured = false;
+let faceMatchesTableCompatEnsured = false;
+let personFaceProfilesTableCompatEnsured = false;
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -177,6 +180,50 @@ const TABLES: Record<string, TableConfig> = {
       "sort_order",
       "media_metadata",
       "created_at",
+    ],
+  },
+  FaceInstances: {
+    tableName: "face_instances",
+    headers: [
+      "family_group_key",
+      "face_id",
+      "file_id",
+      "bbox_x",
+      "bbox_y",
+      "bbox_w",
+      "bbox_h",
+      "detection_confidence",
+      "quality_score",
+      "embedding_json",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  FaceMatches: {
+    tableName: "face_matches",
+    headers: [
+      "family_group_key",
+      "match_id",
+      "face_id",
+      "candidate_person_id",
+      "confidence_score",
+      "match_status",
+      "reviewed_by",
+      "reviewed_at",
+      "created_at",
+      "match_metadata",
+    ],
+  },
+  PersonFaceProfiles: {
+    tableName: "person_face_profiles",
+    headers: [
+      "family_group_key",
+      "profile_id",
+      "person_id",
+      "source_file_id",
+      "sample_count",
+      "embedding_json",
+      "updated_at",
     ],
   },
   ImportantDates: {
@@ -395,7 +442,7 @@ function resolveIdColumn(headers: string[], idColumn?: string): string {
     const match = headers.find((h) => normalizeHeader(h) === normalizeHeader(idColumn));
     if (match) return match;
   }
-  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id", "reset_id"]) {
+  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id", "reset_id", "face_id", "match_id", "profile_id"]) {
     const match = headers.find((h) => normalizeHeader(h) === fallback);
     if (match) return match;
   }
@@ -801,6 +848,219 @@ async function ensureUserAccessTableCompatibility(connection: OciConnection) {
   userAccessTableCompatEnsured = true;
 }
 
+async function ensureFaceInstancesTableCompatibility(connection: OciConnection) {
+  if (faceInstancesTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE face_instances (
+         face_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         file_id VARCHAR2(128) NOT NULL,
+         bbox_x VARCHAR2(32),
+         bbox_y VARCHAR2(32),
+         bbox_w VARCHAR2(32),
+         bbox_h VARCHAR2(32),
+         detection_confidence VARCHAR2(32),
+         quality_score VARCHAR2(32),
+         embedding_json CLOB,
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_face_instances_family_file ON face_instances(family_group_key, file_id)`);
+    await connection.execute(`CREATE INDEX ix_face_instances_file ON face_instances(file_id)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "file_id VARCHAR2(128)",
+    "bbox_x VARCHAR2(32)",
+    "bbox_y VARCHAR2(32)",
+    "bbox_w VARCHAR2(32)",
+    "bbox_h VARCHAR2(32)",
+    "detection_confidence VARCHAR2(32)",
+    "quality_score VARCHAR2(32)",
+    "embedding_json CLOB",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE face_instances ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_face_instances_family_file ON face_instances(family_group_key, file_id)",
+    "CREATE INDEX ix_face_instances_file ON face_instances(file_id)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  faceInstancesTableCompatEnsured = true;
+}
+
+async function ensureFaceMatchesTableCompatibility(connection: OciConnection) {
+  if (faceMatchesTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE face_matches (
+         match_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         face_id VARCHAR2(128) NOT NULL,
+         candidate_person_id VARCHAR2(128) NOT NULL,
+         confidence_score VARCHAR2(32),
+         match_status VARCHAR2(32),
+         reviewed_by VARCHAR2(320),
+         reviewed_at VARCHAR2(64),
+         created_at VARCHAR2(64),
+         match_metadata CLOB
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_face_matches_face ON face_matches(face_id)`);
+    await connection.execute(`CREATE INDEX ix_face_matches_person ON face_matches(candidate_person_id)`);
+    await connection.execute(`CREATE INDEX ix_face_matches_family_status ON face_matches(family_group_key, match_status)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "face_id VARCHAR2(128)",
+    "candidate_person_id VARCHAR2(128)",
+    "confidence_score VARCHAR2(32)",
+    "match_status VARCHAR2(32)",
+    "reviewed_by VARCHAR2(320)",
+    "reviewed_at VARCHAR2(64)",
+    "created_at VARCHAR2(64)",
+    "match_metadata CLOB",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE face_matches ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_face_matches_face ON face_matches(face_id)",
+    "CREATE INDEX ix_face_matches_person ON face_matches(candidate_person_id)",
+    "CREATE INDEX ix_face_matches_family_status ON face_matches(family_group_key, match_status)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  faceMatchesTableCompatEnsured = true;
+}
+
+async function ensurePersonFaceProfilesTableCompatibility(connection: OciConnection) {
+  if (personFaceProfilesTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE person_face_profiles (
+         profile_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         person_id VARCHAR2(128) NOT NULL,
+         source_file_id VARCHAR2(128),
+         sample_count VARCHAR2(32),
+         embedding_json CLOB,
+         updated_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_person_face_profiles_person ON person_face_profiles(family_group_key, person_id)`);
+    await connection.execute(`CREATE INDEX ix_person_face_profiles_source ON person_face_profiles(source_file_id)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "source_file_id VARCHAR2(128)",
+    "sample_count VARCHAR2(32)",
+    "embedding_json CLOB",
+    "updated_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE person_face_profiles ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_person_face_profiles_person ON person_face_profiles(family_group_key, person_id)",
+    "CREATE INDEX ix_person_face_profiles_source ON person_face_profiles(source_file_id)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  personFaceProfilesTableCompatEnsured = true;
+}
+
 async function ensureTableCompatibility(connection: OciConnection, tableName: string) {
   if (tableName === "people") {
     await ensurePeopleTableCompatibility(connection);
@@ -832,6 +1092,18 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
   }
   if (tableName === "audit_log") {
     await ensureAuditLogTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "face_instances") {
+    await ensureFaceInstancesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "face_matches") {
+    await ensureFaceMatchesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "person_face_profiles") {
+    await ensurePersonFaceProfilesTableCompatibility(connection);
   }
 }
 
@@ -1060,6 +1332,49 @@ export type OciPersonMediaAttributeRow = {
   updatedAt: string;
 };
 
+export type OciFaceInstanceRow = {
+  familyGroupKey: string;
+  faceId: string;
+  fileId: string;
+  bboxX: number;
+  bboxY: number;
+  bboxW: number;
+  bboxH: number;
+  detectionConfidence: number;
+  qualityScore: number;
+  embeddingJson: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OciFaceMatchRow = {
+  familyGroupKey: string;
+  matchId: string;
+  faceId: string;
+  candidatePersonId: string;
+  confidenceScore: number;
+  matchStatus: string;
+  reviewedBy: string;
+  reviewedAt: string;
+  createdAt: string;
+  matchMetadata: string;
+};
+
+export type OciPersonFaceProfileRow = {
+  familyGroupKey: string;
+  profileId: string;
+  personId: string;
+  sourceFileId: string;
+  sampleCount: number;
+  embeddingJson: string;
+  updatedAt: string;
+};
+
+function parseStoredNumber(value: unknown) {
+  const parsed = Number.parseFloat(fromDbValue(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
   return {
     familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
@@ -1077,6 +1392,50 @@ function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
     sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
     mediaMetadata: fromDbValue(row.MEDIA_METADATA),
     createdAt: fromDbValue(row.CREATED_AT),
+  };
+}
+
+function mapOciFaceInstanceRow(row: Record<string, unknown>): OciFaceInstanceRow {
+  return {
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    faceId: fromDbValue(row.FACE_ID),
+    fileId: fromDbValue(row.FILE_ID),
+    bboxX: parseStoredNumber(row.BBOX_X),
+    bboxY: parseStoredNumber(row.BBOX_Y),
+    bboxW: parseStoredNumber(row.BBOX_W),
+    bboxH: parseStoredNumber(row.BBOX_H),
+    detectionConfidence: parseStoredNumber(row.DETECTION_CONFIDENCE),
+    qualityScore: parseStoredNumber(row.QUALITY_SCORE),
+    embeddingJson: fromDbValue(row.EMBEDDING_JSON),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+  };
+}
+
+function mapOciFaceMatchRow(row: Record<string, unknown>): OciFaceMatchRow {
+  return {
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    matchId: fromDbValue(row.MATCH_ID),
+    faceId: fromDbValue(row.FACE_ID),
+    candidatePersonId: fromDbValue(row.CANDIDATE_PERSON_ID),
+    confidenceScore: parseStoredNumber(row.CONFIDENCE_SCORE),
+    matchStatus: fromDbValue(row.MATCH_STATUS),
+    reviewedBy: fromDbValue(row.REVIEWED_BY),
+    reviewedAt: fromDbValue(row.REVIEWED_AT),
+    createdAt: fromDbValue(row.CREATED_AT),
+    matchMetadata: fromDbValue(row.MATCH_METADATA),
+  };
+}
+
+function mapOciPersonFaceProfileRow(row: Record<string, unknown>): OciPersonFaceProfileRow {
+  return {
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    profileId: fromDbValue(row.PROFILE_ID),
+    personId: fromDbValue(row.PERSON_ID),
+    sourceFileId: fromDbValue(row.SOURCE_FILE_ID),
+    sampleCount: Number.parseInt(fromDbValue(row.SAMPLE_COUNT), 10) || 0,
+    embeddingJson: fromDbValue(row.EMBEDDING_JSON),
+    updatedAt: fromDbValue(row.UPDATED_AT),
   };
 }
 
@@ -1121,6 +1480,22 @@ async function queryOciMediaLinks(
     const rows = (result.rows ?? []) as Record<string, unknown>[];
     return rows.map(mapOciMediaLinkRow);
   });
+}
+
+async function getFaceIdsForFile(connection: OciConnection, familyGroupKey: string, fileId: string) {
+  const result = await connection.execute(
+    `SELECT face_id
+       FROM face_instances
+      WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+        AND TRIM(file_id) = :fileId`,
+    {
+      familyGroupKey,
+      fileId,
+    },
+    { outFormat: oracledb.OUT_FORMAT_OBJECT },
+  );
+  const rows = (result.rows ?? []) as Record<string, unknown>[];
+  return rows.map((row) => fromDbValue(row.FACE_ID)).filter(Boolean);
 }
 
 function enabledExpr(column: string) {
@@ -2161,6 +2536,343 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
       mimeType: fromDbValue(row.MIME_TYPE),
       mediaMetadata: fromDbValue(row.MEDIA_METADATA),
     };
+  });
+}
+
+export async function getOciFaceInstancesForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciFaceInstanceRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureFaceInstancesTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         face_id,
+         file_id,
+         bbox_x,
+         bbox_y,
+         bbox_w,
+         bbox_h,
+         detection_confidence,
+         quality_score,
+         embedding_json,
+         created_at,
+         updated_at
+       FROM face_instances
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(file_id) = :fileId
+       ORDER BY created_at, face_id`,
+      {
+        familyGroupKey,
+        fileId,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map(mapOciFaceInstanceRow);
+  });
+}
+
+export async function getOciFaceMatchesForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciFaceMatchRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureFaceInstancesTableCompatibility(connection);
+    await ensureFaceMatchesTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         m.family_group_key,
+         m.match_id,
+         m.face_id,
+         m.candidate_person_id,
+         m.confidence_score,
+         m.match_status,
+         m.reviewed_by,
+         m.reviewed_at,
+         m.created_at,
+         m.match_metadata
+       FROM face_matches m
+       INNER JOIN face_instances f
+         ON TRIM(f.face_id) = TRIM(m.face_id)
+       WHERE LOWER(TRIM(m.family_group_key)) = :familyGroupKey
+         AND LOWER(TRIM(f.family_group_key)) = :familyGroupKey
+         AND TRIM(f.file_id) = :fileId
+       ORDER BY TO_NUMBER(NVL(NULLIF(TRIM(m.confidence_score), ''), '0')) DESC, m.match_id`,
+      {
+        familyGroupKey,
+        fileId,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map(mapOciFaceMatchRow);
+  });
+}
+
+export async function getOciPersonFaceProfilesForTenant(input: {
+  familyGroupKey: string;
+}): Promise<OciPersonFaceProfileRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  if (!familyGroupKey) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensurePersonFaceProfilesTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         profile_id,
+         person_id,
+         source_file_id,
+         sample_count,
+         embedding_json,
+         updated_at
+       FROM person_face_profiles
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+       ORDER BY person_id`,
+      {
+        familyGroupKey,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map(mapOciPersonFaceProfileRow);
+  });
+}
+
+export async function upsertOciPersonFaceProfile(input: {
+  familyGroupKey: string;
+  profileId: string;
+  personId: string;
+  sourceFileId: string;
+  sampleCount: number;
+  embeddingJson: string;
+  updatedAt: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const profileId = input.profileId.trim();
+  const personId = input.personId.trim();
+  if (!familyGroupKey || !profileId || !personId) {
+    throw new Error("family_group_key, profile_id, and person_id are required");
+  }
+  return withConnection(async (connection) => {
+    await ensurePersonFaceProfilesTableCompatibility(connection);
+    await connection.execute(
+      `MERGE INTO person_face_profiles t
+       USING (
+         SELECT :familyGroupKey AS family_group_key,
+                :profileId AS profile_id,
+                :personId AS person_id,
+                :sourceFileId AS source_file_id,
+                :sampleCount AS sample_count,
+                :embeddingJson AS embedding_json,
+                :updatedAt AS updated_at
+         FROM dual
+       ) s
+       ON (
+         LOWER(TRIM(t.family_group_key)) = LOWER(TRIM(s.family_group_key))
+         AND TRIM(t.person_id) = TRIM(s.person_id)
+       )
+       WHEN MATCHED THEN UPDATE SET
+         t.profile_id = s.profile_id,
+         t.source_file_id = s.source_file_id,
+         t.sample_count = s.sample_count,
+         t.embedding_json = s.embedding_json,
+         t.updated_at = s.updated_at
+       WHEN NOT MATCHED THEN INSERT (
+         family_group_key,
+         profile_id,
+         person_id,
+         source_file_id,
+         sample_count,
+         embedding_json,
+         updated_at
+       ) VALUES (
+         s.family_group_key,
+         s.profile_id,
+         s.person_id,
+         s.source_file_id,
+         s.sample_count,
+         s.embedding_json,
+         s.updated_at
+       )`,
+      {
+        familyGroupKey,
+        profileId,
+        personId,
+        sourceFileId: input.sourceFileId.trim(),
+        sampleCount: String(Math.max(1, Math.trunc(input.sampleCount || 1))),
+        embeddingJson: input.embeddingJson.trim(),
+        updatedAt: input.updatedAt.trim(),
+      },
+      { autoCommit: true },
+    );
+  });
+}
+
+export async function replaceOciFaceAnalysisForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+  instances: Array<{
+    faceId: string;
+    bboxX: number;
+    bboxY: number;
+    bboxW: number;
+    bboxH: number;
+    detectionConfidence: number;
+    qualityScore: number;
+    embeddingJson: string;
+    createdAt: string;
+    updatedAt: string;
+    matches: Array<{
+      matchId: string;
+      candidatePersonId: string;
+      confidenceScore: number;
+      matchStatus: string;
+      reviewedBy?: string;
+      reviewedAt?: string;
+      createdAt: string;
+      matchMetadata?: string;
+    }>;
+  }>;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    throw new Error("family_group_key and file_id are required");
+  }
+  return withConnection(async (connection) => {
+    await ensureFaceInstancesTableCompatibility(connection);
+    await ensureFaceMatchesTableCompatibility(connection);
+
+    const existingFaceIds = await getFaceIdsForFile(connection, familyGroupKey, fileId);
+    for (const faceId of existingFaceIds) {
+      await connection.execute(
+        `DELETE FROM face_matches
+         WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+           AND TRIM(face_id) = :faceId`,
+        {
+          familyGroupKey,
+          faceId,
+        },
+        { autoCommit: false },
+      );
+    }
+    await connection.execute(
+      `DELETE FROM face_instances
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(file_id) = :fileId`,
+      {
+        familyGroupKey,
+        fileId,
+      },
+      { autoCommit: false },
+    );
+
+    if (input.instances.length > 0) {
+      await connection.executeMany(
+        `INSERT INTO face_instances (
+           family_group_key,
+           face_id,
+           file_id,
+           bbox_x,
+           bbox_y,
+           bbox_w,
+           bbox_h,
+           detection_confidence,
+           quality_score,
+           embedding_json,
+           created_at,
+           updated_at
+         ) VALUES (
+           :familyGroupKey,
+           :faceId,
+           :fileId,
+           :bboxX,
+           :bboxY,
+           :bboxW,
+           :bboxH,
+           :detectionConfidence,
+           :qualityScore,
+           :embeddingJson,
+           :createdAt,
+           :updatedAt
+         )`,
+        input.instances.map((instance) => ({
+          familyGroupKey,
+          faceId: instance.faceId.trim(),
+          fileId,
+          bboxX: String(instance.bboxX),
+          bboxY: String(instance.bboxY),
+          bboxW: String(instance.bboxW),
+          bboxH: String(instance.bboxH),
+          detectionConfidence: String(instance.detectionConfidence),
+          qualityScore: String(instance.qualityScore),
+          embeddingJson: instance.embeddingJson.trim(),
+          createdAt: instance.createdAt.trim(),
+          updatedAt: instance.updatedAt.trim(),
+        })),
+        { autoCommit: false },
+      );
+
+      const matchRows = input.instances.flatMap((instance) =>
+        instance.matches.map((match) => ({
+          familyGroupKey,
+          matchId: match.matchId.trim(),
+          faceId: instance.faceId.trim(),
+          candidatePersonId: match.candidatePersonId.trim(),
+          confidenceScore: String(match.confidenceScore),
+          matchStatus: match.matchStatus.trim(),
+          reviewedBy: String(match.reviewedBy ?? "").trim(),
+          reviewedAt: String(match.reviewedAt ?? "").trim(),
+          createdAt: match.createdAt.trim(),
+          matchMetadata: String(match.matchMetadata ?? "").trim(),
+        })),
+      );
+      if (matchRows.length > 0) {
+        await connection.executeMany(
+          `INSERT INTO face_matches (
+             family_group_key,
+             match_id,
+             face_id,
+             candidate_person_id,
+             confidence_score,
+             match_status,
+             reviewed_by,
+             reviewed_at,
+             created_at,
+             match_metadata
+           ) VALUES (
+             :familyGroupKey,
+             :matchId,
+             :faceId,
+             :candidatePersonId,
+             :confidenceScore,
+             :matchStatus,
+             :reviewedBy,
+             :reviewedAt,
+             :createdAt,
+             :matchMetadata
+           )`,
+          matchRows,
+          { autoCommit: false },
+        );
+      }
+    }
+
+    await connection.commit();
   });
 }
 

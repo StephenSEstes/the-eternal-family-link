@@ -15,6 +15,7 @@ import {
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { seedPersonFaceProfileFromUpload } from "@/lib/media/face-recognition";
 import { buildMediaFileId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
@@ -238,6 +239,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       createdAt: createdAtIso,
       replaceAttributeLinks: !targetAttributeId,
     });
+
+    if (attributeType === "photo" && validated.mediaKind === "image" && shouldBePrimary) {
+      void seedPersonFaceProfileFromUpload({
+        familyGroupKey: resolved.tenant.tenantKey,
+        personId,
+        sourceFileId: fileId,
+        imageBytes: bytes,
+      }).catch((profileError) => {
+        console.warn("[photos/upload] face profile seed skipped", profileError);
+      });
+    }
 
     if (attributeType === "photo") {
       const primaryPhotoFileId = shouldBePrimary

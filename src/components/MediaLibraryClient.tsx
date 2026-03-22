@@ -90,6 +90,11 @@ function inferMediaKind(fileId: string, rawMetadata?: string) {
   return inferStoredMediaKind(fileId, rawMetadata);
 }
 
+function formatConfidencePercent(value: number) {
+  const normalized = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+  return `${Math.round(normalized * 100)}%`;
+}
+
 async function assertOk(res: Response, fallbackMessage: string) {
   if (res.ok) return;
   const body = await res.json().catch(() => null);
@@ -967,6 +972,54 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                           </button>
                         ) : null}
                       </div>
+                      {selectedPhotoIntelligenceSuggestion.faceSuggestions && selectedPhotoIntelligenceSuggestion.faceSuggestions.length > 0 ? (
+                        <div style={{ display: "grid", gap: "0.45rem" }}>
+                          <strong style={{ fontSize: "0.88rem" }}>Face Suggestions</strong>
+                          {selectedPhotoIntelligenceSuggestion.faceSuggestions.map((face, index) => (
+                            <div
+                              key={face.faceId || `face-suggestion-${index}`}
+                              style={{
+                                border: "1px solid #dbe4ee",
+                                borderRadius: "10px",
+                                padding: "0.55rem 0.65rem",
+                                display: "grid",
+                                gap: "0.35rem",
+                                background: "#fff",
+                              }}
+                            >
+                              <span className="page-subtitle" style={{ margin: 0 }}>
+                                Face {index + 1} · quality {formatConfidencePercent(face.qualityScore)} · detection {formatConfidencePercent(face.detectionConfidence)}
+                              </span>
+                              {face.matches.length > 0 ? (
+                                <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                                  {face.matches.map((match) => (
+                                    <span
+                                      key={`${face.faceId}-${match.personId}`}
+                                      className="status-chip status-chip--neutral"
+                                      style={{
+                                        background: match.confidenceBand === "high" ? "#ecfdf3" : match.confidenceBand === "medium" ? "#f8fafc" : "#fff7ed",
+                                        borderColor: match.confidenceBand === "high" ? "#bbf7d0" : match.confidenceBand === "medium" ? "#dbe4ee" : "#fed7aa",
+                                        color: match.confidenceBand === "high" ? "#166534" : match.confidenceBand === "medium" ? "#334155" : "#9a3412",
+                                      }}
+                                    >
+                                      {match.displayName} · {formatConfidencePercent(match.confidenceScore)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="page-subtitle" style={{ margin: 0 }}>
+                                  No candidate people yet.
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" &&
+                        selectedPhotoIntelligenceSuggestion.detectedFaceCount > 0 ? (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          Faces were detected, but no person candidates are ready yet.
+                        </span>
+                      ) : null}
                       {selectedPhotoIntelligenceDebug ? (
                         <details style={{ marginTop: "0.25rem" }}>
                           <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>
