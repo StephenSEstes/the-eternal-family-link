@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-21 (deploy-safe OCI Vision/Object Storage auth)
+
+- `Date`: 2026-03-21
+- `Change`: Replaced the OCI Vision/Object Storage runtime auth path with a shared deploy-safe auth helper that prefers API-key env configuration in production and only falls back to OCI config-file auth when an actual config file exists.
+- `Type`: API | Infra
+- `Why`: Root cause was a `mixed issue`. The photo-intelligence route was reaching OCI Vision, but both `vision.ts` and `object-storage.ts` still constructed `ConfigFileAuthenticationDetailsProvider`, which assumes `~/.oci/config`. Vercel does not provide that file, so OCI client initialization failed before any Vision result could be returned. Production also needs the OCI API-signing env values (`OCI_USER_OCID`, `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY_PEM` or `OCI_PRIVATE_KEY_PATH`) for env-based auth.
+- `Files`:
+  - `src/lib/oci/auth.ts`
+  - `src/lib/oci/vision.ts`
+  - `src/lib/oci/object-storage.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In production, after setting `OCI_USER_OCID`, `OCI_FINGERPRINT`, and `OCI_PRIVATE_KEY_PEM` (or `OCI_PRIVATE_KEY_PATH`) with the existing region/tenancy/object-storage vars, `Generate Suggestions` should no longer fail with the missing `~/.oci/config` error.
+  - OCI Vision debug should advance past auth initialization and either succeed or return a real OCI service error/status payload.
+- `Rollback Notes`: Revert the shared auth helper and restore direct `ConfigFileAuthenticationDetailsProvider` usage in `vision.ts` and `object-storage.ts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (modal backdrop-close disabled for key edit/manage flows)
 
 - `Date`: 2026-03-19

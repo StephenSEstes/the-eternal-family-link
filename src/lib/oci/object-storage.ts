@@ -2,14 +2,12 @@ import "server-only";
 
 import { Readable } from "node:stream";
 import { ObjectStorageClient } from "oci-objectstorage";
-import { ConfigFileAuthenticationDetailsProvider } from "oci-common";
+import { getOciAuthenticationProvider } from "@/lib/oci/auth";
 
 type OciObjectConfig = {
   region: string;
   namespace: string;
   bucketName: string;
-  configFile?: string;
-  profile?: string;
 };
 
 type ObjectContent = {
@@ -42,18 +40,16 @@ function readConfig(): OciObjectConfig | null {
     region,
     namespace,
     bucketName,
-    configFile: readOptionalEnv("OCI_CONFIG_FILE") || undefined,
-    profile: readOptionalEnv("OCI_CONFIG_PROFILE") || undefined,
   };
 }
 
 function getClient(config: OciObjectConfig) {
-  const cacheKey = `${config.region}|${config.namespace}|${config.bucketName}|${config.configFile || ""}|${config.profile || ""}`;
+  const auth = getOciAuthenticationProvider();
+  const cacheKey = `${config.region}|${config.namespace}|${config.bucketName}|${auth.cacheKey}`;
   if (cachedClient && cachedConfigKey === cacheKey) {
     return cachedClient;
   }
-  const provider = new ConfigFileAuthenticationDetailsProvider(config.configFile, config.profile);
-  const client = new ObjectStorageClient({ authenticationDetailsProvider: provider });
+  const client = new ObjectStorageClient({ authenticationDetailsProvider: auth.provider });
   client.endpoint = `https://objectstorage.${config.region}.oraclecloud.com`;
   cachedClient = client;
   cachedConfigKey = cacheKey;

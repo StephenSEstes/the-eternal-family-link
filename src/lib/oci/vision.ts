@@ -1,7 +1,7 @@
 import "server-only";
 
-import { ConfigFileAuthenticationDetailsProvider } from "oci-common";
 import { AIServiceVisionClient, models } from "oci-aivision";
+import { getOciAuthenticationProvider } from "@/lib/oci/auth";
 
 export type OciVisionInsight = {
   labels: Array<{ name: string; confidence: number }>;
@@ -12,8 +12,6 @@ export type OciVisionInsight = {
 type OciVisionConfig = {
   region: string;
   compartmentId: string;
-  configFile?: string;
-  profile?: string;
 };
 
 let cachedClient: AIServiceVisionClient | null = null;
@@ -33,19 +31,17 @@ function readVisionConfig(): OciVisionConfig | null {
   return {
     region,
     compartmentId,
-    configFile: readOptionalEnv("OCI_CONFIG_FILE") || undefined,
-    profile: readOptionalEnv("OCI_CONFIG_PROFILE") || undefined,
   };
 }
 
 function getVisionClient(config: OciVisionConfig) {
-  const key = `${config.region}|${config.compartmentId}|${config.configFile || ""}|${config.profile || ""}`;
+  const auth = getOciAuthenticationProvider();
+  const key = `${config.region}|${config.compartmentId}|${auth.cacheKey}`;
   if (cachedClient && key === cachedConfigKey) {
     return cachedClient;
   }
-  const provider = new ConfigFileAuthenticationDetailsProvider(config.configFile, config.profile);
   const client = new AIServiceVisionClient({
-    authenticationDetailsProvider: provider,
+    authenticationDetailsProvider: auth.provider,
   });
   client.regionId = config.region;
   cachedClient = client;
