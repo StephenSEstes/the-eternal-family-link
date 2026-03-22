@@ -43,6 +43,37 @@ function readConfig(): OciObjectConfig | null {
   };
 }
 
+function isWebReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
+  return typeof ReadableStream !== "undefined" && value instanceof ReadableStream;
+}
+
+async function readObjectBodyBytes(body: unknown) {
+  if (Buffer.isBuffer(body)) {
+    return body;
+  }
+
+  const bodyAny = body as {
+    arrayBuffer?: () => Promise<ArrayBuffer>;
+  };
+  if (typeof bodyAny.arrayBuffer === "function") {
+    return Buffer.from(await bodyAny.arrayBuffer());
+  }
+
+  if (body instanceof Readable) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  if (isWebReadableStream(body)) {
+    return Buffer.from(await new Response(body).arrayBuffer());
+  }
+
+  return Buffer.from(body as Uint8Array);
+}
+
 function getClient(config: OciObjectConfig) {
   const auth = getOciAuthenticationProvider();
   const cacheKey = `${config.region}|${config.namespace}|${config.bucketName}|${auth.cacheKey}`;
@@ -96,21 +127,7 @@ export async function getOciObjectContentByKey(objectKey: string, fallbackMimeTy
     throw new Error("OCI object body was empty.");
   }
 
-  const bodyAny = body as unknown;
-  let bytes: Buffer;
-  if (Buffer.isBuffer(body)) {
-    bytes = body;
-  } else if (typeof (bodyAny as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === "function") {
-    bytes = Buffer.from(await (bodyAny as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer());
-  } else if (body instanceof Readable) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of body) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    bytes = Buffer.concat(chunks);
-  } else {
-    bytes = Buffer.from(bodyAny as Uint8Array);
-  }
+  const bytes = await readObjectBodyBytes(body);
 
   return {
     mimeType: contentType,

@@ -31,6 +31,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the shared auth helper and restore direct `ConfigFileAuthenticationDetailsProvider` usage in `vision.ts` and `object-storage.ts`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-21 (OCI object read handles web ReadableStream)
+
+- `Date`: 2026-03-21
+- `Change`: Updated OCI object-storage runtime reads to consume web `ReadableStream` bodies in addition to Node `Readable`, `Buffer`, and `arrayBuffer()` response shapes.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code/runtime issue`. After the deploy-safe OCI auth fix, production advanced into the object read path, but Vercel returned `response.value` from OCI Object Storage as a web `ReadableStream`. `getOciObjectContentByKey()` only handled Node streams and byte-like bodies, so it fell through to `Buffer.from(...)` and threw `ERR_INVALID_ARG_TYPE` before Vision could analyze the image.
+- `Files`:
+  - `src/lib/oci/object-storage.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In production, `Generate Suggestions` no longer fails with `ERR_INVALID_ARG_TYPE ... Received an instance of ReadableStream`.
+  - Photo intelligence proceeds to Vision analysis or returns the next real OCI service/runtime error if one remains.
+- `Rollback Notes`: Revert the `ReadableStream` handling helper in `src/lib/oci/object-storage.ts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-19 (modal backdrop-close disabled for key edit/manage flows)
 
 - `Date`: 2026-03-19

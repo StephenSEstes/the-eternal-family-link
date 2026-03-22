@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-21: Fixed OCI object-storage runtime reads so production can consume web `ReadableStream` bodies from OCI and continue into Vision analysis instead of failing with `ERR_INVALID_ARG_TYPE`. See `docs/change-summary.md`.
 - 2026-03-21: Switched OCI Vision/Object Storage runtime auth to a deploy-safe shared helper that prefers API-key env credentials and only falls back to config-file auth when a real OCI config file exists. See `docs/change-summary.md`.
 - 2026-03-21: Updated the Media Library photo-intelligence request to send session credentials explicitly so the protected intelligence endpoint no longer fails immediately with plain `unauthorized` before OCI Vision runs. See `docs/change-summary.md`.
 - 2026-03-21: Fixed the Vercel build blocker caused by `lib/ociTest.ts` importing git-ignored `lib/ociConfig.ts`, so production redeploys can pick up the current OCI environment variables. See `docs/change-summary.md`.
