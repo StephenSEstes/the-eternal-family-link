@@ -5165,3 +5165,16 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Production deploy is no longer blocked by `lib/ociTest.ts` importing a git-ignored module.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-21 (photo intelligence request sends session credentials explicitly)
+
+- `Change`: Updated the Media Library photo-intelligence `POST` request to send cookies explicitly with `credentials: "same-origin"` when calling the tenant-scoped intelligence endpoint.
+- `Type`: Auth Reliability, Media Suggestions
+- `Why`: Root cause was the photo-intelligence modal surfacing plain `unauthorized` from the app endpoint before OCI Vision ran. The failing path was the client-side fetch to `/api/t/[tenantKey]/photos/[fileId]/intelligence`, which needed to send the signed-in session cookie explicitly on the protected request.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening a photo and selecting `Generate Suggestions` no longer fails immediately with plain `unauthorized` before Vision debug can populate.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

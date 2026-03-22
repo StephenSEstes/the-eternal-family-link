@@ -422,6 +422,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       const res = await fetch(
         `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/intelligence`,
         {
+          credentials: "same-origin",
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ force }),
