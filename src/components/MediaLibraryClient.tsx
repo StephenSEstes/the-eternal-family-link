@@ -300,8 +300,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     return readPhotoIntelligenceSuggestion(selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail]);
   const selectedPhotoIntelligenceDebug = useMemo<PhotoIntelligenceDebug | null>(() => {
-    if (!selectedPhotoDetail) return photoIntelligenceDebug;
-    return readPhotoIntelligenceDebug(selectedPhotoDetail.mediaMetadata) ?? photoIntelligenceDebug;
+    if (photoIntelligenceDebug) return photoIntelligenceDebug;
+    if (!selectedPhotoDetail) return null;
+    return readPhotoIntelligenceDebug(selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail, photoIntelligenceDebug]);
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
@@ -1027,9 +1028,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                             <span className="page-subtitle" style={{ margin: 0 }}>
                               configured={String(selectedPhotoIntelligenceDebug.visionConfigured)} attempted={String(selectedPhotoIntelligenceDebug.visionAttempted)} succeeded={String(selectedPhotoIntelligenceDebug.visionSucceeded)}
                             </span>
+                            <span className="page-subtitle" style={{ margin: 0 }}>
+                              embeddingAttempted={String(selectedPhotoIntelligenceDebug.embeddingAttempted)} embeddingSucceeded={String(selectedPhotoIntelligenceDebug.embeddingSucceeded)} embeddingFacesReturned={String(selectedPhotoIntelligenceDebug.embeddingFacesReturned)} embeddingFacesWithVectors={String(selectedPhotoIntelligenceDebug.embeddingFacesWithVectors)}
+                            </span>
                             {selectedPhotoIntelligenceDebug.visionErrorMessage ? (
                               <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
                                 {selectedPhotoIntelligenceDebug.visionErrorMessage}
+                              </span>
+                            ) : null}
+                            {selectedPhotoIntelligenceDebug.embeddingErrorMessage ? (
+                              <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
+                                {selectedPhotoIntelligenceDebug.embeddingErrorMessage}
                               </span>
                             ) : null}
                             {(selectedPhotoIntelligenceDebug.visionErrorCode || selectedPhotoIntelligenceDebug.visionStatusCode || selectedPhotoIntelligenceDebug.visionServiceCode || selectedPhotoIntelligenceDebug.visionOpcRequestId) ? (

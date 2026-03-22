@@ -63,6 +63,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the embedding-debug additions in `vision.ts` and the extra raw debug fields in the photo-intelligence route.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (photo-intelligence debug contract alignment)
+
+- `Date`: 2026-03-22
+- `Change`: Extended the persisted `PhotoIntelligenceDebug` contract to include face-embedding status fields and updated the media modal to prefer the fresh route response debug over stale parsed metadata. The Vision debug section now surfaces embedding status directly instead of relying only on the raw JSON blob.
+- `Type`: UI | API
+- `Why`: Root cause was a `code/diagnostics issue`. The backend had started returning face-embedding diagnostics, but the client debug parser only knew the older debug shape and the modal preferred parsed `media_metadata` over the fresh POST response. That let the UI continue showing the older raw payload shape even after a successful redeploy, which blocked diagnosis of why face suggestions still had no candidate people.
+- `Files`:
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Running `Generate Suggestions` now shows `embeddingAttempted`, `embeddingSucceeded`, `embeddingFacesReturned`, and `embeddingFacesWithVectors` in the Vision debug panel.
+  - The modal reflects the latest POST response debug immediately after generation instead of preferring an older stored debug payload.
+- `Rollback Notes`: Revert the debug-type/parser additions, the route debug fields, and the media-modal debug rendering changes together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
 
 - `Date`: 2026-03-22

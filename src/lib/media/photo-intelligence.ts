@@ -54,6 +54,11 @@ export type PhotoIntelligenceDebug = {
   visionServiceCode: string;
   visionOpcRequestId: string;
   visionRawResult: string;
+  embeddingAttempted: boolean;
+  embeddingSucceeded: boolean;
+  embeddingErrorMessage: string;
+  embeddingFacesReturned: number;
+  embeddingFacesWithVectors: number;
 };
 
 export type PhotoIntelligenceDateSignal = {
@@ -377,6 +382,15 @@ export function readPhotoIntelligenceDebug(rawMetadata: string | undefined): Pho
     visionServiceCode: String(debug.visionServiceCode ?? "").trim(),
     visionOpcRequestId: String(debug.visionOpcRequestId ?? "").trim(),
     visionRawResult: String(debug.visionRawResult ?? "").trim(),
+    embeddingAttempted: String(debug.embeddingAttempted ?? "").trim().toLowerCase() === "true",
+    embeddingSucceeded: String(debug.embeddingSucceeded ?? "").trim().toLowerCase() === "true",
+    embeddingErrorMessage: String(debug.embeddingErrorMessage ?? "").trim(),
+    embeddingFacesReturned: Number.isFinite(Number(debug.embeddingFacesReturned ?? 0))
+      ? Number(debug.embeddingFacesReturned)
+      : 0,
+    embeddingFacesWithVectors: Number.isFinite(Number(debug.embeddingFacesWithVectors ?? 0))
+      ? Number(debug.embeddingFacesWithVectors)
+      : 0,
   };
 }
 

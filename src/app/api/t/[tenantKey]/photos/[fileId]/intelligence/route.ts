@@ -190,6 +190,11 @@ export async function POST(request: Request, { params }: RouteProps) {
     visionServiceCode,
     visionOpcRequestId,
     visionRawResult,
+    embeddingAttempted: vision?.embeddingAttempted ?? false,
+    embeddingSucceeded: vision?.embeddingSucceeded ?? false,
+    embeddingErrorMessage: vision?.embeddingErrorMessage ?? "",
+    embeddingFacesReturned: vision?.embeddingFacesReturned ?? 0,
+    embeddingFacesWithVectors: vision?.embeddingFacesWithVectors ?? 0,
   };
 
   const previousSuggestion = readPhotoIntelligenceSuggestion(baseMetadata);
