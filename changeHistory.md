@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Added explicit face-embedding debug visibility to photo intelligence and aligned the embedding subrequest to Oracle's documented request shape so `embeddingLength: 0` runs can be diagnosed directly from the media debug block. See `docs/change-summary.md`.
 - 2026-03-22: Hardened OCI Vision inline-image handling so oversized originals are reduced before `analyzeImage`, preventing Oracle's masked `toLowerCase` crash on large photos and headshots. See `docs/change-summary.md`.
 - 2026-03-22: Hardened OCI Vision face embedding so a buggy embedding request can no longer fail the whole photo-intelligence run; the app now keeps the stable label/object/face-detection path primary and treats embeddings as best-effort. See `docs/change-summary.md`.
 - 2026-03-22: Added the first persisted face-suggestion MVP for media: OCI Vision now stores detected faces, suggest-only candidate matches, and cached person face profiles, and the media editor shows those face suggestions read-only from media metadata. See `docs/change-summary.md`.

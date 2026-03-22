@@ -46,6 +46,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the image-preparation and error-normalization additions in `src/lib/oci/vision.ts`.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (face embedding debug visibility)
+
+- `Date`: 2026-03-22
+- `Change`: Added explicit face-embedding subrequest status to the persisted Vision debug payload and switched the embedding request to Oracle's documented example shape (`shouldReturnLandmarks: true`) so empty-vector results can be diagnosed directly from the media debug block.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code/diagnostics gap`. After the inline-size fix, OCI Vision labels/objects/face detection worked again, but candidate people still did not appear because the embedding subrequest was producing `embeddingLength: 0` with no persisted indication of whether the subrequest failed outright or returned faces without vectors.
+- `Files`:
+  - `src/lib/oci/vision.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Production Vision debug now includes `embeddingAttempted`, `embeddingSucceeded`, `embeddingErrorMessage`, `embeddingFacesReturned`, and `embeddingFacesWithVectors`.
+  - A headshot re-run makes it clear whether the remaining no-candidate state is due to missing vectors, a failed embedding subrequest, or lack of cached candidate profiles.
+- `Rollback Notes`: Revert the embedding-debug additions in `vision.ts` and the extra raw debug fields in the photo-intelligence route.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
 
 - `Date`: 2026-03-22

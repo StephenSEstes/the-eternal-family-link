@@ -21,6 +21,11 @@ export type OciVisionInsight = {
   objects: Array<{ name: string; confidence: number }>;
   faces: OciVisionFace[];
   faceCount: number;
+  embeddingAttempted: boolean;
+  embeddingSucceeded: boolean;
+  embeddingErrorMessage: string;
+  embeddingFacesReturned: number;
+  embeddingFacesWithVectors: number;
 };
 
 type OciVisionConfig = {
@@ -273,8 +278,14 @@ export async function analyzeInlineImageWithVision(input: {
       .slice(0, 8)
     : [];
   let faces = extractFaces(result);
+  let embeddingAttempted = false;
+  let embeddingSucceeded = false;
+  let embeddingErrorMessage = "";
+  let embeddingFacesReturned = 0;
+  let embeddingFacesWithVectors = 0;
   if (faces.length > 0) {
     try {
+      embeddingAttempted = true;
       const embeddingResponse = await client.analyzeImage({
         analyzeImageDetails: {
           compartmentId: config.compartmentId,
@@ -283,16 +294,33 @@ export async function analyzeInlineImageWithVision(input: {
             data: preparedImageBytes.toString("base64"),
           },
           features: [
-            { featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: false } as models.FaceEmbeddingFeature,
+            { featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: true } as models.FaceEmbeddingFeature,
           ],
         },
       });
       const embeddingFaces = extractFaces(embeddingResponse.analyzeImageResult);
+      embeddingSucceeded = true;
+      embeddingFacesReturned = embeddingFaces.length;
+      embeddingFacesWithVectors = embeddingFaces.filter((face) => face.embedding.length > 0).length;
+      if (embeddingFacesWithVectors === 0) {
+        embeddingErrorMessage = "FACE_EMBEDDING returned faces without embedding vectors.";
+      }
       faces = mergeFaceEmbeddings(faces, embeddingFaces);
     } catch (embeddingError) {
+      embeddingErrorMessage = embeddingError instanceof Error ? embeddingError.message : "Face embedding request failed.";
       console.warn("[vision] face embedding request skipped; continuing without embeddings", embeddingError);
     }
   }
   const faceCount = faces.length;
-  return { labels, objects, faces, faceCount };
+  return {
+    labels,
+    objects,
+    faces,
+    faceCount,
+    embeddingAttempted,
+    embeddingSucceeded,
+    embeddingErrorMessage,
+    embeddingFacesReturned,
+    embeddingFacesWithVectors,
+  };
 }
