@@ -33,6 +33,7 @@ let poolPromise: Promise<OciPool> | null = null;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
+let mediaAssetsTableCompatEnsured = false;
 let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
@@ -163,7 +164,27 @@ const TABLES: Record<string, TableConfig> = {
   },
   MediaAssets: {
     tableName: "media_assets",
-    headers: ["media_id", "file_id", "storage_provider", "mime_type", "file_name", "file_size_bytes", "media_metadata", "created_at"],
+    headers: [
+      "media_id",
+      "file_id",
+      "storage_provider",
+      "mime_type",
+      "file_name",
+      "file_size_bytes",
+      "media_metadata",
+      "created_at",
+      "exif_extracted_at",
+      "exif_source_tag",
+      "exif_capture_date",
+      "exif_capture_timestamp_raw",
+      "exif_make",
+      "exif_model",
+      "exif_software",
+      "exif_width",
+      "exif_height",
+      "exif_orientation",
+      "exif_fingerprint",
+    ],
   },
   MediaLinks: {
     tableName: "media_links",
@@ -541,6 +562,37 @@ async function ensureFamilyConfigTableCompatibility(connection: OciConnection) {
     }
   }
   familyConfigCompatEnsured = true;
+}
+
+async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
+  if (mediaAssetsTableCompatEnsured) {
+    return;
+  }
+  const additiveColumns = [
+    "exif_extracted_at VARCHAR2(64)",
+    "exif_source_tag VARCHAR2(64)",
+    "exif_capture_date VARCHAR2(32)",
+    "exif_capture_timestamp_raw VARCHAR2(64)",
+    "exif_make VARCHAR2(120)",
+    "exif_model VARCHAR2(160)",
+    "exif_software VARCHAR2(160)",
+    "exif_width NUMBER",
+    "exif_height NUMBER",
+    "exif_orientation NUMBER",
+    "exif_fingerprint VARCHAR2(128)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE media_assets ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+  await connection.commit();
+  mediaAssetsTableCompatEnsured = true;
 }
 
 async function ensurePersonFamilyGroupsTableCompatibility(connection: OciConnection) {
@@ -1075,6 +1127,10 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
     await ensureFamilyConfigTableCompatibility(connection);
     return;
   }
+  if (tableName === "media_assets") {
+    await ensureMediaAssetsTableCompatibility(connection);
+    return;
+  }
   if (tableName === "households") {
     await ensureHouseholdsTableCompatibility(connection);
     return;
@@ -1317,6 +1373,17 @@ export type OciMediaAssetLookup = {
   storageProvider: string;
   mimeType: string;
   mediaMetadata: string;
+  exifExtractedAt: string;
+  exifSourceTag: string;
+  exifCaptureDate: string;
+  exifCaptureTimestampRaw: string;
+  exifMake: string;
+  exifModel: string;
+  exifSoftware: string;
+  exifWidth: number;
+  exifHeight: number;
+  exifOrientation: number;
+  exifFingerprint: string;
 };
 
 export type OciPersonMediaAttributeRow = {
@@ -2261,6 +2328,7 @@ export async function upsertOciMediaAsset(input: {
     throw new Error("media_id and file_id are required");
   }
   return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, "media_assets");
     await connection.execute(
       `MERGE INTO media_assets t
        USING (
@@ -2517,12 +2585,24 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
     return null;
   }
   return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, "media_assets");
     const result = await connection.execute(
       `SELECT
          a.file_id,
          a.storage_provider,
          a.mime_type,
-         a.media_metadata
+         a.media_metadata,
+         a.exif_extracted_at,
+         a.exif_source_tag,
+         a.exif_capture_date,
+         a.exif_capture_timestamp_raw,
+         a.exif_make,
+         a.exif_model,
+         a.exif_software,
+         a.exif_width,
+         a.exif_height,
+         a.exif_orientation,
+         a.exif_fingerprint
        FROM media_assets a
        WHERE TRIM(a.file_id) = :fileId
        ORDER BY CASE
@@ -2542,6 +2622,17 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
       storageProvider: fromDbValue(row.STORAGE_PROVIDER),
       mimeType: fromDbValue(row.MIME_TYPE),
       mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+      exifExtractedAt: fromDbValue(row.EXIF_EXTRACTED_AT),
+      exifSourceTag: fromDbValue(row.EXIF_SOURCE_TAG),
+      exifCaptureDate: fromDbValue(row.EXIF_CAPTURE_DATE),
+      exifCaptureTimestampRaw: fromDbValue(row.EXIF_CAPTURE_TIMESTAMP_RAW),
+      exifMake: fromDbValue(row.EXIF_MAKE),
+      exifModel: fromDbValue(row.EXIF_MODEL),
+      exifSoftware: fromDbValue(row.EXIF_SOFTWARE),
+      exifWidth: parseStoredNumber(row.EXIF_WIDTH),
+      exifHeight: parseStoredNumber(row.EXIF_HEIGHT),
+      exifOrientation: parseStoredNumber(row.EXIF_ORIENTATION),
+      exifFingerprint: fromDbValue(row.EXIF_FINGERPRINT),
     };
   });
 }
@@ -3081,6 +3172,17 @@ export async function updateOciMediaMetadataForFile(input: {
   familyGroupKey: string;
   fileId: string;
   mediaMetadata: string;
+  exifExtractedAt?: string;
+  exifSourceTag?: string;
+  exifCaptureDate?: string;
+  exifCaptureTimestampRaw?: string;
+  exifMake?: string;
+  exifModel?: string;
+  exifSoftware?: string;
+  exifWidth?: number;
+  exifHeight?: number;
+  exifOrientation?: number;
+  exifFingerprint?: string;
 }) {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
@@ -3088,13 +3190,36 @@ export async function updateOciMediaMetadataForFile(input: {
     return { assetsUpdated: 0, linksUpdated: 0 };
   }
   return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, "media_assets");
     const assetUpdate = await connection.execute(
       `UPDATE media_assets
-       SET media_metadata = :mediaMetadata
+       SET media_metadata = :mediaMetadata,
+           exif_extracted_at = COALESCE(:exifExtractedAt, exif_extracted_at),
+           exif_source_tag = COALESCE(:exifSourceTag, exif_source_tag),
+           exif_capture_date = COALESCE(:exifCaptureDate, exif_capture_date),
+           exif_capture_timestamp_raw = COALESCE(:exifCaptureTimestampRaw, exif_capture_timestamp_raw),
+           exif_make = COALESCE(:exifMake, exif_make),
+           exif_model = COALESCE(:exifModel, exif_model),
+           exif_software = COALESCE(:exifSoftware, exif_software),
+           exif_width = COALESCE(:exifWidth, exif_width),
+           exif_height = COALESCE(:exifHeight, exif_height),
+           exif_orientation = COALESCE(:exifOrientation, exif_orientation),
+           exif_fingerprint = COALESCE(:exifFingerprint, exif_fingerprint)
        WHERE TRIM(file_id) = :fileId`,
       {
         fileId,
         mediaMetadata: input.mediaMetadata.trim(),
+        exifExtractedAt: input.exifExtractedAt ? input.exifExtractedAt.trim() : null,
+        exifSourceTag: input.exifSourceTag ? input.exifSourceTag.trim() : null,
+        exifCaptureDate: input.exifCaptureDate ? input.exifCaptureDate.trim() : null,
+        exifCaptureTimestampRaw: input.exifCaptureTimestampRaw ? input.exifCaptureTimestampRaw.trim() : null,
+        exifMake: input.exifMake ? input.exifMake.trim() : null,
+        exifModel: input.exifModel ? input.exifModel.trim() : null,
+        exifSoftware: input.exifSoftware ? input.exifSoftware.trim() : null,
+        exifWidth: Number.isFinite(input.exifWidth) ? input.exifWidth : null,
+        exifHeight: Number.isFinite(input.exifHeight) ? input.exifHeight : null,
+        exifOrientation: Number.isFinite(input.exifOrientation) ? input.exifOrientation : null,
+        exifFingerprint: input.exifFingerprint ? input.exifFingerprint.trim() : null,
       },
       { autoCommit: false },
     );

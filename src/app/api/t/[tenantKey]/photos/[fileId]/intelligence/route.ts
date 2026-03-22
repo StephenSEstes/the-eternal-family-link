@@ -10,7 +10,11 @@ import {
   readPhotoIntelligenceSuggestion,
   type PhotoIntelligenceDebug,
 } from "@/lib/media/photo-intelligence";
-import { extractExifDateSignal } from "@/lib/media/exif";
+import {
+  buildDateSignalFromPersistedExif,
+  collectPersistedExifData,
+  readPersistedExifData,
+} from "@/lib/media/exif";
 import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
@@ -136,7 +140,25 @@ export async function POST(request: Request, { params }: RouteProps) {
     }
   }
 
-  const exifDateSignal = sourceBytes ? await extractExifDateSignal(sourceBytes) : null;
+  const persistedExif = readPersistedExifData(
+    asset
+      ? {
+        extractedAt: asset.exifExtractedAt,
+        sourceTag: asset.exifSourceTag,
+        captureDate: asset.exifCaptureDate,
+        captureTimestampRaw: asset.exifCaptureTimestampRaw,
+        make: asset.exifMake,
+        model: asset.exifModel,
+        software: asset.exifSoftware,
+        width: asset.exifWidth,
+        height: asset.exifHeight,
+        orientation: asset.exifOrientation,
+        fingerprint: asset.exifFingerprint,
+      }
+      : null,
+  );
+  const collectedExif = persistedExif ?? (sourceBytes ? await collectPersistedExifData(sourceBytes) : null);
+  const exifDateSignal = buildDateSignalFromPersistedExif(collectedExif);
   const visionConfigured = isOciVisionConfigured();
   let vision: OciVisionInsight | null = null;
   let visionAttempted = false;
@@ -275,6 +297,17 @@ export async function POST(request: Request, { params }: RouteProps) {
     familyGroupKey: resolved.tenant.tenantKey,
     fileId: normalizedFileId,
     mediaMetadata: generated.mediaMetadata,
+    exifExtractedAt: persistedExif ? undefined : collectedExif?.extractedAt,
+    exifSourceTag: persistedExif ? undefined : collectedExif?.sourceTag,
+    exifCaptureDate: persistedExif ? undefined : collectedExif?.captureDate,
+    exifCaptureTimestampRaw: persistedExif ? undefined : collectedExif?.captureTimestampRaw,
+    exifMake: persistedExif ? undefined : collectedExif?.make,
+    exifModel: persistedExif ? undefined : collectedExif?.model,
+    exifSoftware: persistedExif ? undefined : collectedExif?.software,
+    exifWidth: persistedExif ? undefined : collectedExif?.width,
+    exifHeight: persistedExif ? undefined : collectedExif?.height,
+    exifOrientation: persistedExif ? undefined : collectedExif?.orientation,
+    exifFingerprint: persistedExif ? undefined : collectedExif?.fingerprint,
   });
 
   await appendSessionAuditLog(resolved.session, {

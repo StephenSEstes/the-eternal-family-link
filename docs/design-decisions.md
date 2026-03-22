@@ -234,3 +234,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep family-group-scoped face/profile rows; add both global and family-specific face stores side by side.
 - `Impact`: `person_face_profiles` now represent one canonical profile per person, `face_instances` represent one canonical analyzed face set per file, reruns replace global face analysis for that file, and suggestion filtering must continue to use accessible people at read time so no unauthorized candidates are returned.
 - `Follow-up`: Add explicit confirm/reject review flows, delete/retention cleanup, and a targeted OCI cleanup/backfill for remaining legacy family-scoped face rows after the global model is stable.
+
+- `Area`: Media EXIF persistence
+- `Decision`: Persist the high-value normalized EXIF fields directly on `MediaAssets` and treat `exif_extracted_at` as the canonical marker that EXIF collection has already been attempted for that file. Reuse those stored EXIF fields on later intelligence runs instead of reparsing the image bytes each time.
+- `Reason`: EXIF is file-level metadata, not link-level metadata. The prior route-only extraction model reparsed EXIF on each forced intelligence run and could not distinguish between `not attempted yet` and `attempted, but no EXIF found`.
+- `Alternatives Considered`: Keep EXIF transient inside the intelligence route only; store EXIF only inside `media_metadata` JSON; add EXIF columns plus indexes immediately.
+- `Impact`: `MediaAssets` now carries query-friendly EXIF fields for date/device/dimension metadata, later reruns can skip EXIF parsing when `exif_extracted_at` is populated, and duplicate tooling can use those fields in future without reading image bytes again. No EXIF indexes are added in this phase.
+- `Follow-up`: Decide which EXIF columns should be indexed after there is a concrete search or duplicate-review workload that benefits from them.

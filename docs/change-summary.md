@@ -69,6 +69,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the face-table read/write changes, face-id/profile-id generation changes, and the matching design/schema docs together so runtime behavior and documented storage scope stay aligned.
 - `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make face-recognition identity global by `person_id` and `file_id`.
 
+## 2026-03-22 (persisted MediaAssets EXIF fields + skip repeat EXIF parsing)
+
+- `Date`: 2026-03-22
+- `Change`: Added normalized EXIF columns to `MediaAssets`, taught the OCI access layer to read/write those fields, and updated the photo-intelligence route to reuse stored EXIF when `exif_extracted_at` is already populated instead of reparsing EXIF on each forced suggestion run.
+- `Type`: API | Schema
+- `Why`: Root cause was a `schema/code issue`. EXIF extraction only existed as a transient step inside the intelligence route, so every forced `Generate Suggestions` run had to parse EXIF again from image bytes, and the runtime had no durable marker distinguishing `not attempted yet` from `attempted, but no EXIF found`.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/media/exif.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: `MediaAssets` compatibility now adds `exif_extracted_at`, `exif_source_tag`, `exif_capture_date`, `exif_capture_timestamp_raw`, `exif_make`, `exif_model`, `exif_software`, `exif_width`, `exif_height`, `exif_orientation`, and `exif_fingerprint`. No new indexes are added in this phase.
+- `Verify`:
+  - `npm run build` passes.
+  - The first intelligence run on an image populates EXIF columns on `MediaAssets` even when no capture date is found.
+  - A later forced intelligence run on the same image reuses stored EXIF and does not need to parse EXIF again.
+  - Photo date suggestion still prefers persisted EXIF capture date over filename/created-at fallback when EXIF date exists.
+- `Rollback Notes`: Revert the `MediaAssets` EXIF compatibility/access-layer changes, the EXIF helper rewrite, the intelligence-route reuse logic, and the matching design/schema docs together.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make normalized EXIF a first-class `MediaAssets` concern.
+
 ## 2026-03-22 (face embedding request fallback hardening)
 
 - `Date`: 2026-03-22

@@ -317,11 +317,23 @@ This section is a quick reference for the three data areas that drive profile/me
   - `file_size_bytes`
   - `media_metadata`
   - `created_at`
+  - `exif_extracted_at`
+  - `exif_source_tag`
+  - `exif_capture_date`
+  - `exif_capture_timestamp_raw`
+  - `exif_make`
+  - `exif_model`
+  - `exif_software`
+  - `exif_width`
+  - `exif_height`
+  - `exif_orientation`
+  - `exif_fingerprint`
 - Purpose:
-  - Canonical uploaded media file metadata registry.
+  - Canonical uploaded media file metadata registry, including normalized file-level EXIF fields that are extracted once and reused on later photo-intelligence runs.
 - Logical index/key:
   - Unique: `media_id`
   - Common lookup: `file_id`
+  - EXIF note: EXIF columns are intentionally unindexed in the current phase; they are persisted now so future search/duplicate tooling can use them without rereading file bytes.
 
 ## MediaLinks
 

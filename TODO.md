@@ -168,6 +168,13 @@ I will update this list as we add, complete, or remove work.
   - 2026-03-21 progress: Added deterministic image suggestion generation endpoint (`/photos/[fileId]/intelligence`), persisted `photoIntelligence` metadata, and media-editor apply controls (`Use Title/Description/Date`).
   - 2026-03-21 progress: Switched generation to OCI Vision-first analysis (labels/objects/faces) with deterministic fallback when Vision is unavailable.
   - 2026-03-22 progress: Production OCI Vision integration now works end-to-end for photo suggestions. The intelligence route reaches OCI auth, reads original image bytes from OCI Object Storage, and executes Vision analysis successfully in production.
+  - 2026-03-22 implementation plan (persisted EXIF fields):
+    - Add normalized EXIF columns to `MediaAssets` for the high-value file-level fields we want to query later (`exif_extracted_at`, `exif_source_tag`, `exif_capture_date`, `exif_capture_timestamp_raw`, `exif_make`, `exif_model`, `exif_software`, `exif_width`, `exif_height`, `exif_orientation`, `exif_fingerprint`) without adding new indexes yet.
+    - Extend the OCI table compatibility layer and `MediaAssets` lookup/update helpers so EXIF columns can be read and updated alongside existing media metadata without changing family-scoped `MediaLinks`.
+    - Refactor EXIF extraction to return a normalized structured payload, then persist that payload back to `MediaAssets` the first time image bytes are analyzed.
+    - Update the photo-intelligence route so it reuses persisted `MediaAssets` EXIF fields when present and only reruns EXIF parsing when the stored EXIF columns are blank.
+    - Keep checksum-based duplicate detection as the primary exact-match rule for now; do not wire EXIF into duplicate scans yet beyond storing the normalized values/fingerprint for future use.
+    - Validate with `npm run build`, then confirm a second forced `Generate Suggestions` run on the same photo no longer needs fresh EXIF extraction once the columns are populated.
   - 2026-03-22 implementation plan:
     - Add EXIF parser support for OCI-backed image bytes and extract capture-date candidates before heuristic fallback.
     - Extend photo-intelligence suggestion building to rank date signals in this order: EXIF capture date, file name date, createdAt fallback.
