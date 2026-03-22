@@ -30,6 +30,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the split-request logic in `src/lib/oci/vision.ts` and restore the prior single-request face-embedding path.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (OCI Vision inline image size hardening)
+
+- `Date`: 2026-03-22
+- `Change`: Bound oversized images before OCI Vision analysis and replace the opaque OCI TypeScript SDK `toLowerCase` crash with a clear Vision-specific error when Oracle still rejects the request. All inline Vision calls now re-encode large images to a smaller JPEG variant before the API request.
+- `Type`: API | Infra
+- `Why`: Root cause was a `mixed issue`. The photo-intelligence and face-profile paths always sent full original image bytes to OCI Vision, while Oracle's synchronous `analyzeImage` path only accepts single-image inline requests up to 5 MB. High-resolution originals could trigger a service-side rejection, and the Oracle TypeScript SDK then masked that rejection with its own secondary `toLowerCase is not a function` error when formatting the service error code.
+- `Files`:
+  - `src/lib/oci/vision.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In production, `Generate Suggestions` on large or high-resolution photos no longer fails with `b.toLowerCase is not a function`.
+  - Headshot profile seeding and photo-intelligence runs still reach OCI Vision and return labels/objects/faces for the same image set.
+- `Rollback Notes`: Revert the image-preparation and error-normalization additions in `src/lib/oci/vision.ts`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
 
 - `Date`: 2026-03-22

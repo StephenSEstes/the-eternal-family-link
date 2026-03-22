@@ -1,5 +1,6 @@
 import "server-only";
 
+import sharp from "sharp";
 import { AIServiceVisionClient, models } from "oci-aivision";
 import { getOciAuthenticationProvider } from "@/lib/oci/auth";
 
@@ -29,6 +30,15 @@ type OciVisionConfig = {
 
 let cachedClient: AIServiceVisionClient | null = null;
 let cachedConfigKey = "";
+
+const OCI_VISION_INLINE_TARGET_BYTES = 4_500_000;
+const OCI_VISION_PREPARE_STEPS = [
+  { maxEdge: 2048, quality: 84 },
+  { maxEdge: 1600, quality: 80 },
+  { maxEdge: 1280, quality: 76 },
+  { maxEdge: 960, quality: 72 },
+  { maxEdge: 720, quality: 68 },
+] as const;
 
 function readOptionalEnv(name: string) {
   const value = String(process.env[name] ?? "").trim();
@@ -64,6 +74,51 @@ function getVisionClient(config: OciVisionConfig) {
 
 export function isOciVisionConfigured() {
   return readVisionConfig() != null;
+}
+
+async function prepareImageBytesForVision(imageBytes: Buffer) {
+  if (imageBytes.length <= OCI_VISION_INLINE_TARGET_BYTES) {
+    return imageBytes;
+  }
+
+  let smallestCandidate = imageBytes;
+  for (const step of OCI_VISION_PREPARE_STEPS) {
+    const candidate = await sharp(imageBytes, { failOn: "none", animated: false })
+      .rotate()
+      .resize({
+        width: step.maxEdge,
+        height: step.maxEdge,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: step.quality, mozjpeg: true })
+      .toBuffer();
+    if (candidate.length < smallestCandidate.length) {
+      smallestCandidate = candidate;
+    }
+    if (candidate.length <= OCI_VISION_INLINE_TARGET_BYTES) {
+      return candidate;
+    }
+  }
+
+  if (smallestCandidate.length <= OCI_VISION_INLINE_TARGET_BYTES) {
+    return smallestCandidate;
+  }
+
+  throw new Error(
+    `OCI Vision inline image could not be reduced below ${OCI_VISION_INLINE_TARGET_BYTES} bytes (prepared=${smallestCandidate.length}).`,
+  );
+}
+
+function normalizeVisionError(error: unknown, context: { originalBytes: number; preparedBytes: number }) {
+  const typed = error as { message?: string };
+  const message = String(typed?.message ?? "");
+  if (message.includes("toLowerCase is not a function")) {
+    return new Error(
+      `OCI Vision request failed before returning a readable service error. originalBytes=${context.originalBytes} preparedBytes=${context.preparedBytes}`,
+    );
+  }
+  return error;
 }
 
 function toBoundingBox(item: {
@@ -168,6 +223,7 @@ export async function analyzeInlineImageWithVision(input: {
     throw new Error("OCI Vision is not configured.");
   }
   const client = getVisionClient(config);
+  const preparedImageBytes = await prepareImageBytesForVision(input.imageBytes);
 
   const primaryFeatures: models.ImageFeature[] = [
     { featureType: "IMAGE_CLASSIFICATION", maxResults: 6 } as models.ImageClassificationFeature,
@@ -179,14 +235,22 @@ export async function analyzeInlineImageWithVision(input: {
     compartmentId: config.compartmentId,
     image: {
       source: "INLINE",
-      data: input.imageBytes.toString("base64"),
+      data: preparedImageBytes.toString("base64"),
     },
     features: primaryFeatures,
   };
 
-  const response = await client.analyzeImage({
-    analyzeImageDetails: primaryRequest,
-  });
+  let response;
+  try {
+    response = await client.analyzeImage({
+      analyzeImageDetails: primaryRequest,
+    });
+  } catch (error) {
+    throw normalizeVisionError(error, {
+      originalBytes: input.imageBytes.length,
+      preparedBytes: preparedImageBytes.length,
+    });
+  }
   const result = response.analyzeImageResult;
   const labels = Array.isArray(result?.labels)
     ? result.labels
@@ -216,7 +280,7 @@ export async function analyzeInlineImageWithVision(input: {
           compartmentId: config.compartmentId,
           image: {
             source: "INLINE",
-            data: input.imageBytes.toString("base64"),
+            data: preparedImageBytes.toString("base64"),
           },
           features: [
             { featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: false } as models.FaceEmbeddingFeature,
