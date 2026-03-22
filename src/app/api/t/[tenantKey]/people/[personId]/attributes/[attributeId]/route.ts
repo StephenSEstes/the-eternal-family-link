@@ -151,7 +151,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     parsed.data.isPrimary === true
   ) {
     const primaryPhotoFileId =
-      nextMediaType === "photo" && nextValueText && (parsed.data.isPrimary === true || existingMedia?.isPrimary === true)
+      nextMediaType === "photo" && nextValueText && nextIsPrimary
         ? nextValueText
         : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
     await updateTableRecordById(

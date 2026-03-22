@@ -81,6 +81,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the debug-type/parser additions, the route debug fields, and the media-modal debug rendering changes together.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (person primary photo deselect reconciliation)
+
+- `Date`: 2026-03-22
+- `Change`: Fixed the person photo attribute update path so clearing `Set as primary` on a photo no longer leaves `People.photo_file_id` pointed at the deselected file. The route now only pins the edited file when it remains primary after the save; otherwise it recomputes the current primary from the remaining person photo links.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The person photo edit route treated `existingMedia.isPrimary === true` as enough reason to keep the edited file as the person-level headshot even when the user had just unchecked `isPrimary`. That left the media link flags and `People.photo_file_id` out of sync, so the person header/avatar could still show the deselected image.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - If two person photos were previously primary, unchecking one and saving causes the person header/avatar to switch to the remaining primary photo instead of the deselected one.
+  - If no photo remains primary, the person header/avatar falls back to the first remaining photo as defined by `getPrimaryPhotoFileIdForPerson`.
+- `Rollback Notes`: Revert the `nextIsPrimary`-based `photo_file_id` reconciliation in the person attribute PATCH route.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
 
 - `Date`: 2026-03-22
