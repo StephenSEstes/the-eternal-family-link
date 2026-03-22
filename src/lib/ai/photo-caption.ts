@@ -13,6 +13,8 @@ type RefinePhotoCaptionInput = {
   fallbackDescription: string;
 };
 
+const PHOTO_CAPTION_REFINEMENT_TIMEOUT_MS = 8_000;
+
 const photoCaptionSchema = z.object({
   labelSuggestion: z.string().trim().max(80).default(""),
   descriptionSuggestion: z.string().trim().max(180).default(""),
@@ -109,7 +111,7 @@ export async function refinePhotoCaptionWithOpenAi(
       },
     ],
     max_output_tokens: 300,
-  });
+  }, { timeout: PHOTO_CAPTION_REFINEMENT_TIMEOUT_MS });
 
   const outputText = stripMarkdownFence(extractResponseText(response));
   if (!outputText) {

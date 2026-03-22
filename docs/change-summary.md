@@ -62,6 +62,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the interactive face-suggestion candidate loading change together so the request path does not resume synchronous profile bootstrap unexpectedly.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (cap optional OpenAI photo-caption refinement time)
+
+- `Date`: 2026-03-22
+- `Change`: Added a hard timeout to the optional OpenAI photo-caption refinement step so slow upstream caption calls cannot block saving the deterministic OCI Vision suggestion.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. After Vision succeeded, the photo-intelligence route still called `refinePhotoCaptionWithOpenAi()` before persisting metadata. That refinement used the OpenAI SDK default timeout of 10 minutes, so a slow or stalled upstream caption request could leave the UI on `Generating suggestions for this photo...` for minutes and then fail before saving any suggestion, especially on family-group-only photos where no face-matching work remained.
+- `Files`:
+  - `src/lib/ai/photo-caption.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Family-group-only photos no longer sit in `Generating suggestions for this photo...` for minutes because of the optional caption-refinement step.
+  - If OpenAI is slow, the route still saves the deterministic Vision-based suggestion instead of returning with no AI suggestion.
+- `Rollback Notes`: Revert the photo-caption request timeout if you intentionally want long-running caption refinement to block the full intelligence response again.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (person-global primary photo model + person attach name fix)
 
 - `Date`: 2026-03-22
