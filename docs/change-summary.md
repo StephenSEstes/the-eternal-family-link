@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (face embedding request fallback hardening)
+
+- `Date`: 2026-03-22
+- `Change`: Split OCI Vision face embeddings into a separate best-effort request while keeping the stable label/object/face-detection request as the primary photo-intelligence path. If the embedding request fails, photo intelligence now continues with normal Vision labels/objects/faces instead of failing the whole suggestion run.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code/runtime issue`. The new face-suggestion MVP moved the primary Vision request onto `FACE_EMBEDDING`, and production started failing with `b.toLowerCase is not a function` before any Vision result could be returned. That broke photo-intelligence generation on clear headshots. The failure appears in the OCI TypeScript SDK request path for the embedding feature shape, not in the downstream face-match logic.
+- `Files`:
+  - `src/lib/oci/vision.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In production, `Generate Suggestions` on a clear headshot no longer fails the whole Vision run with `b.toLowerCase is not a function`.
+  - Photo intelligence still returns labels/objects/face detections even if the embedding-specific request is skipped.
+  - When the embedding call succeeds, face-suggestion matching still has access to embeddings and can populate candidate people.
+- `Rollback Notes`: Revert the split-request logic in `src/lib/oci/vision.ts` and restore the prior single-request face-embedding path.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (face suggestion MVP: persisted detections + read-only matches)
 
 - `Date`: 2026-03-22
