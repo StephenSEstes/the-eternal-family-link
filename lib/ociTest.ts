@@ -2,7 +2,36 @@ import { ObjectStorageClient, requests } from "oci-objectstorage";
 import {
   ConfigFileAuthenticationDetailsProvider,
 } from "oci-common";
-import { getOciObjectStorageConfig } from "./ociConfig";
+
+type OciObjectStorageConfig = {
+  tenancyOcid: string;
+  userOcid: string;
+  fingerprint: string;
+  privateKeyPath: string;
+  region: string;
+  namespace: string;
+  bucketName: string;
+};
+
+function readRequiredEnv(name: string): string {
+  const value = String(process.env[name] ?? "").trim();
+  if (!value) {
+    throw new Error(`Missing required OCI Object Storage env var: ${name}`);
+  }
+  return value;
+}
+
+function getOciObjectStorageConfig(): OciObjectStorageConfig {
+  return {
+    tenancyOcid: readRequiredEnv("OCI_TENANCY_OCID"),
+    userOcid: readRequiredEnv("OCI_USER_OCID"),
+    fingerprint: readRequiredEnv("OCI_FINGERPRINT"),
+    privateKeyPath: readRequiredEnv("OCI_PRIVATE_KEY_PATH"),
+    region: readRequiredEnv("OCI_REGION"),
+    namespace: readRequiredEnv("OCI_OBJECT_NAMESPACE"),
+    bucketName: readRequiredEnv("OCI_OBJECT_BUCKET"),
+  };
+}
 
 function mask(value: string, keep = 14) {
   if (!value) return "";

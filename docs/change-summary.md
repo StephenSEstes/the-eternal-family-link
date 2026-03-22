@@ -5152,3 +5152,16 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Existing JSON schema and attribute/category constraints remain unchanged.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-21 (fix Vercel OCI helper build blocker)
+
+- `Change`: Updated the root-level OCI object-storage diagnostic helper to read its required env vars directly instead of importing a separate local-only helper module.
+- `Type`: Build Reliability, Deployment Unblock
+- `Why`: Root cause was Vercel production builds failing on `Cannot find module './ociConfig'` because `lib/ociTest.ts` imported `lib/ociConfig.ts`, while `.gitignore` excluded `lib/ociConfig.ts` from git. That blocked the redeploy needed to apply current OCI environment variables in production.
+- `Files`:
+  - `lib/ociTest.ts`
+- `Data Changes`: No schema change.
+- `Verify`:
+  - `npm run build` passes.
+  - Production deploy is no longer blocked by `lib/ociTest.ts` importing a git-ignored module.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

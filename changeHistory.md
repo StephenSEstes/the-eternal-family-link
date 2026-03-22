@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-21: Fixed the Vercel build blocker caused by `lib/ociTest.ts` importing git-ignored `lib/ociConfig.ts`, so production redeploys can pick up the current OCI environment variables. See `docs/change-summary.md`.
 - 2026-03-20: Executed OCI media migration for existing assets (original + thumbnail metadata) and added safe OCI-first photo resolution with Drive fallback during transition. See `docs/change-summary.md`.
 - 2026-03-20: Added OCI object-media migration tooling and TODO execution plan to backfill existing media as OCI originals plus generated thumbnails (`media:oci:migrate:dryrun` / `media:oci:migrate:apply`). See `docs/change-summary.md`.
 - 2026-03-20: AI story extraction now follows an expert-documentarian workflow (single-story vs multi-vignette support), extraction modes were removed, and draft regeneration now follows iterative AI/user guidance. Also added the AGENTS rule requiring agreed multi-step plans to be captured in `TODO.md` before implementation. See `docs/change-summary.md`.
