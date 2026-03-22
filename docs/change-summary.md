@@ -13,6 +13,40 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (person-global primary photo model + person attach name fix)
+
+- `Date`: 2026-03-22
+- `Change`: Normalized person primary-photo behavior around `People.photo_file_id` as the only canonical headshot field, stopped persisting authoritative person-primary state on media links, aligned person/photo read paths and integrity expectations to that model, and fixed the person media-attach wizard so the current person shows by display name instead of raw `personId`.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a `mixed issue`. The app stored tenant-scoped person-photo primary flags on `MediaLinks.is_primary` while also storing a global `People.photo_file_id`. That split allowed duplicate primaries and stale avatar rows, and it made shared people inconsistent across family groups. Separately, the person media-attach wizard preselected the current person by ID but excluded that person from its `peopleOptions`, so the wizard could only render the raw `personId`.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/person/display-name.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/attributes/person-media.ts`
+  - `src/lib/attributes/media-response.ts`
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/[photoId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/integrity/route.ts`
+  - `src/components/PersonEditModal.tsx`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: Applied live OCI remediation to normalize existing person-primary data: updated `People.photo_file_id` for Brent Estes (`1QrWBGGbSW1reWyNhWjvI4uGc8bQuzpLK` -> `17YoxRiKr_EKi2d-fop-aQO9O4Xkl95ns`) and Eliza Estes (blank -> `1f2qhnRu5F_Blq-sysKPnlfKZzqmsLnKj`), converted 29 legacy person `usage_type='profile'` links to normalized `usage_type='photo'` links, and cleared 11 stale person-link `is_primary` flags.
+- `Verify`:
+  - `npm run build` passes.
+  - In person photo edit flows, exactly one linked photo renders as `Primary`, and that state follows `People.photo_file_id`.
+  - Uploading/attaching a new photo to a person shows the person's display name in the attach flow instead of the raw `personId`.
+  - Integrity audit no longer expects person headshot links to use `usage_type=profile`.
+- `Rollback Notes`: Revert the canonical person-photo selection helpers, person media-link write/read changes, wizard people-option fix, and the matching design/schema docs together so runtime behavior and docs stay aligned.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make person primary photos globally person-scoped via `People.photo_file_id`.
+
 ## 2026-03-22 (face embedding request fallback hardening)
 
 - `Date`: 2026-03-22

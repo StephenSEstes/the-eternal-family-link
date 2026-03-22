@@ -77,6 +77,7 @@ export async function syncPersonMediaAssociations(input: {
   const replacePersonLinksForFileIds = Array.from(
     new Set([fileId, ...(input.replacePersonLinksForFileIds ?? [])].map((value) => value.trim()).filter(Boolean)),
   );
+  const persistedIsPrimary = false;
 
   await Promise.all([
     input.replaceAttributeLinks === false ? Promise.resolve() : deleteAttributeLinks(input.tenantKey, input.attributeId),
@@ -85,7 +86,7 @@ export async function syncPersonMediaAssociations(input: {
 
   const mediaId = buildMediaId(fileId);
   const attributeUsageType = input.attributeType === "photo" ? "photo" : "media";
-  const personUsageType = input.attributeType === "photo" ? (input.isPrimary ? "profile" : "gallery") : "media";
+  const personUsageType = input.attributeType === "photo" ? "photo" : "media";
   const attributeLinkId = buildMediaLinkId(
     input.tenantKey,
     "attribute",
@@ -122,7 +123,7 @@ export async function syncPersonMediaAssociations(input: {
       label: input.label,
       description: input.description,
       photoDate: input.photoDate,
-      isPrimary: Boolean(input.isPrimary),
+      isPrimary: persistedIsPrimary,
       sortOrder: input.sortOrder ?? 0,
       mediaMetadata,
       createdAt,
@@ -137,7 +138,7 @@ export async function syncPersonMediaAssociations(input: {
       label: input.label,
       description: input.description,
       photoDate: input.photoDate,
-      isPrimary: Boolean(input.isPrimary),
+      isPrimary: persistedIsPrimary,
       sortOrder: input.sortOrder ?? 0,
       mediaMetadata,
       createdAt,

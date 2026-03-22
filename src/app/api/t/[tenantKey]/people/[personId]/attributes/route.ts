@@ -5,7 +5,7 @@ import { normalizePersonMediaAttributeType, syncPersonMediaAssociations } from "
 import {
   createAttribute,
   getAttributesForEntityWithMedia,
-  getPrimaryPhotoFileIdForPerson,
+  resolvePersonPhotoFileId,
 } from "@/lib/attributes/store";
 import {
   getPersonById,
@@ -24,10 +24,11 @@ type PersonAttributeRouteProps = {
 function toCompatibilityAttribute(
   tenantKey: string,
   personId: string,
+  canonicalPrimaryPhotoFileId: string,
   item: AttributeWithMedia,
   index: number,
 ) {
-  const media = toPersonMediaAttribute(item);
+  const media = toPersonMediaAttribute(item, canonicalPrimaryPhotoFileId);
   const attributeType = String(item.attributeType || item.typeKey || "").trim().toLowerCase();
   if (isLegacyInLawAttributeType(attributeType)) {
     return null;
@@ -72,7 +73,7 @@ export async function GET(_: Request, { params }: PersonAttributeRouteProps) {
   }
 
   const attributes = (await getAttributesForEntityWithMedia(resolved.tenant.tenantKey, "person", personId))
-    .map((item, index) => toCompatibilityAttribute(resolved.tenant.tenantKey, personId, item, index))
+    .map((item, index) => toCompatibilityAttribute(resolved.tenant.tenantKey, personId, person.photoFileId.trim(), item, index))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
   return NextResponse.json({ tenantKey: resolved.tenant.tenantKey, personId, attributes });
 }
@@ -161,9 +162,10 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
       mediaMetadata: parsed.data.valueJson,
     });
     if (mediaAttributeType === "photo") {
-      const primaryPhotoFileId = parsed.data.isPrimary
-        ? fileId
-        : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
+      const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+        preferredFileId: parsed.data.isPrimary ? fileId : "",
+        currentPhotoFileId: person.photoFileId,
+      })) ?? "";
       await updateTableRecordById(
         PEOPLE_TABLE,
         personId,

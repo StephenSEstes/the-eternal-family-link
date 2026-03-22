@@ -218,3 +218,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Continue serving originals for every surface; generate thumbnails only at view time; defer all variant work until OCI migration.
 - `Impact`: Upload routes now attempt best-effort thumbnail generation for images, media metadata includes variant pointers, and preview UI paths resolve to thumbnail file IDs when present.
 - `Follow-up`: Keep storage adapter behavior variant-aware so OCI migration can move originals/thumbnails without UI contract changes.
+
+## 2026-03-22
+
+- `Area`: Person primary-photo ownership
+- `Decision`: Person primary photos are now globally person-scoped. `People.photo_file_id` is the only canonical primary headshot field for people, and person media links no longer carry authoritative primary state.
+- `Reason`: The prior mixed model stored tenant-scoped `MediaLinks.is_primary` flags while also storing a global `People.photo_file_id`. That split allowed duplicate primaries, stale person avatars, and cross-family inconsistencies for shared people.
+- `Alternatives Considered`: Keep family-group-scoped person primaries on `MediaLinks`; add a second family-scoped headshot pointer alongside `People.photo_file_id`.
+- `Impact`: Setting or clearing a person primary photo now updates only the canonical `People.photo_file_id` selection logic, person UIs derive `Primary` from that field, and integrity/runtime paths must treat person `MediaLinks.is_primary` as non-authoritative legacy state.
+- `Follow-up`: Backfill any existing stale `People.photo_file_id` rows and duplicate historical person-primary link flags in production data as a separate remediation step.

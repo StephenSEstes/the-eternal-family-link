@@ -7,7 +7,7 @@ import {
   createAttribute,
   getAttributeById,
   getAttributesForEntityWithMedia,
-  getPrimaryPhotoFileIdForPerson,
+  resolvePersonPhotoFileId,
 } from "@/lib/attributes/store";
 import {
   buildMediaMetadata,
@@ -182,6 +182,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const existingPhotos = attributeType === "photo"
       ? toPersonMediaAttributes(
         await getAttributesForEntityWithMedia(resolved.tenant.tenantKey, "person", personId),
+        person.photoFileId,
       ).filter((item) => item.attributeType === "photo")
       : [];
     const shouldBePrimary =
@@ -252,9 +253,10 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     }
 
     if (attributeType === "photo") {
-      const primaryPhotoFileId = shouldBePrimary
-        ? fileId
-        : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
+      const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+        preferredFileId: shouldBePrimary ? fileId : "",
+        currentPhotoFileId: person.photoFileId,
+      })) ?? "";
       await updateTableRecordById(
         PEOPLE_TABLE,
         personId,

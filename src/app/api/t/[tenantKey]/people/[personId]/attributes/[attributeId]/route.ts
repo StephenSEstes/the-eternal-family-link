@@ -9,7 +9,7 @@ import {
 import {
   deleteAttribute,
   getAttributeWithMediaById,
-  getPrimaryPhotoFileIdForPerson,
+  resolvePersonPhotoFileId,
   updateAttribute,
 } from "@/lib/attributes/store";
 import {
@@ -42,7 +42,7 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
   if (!existing || existing.entityType !== "person" || existing.entityId !== personId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  const existingMedia = toPersonMediaAttribute(existing);
+  const existingMedia = toPersonMediaAttribute(existing, person.photoFileId.trim());
 
   const parsed = personAttributeUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -150,10 +150,16 @@ export async function PATCH(request: Request, { params }: PersonAttributeItemRou
     existingMedia?.isPrimary === true ||
     parsed.data.isPrimary === true
   ) {
-    const primaryPhotoFileId =
-      nextMediaType === "photo" && nextValueText && nextIsPrimary
-        ? nextValueText
-        : ((await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "");
+    const currentPhotoFileId = person.photoFileId.trim();
+    const excludedFileIds =
+      parsed.data.isPrimary === false && currentPhotoFileId && (currentPhotoFileId === existingFileId || currentPhotoFileId === nextValueText)
+        ? [currentPhotoFileId]
+        : [];
+    const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+      preferredFileId: nextMediaType === "photo" && nextValueText && nextIsPrimary ? nextValueText : "",
+      currentPhotoFileId,
+      excludedFileIds,
+    })) ?? "";
     await updateTableRecordById(
       PEOPLE_TABLE,
       personId,
@@ -182,11 +188,16 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
     return resolved.error;
   }
 
+  const person = await getPersonById(personId, resolved.tenant.tenantKey);
+  if (!person) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const existing = await getAttributeWithMediaById(resolved.tenant.tenantKey, attributeId);
   if (!existing || existing.entityType !== "person" || existing.entityId !== personId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  const existingMedia = toPersonMediaAttribute(existing);
+  const existingMedia = toPersonMediaAttribute(existing, person.photoFileId.trim());
   const existingAttributeType = (existing.attributeType || existing.typeKey || "").trim().toLowerCase();
   if (isLegacyInLawAttributeType(existingAttributeType)) {
     return NextResponse.json(
@@ -213,7 +224,9 @@ export async function DELETE(_: Request, { params }: PersonAttributeItemRoutePro
   }
 
   if (normalizePersonMediaAttributeType(existingAttributeType) === "photo") {
-    const primaryPhotoFileId = (await getPrimaryPhotoFileIdForPerson(resolved.tenant.tenantKey, personId)) ?? "";
+    const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+      currentPhotoFileId: person.photoFileId,
+    })) ?? "";
     await updateTableRecordById(
       PEOPLE_TABLE,
       personId,

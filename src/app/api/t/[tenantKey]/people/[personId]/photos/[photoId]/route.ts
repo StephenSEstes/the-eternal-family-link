@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
+import { resolvePersonPhotoFileId } from "@/lib/attributes/store";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getPersonById, PEOPLE_TABLE, updateTableRecordById } from "@/lib/data/runtime";
 import { deleteOciMediaLink, getOciMediaLinksForEntity } from "@/lib/oci/tables";
@@ -37,11 +38,14 @@ export async function DELETE(_: Request, { params }: RouteProps) {
   }
 
   const currentPhotoFileId = person.photoFileId.trim();
-  if (currentPhotoFileId === targetFileId) {
+  if (deletedLinks > 0 || currentPhotoFileId === targetFileId) {
+    const nextPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+      currentPhotoFileId,
+    })) ?? "";
     await updateTableRecordById(
       PEOPLE_TABLE,
       personId,
-      { photo_file_id: "" },
+      { photo_file_id: nextPhotoFileId },
       "person_id",
       resolved.tenant.tenantKey,
     );

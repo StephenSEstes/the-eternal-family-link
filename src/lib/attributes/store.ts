@@ -35,10 +35,7 @@ function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function compareMediaLinks(a: AttributeMediaLink, b: AttributeMediaLink) {
-  if (a.isPrimary !== b.isPrimary) {
-    return Number(b.isPrimary) - Number(a.isPrimary);
-  }
+function compareMediaLinksForCanonicalPhotoOrder(a: AttributeMediaLink, b: AttributeMediaLink) {
   if (a.sortOrder !== b.sortOrder) {
     return a.sortOrder - b.sortOrder;
   }
@@ -329,25 +326,42 @@ export async function upsertPersonBirthAttribute(tenantKey: string, personId: st
 }
 
 export async function getPrimaryPhotoFileIdForPerson(tenantKey: string, personId: string): Promise<string | null> {
+  return resolvePersonPhotoFileId(tenantKey, personId);
+}
+
+export async function listPersonPhotoFileIds(tenantKey: string, personId: string): Promise<string[]> {
   const attributes = await getAttributesForEntityWithMedia(tenantKey, "person", personId);
   const photos = attributes
     .filter((item) => normalize(item.attributeType || item.typeKey) === "photo")
     .map((item) => {
-      const media = item.media.slice().sort(compareMediaLinks)[0] ?? null;
+      const media = item.media.slice().sort(compareMediaLinksForCanonicalPhotoOrder)[0] ?? null;
       const fileId = (media?.fileId || item.attributeDetail || item.valueText || "").trim();
-      if (!fileId) {
-        return null;
-      }
-      return {
-        fileId,
-        isPrimary: Boolean(media?.isPrimary),
-      };
+      return fileId || null;
     })
-    .filter((item): item is { fileId: string; isPrimary: boolean } => Boolean(item));
+    .filter((item): item is string => Boolean(item));
 
-  if (photos.length === 0) {
-    return null;
+  return Array.from(new Set(photos));
+}
+
+export async function resolvePersonPhotoFileId(
+  tenantKey: string,
+  personId: string,
+  options?: {
+    preferredFileId?: string;
+    currentPhotoFileId?: string;
+    excludedFileIds?: string[];
+  },
+): Promise<string | null> {
+  const preferredFileId = (options?.preferredFileId ?? "").trim();
+  const currentPhotoFileId = (options?.currentPhotoFileId ?? "").trim();
+  const excludedFileIds = new Set((options?.excludedFileIds ?? []).map((value) => value.trim()).filter(Boolean));
+  const photoFileIds = (await listPersonPhotoFileIds(tenantKey, personId)).filter((fileId) => !excludedFileIds.has(fileId));
+
+  if (preferredFileId && photoFileIds.includes(preferredFileId)) {
+    return preferredFileId;
   }
-
-  return (photos.find((item) => item.isPrimary) ?? photos[0]).fileId;
+  if (currentPhotoFileId && photoFileIds.includes(currentPhotoFileId)) {
+    return currentPhotoFileId;
+  }
+  return photoFileIds[0] ?? null;
 }

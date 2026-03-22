@@ -4,6 +4,43 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Normalize person primary-photo model to one global canonical headshot
+  Priority: High
+  Est date: 2026-03-23
+  Desc: Make person headshot selection person-based only by treating `People.photo_file_id` as the single canonical primary photo for a person across all family groups. Remove tenant-scoped person-photo primary authority from runtime behavior, repair stale data left by the old dual-source model, and fix person-photo surfaces that fall back to person IDs instead of names.
+  Scope:
+  - Treat `People.photo_file_id` as the only authoritative primary photo pointer for people.
+  - Stop relying on `MediaLinks.is_primary` for `entity_type='person'` when reading, saving, or rendering person photos.
+  - Keep household primary-photo behavior unchanged.
+  - Repair stale `People.photo_file_id` rows and duplicate person-photo primaries left by the old route behavior.
+  - Ensure person-linked photo flows resolve and display person names, not person IDs.
+  Phases:
+  - Phase 1: Design + source-of-truth alignment
+    - Update design docs to record that person primary photos are global/person-scoped, not family-group-scoped.
+    - Identify all person-photo save/upload/link/delete code paths that still read or write `isPrimary` as authoritative state.
+    - Define the runtime rule that a linked person photo is primary only when its `fileId === People.photo_file_id`.
+  - Phase 2: Runtime write-path changes
+    - Update person photo upload, attribute create, attribute patch, and delete flows to set or clear `People.photo_file_id` directly.
+    - Ensure new primary selection validates that the chosen file is linked to that person before updating the person row.
+    - Keep person `MediaLinks` rows for association/search metadata, but stop using `is_primary` on those rows as the deciding field.
+  - Phase 3: Runtime read-path + UI changes
+    - Update person media read models and person photo UI to compute `isPrimary` from `People.photo_file_id`.
+    - Remove person-photo sorting/selection logic that depends on tenant-scoped `media_links.is_primary`.
+    - Keep existing household media read logic unchanged.
+  - Phase 4: Data remediation + person-name display fix
+    - Backfill stale `People.photo_file_id` values where a single linked person photo should now be canonical.
+    - Normalize duplicate person-photo primary flags that were left behind by the old model.
+    - Fix person-photo flows that currently fall back to raw `personId` strings by resolving names from canonical person records with safe display-name fallback.
+  Validation:
+  - A person can have only one effective primary photo because the UI and runtime derive primary from `People.photo_file_id` only.
+  - Changing a person’s primary photo in one family group updates the same canonical headshot everywhere for that person.
+  - Removing the current primary photo recomputes or clears `People.photo_file_id` correctly.
+  - Existing stale rows like Brent Estes are repaired and the People tile matches the linked primary photo.
+  - New person-photo suggestion/search surfaces show the person’s display name, not `p-xxxxxxxx`.
+  Completion criteria:
+  - No person-photo save/read path depends on tenant-scoped `media_links.is_primary` for authority.
+  - `People.photo_file_id` is the only canonical person headshot field in active runtime behavior.
+  - Targeted build and OCI data checks confirm the old split-brain state is removed.
 - [ ] Face recognition architecture and phased implementation for media upload
   Priority: High
   Est date: 2026-04-20

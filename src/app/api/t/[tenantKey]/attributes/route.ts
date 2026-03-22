@@ -24,18 +24,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     );
   }
 
+  let person = null as Awaited<ReturnType<typeof getPersonById>>;
   if (entityType === "person") {
-    const person = await getPersonById(entityId, resolved.tenant.tenantKey);
+    person = await getPersonById(entityId, resolved.tenant.tenantKey);
     if (!person) {
       return NextResponse.json({ error: "not_found", message: "person not found" }, { status: 404 });
     }
   }
 
   const attributes = await getAttributesForEntity(resolved.tenant.tenantKey, entityType, entityId);
+  const canonicalPrimaryPhotoFileId = entityType === "person" ? person?.photoFileId.trim() ?? "" : "";
   const withMedia = await Promise.all(
     attributes.map(async (item) => ({
       ...item,
-      media: await getAttributeMediaLinks(resolved.tenant.tenantKey, item.attributeId),
+      media: (await getAttributeMediaLinks(resolved.tenant.tenantKey, item.attributeId)).map((media) => ({
+        ...media,
+        isPrimary: Boolean(canonicalPrimaryPhotoFileId) && media.fileId.trim() === canonicalPrimaryPhotoFileId,
+      })),
     })),
   );
 

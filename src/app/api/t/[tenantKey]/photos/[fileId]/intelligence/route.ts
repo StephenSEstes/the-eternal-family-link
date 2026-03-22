@@ -13,6 +13,7 @@ import {
 import { extractExifDateSignal } from "@/lib/media/exif";
 import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
+import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciMediaAssetByFileId,
   getOciMediaLinksForFile,
@@ -100,10 +101,26 @@ export async function POST(request: Request, { params }: RouteProps) {
     });
   }
 
-  const peopleById = new Map(people.map((item) => [item.personId, item.displayName]));
+  const peopleById = new Map(
+    people
+      .map((item) => [
+        item.personId.trim(),
+        resolvePersonDisplayName({
+          personId: item.personId,
+          displayName: item.displayName,
+          firstName: item.firstName,
+          middleName: item.middleName,
+          lastName: item.lastName,
+        }),
+      ] as const)
+      .filter(([personId]) => Boolean(personId)),
+  );
   const linkedPeople = links
     .filter((item) => norm(item.entityType) === "person")
-    .map((item) => peopleById.get(item.entityId) || item.entityId)
+    .map((item) => {
+      const personId = item.entityId.trim();
+      return peopleById.get(personId) || personId;
+    })
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 
   const originalObjectKey = readOriginalObjectKey(parsedMetadata);

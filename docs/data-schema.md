@@ -39,6 +39,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - Target: `entity_type` + `entity_id` (`person` | `household` | `attribute`)
   - Link to file: `media_id -> MediaAssets.media_id`
   - Display semantics: `usage_type`, `label`, `description`, `photo_date`, `is_primary`
+  - Person-note: person primary-headshot authority does not live here; person links are non-authoritative associations, and `People.photo_file_id` is the canonical person headshot field
 
 ### 4) Face Suggestions
 
@@ -65,6 +66,7 @@ This section is a quick reference for the three data areas that drive profile/me
 
 - Person profile photo:
   - `People.photo_file_id` -> `MediaAssets.file_id` (or direct Drive proxy by file ID)
+  - This is the only canonical primary-headshot pointer for people across all family groups
 - Person gallery/media:
   - `MediaLinks(entity_type='person', entity_id=People.person_id)` for direct links
   - `MediaLinks(entity_type='attribute', entity_id=Attributes.attribute_id)` for event/descriptor-linked media
@@ -475,7 +477,8 @@ This section is a quick reference for the three data areas that drive profile/me
 ## Media Link Design
 
 - Primary person photo:
-  - `People.photo_file_id` stores the current headshot file ID.
+  - `People.photo_file_id` stores the one canonical current headshot file ID for the person.
+  - Person `MediaLinks.is_primary` is legacy/non-authoritative and should not be used as the source of truth.
 - Photo gallery:
   - Use `MediaLinks` rows to associate files to people/households/attributes.
 - Attribute media:

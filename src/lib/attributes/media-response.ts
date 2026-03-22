@@ -27,9 +27,6 @@ export function isMediaAttributeType(value: string | undefined) {
 }
 
 function sortMediaLinks(a: AttributeMediaLink, b: AttributeMediaLink) {
-  if (a.isPrimary !== b.isPrimary) {
-    return Number(b.isPrimary) - Number(a.isPrimary);
-  }
   if (a.sortOrder !== b.sortOrder) {
     return a.sortOrder - b.sortOrder;
   }
@@ -57,7 +54,7 @@ export function matchesCanonicalMediaFileId(input: AttributeWithMedia, fileId: s
   return (input.media ?? []).some((item) => item.fileId.trim() === normalizedFileId);
 }
 
-export function toPersonMediaAttribute(input: AttributeWithMedia): PersonMediaAttributeRecord | null {
+export function toPersonMediaAttribute(input: AttributeWithMedia, canonicalPrimaryFileId = ""): PersonMediaAttributeRecord | null {
   if (!isMediaAttributeType(input.attributeType || input.typeKey)) {
     return null;
   }
@@ -73,15 +70,15 @@ export function toPersonMediaAttribute(input: AttributeWithMedia): PersonMediaAt
     valueJson: media?.mediaMetadata || "",
     mediaMetadata: media?.mediaMetadata || "",
     label: (media?.label || input.label || "").trim(),
-    isPrimary: Boolean(media?.isPrimary),
+    isPrimary: canonicalPrimaryFileId.trim() ? fileId === canonicalPrimaryFileId.trim() : Boolean(media?.isPrimary),
     sortOrder: media?.sortOrder ?? 0,
     startDate: (media?.photoDate || input.attributeDate || input.dateStart || "").trim(),
     notes: (media?.description || input.attributeNotes || input.notes || "").trim(),
   };
 }
 
-export function toPersonMediaAttributes(input: AttributeWithMedia[]) {
+export function toPersonMediaAttributes(input: AttributeWithMedia[], canonicalPrimaryFileId = "") {
   return input
-    .map((item) => toPersonMediaAttribute(item))
+    .map((item) => toPersonMediaAttribute(item, canonicalPrimaryFileId))
     .filter((item): item is PersonMediaAttributeRecord => Boolean(item));
 }

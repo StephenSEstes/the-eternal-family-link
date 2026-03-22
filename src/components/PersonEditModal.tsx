@@ -1139,7 +1139,7 @@ export function PersonEditModal({
     }
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
-    setAttributes(toPersonMediaAttributes(canonicalAttributes));
+    setAttributes(toPersonMediaAttributes(canonicalAttributes, person?.photoFileId ?? ""));
   };
 
   const clearStoryImportQueue = () => {
@@ -1904,6 +1904,26 @@ export function PersonEditModal({
       ),
     [personOptions],
   );
+  const mediaAttachPeopleOptions = useMemo(() => {
+    const map = new Map<string, { personId: string; displayName: string; gender: "male" | "female" | "unspecified" }>();
+    if (person?.personId?.trim()) {
+      map.set(person.personId.trim(), {
+        personId: person.personId.trim(),
+        displayName: (displayName || person.displayName || person.personId).trim(),
+        gender: person.gender ?? "unspecified",
+      });
+    }
+    personOptions.forEach((item) => {
+      const personId = item.personId.trim();
+      if (!personId || map.has(personId)) return;
+      map.set(personId, {
+        personId,
+        displayName: item.displayName,
+        gender: item.gender ?? "unspecified",
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [displayName, person, personOptions]);
   const availableHouseholdLinks = useMemo(() => {
     const unique = new Map<string, { householdId: string; label: string }>();
     contextHouseholds.forEach((item) => {
@@ -3473,11 +3493,7 @@ export function PersonEditModal({
                   defaultIsPrimary: true,
                   defaultLabel: "photo",
                   preselectedPersonIds: [person.personId],
-                  peopleOptions: personOptions.map((item) => ({
-                    personId: item.personId,
-                    displayName: item.displayName,
-                    gender: item.gender ?? "unspecified",
-                  })),
+                  peopleOptions: mediaAttachPeopleOptions,
                   householdOptions: availableHouseholdLinks.map((item) => ({
                     householdId: item.householdId,
                     label: item.label,

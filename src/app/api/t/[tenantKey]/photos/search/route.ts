@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { listFilesInFolder } from "@/lib/google/drive";
 import { getPeople, getTenantConfig } from "@/lib/data/runtime";
+import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciHouseholdsForTenant,
   getOciMediaLinksForTenant,
@@ -116,7 +117,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     getOciMediaLinksForTenant(resolved.tenant.tenantKey).catch(() => []),
   ]);
 
-  const peopleById = new Map(people.map((person) => [person.personId, person.displayName]));
+  const peopleById = new Map(
+    people
+      .map((person) => [
+        person.personId.trim(),
+        resolvePersonDisplayName({
+          personId: person.personId,
+          displayName: person.displayName,
+          firstName: person.firstName,
+          middleName: person.middleName,
+          lastName: person.lastName,
+        }),
+      ] as const)
+      .filter(([personId]) => Boolean(personId)),
+  );
   const householdsById = new Map(
     householdRows.map((row) => {
       const householdId = readCell(row.data, "household_id", "id");
@@ -153,7 +167,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
           attributeId,
           {
             attributeId,
-            personId,
+            personId: personId.trim(),
             entityType,
             attributeType,
             label: row.attributeTypeCategory.trim(),
@@ -165,7 +179,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       })
       .filter(
         ([attributeId, item]) =>
-          Boolean(attributeId && item.personId && item.entityType === "person" && peopleById.has(item.personId)),
+          Boolean(attributeId && item.personId && item.entityType === "person" && peopleById.has(item.personId.trim())),
       ),
   );
   for (const row of mediaLinkRows) {

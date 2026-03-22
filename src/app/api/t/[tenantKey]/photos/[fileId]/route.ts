@@ -4,6 +4,7 @@ import { appendSessionAuditLog } from "@/lib/audit/log";
 import { ATTRIBUTES_TABLE } from "@/lib/attributes/store";
 import { getPeople, updateTableRecordById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciMediaAssetByFileId,
   getOciHouseholdsForTenant,
@@ -51,7 +52,20 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     getOciMediaAssetByFileId(fileId).catch(() => null),
   ]);
 
-  const peopleById = new Map(people.map((person) => [person.personId, person.displayName] as const));
+  const peopleById = new Map(
+    people
+      .map((person) => [
+        person.personId.trim(),
+        resolvePersonDisplayName({
+          personId: person.personId,
+          displayName: person.displayName,
+          firstName: person.firstName,
+          middleName: person.middleName,
+          lastName: person.lastName,
+        }),
+      ] as const)
+      .filter(([personId]) => Boolean(personId)),
+  );
   const householdsById = new Map(
     householdRows.map((row) => {
       const householdId = readCell(row.data, "household_id", "id");
@@ -77,10 +91,11 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     if (!detail.mediaMetadata) detail.mediaMetadata = link.mediaMetadata.trim();
 
     if (link.entityType.trim().toLowerCase() === "person") {
-      if (!detail.people.some((entry) => entry.personId === link.entityId)) {
+      const personId = link.entityId.trim();
+      if (!detail.people.some((entry) => entry.personId === personId)) {
         detail.people.push({
-          personId: link.entityId,
-          displayName: peopleById.get(link.entityId) || link.entityId,
+          personId,
+          displayName: peopleById.get(personId) || personId,
         });
       }
       continue;
@@ -99,21 +114,23 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
   for (const row of personMediaAttributes) {
     if (!detail.description) detail.description = row.attributeNotes.trim();
     if (!detail.date) detail.date = row.attributeDate.trim();
-    if (!detail.people.some((entry) => entry.personId === row.entityId)) {
+    const personId = row.entityId.trim();
+    if (!detail.people.some((entry) => entry.personId === personId)) {
       detail.people.push({
-        personId: row.entityId,
-        displayName: peopleById.get(row.entityId) || row.entityId,
+        personId,
+        displayName: peopleById.get(personId) || personId,
       });
     }
   }
 
   for (const person of people) {
-    if (person.photoFileId.trim() !== fileId) continue;
+    const personId = person.personId.trim();
+    if (person.photoFileId.trim() !== fileId || !personId) continue;
     if (!detail.name) detail.name = "Headshot";
-    if (!detail.people.some((entry) => entry.personId === person.personId)) {
+    if (!detail.people.some((entry) => entry.personId === personId)) {
       detail.people.push({
-        personId: person.personId,
-        displayName: peopleById.get(person.personId) || person.personId,
+        personId,
+        displayName: peopleById.get(personId) || personId,
       });
     }
   }

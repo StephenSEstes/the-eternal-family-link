@@ -282,7 +282,7 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
       familyGroupKey,
       entityType: "person",
       entityId: personId,
-      usageType: "profile",
+      usageType: "photo",
       fileId,
       label: "Headshot",
       description: "",
