@@ -103,6 +103,14 @@ I will update this list as we add, complete, or remove work.
     - Render a read-only face suggestions section in the media detail modal that shows each detected face plus top candidate people/confidence bands without auto-linking or creating person relationships yet.
     - Validate with `npm run build`, then regenerate production photo intelligence on images with and without faces and confirm table persistence plus metadata-backed UI rendering.
   Phase 2 (review + learning loop):
+  - 2026-03-22 implementation plan (manual face association MVP):
+    - Add a reviewed manual-association workflow in the media detail modal that operates on already-detected OCI face instances instead of relying on automatic candidate ranking.
+    - Render a visible crop/preview for each detected face using the stored normalized face bounding box so the user can confirm the exact face region being associated.
+    - Add a tenant-scoped API to explicitly associate one detected `face_id` with one accessible `person_id`, without auto-linking any other faces in the photo.
+    - On manual confirmation, persist that relationship in `face_matches` with `match_status='confirmed'` and update the canonical `person_face_profiles` row for that `person_id` using the confirmed face embedding.
+    - For the first cut, support the single-person-in-photo use case cleanly, while keeping the UI/API shape compatible with multiple detected faces later.
+    - Keep existing suggest-only matching code available, but treat this manual face-to-person confirmation flow as the required reviewed path for building trustworthy person face profiles.
+    - Validate with `npm run build`, then confirm in production that a detected face crop can be associated to a selected person and that the person profile row stores the embedding for that person.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

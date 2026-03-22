@@ -2872,6 +2872,75 @@ export async function upsertOciPersonFaceProfile(input: {
   });
 }
 
+export async function replaceOciFaceMatchesForFace(input: {
+  faceId: string;
+  matches: Array<{
+    matchId: string;
+    candidatePersonId: string;
+    confidenceScore: number;
+    matchStatus: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    createdAt: string;
+    matchMetadata?: string;
+  }>;
+}) {
+  const faceId = input.faceId.trim();
+  if (!faceId) {
+    throw new Error("face_id is required");
+  }
+  return withConnection(async (connection) => {
+    await ensureFaceMatchesTableCompatibility(connection);
+    await connection.execute(
+      `DELETE FROM face_matches
+       WHERE TRIM(face_id) = :faceId`,
+      { faceId },
+      { autoCommit: false },
+    );
+    if (input.matches.length > 0) {
+      await connection.executeMany(
+        `INSERT INTO face_matches (
+           family_group_key,
+           match_id,
+           face_id,
+           candidate_person_id,
+           confidence_score,
+           match_status,
+           reviewed_by,
+           reviewed_at,
+           created_at,
+           match_metadata
+         ) VALUES (
+           :familyGroupKey,
+           :matchId,
+           :faceId,
+           :candidatePersonId,
+           :confidenceScore,
+           :matchStatus,
+           :reviewedBy,
+           :reviewedAt,
+           :createdAt,
+           :matchMetadata
+         )`,
+        input.matches.map((match) => ({
+          familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
+          matchId: match.matchId.trim(),
+          faceId,
+          candidatePersonId: match.candidatePersonId.trim(),
+          confidenceScore: String(match.confidenceScore),
+          matchStatus: match.matchStatus.trim(),
+          reviewedBy: String(match.reviewedBy ?? "").trim(),
+          reviewedAt: String(match.reviewedAt ?? "").trim(),
+          createdAt: match.createdAt.trim(),
+          matchMetadata: String(match.matchMetadata ?? "").trim(),
+        })),
+        { autoCommit: false },
+      );
+    }
+    await connection.commit();
+  });
+}
+
 export async function replaceOciFaceAnalysisForFile(input: {
   familyGroupKey: string;
   fileId: string;

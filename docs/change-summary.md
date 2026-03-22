@@ -78,6 +78,29 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the photo-caption request timeout if you intentionally want long-running caption refinement to block the full intelligence response again.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-22 (manual face-to-person association MVP)
+
+- `Date`: 2026-03-22
+- `Change`: Added a manual reviewed face-association flow in the media modal: detected faces now show a cropped face preview plus explicit person selection, and the app can confirm one `face_id` to one `person_id` without relying on automatic recommendations.
+- `Type`: UI | API
+- `Why`: Root cause was a `product/design gap`. The app could detect faces and persist face embeddings, but it did not yet provide a reviewed manual path for saying “this exact face crop belongs to this person” and then using that confirmed embedding to build the person’s face profile. That manual-first training path is the safest way to bootstrap trustworthy person face profiles before broader automatic match loops.
+- `Files`:
+  - `TODO.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/media/face-recognition.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In the media modal, each detected face shows a face crop preview derived from the stored bounding box.
+  - Selecting a person and clicking `Associate Face` creates a reviewed face association for that `face_id`.
+  - The associated face embedding is stored onto that person’s canonical `person_face_profiles` row, and the modal refresh shows the confirmed match.
+- `Rollback Notes`: Revert the manual face-association API, UI controls, and reviewed face-match/profile update helpers together so the product does not expose a partial manual-review flow.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to record manual reviewed face-to-person association as the primary training workflow for person face profiles.
+
 ## 2026-03-22 (person-global primary photo model + person attach name fix)
 
 - `Date`: 2026-03-22

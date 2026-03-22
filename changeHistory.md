@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Added a manual reviewed face-to-person association flow so detected face crops can be explicitly linked to a selected person and their embedding can be written onto that person’s face profile without relying on automatic recommendations. See `docs/change-summary.md`.
 - 2026-03-22: Added a hard timeout to optional OpenAI photo-caption refinement so slow caption requests cannot leave `Generate Suggestions` hanging for minutes before any suggestion is saved. See `docs/change-summary.md`.
 - 2026-03-22: Removed synchronous person-face profile bootstrap from the interactive `Generate Suggestions` route so photo intelligence no longer stalls while trying to backfill missing headshot embeddings inline. See `docs/change-summary.md`.
 - 2026-03-22: Normalized unsupported image formats to JPEG before OCI Vision analysis so smaller non-JPG/PNG photos no longer trip the opaque SDK `toLowerCase` crash path during `Generate Suggestions`. See `docs/change-summary.md`.

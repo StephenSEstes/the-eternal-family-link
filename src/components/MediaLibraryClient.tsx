@@ -61,6 +61,13 @@ type LinkedSearchResult =
       householdId: string;
     };
 
+type FaceAssociationResponse = {
+  faceId?: string;
+  personId?: string;
+  personDisplayName?: string;
+  sampleCount?: number;
+};
+
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
@@ -93,6 +100,48 @@ function inferMediaKind(fileId: string, rawMetadata?: string) {
 function formatConfidencePercent(value: number) {
   const normalized = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   return `${Math.round(normalized * 100)}%`;
+}
+
+function FaceCropPreview({
+  fileId,
+  tenantKey,
+  bbox,
+}: {
+  fileId: string;
+  tenantKey: string;
+  bbox: { x: number; y: number; width: number; height: number };
+}) {
+  const safeWidth = Math.max(0.05, Math.min(1, bbox.width || 0));
+  const safeHeight = Math.max(0.05, Math.min(1, bbox.height || 0));
+  const safeX = Math.max(0, Math.min(1 - safeWidth, bbox.x || 0));
+  const safeY = Math.max(0, Math.min(1 - safeHeight, bbox.y || 0));
+  return (
+    <div
+      style={{
+        width: "84px",
+        height: "84px",
+        borderRadius: "10px",
+        overflow: "hidden",
+        border: "1px solid #dbe4ee",
+        background: "#e2e8f0",
+        position: "relative",
+        flexShrink: 0,
+      }}
+    >
+      <img
+        src={getPhotoProxyPath(fileId, tenantKey)}
+        alt=""
+        style={{
+          position: "absolute",
+          left: `${-(safeX / safeWidth) * 100}%`,
+          top: `${-(safeY / safeHeight) * 100}%`,
+          width: `${100 / safeWidth}%`,
+          height: `${100 / safeHeight}%`,
+          maxWidth: "none",
+        }}
+      />
+    </div>
+  );
 }
 
 async function assertOk(res: Response, fallbackMessage: string) {
@@ -132,6 +181,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const photoIntelligenceAutoRequestedRef = useRef("");
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
+  const [faceAssociationSelections, setFaceAssociationSelections] = useState<Record<string, string>>({});
+  const [pendingFaceAssociations, setPendingFaceAssociations] = useState<Set<string>>(new Set());
+  const [confirmedFaceAssociations, setConfirmedFaceAssociations] = useState<Record<string, string>>({});
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
@@ -359,6 +411,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const openPhotoEditor = async (fileId: string) => {
     setPhotoIntelligenceDebug(null);
     photoIntelligenceAutoRequestedRef.current = "";
+    setFaceAssociationSelections({});
+    setPendingFaceAssociations(new Set());
+    setConfirmedFaceAssociations({});
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -469,6 +524,45 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     photoIntelligenceAutoRequestedRef.current = selectedPhotoDetail.fileId;
     void runPhotoIntelligence(false);
   }, [showPhotoEditor, selectedPhotoDetail?.fileId, selectedPhotoSupportsIntelligence, selectedPhotoIntelligenceSuggestion]);
+
+  const associateFaceToPerson = async (faceId: string) => {
+    if (!selectedPhotoDetail) return;
+    const normalizedFaceId = faceId.trim();
+    const personId = String(faceAssociationSelections[normalizedFaceId] ?? "").trim();
+    if (!normalizedFaceId || !personId) {
+      setPhotoAssociationStatus("Select a person before associating a face.");
+      return;
+    }
+    setPendingFaceAssociations((current) => new Set(current).add(normalizedFaceId));
+    setPhotoAssociationStatus("Associating face to person...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/faces/${encodeURIComponent(normalizedFaceId)}/associate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ personId }),
+        },
+      );
+      await assertOk(res, "Failed to associate face");
+      const body = (await res.json().catch(() => null)) as FaceAssociationResponse | null;
+      const displayName = String(body?.personDisplayName ?? peopleById.get(personId)?.displayName ?? personId).trim() || personId;
+      setConfirmedFaceAssociations((current) => ({
+        ...current,
+        [normalizedFaceId]: displayName,
+      }));
+      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      setPhotoAssociationStatus(`Associated face to ${displayName}.`);
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "Face association failed");
+    } finally {
+      setPendingFaceAssociations((current) => {
+        const next = new Set(current);
+        next.delete(normalizedFaceId);
+        return next;
+      });
+    }
+  };
 
   const linkPhotoToPerson = async (personId: string) => {
     if (!selectedPhotoDetail) return;
@@ -1031,6 +1125,57 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                   No candidate people yet.
                                 </span>
                               )}
+                              <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.15rem" }}>
+                                <strong style={{ fontSize: "0.82rem" }}>Associate Face</strong>
+                                <div style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+                                  <FaceCropPreview
+                                    fileId={selectedPhotoDetail.fileId}
+                                    tenantKey={tenantKey}
+                                    bbox={face.bbox}
+                                  />
+                                  <div style={{ display: "grid", gap: "0.35rem", minWidth: "220px", flex: "1 1 220px" }}>
+                                    <select
+                                      className="input"
+                                      value={faceAssociationSelections[face.faceId] ?? ""}
+                                      disabled={photoAssociationBusy || photoIntelligenceBusy || pendingFaceAssociations.has(face.faceId)}
+                                      onChange={(event) =>
+                                        setFaceAssociationSelections((current) => ({
+                                          ...current,
+                                          [face.faceId]: event.target.value,
+                                        }))}
+                                    >
+                                      <option value="">Select person...</option>
+                                      {peopleOptions.map((person) => (
+                                        <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
+                                          {person.displayName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
+                                      <button
+                                        type="button"
+                                        className="button secondary tap-button"
+                                        disabled={
+                                          photoAssociationBusy
+                                          || photoIntelligenceBusy
+                                          || pendingFaceAssociations.has(face.faceId)
+                                          || !String(faceAssociationSelections[face.faceId] ?? "").trim()
+                                        }
+                                        onClick={() => {
+                                          void associateFaceToPerson(face.faceId);
+                                        }}
+                                      >
+                                        {pendingFaceAssociations.has(face.faceId) ? "Associating..." : "Associate Face"}
+                                      </button>
+                                      {confirmedFaceAssociations[face.faceId] ? (
+                                        <span className="page-subtitle" style={{ margin: 0 }}>
+                                          Saved to {confirmedFaceAssociations[face.faceId]}.
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>

@@ -221,6 +221,15 @@ This file captures product and engineering choices that affect behavior, data sh
 
 ## 2026-03-22
 
+- `Area`: Face-recognition review workflow
+- `Decision`: Manual reviewed face-to-person association is now the first-class training workflow for person face profiles. The app should let the user inspect the detected face crop from a photo, explicitly choose the person, and only then persist the face embedding onto that person's profile. Automatic candidate ranking can remain suggest-only, but it is not the trusted source for creating or refreshing person face profiles.
+- `Reason`: Face recognition needs a reliable human-confirmed path for building biometric identity state. A manual-first workflow reduces false-profile pollution, supports single-person validation before broader multi-face automation, and matches the product requirement that people should never be silently auto-assigned.
+- `Alternatives Considered`: Continue relying on primary headshots only; build broader auto-suggestion loops before an explicit manual confirmation path; persist unreviewed face crops directly as person profiles.
+- `Impact`: Media-detail face UI should surface detected face crops and an explicit person association action, confirmed associations should update `person_face_profiles` and reviewed `face_matches`, and future automatic matching should consume those confirmed person profiles instead of bypassing review.
+- `Follow-up`: Expand from single-face/single-person confirmation to multi-face reviewed association, and consider multi-sample profile storage/centroid management after the manual path is stable.
+
+## 2026-03-22
+
 - `Area`: Person primary-photo ownership
 - `Decision`: Person primary photos are now globally person-scoped. `People.photo_file_id` is the only canonical primary headshot field for people, and person media links no longer carry authoritative primary state.
 - `Reason`: The prior mixed model stored tenant-scoped `MediaLinks.is_primary` flags while also storing a global `People.photo_file_id`. That split allowed duplicate primaries, stale person avatars, and cross-family inconsistencies for shared people.

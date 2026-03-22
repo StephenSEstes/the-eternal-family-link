@@ -5,8 +5,10 @@ import type { PersonRecord } from "@/lib/google/types";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
   OCI_GLOBAL_FACE_SCOPE_KEY,
+  getOciFaceInstancesForFile,
   getOciMediaAssetByFileId,
   getOciPersonFaceProfilesForTenant,
+  replaceOciFaceMatchesForFace,
   replaceOciFaceAnalysisForFile,
   upsertOciPersonFaceProfile,
   type OciPersonFaceProfileRow,
@@ -108,6 +110,13 @@ function cosineSimilarity(left: number[], right: number[]) {
     return 0;
   }
   return Math.max(0, Math.min(1, score));
+}
+
+function averageEmbeddings(current: number[], incoming: number[], currentSamples: number) {
+  if (current.length === 0 || incoming.length === 0 || current.length !== incoming.length || currentSamples <= 0) {
+    return incoming;
+  }
+  return incoming.map((value, index) => ((current[index] * currentSamples) + value) / (currentSamples + 1));
 }
 
 function toConfidenceBand(score: number): FaceConfidenceBand {
@@ -260,6 +269,84 @@ export async function seedPersonFaceProfileFromUpload(input: {
   imageBytes: Buffer;
 }) {
   return ensurePersonFaceProfileFromImageBytes(input);
+}
+
+export async function associateDetectedFaceToPerson(input: {
+  familyGroupKey: string;
+  fileId: string;
+  faceId: string;
+  personId: string;
+  reviewedBy: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  const faceId = input.faceId.trim();
+  const personId = input.personId.trim();
+  if (!fileId || !faceId || !personId) {
+    throw new Error("file_id, face_id, and person_id are required");
+  }
+
+  const [faceInstances, existingProfiles] = await Promise.all([
+    getOciFaceInstancesForFile({ familyGroupKey, fileId }),
+    getOciPersonFaceProfilesForTenant({ familyGroupKey }).catch(() => []),
+  ]);
+  const faceInstance = faceInstances.find((item) => item.faceId === faceId);
+  if (!faceInstance) {
+    throw new Error("Detected face was not found for this photo.");
+  }
+
+  const embedding = parseEmbeddingJson(faceInstance.embeddingJson);
+  if (embedding.length === 0) {
+    throw new Error("Detected face has no embedding vector to associate.");
+  }
+
+  const existingProfile = existingProfiles.find((profile) => profile.personId === personId) ?? null;
+  const existingEmbedding = parseEmbeddingJson(existingProfile?.embeddingJson ?? "");
+  const existingSamples = Math.max(0, existingProfile?.sampleCount ?? 0);
+  const nextEmbedding = averageEmbeddings(existingEmbedding, embedding, existingSamples);
+  const nextSampleCount =
+    existingSamples > 0 && existingEmbedding.length === embedding.length
+      ? existingSamples + 1
+      : 1;
+  const reviewedAt = new Date().toISOString();
+  const profileId = hashId("fprofile", personId);
+
+  await upsertOciPersonFaceProfile({
+    familyGroupKey,
+    profileId,
+    personId,
+    sourceFileId: fileId,
+    sampleCount: nextSampleCount,
+    embeddingJson: JSON.stringify(nextEmbedding),
+    updatedAt: reviewedAt,
+  });
+
+  await replaceOciFaceMatchesForFace({
+    faceId,
+    matches: [
+      {
+        matchId: hashId("fmatch", `${faceId}|${personId}|confirmed`),
+        candidatePersonId: personId,
+        confidenceScore: 1,
+        matchStatus: "confirmed",
+        reviewedBy: input.reviewedBy.trim(),
+        reviewedAt,
+        createdAt: reviewedAt,
+        matchMetadata: JSON.stringify({
+          source: "manual_review",
+          profileSampleCount: nextSampleCount,
+        }),
+      },
+    ],
+  });
+
+  return {
+    familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
+    faceId,
+    personId,
+    sampleCount: nextSampleCount,
+    updatedAt: reviewedAt,
+  };
 }
 
 export async function buildAndPersistFaceSuggestions(input: {
