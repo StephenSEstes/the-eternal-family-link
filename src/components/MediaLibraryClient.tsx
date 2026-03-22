@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
@@ -128,6 +128,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [photoIntelligenceBusy, setPhotoIntelligenceBusy] = useState(false);
   const [photoIntelligenceDebug, setPhotoIntelligenceDebug] = useState<PhotoIntelligenceDebug | null>(null);
+  const photoIntelligenceInFlightRef = useRef("");
+  const photoIntelligenceAutoRequestedRef = useRef("");
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
@@ -304,6 +306,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail) return null;
     return readPhotoIntelligenceDebug(selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail, photoIntelligenceDebug]);
+  const selectedPhotoSupportsIntelligence = useMemo(() => {
+    if (!selectedPhotoDetail) return false;
+    return canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata);
+  }, [selectedPhotoDetail]);
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -352,6 +358,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const openPhotoEditor = async (fileId: string) => {
     setPhotoIntelligenceDebug(null);
+    photoIntelligenceAutoRequestedRef.current = "";
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -422,11 +429,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const runPhotoIntelligence = async (force = false) => {
     if (!selectedPhotoDetail) return;
     if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
+    const activeFileId = selectedPhotoDetail.fileId;
+    if (photoIntelligenceBusy || photoIntelligenceInFlightRef.current === activeFileId) {
+      return;
+    }
+    photoIntelligenceInFlightRef.current = activeFileId;
     setPhotoIntelligenceBusy(true);
     setPhotoAssociationStatus(force ? "Regenerating photo suggestions..." : "Generating photo suggestions...");
     try {
       const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/intelligence`,
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/intelligence`,
         {
           credentials: "same-origin",
           method: "POST",
@@ -437,21 +449,26 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       await assertOk(res, "Failed to generate photo suggestions");
       const body = (await res.json().catch(() => null)) as { debug?: PhotoIntelligenceDebug | null } | null;
       setPhotoIntelligenceDebug(body?.debug ?? null);
-      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      await loadSelectedPhotoDetail(activeFileId, { noStore: true });
       setPhotoAssociationStatus("Photo suggestions ready.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Photo suggestion failed");
     } finally {
+      if (photoIntelligenceInFlightRef.current === activeFileId) {
+        photoIntelligenceInFlightRef.current = "";
+      }
       setPhotoIntelligenceBusy(false);
     }
   };
 
   useEffect(() => {
     if (!showPhotoEditor || !selectedPhotoDetail) return;
-    if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
+    if (!selectedPhotoSupportsIntelligence) return;
     if (selectedPhotoIntelligenceSuggestion) return;
+    if (photoIntelligenceAutoRequestedRef.current === selectedPhotoDetail.fileId) return;
+    photoIntelligenceAutoRequestedRef.current = selectedPhotoDetail.fileId;
     void runPhotoIntelligence(false);
-  }, [showPhotoEditor, selectedPhotoDetail?.fileId, selectedPhotoDetail?.mediaMetadata, selectedPhotoIntelligenceSuggestion]);
+  }, [showPhotoEditor, selectedPhotoDetail?.fileId, selectedPhotoSupportsIntelligence, selectedPhotoIntelligenceSuggestion]);
 
   const linkPhotoToPerson = async (personId: string) => {
     if (!selectedPhotoDetail) return;
@@ -915,7 +932,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     onChange={(event) => setSelectedPhotoDate(event.target.value)}
                     disabled={photoAssociationBusy || !selectedPhotoEditable}
                   />
-                  {selectedPhotoIntelligenceSuggestion ? (
+                  {selectedPhotoSupportsIntelligence ? (
                     <div
                       style={{
                         marginTop: "0.65rem",
@@ -928,6 +945,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       }}
                     >
                       <strong style={{ fontSize: "0.9rem" }}>Photo Suggestions</strong>
+                      {selectedPhotoIntelligenceSuggestion ? (
+                        <>
                       <span className="page-subtitle" style={{ margin: 0 }}>
                         Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
                       </span>
@@ -1021,6 +1040,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                           Faces were detected, but no person candidates are ready yet.
                         </span>
                       ) : null}
+                        </>
+                      ) : (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          {photoIntelligenceBusy
+                            ? "Generating suggestions for this photo..."
+                            : "No AI suggestions yet. Use Generate Suggestions to analyze this photo."}
+                        </span>
+                      )}
                       {selectedPhotoIntelligenceDebug ? (
                         <details style={{ marginTop: "0.25rem" }}>
                           <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>

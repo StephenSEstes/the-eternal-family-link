@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (media photo-intelligence first-run AI card)
+
+- `Date`: 2026-03-22
+- `Change`: Kept the photo-intelligence panel visible for eligible images even before the first suggestion exists, added explicit loading/empty states for first-run photos, and prevented duplicate auto-start requests for the same open photo.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. In `MediaLibraryClient`, the modal auto-started photo intelligence for eligible images with no saved suggestion, but the AI card only rendered when `selectedPhotoIntelligenceSuggestion` already existed. That hid the entire AI section while the request was running, making the `Generate Suggestions` button look stuck on `Generating...`. The same modal could also issue redundant auto-start calls as detail state refreshed because there was no in-flight guard for the current file.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening an eligible photo with no prior AI metadata still shows the `Photo Suggestions` card immediately.
+  - While the first request is running, the card shows `Generating suggestions for this photo...` instead of appearing absent.
+  - Reopening the same photo does not trigger overlapping auto-start intelligence calls for the same file.
+- `Rollback Notes`: Revert the `MediaLibraryClient` photo-intelligence in-flight guard and AI card conditional together so the request flow and modal states stay aligned.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (person-global primary photo model + person attach name fix)
 
 - `Date`: 2026-03-22
