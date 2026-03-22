@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
+import { refinePhotoCaptionWithOpenAi } from "@/lib/ai/photo-caption";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
@@ -9,6 +10,7 @@ import {
   readPhotoIntelligenceSuggestion,
   type PhotoIntelligenceDebug,
 } from "@/lib/media/photo-intelligence";
+import { extractExifDateSignal } from "@/lib/media/exif";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
   getOciMediaAssetByFileId,
@@ -103,6 +105,20 @@ export async function POST(request: Request, { params }: RouteProps) {
     .map((item) => peopleById.get(item.entityId) || item.entityId)
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 
+  const originalObjectKey = readOriginalObjectKey(parsedMetadata);
+  let sourceBytes: Buffer | null = null;
+  let sourceReadErrorMessage = "";
+  if (originalObjectKey) {
+    try {
+      const source = await getOciObjectContentByKey(originalObjectKey);
+      sourceBytes = Buffer.from(source.data);
+    } catch (sourceError) {
+      sourceReadErrorMessage = sourceError instanceof Error ? sourceError.message : "Unable to read OCI object bytes.";
+      console.warn("[photo-intelligence] failed to load OCI object bytes", sourceError);
+    }
+  }
+
+  const exifDateSignal = sourceBytes ? await extractExifDateSignal(sourceBytes) : null;
   const visionConfigured = isOciVisionConfigured();
   let vision: OciVisionInsight | null = null;
   let visionAttempted = false;
@@ -115,12 +131,10 @@ export async function POST(request: Request, { params }: RouteProps) {
   let visionRawResult = "";
   if (visionConfigured) {
     try {
-      const originalObjectKey = readOriginalObjectKey(parsedMetadata);
-      if (originalObjectKey) {
+      if (sourceBytes) {
         visionAttempted = true;
-        const source = await getOciObjectContentByKey(originalObjectKey);
         vision = await analyzeInlineImageWithVision({
-          imageBytes: Buffer.from(source.data),
+          imageBytes: sourceBytes,
         });
         visionSucceeded = true;
         visionRawResult = JSON.stringify(
@@ -132,6 +146,8 @@ export async function POST(request: Request, { params }: RouteProps) {
           null,
           2,
         );
+      } else if (sourceReadErrorMessage) {
+        visionErrorMessage = sourceReadErrorMessage;
       } else {
         visionErrorMessage = "Missing originalObjectKey in media metadata.";
       }
@@ -164,15 +180,45 @@ export async function POST(request: Request, { params }: RouteProps) {
     visionRawResult,
   };
 
-  const generated = buildPhotoIntelligenceSuggestion({
+  const fileName = String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId;
+  const initialGenerated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
-    fileName: String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId,
+    fileName,
     createdAt: String(parsedMetadata.createdAt ?? "").trim(),
     linkedPeople,
     existingMetadata: baseMetadata,
+    dateSignal: exifDateSignal,
     vision,
     debug,
   });
+  let generated = initialGenerated;
+  if (visionSucceeded && vision) {
+    try {
+      const captionRefinement = await refinePhotoCaptionWithOpenAi({
+        tenantName: resolved.tenant.tenantName,
+        fileName,
+        linkedPeople,
+        vision,
+        fallbackLabel: initialGenerated.suggestion.labelSuggestion,
+        fallbackDescription: initialGenerated.suggestion.descriptionSuggestion,
+      });
+      if (captionRefinement) {
+        generated = buildPhotoIntelligenceSuggestion({
+          fileId: normalizedFileId,
+          fileName,
+          createdAt: String(parsedMetadata.createdAt ?? "").trim(),
+          linkedPeople,
+          existingMetadata: baseMetadata,
+          dateSignal: exifDateSignal,
+          captionRefinement,
+          vision,
+          debug,
+        });
+      }
+    } catch (captionError) {
+      console.warn("[photo-intelligence] openai caption refinement skipped", captionError);
+    }
+  }
 
   await updateOciMediaMetadataForFile({
     familyGroupKey: resolved.tenant.tenantKey,

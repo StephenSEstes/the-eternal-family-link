@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Photo intelligence Phase 1 now adds EXIF-backed date extraction and optional OpenAI caption refinement from OCI Vision signals while keeping deterministic fallback and the existing media-editor apply workflow. See `docs/change-summary.md`.
 - 2026-03-21: Hardened OCI object-storage runtime reads so production can consume cross-realm web `ReadableStream` bodies and nested streamed chunks from OCI instead of falling through to `Buffer.from(...)` with `ERR_INVALID_ARG_TYPE`. See `docs/change-summary.md`.
 - 2026-03-21: Switched OCI Vision/Object Storage runtime auth to a deploy-safe shared helper that prefers API-key env credentials and only falls back to config-file auth when a real OCI config file exists. See `docs/change-summary.md`.
 - 2026-03-21: Updated the Media Library photo-intelligence request to send session credentials explicitly so the protected intelligence endpoint no longer fails immediately with plain `unauthorized` before OCI Vision runs. See `docs/change-summary.md`.

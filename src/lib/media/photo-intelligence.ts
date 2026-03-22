@@ -12,9 +12,11 @@ export type PhotoIntelligenceSuggestion = {
   labelSuggestion: string;
   descriptionSuggestion: string;
   dateSuggestion: string;
-  dateSource: "filename" | "capture_timestamp" | "none";
+  dateSource: "exif" | "filename" | "capture_timestamp" | "none";
   dateConfidence: "high" | "medium" | "low";
   notes: string;
+  captionSource?: "deterministic" | "openai_vision";
+  captionModel?: string;
   visionLabels?: string[];
   visionObjects?: string[];
   detectedFaceCount?: number;
@@ -33,12 +35,29 @@ export type PhotoIntelligenceDebug = {
   visionRawResult: string;
 };
 
+export type PhotoIntelligenceDateSignal = {
+  date: string;
+  source: Exclude<PhotoIntelligenceSuggestion["dateSource"], "none">;
+  confidence: PhotoIntelligenceSuggestion["dateConfidence"];
+  notes: string;
+};
+
+export type PhotoIntelligenceCaptionRefinement = {
+  labelSuggestion: string;
+  descriptionSuggestion: string;
+  source: NonNullable<PhotoIntelligenceSuggestion["captionSource"]>;
+  model: string;
+  notes: string;
+};
+
 type BuildPhotoIntelligenceInput = {
   fileId: string;
   fileName: string;
   createdAt: string;
   linkedPeople: string[];
   existingMetadata: string;
+  dateSignal?: PhotoIntelligenceDateSignal | null;
+  captionRefinement?: PhotoIntelligenceCaptionRefinement | null;
   vision?: PhotoVisionInsight | null;
   debug?: PhotoIntelligenceDebug | null;
 };
@@ -101,6 +120,14 @@ function normalizeDate(value: string) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function clampText(value: string, max: number) {
+  const normalized = normalizeWhitespace(value);
+  if (normalized.length <= max) {
+    return normalized;
+  }
+  return normalized.slice(0, max).trim();
+}
+
 function buildLabel(fileName: string) {
   const stem = sanitizeFileStem(fileName);
   if (!stem || looksGenericStem(stem)) {
@@ -138,6 +165,30 @@ function buildDescription(label: string, linkedPeople: string[]) {
   return `${label} featuring ${people[0]} and family`;
 }
 
+function buildFallbackDateSignal(fileName: string, createdAt: string): PhotoIntelligenceDateSignal | null {
+  const fileNameDate = parseDateFromFileName(fileName);
+  if (fileNameDate) {
+    return {
+      date: fileNameDate,
+      source: "filename",
+      confidence: "high",
+      notes: "Date inferred from file name pattern.",
+    };
+  }
+
+  const createdAtDate = normalizeDate(createdAt);
+  if (createdAtDate) {
+    return {
+      date: createdAtDate,
+      source: "capture_timestamp",
+      confidence: "medium",
+      notes: "Date inferred from capture timestamp metadata.",
+    };
+  }
+
+  return null;
+}
+
 export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceInput): {
   mediaMetadata: string;
   suggestion: PhotoIntelligenceSuggestion;
@@ -146,36 +197,44 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
   const existing = current as Record<string, unknown>;
   const fileName = input.fileName.trim() || input.fileId.trim();
   const labelFromVision = buildLabelFromVision(input.vision);
-  const label = labelFromVision || buildLabel(fileName);
-  const description = buildDescription(label, input.linkedPeople);
-  const fileNameDate = parseDateFromFileName(fileName);
-  const createdAtDate = normalizeDate(input.createdAt);
-  const dateSuggestion = fileNameDate || createdAtDate;
-  const dateSource: PhotoIntelligenceSuggestion["dateSource"] = fileNameDate
-    ? "filename"
-    : createdAtDate
-      ? "capture_timestamp"
-      : "none";
-  const dateConfidence: PhotoIntelligenceSuggestion["dateConfidence"] = fileNameDate
-    ? "high"
-    : createdAtDate
-      ? "medium"
-      : "low";
+  const fallbackLabel = labelFromVision || buildLabel(fileName);
+  const fallbackDescription = buildDescription(fallbackLabel, input.linkedPeople);
+  const resolvedCaption = input.captionRefinement
+    ? {
+      labelSuggestion: clampText(input.captionRefinement.labelSuggestion || fallbackLabel, 80),
+      descriptionSuggestion: clampText(input.captionRefinement.descriptionSuggestion || fallbackDescription, 180),
+      source: input.captionRefinement.source,
+      model: input.captionRefinement.model,
+      notes: input.captionRefinement.notes,
+    }
+    : {
+      labelSuggestion: clampText(fallbackLabel, 80),
+      descriptionSuggestion: clampText(fallbackDescription, 180),
+      source: "deterministic" as const,
+      model: "",
+      notes: labelFromVision
+        ? "Caption inferred deterministically from OCI Vision labels."
+        : "Caption inferred deterministically from file name and linked people.",
+    };
+  const resolvedDateSignal = input.dateSignal ?? buildFallbackDateSignal(fileName, input.createdAt);
+  const dateSuggestion = resolvedDateSignal?.date ?? "";
+  const dateSource = resolvedDateSignal?.source ?? "none";
+  const dateConfidence = resolvedDateSignal?.confidence ?? "low";
+  const noteParts = [resolvedDateSignal?.notes ?? "No date signal found in EXIF, file name, or capture timestamp.", resolvedCaption.notes]
+    .map((item) => normalizeWhitespace(item))
+    .filter(Boolean);
 
   const suggestion: PhotoIntelligenceSuggestion = {
     status: "completed",
     generatedAt: new Date().toISOString(),
-    labelSuggestion: label,
-    descriptionSuggestion: description,
+    labelSuggestion: resolvedCaption.labelSuggestion,
+    descriptionSuggestion: resolvedCaption.descriptionSuggestion,
     dateSuggestion,
     dateSource,
     dateConfidence,
-    notes:
-      dateSource === "none"
-        ? "No date signal found in file name or capture timestamp."
-        : dateSource === "filename"
-          ? "Date inferred from file name pattern."
-          : "Date inferred from capture timestamp metadata.",
+    notes: noteParts.join(" "),
+    captionSource: resolvedCaption.source,
+    captionModel: resolvedCaption.model || undefined,
     visionLabels: input.vision?.labels?.map((item) => item.name).slice(0, 6) ?? [],
     visionObjects: input.vision?.objects?.map((item) => item.name).slice(0, 8) ?? [],
     detectedFaceCount: input.vision?.faceCount ?? 0,
@@ -212,13 +271,17 @@ export function readPhotoIntelligenceSuggestion(rawMetadata: string | undefined)
     labelSuggestion: String(suggestion.labelSuggestion ?? "").trim(),
     descriptionSuggestion: String(suggestion.descriptionSuggestion ?? "").trim(),
     dateSuggestion: String(suggestion.dateSuggestion ?? "").trim(),
-    dateSource: ["filename", "capture_timestamp", "none"].includes(String(suggestion.dateSource ?? ""))
+    dateSource: ["exif", "filename", "capture_timestamp", "none"].includes(String(suggestion.dateSource ?? ""))
       ? (String(suggestion.dateSource) as PhotoIntelligenceSuggestion["dateSource"])
       : "none",
     dateConfidence: ["high", "medium", "low"].includes(String(suggestion.dateConfidence ?? ""))
       ? (String(suggestion.dateConfidence) as PhotoIntelligenceSuggestion["dateConfidence"])
       : "low",
     notes: String(suggestion.notes ?? "").trim(),
+    captionSource: ["deterministic", "openai_vision"].includes(String(suggestion.captionSource ?? ""))
+      ? (String(suggestion.captionSource) as NonNullable<PhotoIntelligenceSuggestion["captionSource"]>)
+      : undefined,
+    captionModel: String(suggestion.captionModel ?? "").trim() || undefined,
     visionLabels: Array.isArray(suggestion.visionLabels)
       ? suggestion.visionLabels.map((item) => String(item ?? "").trim()).filter(Boolean)
       : [],

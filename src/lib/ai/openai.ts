@@ -16,6 +16,10 @@ export function getOpenAiStoryImportModel() {
   return process.env.OPENAI_STORY_IMPORT_MODEL?.trim() || getOpenAiHelpModel();
 }
 
+export function getOpenAiPhotoIntelligenceModel() {
+  return process.env.OPENAI_PHOTO_INTELLIGENCE_MODEL?.trim() || getOpenAiHelpModel();
+}
+
 export function getOpenAiClient() {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {

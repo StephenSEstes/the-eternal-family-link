@@ -13,6 +13,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (photo intelligence phase 1: EXIF dates + optional AI caption refinement)
+
+- `Date`: 2026-03-22
+- `Change`: Added EXIF-backed photo date extraction and optional OpenAI caption refinement on top of OCI Vision signals for photo-intelligence suggestions. The intelligence route now loads OCI image bytes once, reuses them for EXIF and Vision analysis, and persists richer suggestion metadata while keeping the existing editor apply workflow unchanged.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code/workflow issue`. Phase 1 photo intelligence still depended only on filename and `createdAt` heuristics for dates, and title/description suggestions were fully deterministic even when OCI Vision signals were available. That left the feature short of the remaining Phase 1 requirements in `TODO.md`.
+- `Files`:
+  - `package.json`
+  - `package-lock.json`
+  - `src/lib/media/exif.ts`
+  - `src/lib/ai/photo-caption.ts`
+  - `src/lib/ai/openai.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `TODO.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - In production, `Generate Suggestions` can now return `dateSource=exif` when EXIF capture metadata exists.
+  - When `OPENAI_API_KEY` is configured and OCI Vision returns usable labels/objects/faces, title/description suggestions can be refined by OpenAI; otherwise the deterministic fallback still produces suggestions.
+  - Existing editor controls (`Use Title`, `Use Description`, `Use Date`) continue to work with the richer suggestion payload.
+- `Rollback Notes`: Revert the EXIF helper, OpenAI caption helper/model getter, and the photo-intelligence route/suggestion-builder changes together.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (deploy-safe OCI Vision/Object Storage auth)
 
 - `Date`: 2026-03-21

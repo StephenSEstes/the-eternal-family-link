@@ -118,6 +118,13 @@ I will update this list as we add, complete, or remove work.
   Phase 1:
   - 2026-03-21 progress: Added deterministic image suggestion generation endpoint (`/photos/[fileId]/intelligence`), persisted `photoIntelligence` metadata, and media-editor apply controls (`Use Title/Description/Date`).
   - 2026-03-21 progress: Switched generation to OCI Vision-first analysis (labels/objects/faces) with deterministic fallback when Vision is unavailable.
+  - 2026-03-22 progress: Production OCI Vision integration now works end-to-end for photo suggestions. The intelligence route reaches OCI auth, reads original image bytes from OCI Object Storage, and executes Vision analysis successfully in production.
+  - 2026-03-22 implementation plan:
+    - Add EXIF parser support for OCI-backed image bytes and extract capture-date candidates before heuristic fallback.
+    - Extend photo-intelligence suggestion building to rank date signals in this order: EXIF capture date, file name date, createdAt fallback.
+    - Add optional OpenAI caption refinement using linked people plus OCI Vision labels/objects/faces, while preserving deterministic fallback when OpenAI is unavailable or returns unusable output.
+    - Persist the richer suggestion metadata (`dateSource`, `dateConfidence`, caption notes/model hints) without changing the existing media-editor apply workflow.
+    - Validate with `npm run build` and redeployed photo-suggestion generation against production OCI media.
   - Remaining for full Phase 1: add EXIF parser-backed date extraction and optional OpenAI caption refinement using Vision outputs.
   - Implement caption + EXIF date extraction and persist suggestions.
   - Render suggestions in media detail panel with accept/edit controls.
