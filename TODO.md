@@ -44,13 +44,14 @@ I will update this list as we add, complete, or remove work.
 - [ ] Face recognition architecture and phased implementation for media upload
   Priority: High
   Est date: 2026-04-20
-  Desc: Add reviewed face-recognition suggestions in media flows so uploads can propose likely people matches across accessible family groups, with strict permission filtering and no silent auto-assignment.
+  Desc: Add reviewed face-recognition suggestions in media flows so uploads can propose likely people matches across accessible family groups, with strict permission filtering, one global person identity model, and no silent auto-assignment.
   Scope:
   - Detect faces from uploaded images and create per-face records.
   - Generate embeddings and query nearest candidates from a face index.
   - Return ranked match suggestions with confidence for user review.
   - Allow confirm/reject actions to improve matching quality over time.
   - Enforce access controls so suggestions only include people the current user can access.
+  - Treat person face profiles and detected face instances as global identity data, not family-scoped duplicates.
   - Add biometric/privacy controls (retention, delete cascade, audit).
   Architecture:
   - Services
@@ -64,7 +65,7 @@ I will update this list as we add, complete, or remove work.
     - Existing media backfill runs as resumable batch jobs.
   - Suggested data model
     - `face_instances`
-      - `face_id` (PK), `media_id`, `family_group_key`, `bbox_x`, `bbox_y`, `bbox_w`, `bbox_h`,
+      - `face_id` (PK), `media_id`, `file_id`, `bbox_x`, `bbox_y`, `bbox_w`, `bbox_h`,
       - `embedding_vector` (or `embedding_ref`), `quality_score`, `created_at`, `updated_at`.
     - `face_matches`
       - `match_id` (PK), `face_id`, `candidate_person_id`, `confidence_score`,
@@ -74,28 +75,31 @@ I will update this list as we add, complete, or remove work.
     - `face_review_audit`
       - `audit_id` (PK), `face_id`, `person_id`, `action`, `actor_user_id/email`, `family_group_key`, `created_at`.
   - Access model
-    - Candidate search scope is all people in family groups user can access.
-    - Response filter enforces user access before returning candidates.
-    - No cross-tenant leakage; hard partition by tenant/family-group access rules.
+    - Face/profile storage is global by `person_id` and `file_id`.
+    - Candidate search can use all global person face profiles.
+    - Response filter enforces current-user family access before returning candidates.
+    - No cross-tenant leakage in responses; access is enforced at suggestion/read/review time instead of by duplicating storage per family.
   - UX model
     - Upload card shows `Face analysis in progress`.
     - Suggestions panel per photo: face chips + top candidates + confidence bands.
     - Actions: `Confirm`, `Reject`, `Not sure`, `Create person`.
     - Never auto-link without explicit confirmation.
   Phase 1 (MVP suggest-only):
+  - 2026-03-22 progress: Face/profile storage and canonical identity are now global by `file_id` and `person_id`, with family access enforced when candidate suggestions are read instead of by duplicating biometric rows per family.
   - Add schema tables + migration.
   - Add worker scaffold + queue trigger from upload routes.
   - Persist face instances and raw candidate suggestions.
   - Add read-only suggestion UI.
   Validation:
   - Uploading an image with faces produces `face_instances` and `face_matches`.
+  - The same person has one canonical face-profile identity everywhere in the app.
   - Only accessible people appear in suggestions.
   - 2026-03-22 implementation plan:
     - Use the existing `/api/t/[tenantKey]/photos/[fileId]/intelligence` route as the first persisted face-analysis trigger so the app reuses the already-working OCI object-byte load, auth, and media metadata update path before adding a separate worker queue.
-    - Add OCI bootstrap support plus schema/docs entries for `face_instances`, `face_matches`, and `person_face_profiles`, with face detections and candidate matches partitioned by `family_group_key`.
+    - Add OCI bootstrap support plus schema/docs entries for `face_instances`, `face_matches`, and `person_face_profiles`, with face/profile identity stored globally by `file_id` and `person_id` instead of partitioning storage by `family_group_key`.
     - Extend OCI Vision image analysis to request face embeddings in addition to labels/objects, then persist detected face boxes, quality/confidence scores, and embedding payloads for the analyzed image.
-    - Seed or refresh `person_face_profiles` from accessible person headshots, preferring cached profile rows and opportunistically updating profiles when a primary person photo upload provides fresh image bytes.
-    - Generate suggest-only candidate matches by comparing detected face embeddings against accessible cached person profiles, persist the ranked results in `face_matches`, and write a compact read model back into `media_metadata` for the existing media editor.
+    - Seed or refresh global `person_face_profiles` from canonical person headshots, preferring cached profile rows and opportunistically updating profiles when a primary person photo upload provides fresh image bytes.
+    - Generate suggest-only candidate matches by comparing detected face embeddings against global cached person profiles, then filter the returned candidate set to people accessible in the current family context before writing UI-facing suggestion metadata.
     - Render a read-only face suggestions section in the media detail modal that shows each detected face plus top candidate people/confidence bands without auto-linking or creating person relationships yet.
     - Validate with `npm run build`, then regenerate production photo intelligence on images with and without faces and confirm table persistence plus metadata-backed UI rendering.
   Phase 2 (review + learning loop):

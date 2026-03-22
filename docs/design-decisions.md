@@ -227,3 +227,10 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep family-group-scoped person primaries on `MediaLinks`; add a second family-scoped headshot pointer alongside `People.photo_file_id`.
 - `Impact`: Setting or clearing a person primary photo now updates only the canonical `People.photo_file_id` selection logic, person UIs derive `Primary` from that field, and integrity/runtime paths must treat person `MediaLinks.is_primary` as non-authoritative legacy state.
 - `Follow-up`: Backfill any existing stale `People.photo_file_id` rows and duplicate historical person-primary link flags in production data as a separate remediation step.
+
+- `Area`: Face-recognition identity scope
+- `Decision`: Person face profiles and detected face instances are globally person/file scoped. Runtime writes store canonical face rows under a global sentinel scope, and family-group access is enforced when candidate suggestions are read or returned rather than by duplicating biometric rows per family.
+- `Reason`: The prior family-scoped face model duplicated the same person's biometric reference state across family groups, conflicted with the product rule that a person is the same person everywhere, and created the same kind of split-brain risk already seen in person primary-photo behavior.
+- `Alternatives Considered`: Keep family-group-scoped face/profile rows; add both global and family-specific face stores side by side.
+- `Impact`: `person_face_profiles` now represent one canonical profile per person, `face_instances` represent one canonical analyzed face set per file, reruns replace global face analysis for that file, and suggestion filtering must continue to use accessible people at read time so no unauthorized candidates are returned.
+- `Follow-up`: Add explicit confirm/reject review flows, delete/retention cleanup, and a targeted OCI cleanup/backfill for remaining legacy family-scoped face rows after the global model is stable.

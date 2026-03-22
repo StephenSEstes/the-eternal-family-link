@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Switched face recognition to one global person/file identity model so canonical face profiles and analyzed face rows are no longer duplicated per family, while candidate visibility stays filtered by accessible people. See `docs/change-summary.md`.
 - 2026-03-22: Normalized person primary photos around `People.photo_file_id` as the only canonical headshot field, aligned person/photo read paths to that model, and fixed the person media-attach wizard to show the person's name instead of raw `personId`. See `docs/change-summary.md`.
 - 2026-03-22: Fixed person photo primary reconciliation so unchecking `Set as primary` on one photo no longer leaves the person avatar/header pointed at the deselected file. See `docs/change-summary.md`.
 - 2026-03-22: Aligned the photo-intelligence debug contract so the media modal now shows fresh face-embedding status fields directly instead of masking them behind an older stored debug shape. See `docs/change-summary.md`.

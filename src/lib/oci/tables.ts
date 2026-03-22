@@ -41,6 +41,7 @@ let auditLogTableCompatEnsured = false;
 let faceInstancesTableCompatEnsured = false;
 let faceMatchesTableCompatEnsured = false;
 let personFaceProfilesTableCompatEnsured = false;
+export const OCI_GLOBAL_FACE_SCOPE_KEY = "__global__";
 
 function isColumnAlreadyCompatibleError(message: string) {
   return /ORA-01430|ORA-01442|ORA-00904/i.test(message);
@@ -1482,24 +1483,30 @@ async function queryOciMediaLinks(
   });
 }
 
-async function getFaceIdsForFile(connection: OciConnection, familyGroupKey: string, fileId: string) {
-  const result = await connection.execute(
-    `SELECT face_id
-       FROM face_instances
-      WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
-        AND TRIM(file_id) = :fileId`,
-    {
-      familyGroupKey,
-      fileId,
-    },
-    { outFormat: oracledb.OUT_FORMAT_OBJECT },
-  );
-  const rows = (result.rows ?? []) as Record<string, unknown>[];
-  return rows.map((row) => fromDbValue(row.FACE_ID)).filter(Boolean);
-}
-
 function enabledExpr(column: string) {
   return `LOWER(TRIM(NVL(${column}, 'TRUE'))) IN ('true','yes','1')`;
+}
+
+function listFaceScopeKeys(requestedFamilyGroupKey?: string) {
+  const requested = String(requestedFamilyGroupKey ?? "").trim().toLowerCase();
+  const keys = [OCI_GLOBAL_FACE_SCOPE_KEY];
+  if (requested && requested !== OCI_GLOBAL_FACE_SCOPE_KEY) {
+    keys.push(requested);
+  }
+  return keys;
+}
+
+function buildScopePredicate(columnExpr: string, scopeKeys: string[], bindPrefix: string) {
+  const binds: Record<string, string> = {};
+  const clauses = scopeKeys.map((scopeKey, index) => {
+    const bindKey = `${bindPrefix}${index}`;
+    binds[bindKey] = scopeKey;
+    return `LOWER(TRIM(${columnExpr})) = :${bindKey}`;
+  });
+  return {
+    clause: clauses.length > 0 ? `(${clauses.join(" OR ")})` : "1 = 0",
+    binds,
+  };
 }
 
 export async function getOciEnabledUserAccessesByEmail(email: string): Promise<OciTenantAccessRow[]> {
@@ -2545,11 +2552,13 @@ export async function getOciFaceInstancesForFile(input: {
 }): Promise<OciFaceInstanceRow[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
-  if (!familyGroupKey || !fileId) {
+  if (!fileId) {
     return [];
   }
   return withConnection(async (connection) => {
     await ensureFaceInstancesTableCompatibility(connection);
+    const scopeKeys = listFaceScopeKeys(familyGroupKey);
+    const scopePredicate = buildScopePredicate("family_group_key", scopeKeys, "scope");
     const result = await connection.execute(
       `SELECT
          family_group_key,
@@ -2565,17 +2574,31 @@ export async function getOciFaceInstancesForFile(input: {
          created_at,
          updated_at
        FROM face_instances
-       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+       WHERE ${scopePredicate.clause}
          AND TRIM(file_id) = :fileId
-       ORDER BY created_at, face_id`,
+       ORDER BY
+         CASE WHEN LOWER(TRIM(family_group_key)) = :preferredScope THEN 0 ELSE 1 END,
+         created_at,
+         face_id`,
       {
-        familyGroupKey,
+        ...scopePredicate.binds,
         fileId,
+        preferredScope: OCI_GLOBAL_FACE_SCOPE_KEY,
       },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map(mapOciFaceInstanceRow);
+    const mappedRows = rows.map(mapOciFaceInstanceRow);
+    const preferredRows = mappedRows.some((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      ? mappedRows.filter((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      : mappedRows;
+    const deduped = new Map<string, OciFaceInstanceRow>();
+    for (const row of preferredRows) {
+      if (!deduped.has(row.faceId)) {
+        deduped.set(row.faceId, row);
+      }
+    }
+    return Array.from(deduped.values());
   });
 }
 
@@ -2585,12 +2608,15 @@ export async function getOciFaceMatchesForFile(input: {
 }): Promise<OciFaceMatchRow[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
-  if (!familyGroupKey || !fileId) {
+  if (!fileId) {
     return [];
   }
   return withConnection(async (connection) => {
     await ensureFaceInstancesTableCompatibility(connection);
     await ensureFaceMatchesTableCompatibility(connection);
+    const scopeKeys = listFaceScopeKeys(familyGroupKey);
+    const matchScopePredicate = buildScopePredicate("m.family_group_key", scopeKeys, "matchScope");
+    const faceScopePredicate = buildScopePredicate("f.family_group_key", scopeKeys, "faceScope");
     const result = await connection.execute(
       `SELECT
          m.family_group_key,
@@ -2606,18 +2632,33 @@ export async function getOciFaceMatchesForFile(input: {
        FROM face_matches m
        INNER JOIN face_instances f
          ON TRIM(f.face_id) = TRIM(m.face_id)
-       WHERE LOWER(TRIM(m.family_group_key)) = :familyGroupKey
-         AND LOWER(TRIM(f.family_group_key)) = :familyGroupKey
+       WHERE ${matchScopePredicate.clause}
+         AND ${faceScopePredicate.clause}
          AND TRIM(f.file_id) = :fileId
-       ORDER BY TO_NUMBER(NVL(NULLIF(TRIM(m.confidence_score), ''), '0')) DESC, m.match_id`,
+       ORDER BY
+         CASE WHEN LOWER(TRIM(m.family_group_key)) = :preferredScope THEN 0 ELSE 1 END,
+         TO_NUMBER(NVL(NULLIF(TRIM(m.confidence_score), ''), '0')) DESC,
+         m.match_id`,
       {
-        familyGroupKey,
+        ...matchScopePredicate.binds,
+        ...faceScopePredicate.binds,
         fileId,
+        preferredScope: OCI_GLOBAL_FACE_SCOPE_KEY,
       },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map(mapOciFaceMatchRow);
+    const mappedRows = rows.map(mapOciFaceMatchRow);
+    const preferredRows = mappedRows.some((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      ? mappedRows.filter((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      : mappedRows;
+    const deduped = new Map<string, OciFaceMatchRow>();
+    for (const row of preferredRows) {
+      if (!deduped.has(row.matchId)) {
+        deduped.set(row.matchId, row);
+      }
+    }
+    return Array.from(deduped.values());
   });
 }
 
@@ -2625,11 +2666,10 @@ export async function getOciPersonFaceProfilesForTenant(input: {
   familyGroupKey: string;
 }): Promise<OciPersonFaceProfileRow[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
-  if (!familyGroupKey) {
-    return [];
-  }
   return withConnection(async (connection) => {
     await ensurePersonFaceProfilesTableCompatibility(connection);
+    const scopeKeys = listFaceScopeKeys(familyGroupKey);
+    const scopePredicate = buildScopePredicate("family_group_key", scopeKeys, "scope");
     const result = await connection.execute(
       `SELECT
          family_group_key,
@@ -2640,15 +2680,24 @@ export async function getOciPersonFaceProfilesForTenant(input: {
          embedding_json,
          updated_at
        FROM person_face_profiles
-       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
-       ORDER BY person_id`,
+       WHERE ${scopePredicate.clause}
+       ORDER BY
+         CASE WHEN LOWER(TRIM(family_group_key)) = :preferredScope THEN 0 ELSE 1 END,
+         person_id`,
       {
-        familyGroupKey,
+        ...scopePredicate.binds,
+        preferredScope: OCI_GLOBAL_FACE_SCOPE_KEY,
       },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map(mapOciPersonFaceProfileRow);
+    const deduped = new Map<string, OciPersonFaceProfileRow>();
+    for (const row of rows.map(mapOciPersonFaceProfileRow)) {
+      if (!deduped.has(row.personId)) {
+        deduped.set(row.personId, row);
+      }
+    }
+    return Array.from(deduped.values());
   });
 }
 
@@ -2661,11 +2710,10 @@ export async function upsertOciPersonFaceProfile(input: {
   embeddingJson: string;
   updatedAt: string;
 }) {
-  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const profileId = input.profileId.trim();
   const personId = input.personId.trim();
-  if (!familyGroupKey || !profileId || !personId) {
-    throw new Error("family_group_key, profile_id, and person_id are required");
+  if (!profileId || !personId) {
+    throw new Error("profile_id and person_id are required");
   }
   return withConnection(async (connection) => {
     await ensurePersonFaceProfilesTableCompatibility(connection);
@@ -2709,7 +2757,7 @@ export async function upsertOciPersonFaceProfile(input: {
          s.updated_at
        )`,
       {
-        familyGroupKey,
+        familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
         profileId,
         personId,
         sourceFileId: input.sourceFileId.trim(),
@@ -2717,8 +2765,19 @@ export async function upsertOciPersonFaceProfile(input: {
         embeddingJson: input.embeddingJson.trim(),
         updatedAt: input.updatedAt.trim(),
       },
-      { autoCommit: true },
+      { autoCommit: false },
     );
+    await connection.execute(
+      `DELETE FROM person_face_profiles
+       WHERE LOWER(TRIM(family_group_key)) <> :globalFamilyGroupKey
+         AND TRIM(person_id) = :personId`,
+      {
+        globalFamilyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
+        personId,
+      },
+      { autoCommit: false },
+    );
+    await connection.commit();
   });
 }
 
@@ -2748,36 +2807,40 @@ export async function replaceOciFaceAnalysisForFile(input: {
     }>;
   }>;
 }) {
-  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
-  if (!familyGroupKey || !fileId) {
-    throw new Error("family_group_key and file_id are required");
+  if (!fileId) {
+    throw new Error("file_id is required");
   }
   return withConnection(async (connection) => {
     await ensureFaceInstancesTableCompatibility(connection);
     await ensureFaceMatchesTableCompatibility(connection);
 
-    const existingFaceIds = await getFaceIdsForFile(connection, familyGroupKey, fileId);
+    const existingFaceIdsResult = await connection.execute(
+      `SELECT face_id
+         FROM face_instances
+        WHERE TRIM(file_id) = :fileId`,
+      { fileId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const existingFaceIds = Array.from(
+      new Set(
+        ((existingFaceIdsResult.rows ?? []) as Record<string, unknown>[])
+          .map((row) => fromDbValue(row.FACE_ID))
+          .filter(Boolean),
+      ),
+    );
     for (const faceId of existingFaceIds) {
       await connection.execute(
         `DELETE FROM face_matches
-         WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
-           AND TRIM(face_id) = :faceId`,
-        {
-          familyGroupKey,
-          faceId,
-        },
+         WHERE TRIM(face_id) = :faceId`,
+        { faceId },
         { autoCommit: false },
       );
     }
     await connection.execute(
       `DELETE FROM face_instances
-       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
-         AND TRIM(file_id) = :fileId`,
-      {
-        familyGroupKey,
-        fileId,
-      },
+       WHERE TRIM(file_id) = :fileId`,
+      { fileId },
       { autoCommit: false },
     );
 
@@ -2795,7 +2858,7 @@ export async function replaceOciFaceAnalysisForFile(input: {
            quality_score,
            embedding_json,
            created_at,
-           updated_at
+         updated_at
          ) VALUES (
            :familyGroupKey,
            :faceId,
@@ -2811,7 +2874,7 @@ export async function replaceOciFaceAnalysisForFile(input: {
            :updatedAt
          )`,
         input.instances.map((instance) => ({
-          familyGroupKey,
+          familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
           faceId: instance.faceId.trim(),
           fileId,
           bboxX: String(instance.bboxX),
@@ -2829,7 +2892,7 @@ export async function replaceOciFaceAnalysisForFile(input: {
 
       const matchRows = input.instances.flatMap((instance) =>
         instance.matches.map((match) => ({
-          familyGroupKey,
+          familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
           matchId: match.matchId.trim(),
           faceId: instance.faceId.trim(),
           candidatePersonId: match.candidatePersonId.trim(),

@@ -47,6 +47,28 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the canonical person-photo selection helpers, person media-link write/read changes, wizard people-option fix, and the matching design/schema docs together so runtime behavior and docs stay aligned.
 - `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make person primary photos globally person-scoped via `People.photo_file_id`.
 
+## 2026-03-22 (global face-recognition identity model)
+
+- `Date`: 2026-03-22
+- `Change`: Switched the persisted face-recognition model from family-scoped duplication to one global person/file identity model. New face-profile rows and analyzed face/match rows now write to a global sentinel scope, face/profile IDs no longer include family-group scope, and read paths prefer canonical global rows while still tolerating older legacy family-scoped rows during transition.
+- `Type`: API | Schema
+- `Why`: Root cause was a `design/code issue`. The first face-suggestion MVP stored `person_face_profiles`, `face_instances`, and `face_matches` by `family_group_key`, which duplicated the same person identity across families and conflicted with the intended product rule that the person is the same person everywhere. That also risked stale split-brain face state similar to the earlier person-primary-photo issue.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/media/face-recognition.ts`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+- `Data Changes`: No separate data-repair script in this change. New runtime writes store canonical face/profile rows with `family_group_key="__global__"`, replace face analysis globally by `file_id`, and remove legacy per-person face-profile rows when a person profile is refreshed. Read paths prefer those new global rows over any older family-scoped rows.
+- `Verify`:
+  - `npm run build` passes.
+  - Re-running photo intelligence for the same shared file from different family contexts reuses one canonical face-analysis set instead of creating duplicate family-scoped face rows.
+  - Refreshing a person headshot seeds or updates one canonical face profile for that `person_id`.
+  - Candidate suggestions remain limited to accessible people in the active family context even though profile storage is global.
+- `Rollback Notes`: Revert the face-table read/write changes, face-id/profile-id generation changes, and the matching design/schema docs together so runtime behavior and documented storage scope stay aligned.
+- `Design Decision Change`: Updated `docs/design-decisions.md` and `designchoices.md` to make face-recognition identity global by `person_id` and `file_id`.
+
 ## 2026-03-22 (face embedding request fallback hardening)
 
 - `Date`: 2026-03-22

@@ -45,15 +45,16 @@ This section is a quick reference for the three data areas that drive profile/me
 
 - Detected faces per analyzed image: `FaceInstances`
   - Key: `face_id`
-  - Scope: `family_group_key`
+  - Storage scope: global by file (`family_group_key="__global__"` for canonical rows; legacy family-scoped rows may still exist during transition)
   - Image join: `file_id -> MediaAssets.file_id`
   - Stores normalized bounding box, detection score, quality score, and embedding payload
 - Suggested candidate people per detected face: `FaceMatches`
   - Key: `match_id`
   - Parent: `face_id -> FaceInstances.face_id`
+  - Storage scope: global by detected face (`family_group_key="__global__"` for canonical rows)
   - Stores ranked candidate person rows and review status (`suggested|confirmed|rejected`)
 - Cached per-person reference embedding: `PersonFaceProfiles`
-  - One profile per (`family_group_key`, `person_id`) for the current face-suggestion phase
+  - One canonical profile per `person_id` for the current face-suggestion phase (`family_group_key="__global__"` for canonical rows)
   - Seeded from the person's current primary headshot when available
 
 ### 5) How One Media File Can Appear In Multiple Families
@@ -347,7 +348,7 @@ This section is a quick reference for the three data areas that drive profile/me
 ## FaceInstances
 
 - Columns:
-  - `family_group_key`
+  - `family_group_key` (`"__global__"` for canonical runtime rows; legacy family-scoped rows may remain temporarily during transition)
   - `face_id`
   - `file_id`
   - `bbox_x`
@@ -360,15 +361,16 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_at`
   - `updated_at`
 - Purpose:
-  - Persist normalized per-face detections for analyzed images so reruns can replace a canonical face set for each file.
+  - Persist normalized per-face detections for analyzed images so reruns can replace one canonical face set for each file globally, regardless of which family view triggered the analysis.
 - Logical index/key:
   - Unique: `face_id`
-  - Common lookup: (`family_group_key`, `file_id`)
+  - Common lookup: `file_id`
+  - Compatibility index retained in OCI: (`family_group_key`, `file_id`)
 
 ## FaceMatches
 
 - Columns:
-  - `family_group_key`
+  - `family_group_key` (`"__global__"` for canonical runtime rows; retained in schema for compatibility)
   - `match_id`
   - `face_id`
   - `candidate_person_id`
@@ -379,15 +381,16 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_at`
   - `match_metadata`
 - Purpose:
-  - Persist suggest-only or reviewed candidate-person matches for each detected face.
+  - Persist suggest-only or reviewed candidate-person matches for each detected face, with candidate visibility filtered at read time by accessible people rather than by duplicating rows per family.
 - Logical index/key:
   - Unique: `match_id`
-  - Common lookup: (`face_id`), (`candidate_person_id`), (`family_group_key`, `match_status`)
+  - Common lookup: (`face_id`), (`candidate_person_id`)
+  - Compatibility index retained in OCI: (`family_group_key`, `match_status`)
 
 ## PersonFaceProfiles
 
 - Columns:
-  - `family_group_key`
+  - `family_group_key` (`"__global__"` for canonical runtime rows; retained in schema for compatibility)
   - `profile_id`
   - `person_id`
   - `source_file_id`
@@ -395,10 +398,11 @@ This section is a quick reference for the three data areas that drive profile/me
   - `embedding_json`
   - `updated_at`
 - Purpose:
-  - Cache the current per-person reference embedding used for suggest-only face matching, seeded from the person's primary headshot.
+  - Cache the current global per-person reference embedding used for suggest-only face matching, seeded from the person's primary headshot.
 - Logical index/key:
   - Unique: `profile_id`
-  - Recommended unique: (`family_group_key`, `person_id`)
+  - Canonical uniqueness: `person_id`
+  - Compatibility unique index retained in OCI: (`family_group_key`, `person_id`)
 
 ## ImportantDates
 

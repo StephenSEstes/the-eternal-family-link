@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { PersonRecord } from "@/lib/google/types";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
+  OCI_GLOBAL_FACE_SCOPE_KEY,
   getOciMediaAssetByFileId,
   getOciPersonFaceProfilesForTenant,
   replaceOciFaceAnalysisForFile,
@@ -45,6 +46,22 @@ function hashId(prefix: string, seed: string) {
 function toStableNumber(value: number) {
   if (!Number.isFinite(value)) return "0";
   return value.toFixed(6);
+}
+
+function buildFaceInstanceId(input: {
+  fileId: string;
+  faceIndex: number;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}) {
+  return hashId(
+    "face",
+    `${input.fileId}|${input.faceIndex}|${toStableNumber(input.boundingBox.x)}|${toStableNumber(input.boundingBox.y)}|${toStableNumber(input.boundingBox.width)}|${toStableNumber(input.boundingBox.height)}`,
+  );
 }
 
 function readOriginalObjectKey(rawMetadata: string) {
@@ -122,7 +139,7 @@ async function ensurePersonFaceProfileFromImageBytes(input: {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const personId = input.personId.trim();
   const sourceFileId = input.sourceFileId.trim();
-  if (!familyGroupKey || !personId || !sourceFileId) {
+  if (!personId || !sourceFileId) {
     return null;
   }
   const vision = await analyzeInlineImageWithVision({ imageBytes: input.imageBytes });
@@ -131,7 +148,7 @@ async function ensurePersonFaceProfileFromImageBytes(input: {
     return null;
   }
   const updatedAt = new Date().toISOString();
-  const profileId = hashId("fprofile", `${familyGroupKey}|${personId}`);
+  const profileId = hashId("fprofile", personId);
   const embeddingJson = JSON.stringify(face.embedding);
   await upsertOciPersonFaceProfile({
     familyGroupKey,
@@ -143,7 +160,7 @@ async function ensurePersonFaceProfileFromImageBytes(input: {
     updatedAt,
   });
   return {
-    familyGroupKey,
+    familyGroupKey: OCI_GLOBAL_FACE_SCOPE_KEY,
     profileId,
     personId,
     sourceFileId,
@@ -192,9 +209,6 @@ async function loadCandidateProfiles(input: {
   people: PersonRecord[];
 }): Promise<CandidateProfile[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
-  if (!familyGroupKey) {
-    return [];
-  }
   const existingProfiles = await getOciPersonFaceProfilesForTenant({ familyGroupKey }).catch(() => []);
   const profileByPersonId = new Map(existingProfiles.map((profile) => [profile.personId, profile] as const));
 
@@ -254,7 +268,7 @@ export async function buildAndPersistFaceSuggestions(input: {
 }): Promise<PhotoFaceSuggestion[]> {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
-  if (!familyGroupKey || !fileId) {
+  if (!fileId) {
     return [];
   }
 
@@ -264,10 +278,11 @@ export async function buildAndPersistFaceSuggestions(input: {
   });
   const timestamp = new Date().toISOString();
   const suggestions = input.faces.map((face, index) => {
-    const faceId = hashId(
-      "face",
-      `${familyGroupKey}|${fileId}|${index}|${toStableNumber(face.boundingBox.x)}|${toStableNumber(face.boundingBox.y)}|${toStableNumber(face.boundingBox.width)}|${toStableNumber(face.boundingBox.height)}`,
-    );
+    const faceId = buildFaceInstanceId({
+      fileId,
+      faceIndex: index,
+      boundingBox: face.boundingBox,
+    });
     const matches = candidateProfiles
       .map((candidate) => {
         const confidenceScore = cosineSimilarity(face.embedding, candidate.embedding);
@@ -294,6 +309,16 @@ export async function buildAndPersistFaceSuggestions(input: {
       matches,
     } satisfies PhotoFaceSuggestion;
   });
+  const embeddingByFaceId = new Map(
+    input.faces.map((face, index) => [
+      buildFaceInstanceId({
+        fileId,
+        faceIndex: index,
+        boundingBox: face.boundingBox,
+      }),
+      face.embedding,
+    ] as const),
+  );
 
   await replaceOciFaceAnalysisForFile({
     familyGroupKey,
@@ -306,12 +331,7 @@ export async function buildAndPersistFaceSuggestions(input: {
       bboxH: suggestion.bbox.height,
       detectionConfidence: suggestion.detectionConfidence,
       qualityScore: suggestion.qualityScore,
-      embeddingJson: JSON.stringify(input.faces.find((face, index) =>
-        hashId(
-          "face",
-          `${familyGroupKey}|${fileId}|${index}|${toStableNumber(face.boundingBox.x)}|${toStableNumber(face.boundingBox.y)}|${toStableNumber(face.boundingBox.width)}|${toStableNumber(face.boundingBox.height)}`,
-        ) === suggestion.faceId,
-      )?.embedding ?? []),
+      embeddingJson: JSON.stringify(embeddingByFaceId.get(suggestion.faceId) ?? []),
       createdAt: timestamp,
       updatedAt: timestamp,
       matches: suggestion.matches.map((match) => ({
