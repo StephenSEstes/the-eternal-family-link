@@ -68,6 +68,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
 
   const mediaAsset = await getOciMediaAssetByFileId(normalizedFileId).catch(() => null);
+  let updatedMediaMetadata = "";
   if (mediaAsset?.mediaMetadata) {
     const metadata = parseMetadata(mediaAsset.mediaMetadata);
     const photoIntelligence = metadata.photoIntelligence;
@@ -96,10 +97,11 @@ export async function POST(request: Request, { params }: RouteProps) {
         });
       }
       metadata.photoIntelligence = suggestion;
+      updatedMediaMetadata = JSON.stringify(metadata);
       await updateOciMediaMetadataForFile({
         familyGroupKey: resolved.tenant.tenantKey,
         fileId: normalizedFileId,
-        mediaMetadata: JSON.stringify(metadata),
+        mediaMetadata: updatedMediaMetadata,
       });
     }
   }
@@ -117,6 +119,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     ok: true,
     fileId: normalizedFileId,
     faceId: normalizedFaceId,
+    mediaMetadata: updatedMediaMetadata,
     personId: normalizedPersonId,
     personDisplayName,
     sampleCount: association.sampleCount,

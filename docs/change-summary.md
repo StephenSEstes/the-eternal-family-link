@@ -13,6 +13,40 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (use shared photo resolver for intelligence source bytes)
+
+- `Date`: 2026-03-22
+- `Change`: Switched the photo-intelligence route from OCI-object-only byte loading to the shared photo resolver so it now uses the same OCI-first with Drive-fallback source path as the photo viewer.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. Some legacy images still lack `objectStorage.originalObjectKey` in `media_metadata`, but the rest of the app can display them because normal photo reads already use `resolvePhotoContentAcrossFamilies()` with Drive fallback. The intelligence route bypassed that shared resolver and tried OCI object bytes only, so Vision never got image bytes for those legacy photos. That left `attempted=false` with `Missing originalObjectKey in media metadata`, which also prevented detected faces and the manual association selector from appearing.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Running `Generate Suggestions` on a legacy image without `originalObjectKey` now attempts Vision instead of stopping at the missing-object-key debug message.
+  - The same images continue to work for already-migrated OCI-backed rows.
+- `Rollback Notes`: Revert the resolver switch in the intelligence route if you intentionally want photo intelligence limited to OCI-migrated media only.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-22 (remove redundant photo-detail reload after intelligence and face association)
+
+- `Date`: 2026-03-22
+- `Change`: Reused updated `mediaMetadata` returned by the `Generate Suggestions` and manual face-association POST routes so the media modal no longer waits on a second full photo-detail reload before clearing the busy state.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. Both `runPhotoIntelligence()` and `associateFaceToPerson()` already waited on an expensive POST that performed Vision analysis or face-profile writes and then persisted updated media metadata. After that POST completed, the client still made a second `loadSelectedPhotoDetail()` request and kept the modal in its loading state until that extra fetch returned. That redundant round-trip made successful operations feel hung or disproportionately slow, especially on larger images and manual face association.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - After `Generate Suggestions` finishes, the modal exits `Generating suggestions for this photo...` without waiting on a second detail fetch.
+  - After `Associate Face` finishes, the face confirmation appears promptly without a full media-detail refresh.
+- `Rollback Notes`: Revert the route response `mediaMetadata` additions and the client-side metadata-apply path together so the modal does not expect inline metadata snapshots from POST responses.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (media photo-intelligence first-run AI card)
 
 - `Date`: 2026-03-22

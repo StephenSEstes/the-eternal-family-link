@@ -7,6 +7,9 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Switched photo intelligence onto the shared OCI-first photo resolver with Drive fallback, so legacy images without `originalObjectKey` can still load source bytes for Vision and manual face association. See `docs/change-summary.md`.
+- 2026-03-22: Removed the redundant photo-detail reload after `Generate Suggestions` and manual face association so the media modal applies returned `mediaMetadata` immediately instead of waiting on a second fetch before clearing its loading state. See `docs/change-summary.md`.
+
 - 2026-03-22: Added a manual reviewed face-to-person association flow so detected face crops can be explicitly linked to a selected person and their embedding can be written onto that person’s face profile without relying on automatic recommendations. See `docs/change-summary.md`.
 - 2026-03-22: Added a hard timeout to optional OpenAI photo-caption refinement so slow caption requests cannot leave `Generate Suggestions` hanging for minutes before any suggestion is saved. See `docs/change-summary.md`.
 - 2026-03-22: Removed synchronous person-face profile bootstrap from the interactive `Generate Suggestions` route so photo intelligence no longer stalls while trying to backfill missing headshot embeddings inline. See `docs/change-summary.md`.

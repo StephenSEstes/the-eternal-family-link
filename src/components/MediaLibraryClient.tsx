@@ -63,9 +63,15 @@ type LinkedSearchResult =
 
 type FaceAssociationResponse = {
   faceId?: string;
+  mediaMetadata?: string;
   personId?: string;
   personDisplayName?: string;
   sampleCount?: number;
+};
+
+type PhotoIntelligenceResponse = {
+  debug?: PhotoIntelligenceDebug | null;
+  mediaMetadata?: string;
 };
 
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
@@ -286,6 +292,29 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     upsertMediaItem(nextItem);
   };
 
+  const applySelectedPhotoMetadata = (fileId: string, mediaMetadata: string) => {
+    const normalizedMetadata = mediaMetadata.trim();
+    if (!normalizedMetadata) {
+      return false;
+    }
+    const currentDetail = selectedPhotoDetail;
+    if (!currentDetail || currentDetail.fileId !== fileId) {
+      return false;
+    }
+    applySelectedPhotoDetail(
+      {
+        ...currentDetail,
+        mediaMetadata: normalizedMetadata,
+      },
+      {
+        editable: selectedPhotoEditable,
+        canEditName: selectedPhotoCanEditName,
+        preserveExistingText: true,
+      },
+    );
+    return true;
+  };
+
   const photoTagSearchResults = useMemo(() => {
     const q = photoTagQuery.trim().toLowerCase();
     if (!q) return [] as LinkedSearchResult[];
@@ -502,9 +531,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         },
       );
       await assertOk(res, "Failed to generate photo suggestions");
-      const body = (await res.json().catch(() => null)) as { debug?: PhotoIntelligenceDebug | null } | null;
+      const body = (await res.json().catch(() => null)) as PhotoIntelligenceResponse | null;
       setPhotoIntelligenceDebug(body?.debug ?? null);
-      await loadSelectedPhotoDetail(activeFileId, { noStore: true });
+      if (!applySelectedPhotoMetadata(activeFileId, String(body?.mediaMetadata ?? ""))) {
+        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
+      }
       setPhotoAssociationStatus("Photo suggestions ready.");
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Photo suggestion failed");
@@ -551,7 +582,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         ...current,
         [normalizedFaceId]: displayName,
       }));
-      await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      if (!applySelectedPhotoMetadata(selectedPhotoDetail.fileId, String(body?.mediaMetadata ?? ""))) {
+        await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
+      }
       setPhotoAssociationStatus(`Associated face to ${displayName}.`);
     } catch (error) {
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Face association failed");

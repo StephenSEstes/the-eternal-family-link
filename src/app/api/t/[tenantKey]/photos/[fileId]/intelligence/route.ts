@@ -15,8 +15,8 @@ import {
   collectPersistedExifData,
   readPersistedExifData,
 } from "@/lib/media/exif";
+import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
-import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciMediaAssetByFileId,
@@ -41,16 +41,6 @@ function parseMetadata(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function readOriginalObjectKey(metadata: Record<string, unknown>) {
-  const objectStorage = metadata.objectStorage;
-  if (objectStorage && typeof objectStorage === "object") {
-    const key = String((objectStorage as Record<string, unknown>).originalObjectKey ?? "").trim();
-    if (key) return key;
-  }
-  const fallback = String(metadata.originalObjectKey ?? "").trim();
-  return fallback;
 }
 
 export async function POST(request: Request, { params }: RouteProps) {
@@ -101,6 +91,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       fileId: normalizedFileId,
       suggestion: existing,
       debug,
+      mediaMetadata: baseMetadata,
       cached: true,
     });
   }
@@ -127,17 +118,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     })
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 
-  const originalObjectKey = readOriginalObjectKey(parsedMetadata);
   let sourceBytes: Buffer | null = null;
   let sourceReadErrorMessage = "";
-  if (originalObjectKey) {
-    try {
-      const source = await getOciObjectContentByKey(originalObjectKey);
-      sourceBytes = Buffer.from(source.data);
-    } catch (sourceError) {
-      sourceReadErrorMessage = sourceError instanceof Error ? sourceError.message : "Unable to read OCI object bytes.";
-      console.warn("[photo-intelligence] failed to load OCI object bytes", sourceError);
-    }
+  try {
+    const source = await resolvePhotoContentAcrossFamilies(normalizedFileId, resolved.tenant.tenantKey, { variant: "original" });
+    sourceBytes = Buffer.from(source.data);
+  } catch (sourceError) {
+    sourceReadErrorMessage = sourceError instanceof Error ? sourceError.message : "Unable to load source image bytes.";
+    console.warn("[photo-intelligence] failed to load source image bytes", sourceError);
   }
 
   const persistedExif = readPersistedExifData(
@@ -199,8 +187,6 @@ export async function POST(request: Request, { params }: RouteProps) {
         );
       } else if (sourceReadErrorMessage) {
         visionErrorMessage = sourceReadErrorMessage;
-      } else {
-        visionErrorMessage = "Missing originalObjectKey in media metadata.";
       }
     } catch (visionError) {
       const typed = visionError as {
@@ -324,6 +310,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     fileId: normalizedFileId,
     suggestion: generated.suggestion,
     debug,
+    mediaMetadata: generated.mediaMetadata,
     cached: false,
   });
 }
