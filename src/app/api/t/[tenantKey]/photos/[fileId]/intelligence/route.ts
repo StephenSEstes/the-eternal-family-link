@@ -22,7 +22,7 @@ import {
   getOciMediaLinksForFile,
   updateOciMediaMetadataForFile,
 } from "@/lib/oci/tables";
-import { analyzeInlineImageWithVision, isOciVisionConfigured, type OciVisionInsight } from "@/lib/oci/vision";
+import { detectFacesInlineWithVision, isOciVisionConfigured, type OciVisionInsight } from "@/lib/oci/vision";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;
@@ -167,35 +167,40 @@ export async function POST(request: Request, { params }: RouteProps) {
       if (sourceBytes) {
         visionAttempted = true;
         const visionStartedAt = Date.now();
-        vision = await analyzeInlineImageWithVision({
-          imageBytes: sourceBytes,
-        });
-        visionOuterLatencyMs = Date.now() - visionStartedAt;
-        visionSucceeded = true;
-        visionRawResult = JSON.stringify(
-          {
-            analysisMode: "face_embedding_only",
-            labels: vision.labels,
-            objects: vision.objects,
-            faces: vision.faces.map((face) => ({
-              confidence: face.confidence,
-              qualityScore: face.qualityScore,
-              boundingBox: face.boundingBox,
-              embeddingLength: face.embedding.length,
-            })),
-            faceCount: vision.faceCount,
-            embeddingAttempted: vision.embeddingAttempted,
-            embeddingSucceeded: vision.embeddingSucceeded,
-            embeddingErrorMessage: vision.embeddingErrorMessage,
-            embeddingFacesReturned: vision.embeddingFacesReturned,
-            embeddingFacesWithVectors: vision.embeddingFacesWithVectors,
-            prepareLatencyMs: vision.prepareLatencyMs,
-            visionRequestLatencyMs: vision.visionRequestLatencyMs,
-            totalLatencyMs: vision.totalLatencyMs,
-          },
-          null,
-          2,
-        );
+        try {
+          vision = await detectFacesInlineWithVision({
+            imageBytes: sourceBytes,
+          });
+          visionOuterLatencyMs = Date.now() - visionStartedAt;
+          visionSucceeded = true;
+          visionRawResult = JSON.stringify(
+            {
+              analysisMode: "face_detection_only",
+              labels: vision.labels,
+              objects: vision.objects,
+              faces: vision.faces.map((face) => ({
+                confidence: face.confidence,
+                qualityScore: face.qualityScore,
+                boundingBox: face.boundingBox,
+                embeddingLength: face.embedding.length,
+              })),
+              faceCount: vision.faceCount,
+              embeddingAttempted: vision.embeddingAttempted,
+              embeddingSucceeded: vision.embeddingSucceeded,
+              embeddingErrorMessage: vision.embeddingErrorMessage,
+              embeddingFacesReturned: vision.embeddingFacesReturned,
+              embeddingFacesWithVectors: vision.embeddingFacesWithVectors,
+              prepareLatencyMs: vision.prepareLatencyMs,
+              visionRequestLatencyMs: vision.visionRequestLatencyMs,
+              totalLatencyMs: vision.totalLatencyMs,
+            },
+            null,
+            2,
+          );
+        } catch (visionError) {
+          visionOuterLatencyMs = Date.now() - visionStartedAt;
+          throw visionError;
+        }
       } else if (sourceReadErrorMessage) {
         visionErrorMessage = sourceReadErrorMessage;
       }

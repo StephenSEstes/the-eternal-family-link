@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import sharp from "sharp";
 import type { PersonRecord } from "@/lib/google/types";
 import { getOciObjectContentByKey } from "@/lib/oci/object-storage";
 import {
@@ -13,7 +14,7 @@ import {
   upsertOciPersonFaceProfile,
   type OciPersonFaceProfileRow,
 } from "@/lib/oci/tables";
-import { analyzeInlineImageWithVision, type OciVisionFace } from "@/lib/oci/vision";
+import { analyzeInlineImageWithVision, detectFacesInlineWithVision, type OciVisionFace } from "@/lib/oci/vision";
 import { parseMediaMetadata } from "@/lib/media/upload";
 
 export type FaceConfidenceBand = "high" | "medium" | "low";
@@ -125,17 +126,70 @@ function toConfidenceBand(score: number): FaceConfidenceBand {
   return "low";
 }
 
+function scoreFaceCandidate(face: OciVisionFace) {
+  const area = face.boundingBox.width * face.boundingBox.height;
+  return face.qualityScore * 0.7 + face.confidence * 0.3 + area * 0.05;
+}
+
+function chooseBestFaceCandidate(faces: OciVisionFace[]) {
+  return faces
+    .slice()
+    .sort((left, right) => scoreFaceCandidate(right) - scoreFaceCandidate(left))[0] ?? null;
+}
+
 function chooseBestProfileFace(faces: OciVisionFace[]) {
   return faces
     .filter((face) => face.embedding.length > 0)
-    .slice()
-    .sort((left, right) => {
-      const leftArea = left.boundingBox.width * left.boundingBox.height;
-      const rightArea = right.boundingBox.width * right.boundingBox.height;
-      const leftScore = left.qualityScore * 0.7 + left.confidence * 0.3 + leftArea * 0.05;
-      const rightScore = right.qualityScore * 0.7 + right.confidence * 0.3 + rightArea * 0.05;
-      return rightScore - leftScore;
-    })[0] ?? null;
+    .sort((left, right) => scoreFaceCandidate(right) - scoreFaceCandidate(left))[0] ?? null;
+}
+
+async function cropFaceImageBytes(input: {
+  imageBytes: Buffer;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}) {
+  const safeWidth = Math.max(0.05, Math.min(1, Number(input.boundingBox.width ?? 0) || 0));
+  const safeHeight = Math.max(0.05, Math.min(1, Number(input.boundingBox.height ?? 0) || 0));
+  const safeX = Math.max(0, Math.min(1 - safeWidth, Number(input.boundingBox.x ?? 0) || 0));
+  const safeY = Math.max(0, Math.min(1 - safeHeight, Number(input.boundingBox.y ?? 0) || 0));
+  const paddingX = safeWidth * 0.18;
+  const paddingY = safeHeight * 0.22;
+  const base = sharp(input.imageBytes, { failOn: "none", animated: false }).rotate();
+  const metadata = await base.metadata();
+  const imageWidth = Math.max(1, metadata.width ?? 0);
+  const imageHeight = Math.max(1, metadata.height ?? 0);
+  const left = Math.max(0, Math.floor((safeX - paddingX) * imageWidth));
+  const top = Math.max(0, Math.floor((safeY - paddingY) * imageHeight));
+  const right = Math.min(imageWidth, Math.ceil((safeX + safeWidth + paddingX) * imageWidth));
+  const bottom = Math.min(imageHeight, Math.ceil((safeY + safeHeight + paddingY) * imageHeight));
+  const width = Math.max(1, right - left);
+  const height = Math.max(1, bottom - top);
+  return base
+    .extract({ left, top, width, height })
+    .jpeg({ quality: 92, mozjpeg: true })
+    .toBuffer();
+}
+
+async function buildEmbeddingFromFaceCrop(input: {
+  imageBytes: Buffer;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}) {
+  const croppedBytes = await cropFaceImageBytes(input);
+  const vision = await analyzeInlineImageWithVision({ imageBytes: croppedBytes });
+  const face = chooseBestProfileFace(vision.faces);
+  if (!face || face.embedding.length === 0) {
+    throw new Error("Selected face crop did not produce an embedding vector.");
+  }
+  return face.embedding;
 }
 
 async function ensurePersonFaceProfileFromImageBytes(input: {
@@ -150,14 +204,21 @@ async function ensurePersonFaceProfileFromImageBytes(input: {
   if (!personId || !sourceFileId) {
     return null;
   }
-  const vision = await analyzeInlineImageWithVision({ imageBytes: input.imageBytes });
-  const face = chooseBestProfileFace(vision.faces);
-  if (!face) {
+  const detection = await detectFacesInlineWithVision({ imageBytes: input.imageBytes });
+  const detectedFace = chooseBestFaceCandidate(detection.faces);
+  if (!detectedFace) {
+    return null;
+  }
+  const embedding = await buildEmbeddingFromFaceCrop({
+    imageBytes: input.imageBytes,
+    boundingBox: detectedFace.boundingBox,
+  }).catch(() => []);
+  if (embedding.length === 0) {
     return null;
   }
   const updatedAt = new Date().toISOString();
   const profileId = hashId("fprofile", personId);
-  const embeddingJson = JSON.stringify(face.embedding);
+  const embeddingJson = JSON.stringify(embedding);
   await upsertOciPersonFaceProfile({
     familyGroupKey,
     profileId,
@@ -277,6 +338,7 @@ export async function associateDetectedFaceToPerson(input: {
   faceId: string;
   personId: string;
   reviewedBy: string;
+  sourceImageBytes?: Buffer | null;
 }) {
   const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
@@ -295,9 +357,20 @@ export async function associateDetectedFaceToPerson(input: {
     throw new Error("Detected face was not found for this photo.");
   }
 
-  const embedding = parseEmbeddingJson(faceInstance.embeddingJson);
+  let embedding = parseEmbeddingJson(faceInstance.embeddingJson);
   if (embedding.length === 0) {
-    throw new Error("Detected face has no embedding vector to associate.");
+    if (!input.sourceImageBytes) {
+      throw new Error("Unable to load source image bytes for face association.");
+    }
+    embedding = await buildEmbeddingFromFaceCrop({
+      imageBytes: input.sourceImageBytes,
+      boundingBox: {
+        x: faceInstance.bboxX,
+        y: faceInstance.bboxY,
+        width: faceInstance.bboxW,
+        height: faceInstance.bboxH,
+      },
+    });
   }
 
   const existingProfile = existingProfiles.find((profile) => profile.personId === personId) ?? null;

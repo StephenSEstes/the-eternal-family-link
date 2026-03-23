@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (detect-first face recognition and crop-time embedding)
+
+- `Date`: 2026-03-22
+- `Change`: Replaced whole-image OCI `FACE_EMBEDDING` requests on `Generate Suggestions` with `FACE_DETECTION` only, then moved face-vector generation to cropped-face embedding during manual face association and canonical headshot profile seeding.
+- `Type`: API | UI
+- `Why`: Root cause was a `mixed issue`. Production debug showed source-byte load and EXIF were fast, but whole-image `FACE_EMBEDDING` requests were failing before the Oracle TypeScript SDK could surface a readable OCI error. That left `Generate Suggestions` unable to persist detected faces on some photos even though the app only needed face boxes at that stage. Detecting faces first and embedding only the selected face crop removes the unstable whole-image embedding path from the suggestion flow while still letting confirmed associations store vectors against `person_id`.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/vision.ts`
+  - `src/lib/media/face-recognition.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `Generate Suggestions` on previously failing photos now completes with detected face boxes and without the whole-image `FACE_EMBEDDING` crash.
+  - `Associate Face` still stores a reviewed embedding on the selected `person_id` by embedding the cropped face region from the source image.
+  - Vision debug still shows timing fields for source load, EXIF, Vision request, face persistence, metadata update, and total route time.
+- `Rollback Notes`: Revert this entry's code changes together if you want to restore the whole-image embedding experiment and stop generating vectors from cropped face association/headshot flows.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (single-call OCI face recognition experiment + latency debug)
 
 - `Date`: 2026-03-22

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 import { associateDetectedFaceToPerson } from "@/lib/media/face-recognition";
 import { getOciMediaAssetByFileId, updateOciMediaMetadataForFile } from "@/lib/oci/tables";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
@@ -59,13 +60,28 @@ export async function POST(request: Request, { params }: RouteProps) {
     lastName: person.lastName,
   });
 
-  const association = await associateDetectedFaceToPerson({
-    familyGroupKey: resolved.tenant.tenantKey,
-    fileId: normalizedFileId,
-    faceId: normalizedFaceId,
-    personId: normalizedPersonId,
-    reviewedBy: resolved.session.user.email ?? "",
-  });
+  let sourceImageBytes: Buffer | null = null;
+  try {
+    const source = await resolvePhotoContentAcrossFamilies(normalizedFileId, resolved.tenant.tenantKey, { variant: "original" });
+    sourceImageBytes = Buffer.from(source.data);
+  } catch (sourceError) {
+    console.warn("[face-association] failed to load source image bytes", sourceError);
+  }
+
+  let association: Awaited<ReturnType<typeof associateDetectedFaceToPerson>>;
+  try {
+    association = await associateDetectedFaceToPerson({
+      familyGroupKey: resolved.tenant.tenantKey,
+      fileId: normalizedFileId,
+      faceId: normalizedFaceId,
+      personId: normalizedPersonId,
+      reviewedBy: resolved.session.user.email ?? "",
+      sourceImageBytes,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to associate detected face.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   const mediaAsset = await getOciMediaAssetByFileId(normalizedFileId).catch(() => null);
   let updatedMediaMetadata = "";

@@ -116,6 +116,11 @@ I will update this list as we add, complete, or remove work.
     - Add step-level latency metrics for source-byte load, image preparation, OCI Vision request time, face-persistence time, metadata-update time, and total route time so slow photos can be diagnosed from the debug payload instead of inferred.
     - Keep this as an implementation experiment only for now: do not update the permanent design decision docs until runtime behavior and performance are validated.
     - Validate with `npm run build`, then compare production debug timings and face-suggestion responsiveness on known slow photos before deciding whether to keep the one-call Vision path.
+  - 2026-03-22 experiment adjustment:
+    - Root cause from production debug showed whole-image `FACE_EMBEDDING` requests failing before the OCI TypeScript SDK could surface a readable service error, while source-byte load and EXIF remained fast.
+    - Switch `Generate Suggestions` to `FACE_DETECTION` only so the route still finds and persists face boxes quickly without paying for or failing on full-image embedding requests.
+    - Generate embeddings later from the selected face crop during manual `Associate Face`, and use the same detect-then-crop-then-embed path when seeding canonical person face profiles from headshots.
+    - Keep the latency debug fields so production runs still expose source-load, Vision request, face-persistence, and total route timing for diagnosis.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.
