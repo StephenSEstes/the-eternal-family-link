@@ -64,6 +64,17 @@ export async function syncPersonMediaAssociations(input: {
   fileName?: string;
   fileSizeBytes?: string;
   createdAt?: string;
+  exifExtractedAt?: string;
+  exifSourceTag?: string;
+  exifCaptureDate?: string;
+  exifCaptureTimestampRaw?: string;
+  exifMake?: string;
+  exifModel?: string;
+  exifSoftware?: string;
+  exifWidth?: number;
+  exifHeight?: number;
+  exifOrientation?: number;
+  exifFingerprint?: string;
   replaceAttributeLinks?: boolean;
   replacePersonLinksForFileIds?: string[];
 }) {
@@ -111,6 +122,17 @@ export async function syncPersonMediaAssociations(input: {
     fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
     mediaMetadata,
     createdAt,
+    exifExtractedAt: input.exifExtractedAt,
+    exifSourceTag: input.exifSourceTag,
+    exifCaptureDate: input.exifCaptureDate,
+    exifCaptureTimestampRaw: input.exifCaptureTimestampRaw,
+    exifMake: input.exifMake,
+    exifModel: input.exifModel,
+    exifSoftware: input.exifSoftware,
+    exifWidth: input.exifWidth,
+    exifHeight: input.exifHeight,
+    exifOrientation: input.exifOrientation,
+    exifFingerprint: input.exifFingerprint,
   });
   await Promise.all([
     upsertOciMediaLink({

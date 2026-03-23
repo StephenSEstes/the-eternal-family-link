@@ -15,6 +15,7 @@ import {
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { collectPersistedExifData } from "@/lib/media/exif";
 import { seedPersonFaceProfileFromUpload } from "@/lib/media/face-recognition";
 import { buildMediaFileId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
@@ -146,6 +147,10 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       }
     }
 
+    const persistedExif = validated.mediaKind === "image"
+      ? await collectPersistedExifData(bytes)
+      : null;
+
     const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
@@ -238,6 +243,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       fileName: safeFileName,
       fileSizeBytes: String(bytes.length),
       createdAt: createdAtIso,
+      exifExtractedAt: persistedExif?.extractedAt,
+      exifSourceTag: persistedExif?.sourceTag,
+      exifCaptureDate: persistedExif?.captureDate,
+      exifCaptureTimestampRaw: persistedExif?.captureTimestampRaw,
+      exifMake: persistedExif?.make,
+      exifModel: persistedExif?.model,
+      exifSoftware: persistedExif?.software,
+      exifWidth: persistedExif?.width,
+      exifHeight: persistedExif?.height,
+      exifOrientation: persistedExif?.orientation,
+      exifFingerprint: persistedExif?.fingerprint,
       replaceAttributeLinks: !targetAttributeId,
     });
 

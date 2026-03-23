@@ -13,6 +13,35 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-23 (move EXIF collection to upload and add media processing status tab)
+
+- `Date`: 2026-03-23
+- `Change`: Moved EXIF collection onto the image upload paths, stopped the photo-intelligence route from reparsing EXIF, and added a dedicated `Analysis` tab in the media modal that shows persisted processing status for upload, EXIF, thumbnail generation, stored face coordinates, stored face vectors, and confirmed face identities.
+- `Type`: UI | API
+- `Why`: Root cause was a `mixed issue`. EXIF extraction was coupled to the `Generate Suggestions` route even though EXIF is file-level metadata that should be collected once when image bytes are first written. The media modal also had no single durable processing-status view, so users could not tell whether a photo had only uploaded, already had EXIF, had a thumbnail, had stored face regions, had any stored vectors, or had confirmed identities. Moving EXIF to upload fixes the file-metadata ownership boundary, and the new processing-status contract reads from persisted media, EXIF, face-instance, profile, and match records instead of transient UI state.
+- `Files`:
+  - `TODO.md`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/lib/attributes/person-media.ts`
+  - `src/lib/media/exif.ts`
+  - `src/lib/media/face-recognition.ts`
+  - `src/lib/media/processing-status.server.ts`
+  - `src/lib/media/processing-status.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - New image uploads persist EXIF fields during upload without waiting for `Generate Suggestions`.
+  - Opening a media item now exposes an `Analysis` tab with step-state cards for upload, EXIF, thumbnail, face coordinates, face vectors, and confirmed identities.
+  - `Generate Suggestions` reuses only persisted EXIF values and no longer reparses EXIF from source bytes.
+- `Rollback Notes`: Re-enable the intelligence-route EXIF fallback if legacy pre-change images need EXIF backfilled without being re-uploaded, and remove the processing-status tab if you decide not to expose the pipeline state in the media modal.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-23 (add direct OCI Vision REST diagnostic script)
 
 - `Date`: 2026-03-23

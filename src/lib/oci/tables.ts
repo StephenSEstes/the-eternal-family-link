@@ -2321,6 +2321,17 @@ export async function upsertOciMediaAsset(input: {
   fileSizeBytes?: string;
   mediaMetadata?: string;
   createdAt?: string;
+  exifExtractedAt?: string;
+  exifSourceTag?: string;
+  exifCaptureDate?: string;
+  exifCaptureTimestampRaw?: string;
+  exifMake?: string;
+  exifModel?: string;
+  exifSoftware?: string;
+  exifWidth?: number;
+  exifHeight?: number;
+  exifOrientation?: number;
+  exifFingerprint?: string;
 }) {
   const mediaId = input.mediaId.trim();
   const fileId = input.fileId.trim();
@@ -2339,7 +2350,18 @@ export async function upsertOciMediaAsset(input: {
                 :fileName AS file_name,
                 :fileSizeBytes AS file_size_bytes,
                 :mediaMetadata AS media_metadata,
-                :createdAt AS created_at
+                :createdAt AS created_at,
+                :exifExtractedAt AS exif_extracted_at,
+                :exifSourceTag AS exif_source_tag,
+                :exifCaptureDate AS exif_capture_date,
+                :exifCaptureTimestampRaw AS exif_capture_timestamp_raw,
+                :exifMake AS exif_make,
+                :exifModel AS exif_model,
+                :exifSoftware AS exif_software,
+                :exifWidth AS exif_width,
+                :exifHeight AS exif_height,
+                :exifOrientation AS exif_orientation,
+                :exifFingerprint AS exif_fingerprint
          FROM dual
        ) s
        ON (TRIM(t.media_id) = TRIM(s.media_id))
@@ -2350,7 +2372,18 @@ export async function upsertOciMediaAsset(input: {
          t.file_name = s.file_name,
          t.file_size_bytes = s.file_size_bytes,
          t.media_metadata = s.media_metadata,
-         t.created_at = s.created_at
+         t.created_at = s.created_at,
+         t.exif_extracted_at = COALESCE(s.exif_extracted_at, t.exif_extracted_at),
+         t.exif_source_tag = COALESCE(s.exif_source_tag, t.exif_source_tag),
+         t.exif_capture_date = COALESCE(s.exif_capture_date, t.exif_capture_date),
+         t.exif_capture_timestamp_raw = COALESCE(s.exif_capture_timestamp_raw, t.exif_capture_timestamp_raw),
+         t.exif_make = COALESCE(s.exif_make, t.exif_make),
+         t.exif_model = COALESCE(s.exif_model, t.exif_model),
+         t.exif_software = COALESCE(s.exif_software, t.exif_software),
+         t.exif_width = COALESCE(s.exif_width, t.exif_width),
+         t.exif_height = COALESCE(s.exif_height, t.exif_height),
+         t.exif_orientation = COALESCE(s.exif_orientation, t.exif_orientation),
+         t.exif_fingerprint = COALESCE(s.exif_fingerprint, t.exif_fingerprint)
        WHEN NOT MATCHED THEN INSERT (
          media_id,
          file_id,
@@ -2359,7 +2392,18 @@ export async function upsertOciMediaAsset(input: {
          file_name,
          file_size_bytes,
          media_metadata,
-         created_at
+         created_at,
+         exif_extracted_at,
+         exif_source_tag,
+         exif_capture_date,
+         exif_capture_timestamp_raw,
+         exif_make,
+         exif_model,
+         exif_software,
+         exif_width,
+         exif_height,
+         exif_orientation,
+         exif_fingerprint
        ) VALUES (
          s.media_id,
          s.file_id,
@@ -2368,7 +2412,18 @@ export async function upsertOciMediaAsset(input: {
          s.file_name,
          s.file_size_bytes,
          s.media_metadata,
-         s.created_at
+         s.created_at,
+         s.exif_extracted_at,
+         s.exif_source_tag,
+         s.exif_capture_date,
+         s.exif_capture_timestamp_raw,
+         s.exif_make,
+         s.exif_model,
+         s.exif_software,
+         s.exif_width,
+         s.exif_height,
+         s.exif_orientation,
+         s.exif_fingerprint
        )`,
       {
         mediaId,
@@ -2379,6 +2434,17 @@ export async function upsertOciMediaAsset(input: {
         fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
         mediaMetadata: (input.mediaMetadata ?? "").trim(),
         createdAt: (input.createdAt ?? "").trim(),
+        exifExtractedAt: input.exifExtractedAt ? input.exifExtractedAt.trim() : null,
+        exifSourceTag: input.exifSourceTag ? input.exifSourceTag.trim() : null,
+        exifCaptureDate: input.exifCaptureDate ? input.exifCaptureDate.trim() : null,
+        exifCaptureTimestampRaw: input.exifCaptureTimestampRaw ? input.exifCaptureTimestampRaw.trim() : null,
+        exifMake: input.exifMake ? input.exifMake.trim() : null,
+        exifModel: input.exifModel ? input.exifModel.trim() : null,
+        exifSoftware: input.exifSoftware ? input.exifSoftware.trim() : null,
+        exifWidth: Number.isFinite(input.exifWidth) ? input.exifWidth : null,
+        exifHeight: Number.isFinite(input.exifHeight) ? input.exifHeight : null,
+        exifOrientation: Number.isFinite(input.exifOrientation) ? input.exifOrientation : null,
+        exifFingerprint: input.exifFingerprint ? input.exifFingerprint.trim() : null,
       },
       { autoCommit: true },
     );
@@ -2792,6 +2858,49 @@ export async function getOciPersonFaceProfilesForTenant(input: {
   });
 }
 
+export async function getOciPersonFaceProfilesBySourceFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciPersonFaceProfileRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!fileId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensurePersonFaceProfilesTableCompatibility(connection);
+    const scopeKeys = listFaceScopeKeys(familyGroupKey);
+    const scopePredicate = buildScopePredicate("family_group_key", scopeKeys, "scope");
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         profile_id,
+         person_id,
+         source_file_id,
+         sample_count,
+         embedding_json,
+         updated_at
+       FROM person_face_profiles
+       WHERE ${scopePredicate.clause}
+         AND TRIM(source_file_id) = :fileId
+       ORDER BY
+         CASE WHEN LOWER(TRIM(family_group_key)) = :preferredScope THEN 0 ELSE 1 END,
+         person_id`,
+      {
+        ...scopePredicate.binds,
+        fileId,
+        preferredScope: OCI_GLOBAL_FACE_SCOPE_KEY,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    const mappedRows = rows.map(mapOciPersonFaceProfileRow);
+    return mappedRows.some((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      ? mappedRows.filter((row) => row.familyGroupKey === OCI_GLOBAL_FACE_SCOPE_KEY)
+      : mappedRows;
+  });
+}
+
 export async function upsertOciPersonFaceProfile(input: {
   familyGroupKey: string;
   profileId: string;
@@ -2938,6 +3047,33 @@ export async function replaceOciFaceMatchesForFace(input: {
       );
     }
     await connection.commit();
+  });
+}
+
+export async function updateOciFaceInstanceEmbedding(input: {
+  faceId: string;
+  embeddingJson: string;
+  updatedAt: string;
+}) {
+  const faceId = input.faceId.trim();
+  if (!faceId) {
+    throw new Error("face_id is required");
+  }
+  return withConnection(async (connection) => {
+    await ensureFaceInstancesTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE face_instances
+       SET embedding_json = :embeddingJson,
+           updated_at = :updatedAt
+       WHERE TRIM(face_id) = :faceId`,
+      {
+        faceId,
+        embeddingJson: input.embeddingJson.trim(),
+        updatedAt: input.updatedAt.trim(),
+      },
+      { autoCommit: true },
+    );
+    return result.rowsAffected ?? 0;
   });
 }
 

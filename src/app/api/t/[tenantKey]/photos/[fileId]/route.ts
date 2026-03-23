@@ -4,6 +4,8 @@ import { appendSessionAuditLog } from "@/lib/audit/log";
 import { ATTRIBUTES_TABLE } from "@/lib/attributes/store";
 import { getPeople, updateTableRecordById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
+import type { MediaProcessingStatus } from "@/lib/media/processing-status";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciMediaAssetByFileId,
@@ -23,6 +25,7 @@ type MediaDetailItem = {
   description: string;
   date: string;
   mediaMetadata?: string;
+  processingStatus?: MediaProcessingStatus | null;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -138,6 +141,13 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
   if (!detail.mediaMetadata && mediaAsset?.mediaMetadata) {
     detail.mediaMetadata = mediaAsset.mediaMetadata.trim();
   }
+
+  detail.processingStatus = await getMediaProcessingStatusForFile({
+    familyGroupKey: tenantKey,
+    fileId,
+    mediaMetadata: detail.mediaMetadata,
+    asset: mediaAsset,
+  }).catch(() => null);
 
   detail.people.sort((a, b) => a.displayName.localeCompare(b.displayName));
   detail.households.sort((a, b) => a.label.localeCompare(b.label));

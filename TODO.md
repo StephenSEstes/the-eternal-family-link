@@ -131,6 +131,13 @@ I will update this list as we add, complete, or remove work.
   - 2026-03-23 direct REST diagnostic:
     - Add a standalone signed OCI Vision diagnostic script that bypasses the SDK error formatter entirely and prints raw HTTP status, body, and `opc-request-id` for a local test image.
     - Support `mixed`, `detect`, and `embed` feature modes so the same image can be tested against the exact request shapes the app has been using.
+  - 2026-03-23 EXIF-at-upload + media processing status plan:
+    - Move EXIF extraction from the photo-intelligence route to every image upload path so file metadata is collected once when the original bytes are first written to OCI.
+    - Persist the normalized EXIF fields during upload for both person-photo and household-photo uploads, and leave non-image uploads with empty EXIF fields.
+    - Update the intelligence route to reuse only the already-persisted EXIF fields instead of reparsing the source image bytes during `Generate Suggestions`.
+    - Add a dedicated status tab to the media modal that shows the current step state for upload, EXIF, thumbnail generation, face coordinates identified, face vectors stored, and face identities verified.
+    - Drive those status indicators from persisted media metadata, persisted EXIF columns, stored face-instance rows, confirmed face-match rows, and current suggestion/debug payloads instead of transient UI state alone.
+    - Validate with `npm run build`, then confirm in production that new uploads already have EXIF before running suggestions and that the media modal status tab reflects both completed and pending steps correctly.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

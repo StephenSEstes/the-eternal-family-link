@@ -10,6 +10,7 @@ import {
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
+import { collectPersistedExifData } from "@/lib/media/exif";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
@@ -141,6 +142,10 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       }
     }
 
+    const persistedExif = validated.mediaKind === "image"
+      ? await collectPersistedExifData(bytes)
+      : null;
+
     const mediaMetadata = buildMediaMetadata({
       fileName: safeFileName,
       mimeType: validated.mimeType,
@@ -193,6 +198,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       fileSizeBytes: String(bytes.length),
       mediaMetadata,
       createdAt: createdAtIso,
+      exifExtractedAt: persistedExif?.extractedAt,
+      exifSourceTag: persistedExif?.sourceTag,
+      exifCaptureDate: persistedExif?.captureDate,
+      exifCaptureTimestampRaw: persistedExif?.captureTimestampRaw,
+      exifMake: persistedExif?.make,
+      exifModel: persistedExif?.model,
+      exifSoftware: persistedExif?.software,
+      exifWidth: persistedExif?.width,
+      exifHeight: persistedExif?.height,
+      exifOrientation: persistedExif?.orientation,
+      exifFingerprint: persistedExif?.fingerprint,
     });
     if (!targetAttributeId) {
       await upsertOciMediaLink({

@@ -6,6 +6,7 @@ import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/me
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { inferStoredMediaKind } from "@/lib/media/upload";
+import type { MediaProcessingStatus, MediaProcessingStep, MediaProcessingStepState } from "@/lib/media/processing-status";
 import {
   canRunPhotoIntelligence,
   readPhotoIntelligenceDebug,
@@ -25,6 +26,7 @@ type MediaItem = {
   description: string;
   date: string;
   mediaMetadata?: string;
+  processingStatus?: MediaProcessingStatus | null;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -64,6 +66,7 @@ type LinkedSearchResult =
 type FaceAssociationResponse = {
   faceId?: string;
   mediaMetadata?: string;
+  processingStatus?: MediaProcessingStatus | null;
   personId?: string;
   personDisplayName?: string;
   sampleCount?: number;
@@ -72,7 +75,10 @@ type FaceAssociationResponse = {
 type PhotoIntelligenceResponse = {
   debug?: PhotoIntelligenceDebug | null;
   mediaMetadata?: string;
+  processingStatus?: MediaProcessingStatus | null;
 };
+
+type MediaModalTab = "info" | "analysis";
 
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
@@ -106,6 +112,85 @@ function inferMediaKind(fileId: string, rawMetadata?: string) {
 function formatConfidencePercent(value: number) {
   const normalized = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   return `${Math.round(normalized * 100)}%`;
+}
+
+function getProcessingStepPalette(state: MediaProcessingStepState) {
+  if (state === "completed") {
+    return {
+      border: "#bbf7d0",
+      background: "#f0fdf4",
+      badgeBackground: "#dcfce7",
+      badgeColor: "#166534",
+      label: "Complete",
+    };
+  }
+  if (state === "failed") {
+    return {
+      border: "#fecaca",
+      background: "#fff1f2",
+      badgeBackground: "#fee2e2",
+      badgeColor: "#991b1b",
+      label: "Failed",
+    };
+  }
+  if (state === "not_applicable") {
+    return {
+      border: "#dbe4ee",
+      background: "#f8fafc",
+      badgeBackground: "#e2e8f0",
+      badgeColor: "#475569",
+      label: "N/A",
+    };
+  }
+  return {
+    border: "#fde68a",
+    background: "#fffbeb",
+    badgeBackground: "#fef3c7",
+    badgeColor: "#92400e",
+    label: "Pending",
+  };
+}
+
+function MediaProcessingStepCard({ step }: { step: MediaProcessingStep }) {
+  const palette = getProcessingStepPalette(step.state);
+  return (
+    <div
+      style={{
+        border: `1px solid ${palette.border}`,
+        borderRadius: "12px",
+        background: palette.background,
+        padding: "0.8rem 0.9rem",
+        display: "grid",
+        gap: "0.45rem",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center" }}>
+        <strong style={{ fontSize: "0.9rem" }}>{step.label}</strong>
+        <span
+          style={{
+            padding: "0.18rem 0.5rem",
+            borderRadius: "999px",
+            background: palette.badgeBackground,
+            color: palette.badgeColor,
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {palette.label}
+        </span>
+      </div>
+      <span className="page-subtitle" style={{ margin: 0 }}>
+        {step.detail}
+      </span>
+      {typeof step.count === "number" ? (
+        <span className="page-subtitle" style={{ margin: 0 }}>
+          Count: {step.count}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function FaceCropPreview({
@@ -169,6 +254,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [status, setStatus] = useState("");
   const [showAttachWizard, setShowAttachWizard] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
+  const [selectedPhotoTab, setSelectedPhotoTab] = useState<MediaModalTab>("info");
   const [selectedPhotoDetail, setSelectedPhotoDetail] = useState<MediaItem | null>(null);
   const [selectedPhotoEditable, setSelectedPhotoEditable] = useState(false);
   const [selectedPhotoCanEditName, setSelectedPhotoCanEditName] = useState(false);
@@ -315,6 +401,28 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     return true;
   };
 
+  const applySelectedPhotoProcessingStatus = (fileId: string, processingStatus: MediaProcessingStatus | null | undefined) => {
+    if (!processingStatus) {
+      return false;
+    }
+    const currentDetail = selectedPhotoDetail;
+    if (!currentDetail || currentDetail.fileId !== fileId) {
+      return false;
+    }
+    applySelectedPhotoDetail(
+      {
+        ...currentDetail,
+        processingStatus,
+      },
+      {
+        editable: selectedPhotoEditable,
+        canEditName: selectedPhotoCanEditName,
+        preserveExistingText: true,
+      },
+    );
+    return true;
+  };
+
   const photoTagSearchResults = useMemo(() => {
     const q = photoTagQuery.trim().toLowerCase();
     if (!q) return [] as LinkedSearchResult[];
@@ -382,6 +490,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail) return null;
     return readPhotoIntelligenceSuggestion(selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail]);
+  const selectedPhotoProcessingStatus = useMemo<MediaProcessingStatus | null>(() => {
+    if (!selectedPhotoDetail?.processingStatus) return null;
+    return selectedPhotoDetail.processingStatus;
+  }, [selectedPhotoDetail]);
   const selectedPhotoIntelligenceDebug = useMemo<PhotoIntelligenceDebug | null>(() => {
     if (photoIntelligenceDebug) return photoIntelligenceDebug;
     if (!selectedPhotoDetail) return null;
@@ -391,6 +503,251 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail) return false;
     return canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail]);
+  const selectedPhotoProcessingSteps = useMemo(() => {
+    if (!selectedPhotoProcessingStatus) return [] as MediaProcessingStep[];
+    return [
+      selectedPhotoProcessingStatus.upload,
+      selectedPhotoProcessingStatus.exif,
+      selectedPhotoProcessingStatus.thumbnail,
+      selectedPhotoProcessingStatus.faceCoordinates,
+      selectedPhotoProcessingStatus.faceVectors,
+      selectedPhotoProcessingStatus.faceIdentities,
+    ];
+  }, [selectedPhotoProcessingStatus]);
+  const selectedPhotoAnalysisContent = selectedPhotoDetail ? (
+    <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
+      <div className="card">
+        <h5 style={{ margin: "0 0 0.6rem" }}>Processing Status</h5>
+        {selectedPhotoProcessingSteps.length > 0 ? (
+          <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            {selectedPhotoProcessingSteps.map((stepItem) => (
+              <MediaProcessingStepCard key={stepItem.label} step={stepItem} />
+            ))}
+          </div>
+        ) : (
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            Processing status will appear after the media details finish loading.
+          </p>
+        )}
+      </div>
+      {selectedPhotoSupportsIntelligence ? (
+        <div
+          className="card"
+          style={{
+            padding: "0.8rem",
+            display: "grid",
+            gap: "0.45rem",
+            background: "#f8fafc",
+          }}
+        >
+          <strong style={{ fontSize: "0.9rem" }}>Photo Suggestions</strong>
+          {selectedPhotoIntelligenceSuggestion ? (
+            <>
+              <span className="page-subtitle" style={{ margin: 0 }}>
+                Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
+              </span>
+              {selectedPhotoIntelligenceSuggestion.visionLabels && selectedPhotoIntelligenceSuggestion.visionLabels.length > 0 ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Vision labels: {selectedPhotoIntelligenceSuggestion.visionLabels.slice(0, 4).join(", ")}
+                </span>
+              ) : null}
+              {typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Faces detected: {selectedPhotoIntelligenceSuggestion.detectedFaceCount}
+                </span>
+              ) : null}
+              <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoCanEditName}
+                    onClick={() => setSelectedPhotoName(selectedPhotoIntelligenceSuggestion.labelSuggestion)}
+                  >
+                    Use Title
+                  </button>
+                ) : null}
+                {selectedPhotoIntelligenceSuggestion.descriptionSuggestion ? (
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
+                    onClick={() => setSelectedPhotoDescription(selectedPhotoIntelligenceSuggestion.descriptionSuggestion)}
+                  >
+                    Use Description
+                  </button>
+                ) : null}
+                {selectedPhotoIntelligenceSuggestion.dateSuggestion ? (
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
+                    onClick={() => setSelectedPhotoDate(selectedPhotoIntelligenceSuggestion.dateSuggestion)}
+                  >
+                    Use Date
+                  </button>
+                ) : null}
+              </div>
+              {selectedPhotoIntelligenceSuggestion.faceSuggestions && selectedPhotoIntelligenceSuggestion.faceSuggestions.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.45rem" }}>
+                  <strong style={{ fontSize: "0.88rem" }}>Face Suggestions</strong>
+                  {selectedPhotoIntelligenceSuggestion.faceSuggestions.map((face, index) => (
+                    <div
+                      key={face.faceId || `face-suggestion-${index}`}
+                      style={{
+                        border: "1px solid #dbe4ee",
+                        borderRadius: "10px",
+                        padding: "0.55rem 0.65rem",
+                        display: "grid",
+                        gap: "0.35rem",
+                        background: "#fff",
+                      }}
+                    >
+                      <span className="page-subtitle" style={{ margin: 0 }}>
+                        Face {index + 1} · quality {formatConfidencePercent(face.qualityScore)} · detection {formatConfidencePercent(face.detectionConfidence)}
+                      </span>
+                      {face.matches.length > 0 ? (
+                        <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                          {face.matches.map((match) => (
+                            <span
+                              key={`${face.faceId}-${match.personId}`}
+                              className="status-chip status-chip--neutral"
+                              style={{
+                                background: match.confidenceBand === "high" ? "#ecfdf3" : match.confidenceBand === "medium" ? "#f8fafc" : "#fff7ed",
+                                borderColor: match.confidenceBand === "high" ? "#bbf7d0" : match.confidenceBand === "medium" ? "#dbe4ee" : "#fed7aa",
+                                color: match.confidenceBand === "high" ? "#166534" : match.confidenceBand === "medium" ? "#334155" : "#9a3412",
+                              }}
+                            >
+                              {match.displayName} · {formatConfidencePercent(match.confidenceScore)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          No candidate people yet.
+                        </span>
+                      )}
+                      <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.15rem" }}>
+                        <strong style={{ fontSize: "0.82rem" }}>Associate Face</strong>
+                        <div style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+                          <FaceCropPreview
+                            fileId={selectedPhotoDetail.fileId}
+                            tenantKey={tenantKey}
+                            bbox={face.bbox}
+                          />
+                          <div style={{ display: "grid", gap: "0.35rem", minWidth: "220px", flex: "1 1 220px" }}>
+                            <select
+                              className="input"
+                              value={faceAssociationSelections[face.faceId] ?? ""}
+                              disabled={photoAssociationBusy || photoIntelligenceBusy || pendingFaceAssociations.has(face.faceId)}
+                              onChange={(event) =>
+                                setFaceAssociationSelections((current) => ({
+                                  ...current,
+                                  [face.faceId]: event.target.value,
+                                }))}
+                            >
+                              <option value="">Select person...</option>
+                              {peopleOptions.map((person) => (
+                                <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
+                                  {person.displayName}
+                                </option>
+                              ))}
+                            </select>
+                            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                disabled={
+                                  photoAssociationBusy
+                                  || photoIntelligenceBusy
+                                  || pendingFaceAssociations.has(face.faceId)
+                                  || !String(faceAssociationSelections[face.faceId] ?? "").trim()
+                                }
+                                onClick={() => {
+                                  void associateFaceToPerson(face.faceId);
+                                }}
+                              >
+                                {pendingFaceAssociations.has(face.faceId) ? "Associating..." : "Associate Face"}
+                              </button>
+                              {confirmedFaceAssociations[face.faceId] ? (
+                                <span className="page-subtitle" style={{ margin: 0 }}>
+                                  Saved to {confirmedFaceAssociations[face.faceId]}.
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" &&
+                selectedPhotoIntelligenceSuggestion.detectedFaceCount > 0 ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Faces were detected, but no person candidates are ready yet.
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="page-subtitle" style={{ margin: 0 }}>
+              {photoIntelligenceBusy
+                ? "Generating suggestions for this photo..."
+                : "No AI suggestions yet. Use Generate Suggestions to analyze this photo."}
+            </span>
+          )}
+          {selectedPhotoIntelligenceDebug ? (
+            <details style={{ marginTop: "0.25rem" }}>
+              <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>
+              <div style={{ marginTop: "0.45rem", display: "grid", gap: "0.3rem" }}>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  configured={String(selectedPhotoIntelligenceDebug.visionConfigured)} attempted={String(selectedPhotoIntelligenceDebug.visionAttempted)} succeeded={String(selectedPhotoIntelligenceDebug.visionSucceeded)}
+                </span>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  embeddingAttempted={String(selectedPhotoIntelligenceDebug.embeddingAttempted)} embeddingSucceeded={String(selectedPhotoIntelligenceDebug.embeddingSucceeded)} embeddingFacesReturned={String(selectedPhotoIntelligenceDebug.embeddingFacesReturned)} embeddingFacesWithVectors={String(selectedPhotoIntelligenceDebug.embeddingFacesWithVectors)}
+                </span>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  sourceLoadMs={String(selectedPhotoIntelligenceDebug.sourceLoadLatencyMs)} exifMs={String(selectedPhotoIntelligenceDebug.exifLatencyMs)} visionPrepareMs={String(selectedPhotoIntelligenceDebug.visionPrepareLatencyMs)} visionRequestMs={String(selectedPhotoIntelligenceDebug.visionRequestLatencyMs)} visionTotalMs={String(selectedPhotoIntelligenceDebug.visionTotalLatencyMs)}
+                </span>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  facePersistMs={String(selectedPhotoIntelligenceDebug.facePersistenceLatencyMs)} captionMs={String(selectedPhotoIntelligenceDebug.captionLatencyMs)} metadataUpdateMs={String(selectedPhotoIntelligenceDebug.metadataUpdateLatencyMs)} routeTotalMs={String(selectedPhotoIntelligenceDebug.routeTotalLatencyMs)}
+                </span>
+                {selectedPhotoIntelligenceDebug.visionErrorMessage ? (
+                  <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
+                    {selectedPhotoIntelligenceDebug.visionErrorMessage}
+                  </span>
+                ) : null}
+                {selectedPhotoIntelligenceDebug.embeddingErrorMessage ? (
+                  <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
+                    {selectedPhotoIntelligenceDebug.embeddingErrorMessage}
+                  </span>
+                ) : null}
+                {(selectedPhotoIntelligenceDebug.visionErrorCode || selectedPhotoIntelligenceDebug.visionStatusCode || selectedPhotoIntelligenceDebug.visionServiceCode || selectedPhotoIntelligenceDebug.visionOpcRequestId) ? (
+                  <span className="page-subtitle" style={{ margin: 0 }}>
+                    code={selectedPhotoIntelligenceDebug.visionErrorCode || "-"} status={selectedPhotoIntelligenceDebug.visionStatusCode || "-"} service={selectedPhotoIntelligenceDebug.visionServiceCode || "-"} requestId={selectedPhotoIntelligenceDebug.visionOpcRequestId || "-"}
+                  </span>
+                ) : null}
+                {selectedPhotoIntelligenceDebug.visionRawResult ? (
+                  <textarea className="textarea" readOnly value={selectedPhotoIntelligenceDebug.visionRawResult} style={{ minHeight: "120px" }} />
+                ) : (
+                  <span className="page-subtitle" style={{ margin: 0 }}>
+                    No raw Vision result captured.
+                  </span>
+                )}
+              </div>
+            </details>
+          ) : null}
+        </div>
+      ) : (
+        <div className="card">
+          <h5 style={{ margin: "0 0 0.6rem" }}>Photo Suggestions</h5>
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            AI analysis is only available for image media.
+          </p>
+        </div>
+      )}
+      {photoAssociationStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{photoAssociationStatus}</p> : null}
+    </div>
+  ) : null;
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -427,6 +784,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       description: serverItem.description || fallbackItem?.description || "",
       date: serverItem.date || fallbackItem?.date || "",
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
+      processingStatus: serverItem.processingStatus ?? fallbackItem?.processingStatus ?? null,
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
       households: Array.isArray(serverItem.households) ? serverItem.households : [],
     };
@@ -440,6 +798,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const openPhotoEditor = async (fileId: string) => {
     setPhotoIntelligenceDebug(null);
     photoIntelligenceAutoRequestedRef.current = "";
+    setSelectedPhotoTab("info");
     setFaceAssociationSelections({});
     setPendingFaceAssociations(new Set());
     setConfirmedFaceAssociations({});
@@ -533,7 +892,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       await assertOk(res, "Failed to generate photo suggestions");
       const body = (await res.json().catch(() => null)) as PhotoIntelligenceResponse | null;
       setPhotoIntelligenceDebug(body?.debug ?? null);
-      if (!applySelectedPhotoMetadata(activeFileId, String(body?.mediaMetadata ?? ""))) {
+      const appliedMetadata = applySelectedPhotoMetadata(activeFileId, String(body?.mediaMetadata ?? ""));
+      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
+      if (!appliedMetadata || !appliedStatus) {
         await loadSelectedPhotoDetail(activeFileId, { noStore: true });
       }
       setPhotoAssociationStatus("Photo suggestions ready.");
@@ -582,7 +943,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         ...current,
         [normalizedFaceId]: displayName,
       }));
-      if (!applySelectedPhotoMetadata(selectedPhotoDetail.fileId, String(body?.mediaMetadata ?? ""))) {
+      const appliedMetadata = applySelectedPhotoMetadata(selectedPhotoDetail.fileId, String(body?.mediaMetadata ?? ""));
+      const appliedStatus = applySelectedPhotoProcessingStatus(selectedPhotoDetail.fileId, body?.processingStatus ?? null);
+      if (!appliedMetadata || !appliedStatus) {
         await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       }
       setPhotoAssociationStatus(`Associated face to ${displayName}.`);
@@ -1004,6 +1367,24 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </button>
                   </div>
                 </div>
+                <div className="person-modal-tabs" style={{ marginTop: "0.75rem", top: 0 }}>
+                  <button
+                    type="button"
+                    className={`tab-pill ${selectedPhotoTab === "info" ? "active" : ""}`}
+                    onClick={() => setSelectedPhotoTab("info")}
+                  >
+                    Info
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-pill ${selectedPhotoTab === "analysis" ? "active" : ""}`}
+                    onClick={() => setSelectedPhotoTab("analysis")}
+                  >
+                    Analysis
+                  </button>
+                </div>
+                {selectedPhotoTab === "info" ? (
+                  <>
                 <div style={{ marginTop: "0.75rem" }}>
                   {inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "video" ? (
                     <video
@@ -1390,6 +1771,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   ) : null}
                   {photoAssociationStatus ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p> : null}
                 </div>
+                </>
+                ) : (
+                  selectedPhotoAnalysisContent
+                )}
               </div>
             </div>
           </div>

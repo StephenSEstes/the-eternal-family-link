@@ -11,9 +11,9 @@ import {
 } from "@/lib/media/photo-intelligence";
 import {
   buildDateSignalFromPersistedExif,
-  collectPersistedExifData,
   readPersistedExifData,
 } from "@/lib/media/exif";
+import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
 import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
@@ -86,12 +86,19 @@ export async function POST(request: Request, { params }: RouteProps) {
   const existing = readPhotoIntelligenceSuggestion(baseMetadata);
   if (existing && !force) {
     const debug = readPhotoIntelligenceDebug(baseMetadata);
+    const processingStatus = await getMediaProcessingStatusForFile({
+      familyGroupKey: resolved.tenant.tenantKey,
+      fileId: normalizedFileId,
+      mediaMetadata: baseMetadata,
+      asset,
+    }).catch(() => null);
     return NextResponse.json({
       ok: true,
       fileId: normalizedFileId,
       suggestion: existing,
       debug,
       mediaMetadata: baseMetadata,
+      processingStatus,
       cached: true,
     });
   }
@@ -148,7 +155,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       }
       : null,
   );
-  const collectedExif = persistedExif ?? (sourceBytes ? await collectPersistedExifData(sourceBytes) : null);
+  const collectedExif = persistedExif;
   const exifLatencyMs = Date.now() - exifStartedAt;
   const exifDateSignal = buildDateSignalFromPersistedExif(collectedExif);
   const visionConfigured = isOciVisionConfigured();
@@ -282,17 +289,6 @@ export async function POST(request: Request, { params }: RouteProps) {
     familyGroupKey: resolved.tenant.tenantKey,
     fileId: normalizedFileId,
     mediaMetadata: initialGenerated.mediaMetadata,
-    exifExtractedAt: persistedExif ? undefined : collectedExif?.extractedAt,
-    exifSourceTag: persistedExif ? undefined : collectedExif?.sourceTag,
-    exifCaptureDate: persistedExif ? undefined : collectedExif?.captureDate,
-    exifCaptureTimestampRaw: persistedExif ? undefined : collectedExif?.captureTimestampRaw,
-    exifMake: persistedExif ? undefined : collectedExif?.make,
-    exifModel: persistedExif ? undefined : collectedExif?.model,
-    exifSoftware: persistedExif ? undefined : collectedExif?.software,
-    exifWidth: persistedExif ? undefined : collectedExif?.width,
-    exifHeight: persistedExif ? undefined : collectedExif?.height,
-    exifOrientation: persistedExif ? undefined : collectedExif?.orientation,
-    exifFingerprint: persistedExif ? undefined : collectedExif?.fingerprint,
   });
   debug.metadataUpdateLatencyMs = Date.now() - metadataUpdateStartedAt;
   debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
@@ -327,12 +323,19 @@ export async function POST(request: Request, { params }: RouteProps) {
     details: `Generated photo intelligence suggestions for file=${normalizedFileId}.`,
   });
 
+  const processingStatus = await getMediaProcessingStatusForFile({
+    familyGroupKey: resolved.tenant.tenantKey,
+    fileId: normalizedFileId,
+    mediaMetadata: finalizedGenerated.mediaMetadata,
+  }).catch(() => null);
+
   return NextResponse.json({
     ok: true,
     fileId: normalizedFileId,
     suggestion: finalizedGenerated.suggestion,
     debug,
     mediaMetadata: finalizedGenerated.mediaMetadata,
+    processingStatus,
     cached: false,
   });
 }

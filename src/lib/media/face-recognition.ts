@@ -11,6 +11,7 @@ import {
   getOciPersonFaceProfilesForTenant,
   replaceOciFaceMatchesForFace,
   replaceOciFaceAnalysisForFile,
+  updateOciFaceInstanceEmbedding,
   upsertOciPersonFaceProfile,
   type OciPersonFaceProfileRow,
 } from "@/lib/oci/tables";
@@ -383,6 +384,13 @@ export async function associateDetectedFaceToPerson(input: {
       : 1;
   const reviewedAt = new Date().toISOString();
   const profileId = hashId("fprofile", personId);
+  const embeddingJson = JSON.stringify(embedding);
+
+  await updateOciFaceInstanceEmbedding({
+    faceId,
+    embeddingJson,
+    updatedAt: reviewedAt,
+  });
 
   await upsertOciPersonFaceProfile({
     familyGroupKey,

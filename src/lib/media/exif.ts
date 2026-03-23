@@ -190,7 +190,7 @@ export async function collectPersistedExifData(imageBytes: Buffer): Promise<Pers
       fingerprint: buildExifFingerprint(normalizedWithoutFingerprint),
     };
   } catch (error) {
-    console.warn("[photo-intelligence] exif extraction skipped", error);
+    console.warn("[media-exif] exif extraction skipped", error);
     return empty;
   }
 }

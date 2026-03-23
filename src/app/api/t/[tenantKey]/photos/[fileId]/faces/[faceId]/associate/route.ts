@@ -5,6 +5,7 @@ import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 import { associateDetectedFaceToPerson } from "@/lib/media/face-recognition";
+import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
 import { getOciMediaAssetByFileId, updateOciMediaMetadataForFile } from "@/lib/oci/tables";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
 
@@ -131,11 +132,19 @@ export async function POST(request: Request, { params }: RouteProps) {
     details: `Confirmed face ${normalizedFaceId} for person=${normalizedPersonId} on file=${normalizedFileId}.`,
   });
 
+  const processingStatus = await getMediaProcessingStatusForFile({
+    familyGroupKey: resolved.tenant.tenantKey,
+    fileId: normalizedFileId,
+    mediaMetadata: updatedMediaMetadata || mediaAsset?.mediaMetadata || "",
+    asset: mediaAsset,
+  }).catch(() => null);
+
   return NextResponse.json({
     ok: true,
     fileId: normalizedFileId,
     faceId: normalizedFaceId,
     mediaMetadata: updatedMediaMetadata,
+    processingStatus,
     personId: normalizedPersonId,
     personDisplayName,
     sampleCount: association.sampleCount,
