@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-23: Added a standalone signed OCI Vision direct-test script and `vision:direct:test` package command so failing images can be sent to OCI Vision without the SDK formatter masking the raw HTTP status, response body, or `opc-request-id`. See `docs/change-summary.md`.
 - 2026-03-22: Patched the OCI Vision error formatter path so failing Vision requests now preserve the raw OCI response body, service code, and request ID instead of only showing the SDK `toLowerCase` crash. See `docs/change-summary.md`.
 - 2026-03-22: Restored `Generate Suggestions` to the last known-good OCI analyze request for face-box generation, kept cropped-face embedding for manual association, and fixed persisted timing/debug fields so reopened media no longer show zeroed route timings. See `docs/change-summary.md`.
 - 2026-03-22: Replaced whole-image OCI face embedding on `Generate Suggestions` with face detection only, and now generate person vectors from cropped face regions during manual face association and headshot profile seeding. See `docs/change-summary.md`.

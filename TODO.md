@@ -128,6 +128,9 @@ I will update this list as we add, complete, or remove work.
   - 2026-03-22 OCI diagnostics patch:
     - Patch the OCI helper error formatter at runtime so if the SDK crashes while building `OciError`, the app still preserves the raw OCI response body, service code, status code, and request ID.
     - Surface that preserved raw OCI rejection through the existing Vision debug message path so future Vision failures can be diagnosed from the actual service response instead of the masked `toLowerCase` crash.
+  - 2026-03-23 direct REST diagnostic:
+    - Add a standalone signed OCI Vision diagnostic script that bypasses the SDK error formatter entirely and prints raw HTTP status, body, and `opc-request-id` for a local test image.
+    - Support `mixed`, `detect`, and `embed` feature modes so the same image can be tested against the exact request shapes the app has been using.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-23 (add direct OCI Vision REST diagnostic script)
+
+- `Date`: 2026-03-23
+- `Change`: Added a standalone signed OCI Vision diagnostic script and package command that bypass the Oracle SDK error formatter and print the raw HTTP status, response body, and `opc-request-id` for local test images.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code issue` in the OCI Vision diagnostics path. Failing Vision requests were still being masked by the Oracle TypeScript SDK before the app could inspect a readable status code, service code, request ID, or raw response body. That left repeated runtime experiments partly guess-driven. A direct signed REST test gives the exact OCI rejection for the same image and request shape without depending on the broken SDK formatter.
+- `Files`:
+  - `TODO.md`
+  - `package.json`
+  - `scripts/oci-vision-direct-test.cjs`
+- `Data Changes`: None.
+- `Verify`:
+  - `node scripts/oci-vision-direct-test.cjs --help` prints usage.
+  - `npm run build` passes.
+  - `npm run vision:direct:test -- --image <path> --feature mixed|detect|embed` prints the raw HTTP status, `opc-request-id`, and response body from OCI Vision.
+- `Rollback Notes`: Revert the script and package command if you decide to keep all OCI Vision diagnostics inside the application runtime only.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (preserve raw OCI Vision error bodies when SDK formatting fails)
 
 - `Date`: 2026-03-22
