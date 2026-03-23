@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Restored `Generate Suggestions` to the last known-good OCI analyze request for face-box generation, kept cropped-face embedding for manual association, and fixed persisted timing/debug fields so reopened media no longer show zeroed route timings. See `docs/change-summary.md`.
 - 2026-03-22: Replaced whole-image OCI face embedding on `Generate Suggestions` with face detection only, and now generate person vectors from cropped face regions during manual face association and headshot profile seeding. See `docs/change-summary.md`.
 - 2026-03-22: Switched the recognition path to one OCI `FACE_EMBEDDING` call and added timing breakdowns in Vision Debug so slow photos can be diagnosed by source load, Vision, and persistence steps. See `docs/change-summary.md`.
 - 2026-03-22: Switched photo intelligence onto the shared OCI-first photo resolver with Drive fallback, so legacy images without `originalObjectKey` can still load source bytes for Vision and manual face association. See `docs/change-summary.md`.

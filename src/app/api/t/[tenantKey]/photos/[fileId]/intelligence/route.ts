@@ -276,13 +276,12 @@ export async function POST(request: Request, { params }: RouteProps) {
     faceSuggestions,
     debug,
   });
-  const generated = initialGenerated;
 
   const metadataUpdateStartedAt = Date.now();
   await updateOciMediaMetadataForFile({
     familyGroupKey: resolved.tenant.tenantKey,
     fileId: normalizedFileId,
-    mediaMetadata: generated.mediaMetadata,
+    mediaMetadata: initialGenerated.mediaMetadata,
     exifExtractedAt: persistedExif ? undefined : collectedExif?.extractedAt,
     exifSourceTag: persistedExif ? undefined : collectedExif?.sourceTag,
     exifCaptureDate: persistedExif ? undefined : collectedExif?.captureDate,
@@ -297,6 +296,27 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
   debug.metadataUpdateLatencyMs = Date.now() - metadataUpdateStartedAt;
   debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
+  const finalizedGenerated = buildPhotoIntelligenceSuggestion({
+    fileId: normalizedFileId,
+    fileName,
+    createdAt: String(parsedMetadata.createdAt ?? "").trim(),
+    linkedPeople,
+    existingMetadata: baseMetadata,
+    dateSignal: exifDateSignal,
+    vision,
+    faceSuggestions,
+    debug,
+  });
+  if (finalizedGenerated.mediaMetadata !== initialGenerated.mediaMetadata) {
+    const finalMetadataStartedAt = Date.now();
+    await updateOciMediaMetadataForFile({
+      familyGroupKey: resolved.tenant.tenantKey,
+      fileId: normalizedFileId,
+      mediaMetadata: finalizedGenerated.mediaMetadata,
+    });
+    debug.metadataUpdateLatencyMs += Date.now() - finalMetadataStartedAt;
+  }
+  debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
 
   await appendSessionAuditLog(resolved.session, {
     action: "UPDATE",
@@ -310,9 +330,9 @@ export async function POST(request: Request, { params }: RouteProps) {
   return NextResponse.json({
     ok: true,
     fileId: normalizedFileId,
-    suggestion: generated.suggestion,
+    suggestion: finalizedGenerated.suggestion,
     debug,
-    mediaMetadata: generated.mediaMetadata,
+    mediaMetadata: finalizedGenerated.mediaMetadata,
     cached: false,
   });
 }

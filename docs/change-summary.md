@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (restore stable OCI analyze request for suggestion-time face detection)
+
+- `Date`: 2026-03-22
+- `Change`: Restored `Generate Suggestions` to the last known-good OCI analyze request (`IMAGE_CLASSIFICATION` + `OBJECT_DETECTION` + `FACE_DETECTION`) for suggestion-time face detection, while keeping cropped-face embedding for manual association/headshot profile seeding and fixing persisted timing/debug fields so reopened media no longer show zeroed route timings.
+- `Type`: API | UI
+- `Why`: Root cause was a `mixed issue`. Production debug proved the detect-first experiment build was live (`embeddingAttempted=false`), but `FACE_DETECTION` by itself was still failing on some images before the Oracle TypeScript SDK could surface a readable OCI error. The older mixed analyze request was the last confirmed working Vision shape for those same photos. Separately, the route was building `photoIntelligenceDebug` into media metadata before `metadataUpdateMs` and `routeTotalMs` were populated, so reopened media could show stale zero timing values even after a real run completed.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/vision.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `Generate Suggestions` on the previously failing image no longer fails on the standalone `FACE_DETECTION` request shape.
+  - Manual `Associate Face` still uses cropped-face embedding rather than whole-image embedding.
+  - Reopening the same media item shows non-zero persisted timing fields for `metadataUpdateMs` and `routeTotalMs`.
+- `Rollback Notes`: Revert this entry if you want to resume experimenting with standalone `FACE_DETECTION`; keep the cropped-face embedding path unless you are also intentionally reverting the manual-association/headshot-profile improvements.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (detect-first face recognition and crop-time embedding)
 
 - `Date`: 2026-03-22

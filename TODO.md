@@ -121,6 +121,10 @@ I will update this list as we add, complete, or remove work.
     - Switch `Generate Suggestions` to `FACE_DETECTION` only so the route still finds and persists face boxes quickly without paying for or failing on full-image embedding requests.
     - Generate embeddings later from the selected face crop during manual `Associate Face`, and use the same detect-then-crop-then-embed path when seeding canonical person face profiles from headshots.
     - Keep the latency debug fields so production runs still expose source-load, Vision request, face-persistence, and total route timing for diagnosis.
+  - 2026-03-22 experiment rollback note:
+    - Production debug showed that `FACE_DETECTION` alone was also less reliable than the older mixed OCI analyze request on some images.
+    - Revert `Generate Suggestions` to the last known-good primary OCI analysis request (`IMAGE_CLASSIFICATION` + `OBJECT_DETECTION` + `FACE_DETECTION`) for face-box generation, while keeping crop-based embedding for manual face association and headshot profile seeding.
+    - Persist the final latency/debug payload after timing fields are populated so stored media metadata no longer reopens with zeroed `metadataUpdateMs` and `routeTotalMs`.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

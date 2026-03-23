@@ -31,8 +31,6 @@ export type OciVisionInsight = {
   totalLatencyMs: number;
 };
 
-type VisionFeatureMode = "face_detection" | "face_embedding";
-
 type OciVisionConfig = {
   region: string;
   compartmentId: string;
@@ -206,9 +204,8 @@ function extractFaces(result: models.AnalyzeImageResult | undefined): OciVisionF
     : [];
 }
 
-async function analyzeInlineImageWithFeature(input: {
+async function analyzeInlineImageWithEmbedding(input: {
   imageBytes: Buffer;
-  mode: VisionFeatureMode;
 }): Promise<OciVisionInsight> {
   const config = readVisionConfig();
   if (!config) {
@@ -224,12 +221,8 @@ async function analyzeInlineImageWithFeature(input: {
   let response;
   let visionRequestLatencyMs = 0;
   const requestStartedAt = Date.now();
-  const embeddingAttempted = input.mode === "face_embedding";
+  const embeddingAttempted = true;
   let embeddingSucceeded = false;
-  const feature =
-    input.mode === "face_embedding"
-      ? ({ featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: true } as models.FaceEmbeddingFeature)
-      : ({ featureType: "FACE_DETECTION", maxResults: 20, shouldReturnLandmarks: true } as models.FaceDetectionFeature);
   try {
     response = await client.analyzeImage({
       analyzeImageDetails: {
@@ -238,11 +231,13 @@ async function analyzeInlineImageWithFeature(input: {
           source: "INLINE",
           data: preparedImageBytes.toString("base64"),
         },
-        features: [feature],
+        features: [
+          { featureType: "FACE_EMBEDDING", maxResults: 20, shouldReturnLandmarks: true } as models.FaceEmbeddingFeature,
+        ],
       },
     });
     visionRequestLatencyMs = Date.now() - requestStartedAt;
-    embeddingSucceeded = embeddingAttempted;
+    embeddingSucceeded = true;
   } catch (error) {
     visionRequestLatencyMs = Date.now() - requestStartedAt;
     throw normalizeVisionError(error, {
@@ -258,9 +253,9 @@ async function analyzeInlineImageWithFeature(input: {
   const objects: Array<{ name: string; confidence: number }> = [];
   const faces = extractFaces(result);
   let embeddingErrorMessage = "";
-  const embeddingFacesReturned = embeddingAttempted ? faces.length : 0;
-  const embeddingFacesWithVectors = embeddingAttempted ? faces.filter((face) => face.embedding.length > 0).length : 0;
-  if (embeddingAttempted && faces.length > 0 && embeddingFacesWithVectors === 0) {
+  const embeddingFacesReturned = faces.length;
+  const embeddingFacesWithVectors = faces.filter((face) => face.embedding.length > 0).length;
+  if (faces.length > 0 && embeddingFacesWithVectors === 0) {
     embeddingErrorMessage = "FACE_EMBEDDING returned faces without embedding vectors.";
   }
   const faceCount = faces.length;
@@ -283,17 +278,90 @@ async function analyzeInlineImageWithFeature(input: {
 export async function analyzeInlineImageWithVision(input: {
   imageBytes: Buffer;
 }): Promise<OciVisionInsight> {
-  return analyzeInlineImageWithFeature({
+  return analyzeInlineImageWithEmbedding({
     imageBytes: input.imageBytes,
-    mode: "face_embedding",
   });
 }
 
 export async function detectFacesInlineWithVision(input: {
   imageBytes: Buffer;
 }): Promise<OciVisionInsight> {
-  return analyzeInlineImageWithFeature({
-    imageBytes: input.imageBytes,
-    mode: "face_detection",
-  });
+  const config = readVisionConfig();
+  if (!config) {
+    throw new Error("OCI Vision is not configured.");
+  }
+  const totalStartedAt = Date.now();
+  const client = getVisionClient(config);
+  const prepareStartedAt = Date.now();
+  const prepared = await prepareImageBytesForVision(input.imageBytes);
+  const prepareLatencyMs = Date.now() - prepareStartedAt;
+  const preparedImageBytes = prepared.imageBytes;
+  const primaryRequest: models.AnalyzeImageDetails = {
+    compartmentId: config.compartmentId,
+    image: {
+      source: "INLINE",
+      data: preparedImageBytes.toString("base64"),
+    },
+    features: [
+      { featureType: "IMAGE_CLASSIFICATION", maxResults: 6 } as models.ImageClassificationFeature,
+      { featureType: "OBJECT_DETECTION", maxResults: 8 } as models.ImageObjectDetectionFeature,
+      { featureType: "FACE_DETECTION", maxResults: 20, shouldReturnLandmarks: false } as models.FaceDetectionFeature,
+    ],
+  };
+
+  let response;
+  let visionRequestLatencyMs = 0;
+  const requestStartedAt = Date.now();
+  try {
+    response = await client.analyzeImage({
+      analyzeImageDetails: primaryRequest,
+    });
+    visionRequestLatencyMs = Date.now() - requestStartedAt;
+  } catch (error) {
+    visionRequestLatencyMs = Date.now() - requestStartedAt;
+    throw normalizeVisionError(error, {
+      originalBytes: input.imageBytes.length,
+      preparedBytes: preparedImageBytes.length,
+      originalFormat: prepared.originalFormat,
+      preparedFormat: prepared.preparedFormat,
+      normalizedFormat: prepared.normalizedFormat,
+    });
+  }
+
+  const result = response.analyzeImageResult;
+  const labels = Array.isArray(result?.labels)
+    ? result.labels
+      .map((item) => ({
+        name: String(item?.name ?? "").trim(),
+        confidence: Number(item?.confidence ?? 0),
+      }))
+      .filter((item) => item.name)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 6)
+    : [];
+  const objects = Array.isArray(result?.imageObjects)
+    ? result.imageObjects
+      .map((item) => ({
+        name: String(item?.name ?? "").trim(),
+        confidence: Number(item?.confidence ?? 0),
+      }))
+      .filter((item) => item.name)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 8)
+    : [];
+  const faces = extractFaces(result);
+  return {
+    labels,
+    objects,
+    faces,
+    faceCount: faces.length,
+    embeddingAttempted: false,
+    embeddingSucceeded: false,
+    embeddingErrorMessage: "",
+    embeddingFacesReturned: 0,
+    embeddingFacesWithVectors: 0,
+    prepareLatencyMs,
+    visionRequestLatencyMs,
+    totalLatencyMs: Date.now() - totalStartedAt,
+  };
 }
