@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (preserve raw OCI Vision error bodies when SDK formatting fails)
+
+- `Date`: 2026-03-22
+- `Change`: Patched the OCI helper error formatter at runtime so Vision failures now preserve raw OCI response bodies, service codes, status codes, and request IDs even when the Oracle TypeScript SDK crashes while constructing `OciError`.
+- `Type`: API
+- `Why`: Root cause was a `code issue` in the Oracle TypeScript SDK integration path. OCI Vision was returning an actual service error, but `oci-common` attempted to call `serviceCode.toLowerCase()` while formatting the error and masked the real rejection with an internal SDK crash. That left photo-intelligence debugging stuck on a generic `toLowerCase` message and forced repeated hypothesis-driven request-shape changes without the real OCI response body.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/vision.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - A failing Vision request now reports the raw OCI error body/service code/request ID in Vision Debug instead of only the SDK formatter crash.
+  - Existing successful Vision calls still use the normal SDK response path.
+- `Rollback Notes`: Revert the runtime OCI helper patch if the upstream SDK is upgraded to a version that no longer masks Vision service errors, or if you decide to replace the SDK call path entirely.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (restore stable OCI analyze request for suggestion-time face detection)
 
 - `Date`: 2026-03-22

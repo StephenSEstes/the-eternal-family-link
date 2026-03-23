@@ -125,6 +125,9 @@ I will update this list as we add, complete, or remove work.
     - Production debug showed that `FACE_DETECTION` alone was also less reliable than the older mixed OCI analyze request on some images.
     - Revert `Generate Suggestions` to the last known-good primary OCI analysis request (`IMAGE_CLASSIFICATION` + `OBJECT_DETECTION` + `FACE_DETECTION`) for face-box generation, while keeping crop-based embedding for manual face association and headshot profile seeding.
     - Persist the final latency/debug payload after timing fields are populated so stored media metadata no longer reopens with zeroed `metadataUpdateMs` and `routeTotalMs`.
+  - 2026-03-22 OCI diagnostics patch:
+    - Patch the OCI helper error formatter at runtime so if the SDK crashes while building `OciError`, the app still preserves the raw OCI response body, service code, status code, and request ID.
+    - Surface that preserved raw OCI rejection through the existing Vision debug message path so future Vision failures can be diagnosed from the actual service response instead of the masked `toLowerCase` crash.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createRequire } from "node:module";
 import sharp from "sharp";
 import { AIServiceVisionClient, models } from "oci-aivision";
 import { getOciAuthenticationProvider } from "@/lib/oci/auth";
@@ -38,6 +39,9 @@ type OciVisionConfig = {
 
 let cachedClient: AIServiceVisionClient | null = null;
 let cachedConfigKey = "";
+let didPatchOciHelperErrorHandling = false;
+
+const require = createRequire(import.meta.url);
 
 const OCI_VISION_INLINE_TARGET_BYTES = 4_500_000;
 const OCI_VISION_SUPPORTED_FORMATS = new Set(["jpeg", "jpg", "png"]);
@@ -74,6 +78,7 @@ function readVisionConfig(): OciVisionConfig | null {
 }
 
 function getVisionClient(config: OciVisionConfig) {
+  ensurePatchedOciHelperErrorHandling();
   const auth = getOciAuthenticationProvider();
   const key = `${config.region}|${config.compartmentId}|${auth.cacheKey}`;
   if (cachedClient && key === cachedConfigKey) {
@@ -90,6 +95,85 @@ function getVisionClient(config: OciVisionConfig) {
 
 export function isOciVisionConfigured() {
   return readVisionConfig() != null;
+}
+
+function stringifyOciErrorBody(body: unknown) {
+  if (typeof body === "string") {
+    return body.trim();
+  }
+  if (body == null) {
+    return "";
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+function ensurePatchedOciHelperErrorHandling() {
+  if (didPatchOciHelperErrorHandling) {
+    return;
+  }
+  const helperModule = require("oci-common/lib/helper") as typeof import("oci-common/lib/helper") & {
+    handleErrorResponse: (...args: unknown[]) => unknown;
+  };
+  const current = helperModule.handleErrorResponse as ((...args: unknown[]) => unknown) & { __etflPatched?: boolean };
+  if (current.__etflPatched) {
+    didPatchOciHelperErrorHandling = true;
+    return;
+  }
+  const original = current;
+  const patched = ((
+    response: Response,
+    body: unknown,
+    targetService: string,
+    operationName: string,
+    timestamp: string,
+    endpoint: string,
+    apiReferenceLink: string,
+  ) => {
+    try {
+      return original(response, body, targetService, operationName, timestamp, endpoint, apiReferenceLink);
+    } catch (error) {
+      const rawBody = stringifyOciErrorBody(body);
+      const messageFromBody =
+        body && typeof body === "object" && "message" in body
+          ? String((body as { message?: unknown }).message ?? "").trim()
+          : "";
+      const serviceCode =
+        body && typeof body === "object" && "code" in body
+          ? String((body as { code?: unknown }).code ?? "UnknownServiceCode").trim() || "UnknownServiceCode"
+          : "UnknownServiceCode";
+      const statusCode = Number(response?.status ?? -1);
+      const opcRequestId = String(response?.headers?.get?.("opc-request-id") ?? "").trim();
+      const fallbackMessage = [
+        `OCI Vision service rejected the request (status=${statusCode}, serviceCode=${serviceCode || "UnknownServiceCode"})`,
+        messageFromBody ? `message=${messageFromBody}` : "",
+        opcRequestId ? `opcRequestId=${opcRequestId}` : "",
+        rawBody ? `rawBody=${rawBody}` : "",
+        error instanceof Error && error.message ? `sdkFormatterError=${error.message}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return Object.assign(new Error(fallbackMessage), {
+        code: serviceCode || "UnknownServiceCode",
+        statusCode,
+        serviceCode: serviceCode || "UnknownServiceCode",
+        opcRequestId,
+        rawBody,
+        targetService,
+        operationName,
+        timestamp,
+        requestEndpoint: endpoint,
+        apiReferenceLink,
+        sdkFormatterError: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    }
+  }) as typeof helperModule.handleErrorResponse & { __etflPatched?: boolean };
+  patched.__etflPatched = true;
+  helperModule.handleErrorResponse = patched;
+  didPatchOciHelperErrorHandling = true;
 }
 
 async function prepareImageBytesForVision(imageBytes: Buffer): Promise<PreparedVisionImage> {
@@ -151,8 +235,40 @@ function normalizeVisionError(error: unknown, context: {
   preparedFormat: string;
   normalizedFormat: boolean;
 }) {
-  const typed = error as { message?: string };
+  const typed = error as {
+    message?: string;
+    rawBody?: string;
+    statusCode?: number;
+    serviceCode?: string;
+    opcRequestId?: string;
+    sdkFormatterError?: string;
+  };
   const message = String(typed?.message ?? "");
+  const rawBody = String(typed?.rawBody ?? "").trim();
+  if (rawBody) {
+    const statusCode = Number.isFinite(Number(typed?.statusCode)) ? Number(typed?.statusCode) : -1;
+    const serviceCode = String(typed?.serviceCode ?? "").trim() || "UnknownServiceCode";
+    const opcRequestId = String(typed?.opcRequestId ?? "").trim();
+    const sdkFormatterError = String(typed?.sdkFormatterError ?? "").trim();
+    return Object.assign(
+      new Error(
+        [
+          `OCI Vision service rejected the request (status=${statusCode}, serviceCode=${serviceCode})`,
+          opcRequestId ? `opcRequestId=${opcRequestId}` : "",
+          `rawBody=${rawBody}`,
+          sdkFormatterError ? `sdkFormatterError=${sdkFormatterError}` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      ),
+      {
+        code: serviceCode,
+        statusCode,
+        serviceCode,
+        opcRequestId,
+      },
+    );
+  }
   if (message.includes("toLowerCase is not a function")) {
     return new Error(
       `OCI Vision request failed before returning a readable service error. originalFormat=${context.originalFormat} preparedFormat=${context.preparedFormat} normalizedFormat=${String(context.normalizedFormat)} originalBytes=${context.originalBytes} preparedBytes=${context.preparedBytes}`,
