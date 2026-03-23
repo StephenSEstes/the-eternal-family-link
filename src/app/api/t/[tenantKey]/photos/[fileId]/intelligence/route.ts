@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
-import { refinePhotoCaptionWithOpenAi } from "@/lib/ai/photo-caption";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
@@ -44,6 +43,7 @@ function parseMetadata(raw: string): Record<string, unknown> {
 }
 
 export async function POST(request: Request, { params }: RouteProps) {
+  const routeStartedAt = Date.now();
   const { tenantKey, fileId } = await params;
   const resolved = await requireTenantAccess(tenantKey);
   if ("error" in resolved) {
@@ -120,6 +120,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   let sourceBytes: Buffer | null = null;
   let sourceReadErrorMessage = "";
+  const sourceLoadStartedAt = Date.now();
   try {
     const source = await resolvePhotoContentAcrossFamilies(normalizedFileId, resolved.tenant.tenantKey, { variant: "original" });
     sourceBytes = Buffer.from(source.data);
@@ -127,7 +128,9 @@ export async function POST(request: Request, { params }: RouteProps) {
     sourceReadErrorMessage = sourceError instanceof Error ? sourceError.message : "Unable to load source image bytes.";
     console.warn("[photo-intelligence] failed to load source image bytes", sourceError);
   }
+  const sourceLoadLatencyMs = Date.now() - sourceLoadStartedAt;
 
+  const exifStartedAt = Date.now();
   const persistedExif = readPersistedExifData(
     asset
       ? {
@@ -146,6 +149,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       : null,
   );
   const collectedExif = persistedExif ?? (sourceBytes ? await collectPersistedExifData(sourceBytes) : null);
+  const exifLatencyMs = Date.now() - exifStartedAt;
   const exifDateSignal = buildDateSignalFromPersistedExif(collectedExif);
   const visionConfigured = isOciVisionConfigured();
   let vision: OciVisionInsight | null = null;
@@ -157,16 +161,20 @@ export async function POST(request: Request, { params }: RouteProps) {
   let visionServiceCode = "";
   let visionOpcRequestId = "";
   let visionRawResult = "";
+  let visionOuterLatencyMs = 0;
   if (visionConfigured) {
     try {
       if (sourceBytes) {
         visionAttempted = true;
+        const visionStartedAt = Date.now();
         vision = await analyzeInlineImageWithVision({
           imageBytes: sourceBytes,
         });
+        visionOuterLatencyMs = Date.now() - visionStartedAt;
         visionSucceeded = true;
         visionRawResult = JSON.stringify(
           {
+            analysisMode: "face_embedding_only",
             labels: vision.labels,
             objects: vision.objects,
             faces: vision.faces.map((face) => ({
@@ -181,6 +189,9 @@ export async function POST(request: Request, { params }: RouteProps) {
             embeddingErrorMessage: vision.embeddingErrorMessage,
             embeddingFacesReturned: vision.embeddingFacesReturned,
             embeddingFacesWithVectors: vision.embeddingFacesWithVectors,
+            prepareLatencyMs: vision.prepareLatencyMs,
+            visionRequestLatencyMs: vision.visionRequestLatencyMs,
+            totalLatencyMs: vision.totalLatencyMs,
           },
           null,
           2,
@@ -220,10 +231,20 @@ export async function POST(request: Request, { params }: RouteProps) {
     embeddingErrorMessage: vision?.embeddingErrorMessage ?? "",
     embeddingFacesReturned: vision?.embeddingFacesReturned ?? 0,
     embeddingFacesWithVectors: vision?.embeddingFacesWithVectors ?? 0,
+    sourceLoadLatencyMs,
+    exifLatencyMs,
+    visionPrepareLatencyMs: vision?.prepareLatencyMs ?? 0,
+    visionRequestLatencyMs: vision?.visionRequestLatencyMs ?? visionOuterLatencyMs,
+    visionTotalLatencyMs: vision?.totalLatencyMs ?? visionOuterLatencyMs,
+    facePersistenceLatencyMs: 0,
+    captionLatencyMs: 0,
+    metadataUpdateLatencyMs: 0,
+    routeTotalLatencyMs: 0,
   };
 
   const previousSuggestion = readPhotoIntelligenceSuggestion(baseMetadata);
   let faceSuggestions = previousSuggestion?.faceSuggestions ?? [];
+  const facePersistenceStartedAt = Date.now();
   if (visionSucceeded && vision) {
     try {
       faceSuggestions = await buildAndPersistFaceSuggestions({
@@ -236,6 +257,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       console.warn("[photo-intelligence] face suggestion persistence skipped", faceError);
     }
   }
+  debug.facePersistenceLatencyMs = Date.now() - facePersistenceStartedAt;
 
   const fileName = String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId;
   const initialGenerated = buildPhotoIntelligenceSuggestion({
@@ -249,36 +271,9 @@ export async function POST(request: Request, { params }: RouteProps) {
     faceSuggestions,
     debug,
   });
-  let generated = initialGenerated;
-  if (visionSucceeded && vision) {
-    try {
-      const captionRefinement = await refinePhotoCaptionWithOpenAi({
-        tenantName: resolved.tenant.tenantName,
-        fileName,
-        linkedPeople,
-        vision,
-        fallbackLabel: initialGenerated.suggestion.labelSuggestion,
-        fallbackDescription: initialGenerated.suggestion.descriptionSuggestion,
-      });
-      if (captionRefinement) {
-        generated = buildPhotoIntelligenceSuggestion({
-          fileId: normalizedFileId,
-          fileName,
-          createdAt: String(parsedMetadata.createdAt ?? "").trim(),
-          linkedPeople,
-          existingMetadata: baseMetadata,
-          dateSignal: exifDateSignal,
-          captionRefinement,
-          vision,
-          faceSuggestions,
-          debug,
-        });
-      }
-    } catch (captionError) {
-      console.warn("[photo-intelligence] openai caption refinement skipped", captionError);
-    }
-  }
+  const generated = initialGenerated;
 
+  const metadataUpdateStartedAt = Date.now();
   await updateOciMediaMetadataForFile({
     familyGroupKey: resolved.tenant.tenantKey,
     fileId: normalizedFileId,
@@ -295,6 +290,8 @@ export async function POST(request: Request, { params }: RouteProps) {
     exifOrientation: persistedExif ? undefined : collectedExif?.orientation,
     exifFingerprint: persistedExif ? undefined : collectedExif?.fingerprint,
   });
+  debug.metadataUpdateLatencyMs = Date.now() - metadataUpdateStartedAt;
+  debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
 
   await appendSessionAuditLog(resolved.session, {
     action: "UPDATE",

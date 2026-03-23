@@ -59,6 +59,15 @@ export type PhotoIntelligenceDebug = {
   embeddingErrorMessage: string;
   embeddingFacesReturned: number;
   embeddingFacesWithVectors: number;
+  sourceLoadLatencyMs: number;
+  exifLatencyMs: number;
+  visionPrepareLatencyMs: number;
+  visionRequestLatencyMs: number;
+  visionTotalLatencyMs: number;
+  facePersistenceLatencyMs: number;
+  captionLatencyMs: number;
+  metadataUpdateLatencyMs: number;
+  routeTotalLatencyMs: number;
 };
 
 export type PhotoIntelligenceDateSignal = {
@@ -390,6 +399,33 @@ export function readPhotoIntelligenceDebug(rawMetadata: string | undefined): Pho
       : 0,
     embeddingFacesWithVectors: Number.isFinite(Number(debug.embeddingFacesWithVectors ?? 0))
       ? Number(debug.embeddingFacesWithVectors)
+      : 0,
+    sourceLoadLatencyMs: Number.isFinite(Number(debug.sourceLoadLatencyMs ?? 0))
+      ? Number(debug.sourceLoadLatencyMs)
+      : 0,
+    exifLatencyMs: Number.isFinite(Number(debug.exifLatencyMs ?? 0))
+      ? Number(debug.exifLatencyMs)
+      : 0,
+    visionPrepareLatencyMs: Number.isFinite(Number(debug.visionPrepareLatencyMs ?? 0))
+      ? Number(debug.visionPrepareLatencyMs)
+      : 0,
+    visionRequestLatencyMs: Number.isFinite(Number(debug.visionRequestLatencyMs ?? 0))
+      ? Number(debug.visionRequestLatencyMs)
+      : 0,
+    visionTotalLatencyMs: Number.isFinite(Number(debug.visionTotalLatencyMs ?? 0))
+      ? Number(debug.visionTotalLatencyMs)
+      : 0,
+    facePersistenceLatencyMs: Number.isFinite(Number(debug.facePersistenceLatencyMs ?? 0))
+      ? Number(debug.facePersistenceLatencyMs)
+      : 0,
+    captionLatencyMs: Number.isFinite(Number(debug.captionLatencyMs ?? 0))
+      ? Number(debug.captionLatencyMs)
+      : 0,
+    metadataUpdateLatencyMs: Number.isFinite(Number(debug.metadataUpdateLatencyMs ?? 0))
+      ? Number(debug.metadataUpdateLatencyMs)
+      : 0,
+    routeTotalLatencyMs: Number.isFinite(Number(debug.routeTotalLatencyMs ?? 0))
+      ? Number(debug.routeTotalLatencyMs)
       : 0,
   };
 }

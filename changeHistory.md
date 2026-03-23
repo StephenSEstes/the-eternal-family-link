@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-22: Switched the recognition path to one OCI `FACE_EMBEDDING` call and added timing breakdowns in Vision Debug so slow photos can be diagnosed by source load, Vision, and persistence steps. See `docs/change-summary.md`.
 - 2026-03-22: Switched photo intelligence onto the shared OCI-first photo resolver with Drive fallback, so legacy images without `originalObjectKey` can still load source bytes for Vision and manual face association. See `docs/change-summary.md`.
 - 2026-03-22: Removed the redundant photo-detail reload after `Generate Suggestions` and manual face association so the media modal applies returned `mediaMetadata` immediately instead of waiting on a second fetch before clearing its loading state. See `docs/change-summary.md`.
 

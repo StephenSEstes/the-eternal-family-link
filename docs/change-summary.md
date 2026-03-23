@@ -13,6 +13,27 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-22 (single-call OCI face recognition experiment + latency debug)
+
+- `Date`: 2026-03-22
+- `Change`: Switched the photo-intelligence recognition path to a single OCI `FACE_EMBEDDING` request, removed the generic OCI label/object analysis pass from that route, and added step-level latency metrics to the persisted Vision debug payload.
+- `Type`: API | UI
+- `Why`: Root cause was a `code issue`. The recognition flow was paying for two sequential OCI Vision requests on every face-analysis photo: a first generic label/object/face-detection call and then a second `FACE_EMBEDDING` call before any face suggestions could be produced. OCI's generic labels were low-value for the current recognition goal, and the route had no timing breakdown to show whether source loading, image preparation, Vision, or persistence was the bottleneck on slow photos.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/oci/vision.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `Vision Debug` now shows `sourceLoadMs`, `visionPrepareMs`, `visionRequestMs`, `visionTotalMs`, `facePersistMs`, `metadataUpdateMs`, and `routeTotalMs`.
+  - Photos with detected faces can still produce face suggestions from a single `FACE_EMBEDDING` OCI call.
+  - Generic OCI label/object text no longer appears unless another captioning path supplies it.
+- `Rollback Notes`: Revert the single-call embedding experiment and latency debug additions together if the app needs the prior OCI label/object analysis path restored.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-22 (use shared photo resolver for intelligence source bytes)
 
 - `Date`: 2026-03-22

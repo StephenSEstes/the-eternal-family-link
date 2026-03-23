@@ -111,6 +111,11 @@ I will update this list as we add, complete, or remove work.
     - For the first cut, support the single-person-in-photo use case cleanly, while keeping the UI/API shape compatible with multiple detected faces later.
     - Keep existing suggest-only matching code available, but treat this manual face-to-person confirmation flow as the required reviewed path for building trustworthy person face profiles.
     - Validate with `npm run build`, then confirm in production that a detected face crop can be associated to a selected person and that the person profile row stores the embedding for that person.
+  - 2026-03-22 performance experiment plan:
+    - Remove the generic OCI Vision label/object detection request from the recognition path and test whether a single `FACE_EMBEDDING` request can supply both detected face regions and usable embeddings for matching.
+    - Add step-level latency metrics for source-byte load, image preparation, OCI Vision request time, face-persistence time, metadata-update time, and total route time so slow photos can be diagnosed from the debug payload instead of inferred.
+    - Keep this as an implementation experiment only for now: do not update the permanent design decision docs until runtime behavior and performance are validated.
+    - Validate with `npm run build`, then compare production debug timings and face-suggestion responsiveness on known slow photos before deciding whether to keep the one-call Vision path.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

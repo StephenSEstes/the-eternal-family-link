@@ -1236,6 +1236,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                             <span className="page-subtitle" style={{ margin: 0 }}>
                               embeddingAttempted={String(selectedPhotoIntelligenceDebug.embeddingAttempted)} embeddingSucceeded={String(selectedPhotoIntelligenceDebug.embeddingSucceeded)} embeddingFacesReturned={String(selectedPhotoIntelligenceDebug.embeddingFacesReturned)} embeddingFacesWithVectors={String(selectedPhotoIntelligenceDebug.embeddingFacesWithVectors)}
                             </span>
+                            <span className="page-subtitle" style={{ margin: 0 }}>
+                              sourceLoadMs={String(selectedPhotoIntelligenceDebug.sourceLoadLatencyMs)} exifMs={String(selectedPhotoIntelligenceDebug.exifLatencyMs)} visionPrepareMs={String(selectedPhotoIntelligenceDebug.visionPrepareLatencyMs)} visionRequestMs={String(selectedPhotoIntelligenceDebug.visionRequestLatencyMs)} visionTotalMs={String(selectedPhotoIntelligenceDebug.visionTotalLatencyMs)}
+                            </span>
+                            <span className="page-subtitle" style={{ margin: 0 }}>
+                              facePersistMs={String(selectedPhotoIntelligenceDebug.facePersistenceLatencyMs)} captionMs={String(selectedPhotoIntelligenceDebug.captionLatencyMs)} metadataUpdateMs={String(selectedPhotoIntelligenceDebug.metadataUpdateLatencyMs)} routeTotalMs={String(selectedPhotoIntelligenceDebug.routeTotalLatencyMs)}
+                            </span>
                             {selectedPhotoIntelligenceDebug.visionErrorMessage ? (
                               <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
                                 {selectedPhotoIntelligenceDebug.visionErrorMessage}
