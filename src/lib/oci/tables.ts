@@ -3396,36 +3396,45 @@ export async function updateOciMediaMetadataForFile(input: {
   }
   return withConnection(async (connection) => {
     await ensureTableCompatibility(connection, "media_assets");
+    const assetSetClauses = ["media_metadata = :mediaMetadata"];
+    const assetBinds: Record<string, unknown> = {
+      fileId,
+      mediaMetadata: input.mediaMetadata.trim(),
+    };
+
+    const assignStringColumn = (columnName: string, bindName: string, value: string | undefined) => {
+      if (value === undefined) {
+        return;
+      }
+      assetSetClauses.push(`${columnName} = :${bindName}`);
+      assetBinds[bindName] = value.trim() || null;
+    };
+
+    const assignNumberColumn = (columnName: string, bindName: string, value: number | undefined) => {
+      if (value === undefined || value === null || !Number.isFinite(value)) {
+        return;
+      }
+      assetSetClauses.push(`${columnName} = :${bindName}`);
+      assetBinds[bindName] = value;
+    };
+
+    assignStringColumn("exif_extracted_at", "exifExtractedAt", input.exifExtractedAt);
+    assignStringColumn("exif_source_tag", "exifSourceTag", input.exifSourceTag);
+    assignStringColumn("exif_capture_date", "exifCaptureDate", input.exifCaptureDate);
+    assignStringColumn("exif_capture_timestamp_raw", "exifCaptureTimestampRaw", input.exifCaptureTimestampRaw);
+    assignStringColumn("exif_make", "exifMake", input.exifMake);
+    assignStringColumn("exif_model", "exifModel", input.exifModel);
+    assignStringColumn("exif_software", "exifSoftware", input.exifSoftware);
+    assignNumberColumn("exif_width", "exifWidth", input.exifWidth);
+    assignNumberColumn("exif_height", "exifHeight", input.exifHeight);
+    assignNumberColumn("exif_orientation", "exifOrientation", input.exifOrientation);
+    assignStringColumn("exif_fingerprint", "exifFingerprint", input.exifFingerprint);
+
     const assetUpdate = await connection.execute(
       `UPDATE media_assets
-       SET media_metadata = :mediaMetadata,
-           exif_extracted_at = COALESCE(:exifExtractedAt, exif_extracted_at),
-           exif_source_tag = COALESCE(:exifSourceTag, exif_source_tag),
-           exif_capture_date = COALESCE(:exifCaptureDate, exif_capture_date),
-           exif_capture_timestamp_raw = COALESCE(:exifCaptureTimestampRaw, exif_capture_timestamp_raw),
-           exif_make = COALESCE(:exifMake, exif_make),
-           exif_model = COALESCE(:exifModel, exif_model),
-           exif_software = COALESCE(:exifSoftware, exif_software),
-           exif_width = COALESCE(:exifWidth, exif_width),
-           exif_height = COALESCE(:exifHeight, exif_height),
-           exif_orientation = COALESCE(:exifOrientation, exif_orientation),
-           exif_fingerprint = COALESCE(:exifFingerprint, exif_fingerprint)
+       SET ${assetSetClauses.join(", ")}
        WHERE TRIM(file_id) = :fileId`,
-      {
-        fileId,
-        mediaMetadata: input.mediaMetadata.trim(),
-        exifExtractedAt: input.exifExtractedAt ? input.exifExtractedAt.trim() : null,
-        exifSourceTag: input.exifSourceTag ? input.exifSourceTag.trim() : null,
-        exifCaptureDate: input.exifCaptureDate ? input.exifCaptureDate.trim() : null,
-        exifCaptureTimestampRaw: input.exifCaptureTimestampRaw ? input.exifCaptureTimestampRaw.trim() : null,
-        exifMake: input.exifMake ? input.exifMake.trim() : null,
-        exifModel: input.exifModel ? input.exifModel.trim() : null,
-        exifSoftware: input.exifSoftware ? input.exifSoftware.trim() : null,
-        exifWidth: Number.isFinite(input.exifWidth) ? input.exifWidth : null,
-        exifHeight: Number.isFinite(input.exifHeight) ? input.exifHeight : null,
-        exifOrientation: Number.isFinite(input.exifOrientation) ? input.exifOrientation : null,
-        exifFingerprint: input.exifFingerprint ? input.exifFingerprint.trim() : null,
-      },
+      assetBinds,
       { autoCommit: false },
     );
     const linkUpdate = await connection.execute(

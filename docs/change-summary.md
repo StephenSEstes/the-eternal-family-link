@@ -33,6 +33,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the direct transport helper and restore `AIServiceVisionClient.analyzeImage(...)` only if Oracle fixes the generated wrapper behavior and you want to return to the higher-level SDK method.
 - `Design Decision Change`: Updated `docs/design-decisions.md` / `designchoices.md` to record the runtime Vision transport choice.
 
+## 2026-03-24 (fix Oracle media metadata update type mismatch)
+
+- `Date`: 2026-03-24
+- `Change`: Fixed the shared media-metadata update helper so routes that only need to write `mediaMetadata` no longer bind null EXIF numeric values into the Oracle `media_assets` update statement.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. `POST /photos/[fileId]/intelligence` and `POST /photos/[fileId]/processing-status` were both failing with `ORA-00932` because [tables.ts](C:/Users/steph/the-eternal-family-link/src/lib/oci/tables.ts) always sent `COALESCE(:exifOrientation, exif_orientation)` style expressions, even when callers did not provide EXIF values. Oracle treated the null bind for `exif_orientation` as a character expression, which is incompatible with the `NUMBER` column type. The helper now builds the asset update dynamically and only includes EXIF columns when the caller actually provided values.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `POST /api/t/[tenantKey]/photos/[fileId]/processing-status` no longer returns `500` with `ORA-00932`.
+  - `POST /api/t/[tenantKey]/photos/[fileId]/intelligence` can persist refreshed `photoIntelligence` / `photoIntelligenceDebug` metadata again.
+- `Rollback Notes`: Revert the dynamic `media_assets` update clause construction and restore the old `COALESCE` update only if you also change the bind typing approach for nullable numeric EXIF columns.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-23 (make media analysis status and EXIF loading on-demand)
 
 - `Date`: 2026-03-23
