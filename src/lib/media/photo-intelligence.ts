@@ -280,7 +280,7 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
   const merged = {
     ...existing,
     photoIntelligence: suggestion,
-    photoIntelligenceDebug: input.debug ?? null,
+    photoIntelligenceDebug: undefined,
   };
   return {
     suggestion,

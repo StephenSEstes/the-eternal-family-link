@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-24 (stop persisting photo intelligence debug payload)
+
+- `Date`: 2026-03-24
+- `Change`: Stopped persisting `photoIntelligenceDebug` inside `media_metadata` while keeping the full live debug object in the `/intelligence` response.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. After normalizing asset technical fields out of JSON, some files still overflowed `MEDIA_ASSETS.MEDIA_METADATA` because the successful intelligence path was persisting `photoIntelligenceDebug`, especially the large raw Vision payload, inside the metadata blob. That pushed known files like `Steve's Mission to Guatemala` just over Oracle's `VARCHAR2(4000)` limit even though the Vision call itself succeeded. Removing persisted debug entirely addresses the confirmed remaining overflow while keeping current-run diagnostics available in the immediate route response.
+- `Files`:
+  - `src/lib/media/photo-intelligence.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - `POST /api/t/[tenantKey]/photos/[fileId]/intelligence` succeeds for previously failing files that were only overflowing on persisted debug size.
+  - The live route response still includes the full debug object for immediate troubleshooting, but reopened media reads no longer depend on storing any photo-intelligence debug payload in `media_metadata`.
+- `Rollback Notes`: Revert the persisted-debug removal only if debug storage is moved to a more appropriate log table or `media_metadata` is widened beyond the current `VARCHAR2(4000)` constraint.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-24 (normalize asset technical media fields out of JSON)
 
 - `Date`: 2026-03-24
