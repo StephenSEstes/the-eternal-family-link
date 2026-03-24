@@ -142,6 +142,9 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
   if (!detail.mediaMetadata && mediaAsset?.mediaMetadata) {
     detail.mediaMetadata = mediaAsset.mediaMetadata.trim();
   }
+  if (!detail.name && mediaAsset?.fileName) {
+    detail.name = mediaAsset.fileName.trim();
+  }
   detail.exifExtractedAt = mediaAsset?.exifExtractedAt?.trim() || "";
   detail.processingStatus = readMediaProcessingStatus(detail.mediaMetadata || mediaAsset?.mediaMetadata || "");
 

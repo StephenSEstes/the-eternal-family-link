@@ -152,6 +152,10 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const persistedExif = validated.mediaKind === "image"
       ? await collectPersistedExifData(bytes)
       : null;
+    const checksumSha256 = createHash("sha256").update(bytes).digest("hex");
+    const normalizedMediaWidth = Number.parseFloat(mediaWidth);
+    const normalizedMediaHeight = Number.parseFloat(mediaHeight);
+    const normalizedMediaDurationSec = Number.parseFloat(mediaDurationSec);
 
     const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
@@ -168,7 +172,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       durationSec: mediaDurationSec,
       captureSource,
       extra: {
-        checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+        checksumSha256,
         objectStorage: {
           provider: "oci_object",
           namespace: objectStorage.namespace,
@@ -190,6 +194,9 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       buildMediaProcessingStatus({
         fileId,
         rawMetadata: baseMediaMetadata,
+        fileName: safeFileName,
+        originalObjectKey,
+        thumbnailObjectKey: thumbnailUpload?.objectKey || "",
         exifExtractedAt: persistedExif?.extractedAt,
         exifCaptureDate: persistedExif?.captureDate,
       }),
@@ -250,9 +257,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       sortOrder: 0,
       mediaMetadata,
       storageProvider: "oci_object",
+      sourceProvider: "oci_object",
+      sourceFileId: fileId,
+      originalObjectKey,
+      thumbnailObjectKey: thumbnailUpload?.objectKey || "",
+      checksumSha256,
       mimeType: validated.mimeType,
       fileName: safeFileName,
       fileSizeBytes: String(bytes.length),
+      mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
+      mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
+      mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
       createdAt: createdAtIso,
       exifExtractedAt: persistedExif?.extractedAt,
       exifSourceTag: persistedExif?.sourceTag,
@@ -299,9 +314,17 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
             sortOrder: 0,
             mediaMetadata,
             storageProvider: "oci_object",
+            sourceProvider: "oci_object",
+            sourceFileId: fileId,
+            originalObjectKey,
+            thumbnailObjectKey: thumbnailUpload?.objectKey || "",
+            checksumSha256,
             mimeType: validated.mimeType,
             fileName: safeFileName,
             fileSizeBytes: String(bytes.length),
+            mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
+            mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
+            mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
             createdAt: createdAtIso,
             replaceAttributeLinks: false,
           });

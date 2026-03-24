@@ -60,9 +60,17 @@ export async function syncPersonMediaAssociations(input: {
   sortOrder?: number;
   mediaMetadata?: string;
   storageProvider?: string;
+  sourceProvider?: string;
+  sourceFileId?: string;
+  originalObjectKey?: string;
+  thumbnailObjectKey?: string;
+  checksumSha256?: string;
   mimeType?: string;
   fileName?: string;
   fileSizeBytes?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  mediaDurationSec?: number;
   createdAt?: string;
   exifExtractedAt?: string;
   exifSourceTag?: string;
@@ -116,10 +124,18 @@ export async function syncPersonMediaAssociations(input: {
   await upsertOciMediaAsset({
     mediaId,
     fileId,
-    storageProvider: (input.storageProvider ?? "gdrive").trim(),
+    storageProvider: input.storageProvider?.trim(),
+    sourceProvider: input.sourceProvider,
+    sourceFileId: input.sourceFileId,
+    originalObjectKey: input.originalObjectKey,
+    thumbnailObjectKey: input.thumbnailObjectKey,
+    checksumSha256: input.checksumSha256,
     mimeType: (input.mimeType ?? "").trim(),
     fileName: (input.fileName ?? "").trim(),
     fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
+    mediaWidth: input.mediaWidth,
+    mediaHeight: input.mediaHeight,
+    mediaDurationSec: input.mediaDurationSec,
     mediaMetadata,
     createdAt,
     exifExtractedAt: input.exifExtractedAt,

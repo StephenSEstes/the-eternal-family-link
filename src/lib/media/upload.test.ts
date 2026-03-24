@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildMediaMetadata,
+  compactMediaMetadata,
   fallbackUploadExtension,
   inferStoredMediaKind,
   normalizeMediaKind,
@@ -55,7 +56,7 @@ test("sanitizeUploadFileName strips unsafe characters", () => {
   assert.equal(sanitizeUploadFileName("", "fallback.jpg"), "fallback.jpg");
 });
 
-test("buildMediaMetadata includes typed media details", () => {
+test("buildMediaMetadata stores only compact media metadata", () => {
   const payload = buildMediaMetadata({
     fileName: "clip.mp4",
     mimeType: "video/mp4",
@@ -69,10 +70,38 @@ test("buildMediaMetadata includes typed media details", () => {
   });
   const parsed = JSON.parse(payload) as Record<string, unknown>;
   assert.equal(parsed.mediaKind, "video");
-  assert.equal(parsed.width, 1920);
-  assert.equal(parsed.height, 1080);
-  assert.equal(parsed.durationSec, 8.4);
   assert.equal(parsed.captureSource, "camera");
+  assert.equal(parsed.width, undefined);
+  assert.equal(parsed.fileName, undefined);
+});
+
+test("compactMediaMetadata strips normalized asset fields from legacy JSON", () => {
+  const payload = compactMediaMetadata(JSON.stringify({
+    fileName: "legacy.jpg",
+    mimeType: "image/jpeg",
+    sizeBytes: 123,
+    createdAt: "2026-03-24T00:00:00.000Z",
+    width: 640,
+    height: 480,
+    durationSec: 0,
+    checksumSha256: "abc",
+    sourceProvider: "oci_object",
+    sourceFileId: "legacy-file",
+    originalObjectKey: "obj/original",
+    thumbnailObjectKey: "obj/thumb",
+    objectStorage: {
+      originalObjectKey: "obj/original",
+      thumbnailObjectKey: "obj/thumb",
+    },
+    mediaKind: "image",
+    captureSource: "camera",
+  }));
+  const parsed = JSON.parse(payload) as Record<string, unknown>;
+  assert.equal(parsed.mediaKind, "image");
+  assert.equal(parsed.captureSource, "camera");
+  assert.equal(parsed.fileName, undefined);
+  assert.equal(parsed.checksumSha256, undefined);
+  assert.equal(parsed.objectStorage, undefined);
 });
 
 test("inferStoredMediaKind falls back to metadata and file extensions", () => {

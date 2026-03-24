@@ -51,6 +51,12 @@ export type MediaAttachLibraryItem = {
   description: string;
   date: string;
   mediaMetadata?: string;
+  mimeType?: string;
+  fileSizeBytes?: string;
+  checksumSha256?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  mediaDurationSec?: number;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };

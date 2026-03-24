@@ -390,11 +390,19 @@ export function MediaAttachWizard({
     const byLegacyFingerprint = new Map<string, MediaAttachLibraryItem>();
     for (const item of catalog) {
       const parsed = parseMediaMetadata(item.mediaMetadata);
-      const checksum = String(parsed?.checksumSha256 ?? "").trim().toLowerCase();
+      const checksum = String(item.checksumSha256 ?? parsed?.checksumSha256 ?? "").trim().toLowerCase();
       if (checksum && !byChecksum.has(checksum)) {
         byChecksum.set(checksum, item);
       }
-      const fingerprint = toLegacyFingerprint(parsed);
+      const fileSizeBytes = Number.parseFloat(String(item.fileSizeBytes ?? ""));
+      const width = Number(item.mediaWidth ?? NaN);
+      const height = Number(item.mediaHeight ?? NaN);
+      const fingerprint = toLegacyFingerprint({
+        sizeBytes: Number.isFinite(fileSizeBytes) ? fileSizeBytes : Number(parsed?.sizeBytes ?? 0),
+        width: Number.isFinite(width) ? width : Number(parsed?.width ?? 0),
+        height: Number.isFinite(height) ? height : Number(parsed?.height ?? 0),
+        mimeType: String(item.mimeType ?? parsed?.mimeType ?? "").trim(),
+      });
       if (fingerprint && !byLegacyFingerprint.has(fingerprint)) {
         byLegacyFingerprint.set(fingerprint, item);
       }

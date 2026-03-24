@@ -1,4 +1,4 @@
-import { inferStoredMediaKind, parseMediaMetadata } from "@/lib/media/upload";
+import { compactMediaMetadata, inferStoredMediaKind, parseMediaMetadata } from "@/lib/media/upload";
 
 export type PhotoVisionInsight = {
   labels: Array<{ name: string; confidence: number }>;
@@ -284,7 +284,7 @@ export function buildPhotoIntelligenceSuggestion(input: BuildPhotoIntelligenceIn
   };
   return {
     suggestion,
-    mediaMetadata: JSON.stringify(merged),
+    mediaMetadata: compactMediaMetadata(JSON.stringify(merged)),
   };
 }
 

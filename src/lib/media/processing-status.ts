@@ -2,7 +2,7 @@ import {
   readPhotoIntelligenceDebug,
   type PhotoIntelligenceDebug,
 } from "@/lib/media/photo-intelligence";
-import { inferStoredMediaKind } from "@/lib/media/upload";
+import { compactMediaMetadata, inferStoredMediaKind } from "@/lib/media/upload";
 
 export type MediaProcessingStepState = "completed" | "pending" | "failed" | "not_applicable";
 
@@ -29,6 +29,9 @@ const VALID_STEP_STATES = new Set<MediaProcessingStepState>(["completed", "pendi
 type BuildMediaProcessingStatusInput = {
   fileId: string;
   rawMetadata?: string;
+  fileName?: string;
+  originalObjectKey?: string;
+  thumbnailObjectKey?: string;
   exifExtractedAt?: string;
   exifCaptureDate?: string;
   faceInstanceCount?: number;
@@ -151,7 +154,7 @@ export function writeMediaProcessingStatus(
 ): string {
   const metadata = parseRawMetadataForWrite(rawMetadata);
   metadata[PROCESSING_STATUS_METADATA_KEY] = processingStatus;
-  return JSON.stringify(metadata);
+  return compactMediaMetadata(JSON.stringify(metadata));
 }
 
 export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInput): MediaProcessingStatus {
@@ -162,9 +165,13 @@ export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInpu
   const objectStorage = metadata.objectStorage && typeof metadata.objectStorage === "object"
     ? (metadata.objectStorage as Record<string, unknown>)
     : null;
-  const originalObjectKey = String(objectStorage?.originalObjectKey ?? metadata.originalObjectKey ?? "").trim();
-  const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? metadata.thumbnailObjectKey ?? "").trim();
-  const originalFileName = String(metadata.fileName ?? "").trim();
+  const originalObjectKey = String(
+    input.originalObjectKey ?? objectStorage?.originalObjectKey ?? metadata.originalObjectKey ?? "",
+  ).trim();
+  const thumbnailObjectKey = String(
+    input.thumbnailObjectKey ?? objectStorage?.thumbnailObjectKey ?? metadata.thumbnailObjectKey ?? "",
+  ).trim();
+  const originalFileName = String(input.fileName ?? metadata.fileName ?? "").trim();
   const thumbnailFileName = extractObjectFileName(thumbnailObjectKey);
   const faceInstanceCount = Math.max(0, Math.trunc(input.faceInstanceCount ?? 0));
   const faceVectorCount = Math.max(

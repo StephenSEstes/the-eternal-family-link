@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-24: Normalized asset-level storage fields (source/object keys, checksum, dimensions, duration) onto `MediaAssets`, stopped copying asset metadata into `MediaLinks`, and compacted newly written media JSON so the media routes no longer depend on oversized catch-all metadata blobs. See `docs/change-summary.md`.
 - 2026-03-24: Fixed the shared media metadata update helper so `intelligence` and `processing-status` routes no longer fail with Oracle `ORA-00932` when no EXIF numeric values are being written. See `docs/change-summary.md`.
 - 2026-03-23: Replaced the runtime OCI Vision `analyzeImage` wrapper with a direct signed REST transport while keeping SDK auth/signing/http transport, so valid images no longer depend on the unreliable generated wrapper path and Vision errors can surface real HTTP/status/body details. See `docs/change-summary.md`.
 - 2026-03-23: Made media Analysis status and legacy EXIF loading fully on-demand, so media detail open reuses cached status, `Load/Refresh Processing Status` recomputes only when requested, and `Load EXIF` backfills missing EXIF for older image files. See `docs/change-summary.md`.

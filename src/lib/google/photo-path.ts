@@ -12,18 +12,13 @@ export function getPhotoProxyPath(fileId: string, tenantKey?: string) {
 export function getPhotoPreviewProxyPath(fileId: string, rawMetadata?: string, tenantKey?: string) {
   const previewFileId = resolvePreviewFileId(fileId, rawMetadata);
   const basePath = getPhotoProxyPath(previewFileId || fileId, tenantKey);
-  const metadataText = String(rawMetadata ?? "").trim();
   if (previewFileId && previewFileId !== fileId) {
     return basePath;
   }
-  if (!metadataText || (!metadataText.startsWith("{") && !metadataText.startsWith("["))) {
-    return basePath;
-  }
   try {
-    const parsed = JSON.parse(metadataText) as Record<string, unknown>;
-    const objectStorage = parsed.objectStorage as Record<string, unknown> | undefined;
-    const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? "").trim();
-    if (thumbnailObjectKey) {
+    const parsed = rawMetadata ? JSON.parse(rawMetadata) as Record<string, unknown> : null;
+    const mediaKind = String(parsed?.mediaKind ?? "").trim().toLowerCase();
+    if (mediaKind === "image") {
       return `${basePath}${basePath.includes("?") ? "&" : "?"}variant=preview`;
     }
   } catch {

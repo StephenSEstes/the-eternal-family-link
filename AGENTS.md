@@ -63,6 +63,7 @@
   - if approved, update decision docs with date and reason in the same commit.
 - When a multi-step design/implementation approach is agreed, write the full execution plan into `TODO.md` before coding.
 - The `TODO.md` plan entry must include enough detail to execute without additional context (scope, phases, API/UI/data changes, validation checks, and completion criteria).
+- For schema-normalization work, if additional normalized fields seem necessary beyond the set Steve explicitly approved, stop and ask before adding them.
 
 ## Session Startup Behavior
 - At the start of each new repo session, read `TODO.md`, `docs/design-decisions.md`, and `designchoices.md`.

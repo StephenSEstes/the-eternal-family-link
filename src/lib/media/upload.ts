@@ -1,5 +1,10 @@
 export type MediaKind = "image" | "video" | "audio" | "document" | "unknown";
 export type SupportedMediaKind = Exclude<MediaKind, "unknown">;
+export type MediaMetadataParsed = Record<string, unknown> & {
+  mediaKind?: string;
+  thumbnailFileId?: string;
+  thumbFileId?: string;
+};
 
 const DEFAULT_MAX_MEDIA_BYTES = 40 * 1024 * 1024;
 const FALLBACK_MIME_TYPE = "application/octet-stream";
@@ -31,12 +36,25 @@ const DOCUMENT_EXTENSIONS = new Set([
   "ods",
 ]);
 
-function toSafeNumber(value: string | undefined) {
-  const parsed = Number.parseFloat(String(value ?? "").trim());
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return undefined;
-  }
-  return parsed;
+function compactMediaMetadataObject(value: Record<string, unknown>) {
+  const metadata = { ...value };
+  delete metadata.fileName;
+  delete metadata.mimeType;
+  delete metadata.sizeBytes;
+  delete metadata.createdAt;
+  delete metadata.width;
+  delete metadata.height;
+  delete metadata.durationSec;
+  delete metadata.sourceProvider;
+  delete metadata.sourceFileId;
+  delete metadata.originalObjectKey;
+  delete metadata.thumbnailObjectKey;
+  delete metadata.checksumSha256;
+  delete metadata.objectStorage;
+
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([, entry]) => entry !== undefined),
+  );
 }
 
 export function normalizeMediaKind(mimeType: string | undefined, fileName?: string): MediaKind {
@@ -145,35 +163,34 @@ export function buildMediaMetadata(input: {
   captureSource?: string;
   extra?: Record<string, unknown>;
 }) {
-  const metadata = {
-    fileName: input.fileName,
-    mimeType: input.mimeType,
-    sizeBytes: input.sizeBytes,
-    createdAt: input.createdAt,
+  const metadata = compactMediaMetadataObject({
     mediaKind: input.mediaKind,
-    width: toSafeNumber(input.width),
-    height: toSafeNumber(input.height),
-    durationSec: toSafeNumber(input.durationSec),
     captureSource: String(input.captureSource ?? "").trim() || undefined,
     ...input.extra,
-  };
+  });
   return JSON.stringify(metadata);
 }
-
-type MediaMetadataParsed = {
-  mediaKind?: string;
-  thumbnailFileId?: string;
-  thumbFileId?: string;
-};
 
 export function parseMediaMetadata(rawMetadata: string | undefined): MediaMetadataParsed | null {
   const value = String(rawMetadata ?? "").trim();
   if (!value) return null;
   try {
-    return JSON.parse(value) as MediaMetadataParsed;
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as MediaMetadataParsed;
   } catch {
     return null;
   }
+}
+
+export function compactMediaMetadata(rawMetadata: string | undefined) {
+  const parsed = parseMediaMetadata(rawMetadata);
+  if (!parsed) {
+    return String(rawMetadata ?? "").trim();
+  }
+  return JSON.stringify(compactMediaMetadataObject(parsed));
 }
 
 export function resolvePreviewFileId(fileId: string, rawMetadata?: string) {

@@ -312,9 +312,17 @@ This section is a quick reference for the three data areas that drive profile/me
   - `media_id`
   - `file_id`
   - `storage_provider`
+  - `source_provider`
+  - `source_file_id`
+  - `original_object_key`
+  - `thumbnail_object_key`
+  - `checksum_sha256`
   - `mime_type`
   - `file_name`
   - `file_size_bytes`
+  - `media_width`
+  - `media_height`
+  - `media_duration_sec`
   - `media_metadata`
   - `created_at`
   - `exif_extracted_at`
@@ -329,7 +337,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `exif_orientation`
   - `exif_fingerprint`
 - Purpose:
-  - Canonical uploaded media file metadata registry, including normalized file-level EXIF fields that are extracted once and reused on later photo-intelligence runs.
+  - Canonical uploaded media file metadata registry, including normalized asset technical fields (source/object keys/checksum/dimensions/duration) plus normalized EXIF fields that are extracted once and reused on later photo-intelligence runs.
 - Logical index/key:
   - Unique: `media_id`
   - Common lookup: `file_id`
@@ -353,6 +361,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_at`
 - Purpose:
   - Link uploaded media to people, households, or attributes without duplicating files.
+  - `media_metadata` on links is legacy/compatibility-only and should not be used as the storage location for copied asset technical fields.
 - Logical index/key:
   - Unique: `link_id`
   - Common lookup: (`family_group_key`, `entity_type`, `entity_id`, `usage_type`)
@@ -500,15 +509,14 @@ This section is a quick reference for the three data areas that drive profile/me
 - Attribute media:
   - `MediaLinks` supports `entity_type = "attribute"` with `entity_id = Attributes.attribute_id`.
 - Media metadata:
-  - JSON payload may include:
-    - `mimeType`
+  - `MediaAssets.media_metadata` is now intended to stay lean and may include:
     - `mediaKind`
-    - `sizeBytes`
-    - `durationSec`
-    - `width`
-    - `height`
     - `captureSource`
+    - `processingStatus`
+    - `photoIntelligence`
+    - `photoIntelligenceDebug`
     - `photoIntelligence.faceSuggestions` (compact read model derived from `FaceInstances`/`FaceMatches`)
+  - Asset technical fields such as object keys, checksum, dimensions, duration, and source-file pointers should be read from normalized `MediaAssets` columns instead of JSON.
 - Media storage:
   - Files uploaded to Google Drive folder from `FamilyConfig.photos_folder_id`.
 - Media delivery:

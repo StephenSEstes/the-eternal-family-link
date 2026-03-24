@@ -272,11 +272,12 @@ export async function POST(request: Request, { params }: RouteProps) {
   }
   debug.facePersistenceLatencyMs = Date.now() - facePersistenceStartedAt;
 
-  const fileName = String(parsedMetadata.fileName ?? links[0]?.fileName ?? normalizedFileId).trim() || normalizedFileId;
+  const fileName = String(asset?.fileName ?? links[0]?.fileName ?? parsedMetadata.fileName ?? normalizedFileId).trim() || normalizedFileId;
+  const assetCreatedAt = String(asset?.createdAt ?? parsedMetadata.createdAt ?? "").trim();
   const initialGenerated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
     fileName,
-    createdAt: String(parsedMetadata.createdAt ?? "").trim(),
+    createdAt: assetCreatedAt,
     linkedPeople,
     existingMetadata: baseMetadata,
     dateSignal: exifDateSignal,
@@ -296,7 +297,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   const finalizedGenerated = buildPhotoIntelligenceSuggestion({
     fileId: normalizedFileId,
     fileName,
-    createdAt: String(parsedMetadata.createdAt ?? "").trim(),
+    createdAt: assetCreatedAt,
     linkedPeople,
     existingMetadata: baseMetadata,
     dateSignal: exifDateSignal,

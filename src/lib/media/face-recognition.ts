@@ -16,7 +16,6 @@ import {
   type OciPersonFaceProfileRow,
 } from "@/lib/oci/tables";
 import { analyzeInlineImageWithVision, detectFacesInlineWithVision, type OciVisionFace } from "@/lib/oci/vision";
-import { parseMediaMetadata } from "@/lib/media/upload";
 
 export type FaceConfidenceBand = "high" | "medium" | "low";
 
@@ -65,17 +64,6 @@ function buildFaceInstanceId(input: {
     "face",
     `${input.fileId}|${input.faceIndex}|${toStableNumber(input.boundingBox.x)}|${toStableNumber(input.boundingBox.y)}|${toStableNumber(input.boundingBox.width)}|${toStableNumber(input.boundingBox.height)}`,
   );
-}
-
-function readOriginalObjectKey(rawMetadata: string) {
-  const parsed = parseMediaMetadata(rawMetadata) as Record<string, unknown> | null;
-  if (!parsed) return "";
-  const objectStorage = parsed.objectStorage;
-  if (objectStorage && typeof objectStorage === "object") {
-    const key = String((objectStorage as Record<string, unknown>).originalObjectKey ?? "").trim();
-    if (key) return key;
-  }
-  return String(parsed.originalObjectKey ?? "").trim();
 }
 
 function parseEmbeddingJson(raw: string) {
@@ -252,7 +240,7 @@ async function bootstrapPersonFaceProfileFromHeadshot(input: {
   if (!asset) {
     return null;
   }
-  const originalObjectKey = readOriginalObjectKey(asset.mediaMetadata);
+  const originalObjectKey = asset.originalObjectKey.trim();
   if (!originalObjectKey) {
     return null;
   }

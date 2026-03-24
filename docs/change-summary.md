@@ -13,6 +13,45 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-24 (normalize asset technical media fields out of JSON)
+
+- `Date`: 2026-03-24
+- `Change`: Normalized asset-level storage and duplicate-support fields onto `MediaAssets`, stopped copying asset metadata into `MediaLinks`, and compacted newly written `media_metadata` so the media routes no longer rely on a large catch-all JSON blob for object keys, source pointers, checksum, dimensions, or duration.
+- `Type`: Schema | API | Data
+- `Why`: Root cause was a `mixed issue`. Critical asset fields were buried in `media_metadata` and mirrored into `MediaLinks`, which made reads depend on JSON parsing, allowed partial link/upsert paths to overwrite asset state incorrectly, and pushed `/intelligence` metadata writes over the `VARCHAR2(4000)` Oracle limit. Moving the approved fields to normalized `MediaAssets` columns and keeping asset JSON lean addresses the actual storage-model problem instead of only enlarging the column.
+- `Files`:
+  - `AGENTS.md`
+  - `TODO.md`
+  - `oci-schema.sql`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+  - `src/lib/media/upload.ts`
+  - `src/lib/media/upload.test.ts`
+  - `src/lib/oci/tables.ts`
+  - `src/lib/attributes/person-media.ts`
+  - `src/lib/google/photo-resolver.ts`
+  - `src/lib/google/photo-path.ts`
+  - `src/lib/media/processing-status.ts`
+  - `src/lib/media/processing-status.server.ts`
+  - `src/lib/media/photo-intelligence.ts`
+  - `src/lib/media/attach-orchestrator.ts`
+  - `src/components/media/MediaAttachWizard.tsx`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+- `Data Changes`: `MediaAssets` now has normalized columns for `source_provider`, `source_file_id`, `original_object_key`, `thumbnail_object_key`, `checksum_sha256`, `media_width`, `media_height`, and `media_duration_sec`. New writes stop persisting those fields into `media_metadata`, and `MediaLinks.media_metadata` is no longer used as a copy of asset technical metadata.
+- `Verify`:
+  - `npm run build` passes.
+  - New uploads persist the approved technical fields directly on `MediaAssets`.
+  - Resolver, face-recognition source-byte reads, and duplicate checks use normalized asset columns first, with JSON fallback only for legacy rows.
+  - The previously failing `/intelligence` metadata writes for known files now fit within the existing `VARCHAR2(4000)` `media_metadata` limit.
+- `Rollback Notes`: Revert the `MediaAssets` column additions and the lean-metadata/write-path changes together; do not restore link-level metadata mirroring without also accepting the prior JSON duplication and overflow risk.
+- `Design Decision Change`: Updated `docs/design-decisions.md` / `designchoices.md` to record that asset technical metadata belongs on normalized `MediaAssets` columns, not in duplicated link JSON.
+
 ## 2026-03-23 (replace Vision analyzeImage wrapper with direct signed REST transport)
 
 - `Date`: 2026-03-23

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import oracledb from "oracledb";
 import type { TableRecord } from "@/lib/data/types";
+import { compactMediaMetadata, parseMediaMetadata } from "@/lib/media/upload";
 
 // Ensure CLOB columns are returned as text instead of Lob objects.
 oracledb.fetchAsString = [oracledb.CLOB];
@@ -168,9 +169,17 @@ const TABLES: Record<string, TableConfig> = {
       "media_id",
       "file_id",
       "storage_provider",
+      "source_provider",
+      "source_file_id",
+      "original_object_key",
+      "thumbnail_object_key",
+      "checksum_sha256",
       "mime_type",
       "file_name",
       "file_size_bytes",
+      "media_width",
+      "media_height",
+      "media_duration_sec",
       "media_metadata",
       "created_at",
       "exif_extracted_at",
@@ -569,6 +578,14 @@ async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
     return;
   }
   const additiveColumns = [
+    "source_provider VARCHAR2(64)",
+    "source_file_id VARCHAR2(512)",
+    "original_object_key VARCHAR2(1024)",
+    "thumbnail_object_key VARCHAR2(1024)",
+    "checksum_sha256 VARCHAR2(128)",
+    "media_width NUMBER",
+    "media_height NUMBER",
+    "media_duration_sec NUMBER",
     "exif_extracted_at VARCHAR2(64)",
     "exif_source_tag VARCHAR2(64)",
     "exif_capture_date VARCHAR2(32)",
@@ -1366,13 +1383,30 @@ export type OciMediaLinkRow = {
   sortOrder: number;
   mediaMetadata: string;
   createdAt: string;
+  mimeType: string;
+  fileSizeBytes: string;
+  checksumSha256: string;
+  mediaWidth: number;
+  mediaHeight: number;
+  mediaDurationSec: number;
 };
 
 export type OciMediaAssetLookup = {
   fileId: string;
   storageProvider: string;
+  sourceProvider: string;
+  sourceFileId: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  checksumSha256: string;
   mimeType: string;
+  fileName: string;
+  fileSizeBytes: string;
+  mediaWidth: number;
+  mediaHeight: number;
+  mediaDurationSec: number;
   mediaMetadata: string;
+  createdAt: string;
   exifExtractedAt: string;
   exifSourceTag: string;
   exifCaptureDate: string;
@@ -1443,6 +1477,41 @@ function parseStoredNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function readLegacyMediaMetadataString(rawMetadata: string, key: string) {
+  const parsed = parseMediaMetadata(rawMetadata);
+  if (!parsed) {
+    return "";
+  }
+  const direct = String(parsed[key] ?? "").trim();
+  if (direct) {
+    return direct;
+  }
+  const objectStorage = parsed.objectStorage;
+  if (objectStorage && typeof objectStorage === "object") {
+    return String((objectStorage as Record<string, unknown>)[key] ?? "").trim();
+  }
+  return "";
+}
+
+function readLegacyMediaMetadataNumber(rawMetadata: string, key: string) {
+  const parsed = parseMediaMetadata(rawMetadata);
+  if (!parsed) {
+    return 0;
+  }
+  const direct = Number(parsed[key] ?? 0);
+  if (Number.isFinite(direct) && direct > 0) {
+    return direct;
+  }
+  const objectStorage = parsed.objectStorage;
+  if (objectStorage && typeof objectStorage === "object") {
+    const nested = Number((objectStorage as Record<string, unknown>)[key] ?? 0);
+    if (Number.isFinite(nested) && nested > 0) {
+      return nested;
+    }
+  }
+  return 0;
+}
+
 function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
   return {
     familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
@@ -1460,6 +1529,12 @@ function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
     sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
     mediaMetadata: fromDbValue(row.MEDIA_METADATA),
     createdAt: fromDbValue(row.CREATED_AT),
+    mimeType: fromDbValue(row.MIME_TYPE),
+    fileSizeBytes: fromDbValue(row.FILE_SIZE_BYTES),
+    checksumSha256: fromDbValue(row.CHECKSUM_SHA256),
+    mediaWidth: parseStoredNumber(row.MEDIA_WIDTH),
+    mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT),
+    mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC),
   };
 }
 
@@ -1528,10 +1603,16 @@ async function queryOciMediaLinks(
          l.is_primary,
          l.sort_order,
          CASE
-           WHEN l.media_metadata IS NOT NULL AND DBMS_LOB.GETLENGTH(l.media_metadata) > 0 THEN l.media_metadata
-           ELSE a.media_metadata
+           WHEN a.media_metadata IS NOT NULL AND DBMS_LOB.GETLENGTH(a.media_metadata) > 0 THEN a.media_metadata
+           ELSE l.media_metadata
          END AS media_metadata,
-         l.created_at
+         l.created_at,
+         a.mime_type,
+         a.file_size_bytes,
+         a.checksum_sha256,
+         a.media_width,
+         a.media_height,
+         a.media_duration_sec
        FROM media_links l
        INNER JOIN media_assets a
          ON TRIM(a.media_id) = TRIM(l.media_id)
@@ -2316,9 +2397,17 @@ export async function upsertOciMediaAsset(input: {
   mediaId: string;
   fileId: string;
   storageProvider?: string;
+  sourceProvider?: string;
+  sourceFileId?: string;
+  originalObjectKey?: string;
+  thumbnailObjectKey?: string;
+  checksumSha256?: string;
   mimeType?: string;
   fileName?: string;
   fileSizeBytes?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  mediaDurationSec?: number;
   mediaMetadata?: string;
   createdAt?: string;
   exifExtractedAt?: string;
@@ -2340,15 +2429,24 @@ export async function upsertOciMediaAsset(input: {
   }
   return withConnection(async (connection) => {
     await ensureTableCompatibility(connection, "media_assets");
+    const compactedMediaMetadata = compactMediaMetadata(input.mediaMetadata);
     await connection.execute(
       `MERGE INTO media_assets t
        USING (
          SELECT :mediaId AS media_id,
                 :fileId AS file_id,
                 :storageProvider AS storage_provider,
+                :sourceProvider AS source_provider,
+                :sourceFileId AS source_file_id,
+                :originalObjectKey AS original_object_key,
+                :thumbnailObjectKey AS thumbnail_object_key,
+                :checksumSha256 AS checksum_sha256,
                 :mimeType AS mime_type,
                 :fileName AS file_name,
                 :fileSizeBytes AS file_size_bytes,
+                :mediaWidth AS media_width,
+                :mediaHeight AS media_height,
+                :mediaDurationSec AS media_duration_sec,
                 :mediaMetadata AS media_metadata,
                 :createdAt AS created_at,
                 :exifExtractedAt AS exif_extracted_at,
@@ -2366,13 +2464,24 @@ export async function upsertOciMediaAsset(input: {
        ) s
        ON (TRIM(t.media_id) = TRIM(s.media_id))
        WHEN MATCHED THEN UPDATE SET
-         t.file_id = s.file_id,
-         t.storage_provider = s.storage_provider,
-         t.mime_type = s.mime_type,
-         t.file_name = s.file_name,
-         t.file_size_bytes = s.file_size_bytes,
-         t.media_metadata = s.media_metadata,
-         t.created_at = s.created_at,
+         t.file_id = COALESCE(NULLIF(TRIM(s.file_id), ''), t.file_id),
+         t.storage_provider = COALESCE(NULLIF(TRIM(s.storage_provider), ''), t.storage_provider),
+         t.source_provider = COALESCE(s.source_provider, t.source_provider),
+         t.source_file_id = COALESCE(s.source_file_id, t.source_file_id),
+         t.original_object_key = COALESCE(s.original_object_key, t.original_object_key),
+         t.thumbnail_object_key = COALESCE(s.thumbnail_object_key, t.thumbnail_object_key),
+         t.checksum_sha256 = COALESCE(s.checksum_sha256, t.checksum_sha256),
+         t.mime_type = COALESCE(NULLIF(TRIM(s.mime_type), ''), t.mime_type),
+         t.file_name = COALESCE(NULLIF(TRIM(s.file_name), ''), t.file_name),
+         t.file_size_bytes = COALESCE(NULLIF(TRIM(s.file_size_bytes), ''), t.file_size_bytes),
+         t.media_width = COALESCE(s.media_width, t.media_width),
+         t.media_height = COALESCE(s.media_height, t.media_height),
+         t.media_duration_sec = COALESCE(s.media_duration_sec, t.media_duration_sec),
+         t.media_metadata = CASE
+           WHEN s.media_metadata IS NOT NULL AND LENGTH(TRIM(s.media_metadata)) > 0 THEN s.media_metadata
+           ELSE t.media_metadata
+         END,
+         t.created_at = COALESCE(NULLIF(TRIM(s.created_at), ''), t.created_at),
          t.exif_extracted_at = COALESCE(s.exif_extracted_at, t.exif_extracted_at),
          t.exif_source_tag = COALESCE(s.exif_source_tag, t.exif_source_tag),
          t.exif_capture_date = COALESCE(s.exif_capture_date, t.exif_capture_date),
@@ -2388,9 +2497,17 @@ export async function upsertOciMediaAsset(input: {
          media_id,
          file_id,
          storage_provider,
+         source_provider,
+         source_file_id,
+         original_object_key,
+         thumbnail_object_key,
+         checksum_sha256,
          mime_type,
          file_name,
          file_size_bytes,
+         media_width,
+         media_height,
+         media_duration_sec,
          media_metadata,
          created_at,
          exif_extracted_at,
@@ -2408,9 +2525,17 @@ export async function upsertOciMediaAsset(input: {
          s.media_id,
          s.file_id,
          s.storage_provider,
+         s.source_provider,
+         s.source_file_id,
+         s.original_object_key,
+         s.thumbnail_object_key,
+         s.checksum_sha256,
          s.mime_type,
          s.file_name,
          s.file_size_bytes,
+         s.media_width,
+         s.media_height,
+         s.media_duration_sec,
          s.media_metadata,
          s.created_at,
          s.exif_extracted_at,
@@ -2428,11 +2553,19 @@ export async function upsertOciMediaAsset(input: {
       {
         mediaId,
         fileId,
-        storageProvider: (input.storageProvider ?? "gdrive").trim(),
+        storageProvider: input.storageProvider ? input.storageProvider.trim() : null,
+        sourceProvider: input.sourceProvider ? input.sourceProvider.trim() : null,
+        sourceFileId: input.sourceFileId ? input.sourceFileId.trim() : null,
+        originalObjectKey: input.originalObjectKey ? input.originalObjectKey.trim() : null,
+        thumbnailObjectKey: input.thumbnailObjectKey ? input.thumbnailObjectKey.trim() : null,
+        checksumSha256: input.checksumSha256 ? input.checksumSha256.trim() : null,
         mimeType: (input.mimeType ?? "").trim(),
         fileName: (input.fileName ?? "").trim(),
         fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
-        mediaMetadata: (input.mediaMetadata ?? "").trim(),
+        mediaWidth: Number.isFinite(input.mediaWidth) ? input.mediaWidth : null,
+        mediaHeight: Number.isFinite(input.mediaHeight) ? input.mediaHeight : null,
+        mediaDurationSec: Number.isFinite(input.mediaDurationSec) ? input.mediaDurationSec : null,
+        mediaMetadata: compactedMediaMetadata,
         createdAt: (input.createdAt ?? "").trim(),
         exifExtractedAt: input.exifExtractedAt ? input.exifExtractedAt.trim() : null,
         exifSourceTag: input.exifSourceTag ? input.exifSourceTag.trim() : null,
@@ -2474,6 +2607,7 @@ export async function upsertOciMediaLink(input: {
     throw new Error("family_group_key, link_id, media_id, and entity_id are required");
   }
   return withConnection(async (connection) => {
+    const linkMetadata = "";
     await connection.execute(
       `MERGE INTO media_links t
        USING (
@@ -2547,7 +2681,7 @@ export async function upsertOciMediaLink(input: {
         photoDate: (input.photoDate ?? "").trim(),
         isPrimary: input.isPrimary ? "TRUE" : "FALSE",
         sortOrder: String(input.sortOrder ?? 0),
-        mediaMetadata: (input.mediaMetadata ?? "").trim(),
+        mediaMetadata: linkMetadata,
         createdAt: (input.createdAt ?? "").trim(),
       },
       { autoCommit: true },
@@ -2656,8 +2790,19 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
       `SELECT
          a.file_id,
          a.storage_provider,
+         a.source_provider,
+         a.source_file_id,
+         a.original_object_key,
+         a.thumbnail_object_key,
+         a.checksum_sha256,
          a.mime_type,
+         a.file_name,
+         a.file_size_bytes,
+         a.media_width,
+         a.media_height,
+         a.media_duration_sec,
          a.media_metadata,
+         a.created_at,
          a.exif_extracted_at,
          a.exif_source_tag,
          a.exif_capture_date,
@@ -2683,11 +2828,23 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
     if (!row) {
       return null;
     }
+    const rawMetadata = fromDbValue(row.MEDIA_METADATA);
     return {
       fileId: fromDbValue(row.FILE_ID),
       storageProvider: fromDbValue(row.STORAGE_PROVIDER),
+      sourceProvider: fromDbValue(row.SOURCE_PROVIDER) || readLegacyMediaMetadataString(rawMetadata, "sourceProvider"),
+      sourceFileId: fromDbValue(row.SOURCE_FILE_ID) || readLegacyMediaMetadataString(rawMetadata, "sourceFileId"),
+      originalObjectKey: fromDbValue(row.ORIGINAL_OBJECT_KEY) || readLegacyMediaMetadataString(rawMetadata, "originalObjectKey"),
+      thumbnailObjectKey: fromDbValue(row.THUMBNAIL_OBJECT_KEY) || readLegacyMediaMetadataString(rawMetadata, "thumbnailObjectKey"),
+      checksumSha256: fromDbValue(row.CHECKSUM_SHA256) || readLegacyMediaMetadataString(rawMetadata, "checksumSha256"),
       mimeType: fromDbValue(row.MIME_TYPE),
-      mediaMetadata: fromDbValue(row.MEDIA_METADATA),
+      fileName: fromDbValue(row.FILE_NAME),
+      fileSizeBytes: fromDbValue(row.FILE_SIZE_BYTES),
+      mediaWidth: parseStoredNumber(row.MEDIA_WIDTH) || readLegacyMediaMetadataNumber(rawMetadata, "width"),
+      mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT) || readLegacyMediaMetadataNumber(rawMetadata, "height"),
+      mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC) || readLegacyMediaMetadataNumber(rawMetadata, "durationSec"),
+      mediaMetadata: rawMetadata,
+      createdAt: fromDbValue(row.CREATED_AT),
       exifExtractedAt: fromDbValue(row.EXIF_EXTRACTED_AT),
       exifSourceTag: fromDbValue(row.EXIF_SOURCE_TAG),
       exifCaptureDate: fromDbValue(row.EXIF_CAPTURE_DATE),
@@ -3389,17 +3546,17 @@ export async function updateOciMediaMetadataForFile(input: {
   exifOrientation?: number;
   exifFingerprint?: string;
 }) {
-  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
   const fileId = input.fileId.trim();
-  if (!familyGroupKey || !fileId) {
+  if (!input.familyGroupKey.trim() || !fileId) {
     return { assetsUpdated: 0, linksUpdated: 0 };
   }
   return withConnection(async (connection) => {
     await ensureTableCompatibility(connection, "media_assets");
+    const compactedMediaMetadata = compactMediaMetadata(input.mediaMetadata);
     const assetSetClauses = ["media_metadata = :mediaMetadata"];
     const assetBinds: Record<string, unknown> = {
       fileId,
-      mediaMetadata: input.mediaMetadata.trim(),
+      mediaMetadata: compactedMediaMetadata,
     };
 
     const assignStringColumn = (columnName: string, bindName: string, value: string | undefined) => {
@@ -3437,26 +3594,10 @@ export async function updateOciMediaMetadataForFile(input: {
       assetBinds,
       { autoCommit: false },
     );
-    const linkUpdate = await connection.execute(
-      `UPDATE media_links
-       SET media_metadata = :mediaMetadata
-       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
-         AND TRIM(media_id) IN (
-           SELECT TRIM(file_id_media.media_id)
-           FROM media_assets file_id_media
-           WHERE TRIM(file_id_media.file_id) = :fileId
-         )`,
-      {
-        familyGroupKey,
-        fileId,
-        mediaMetadata: input.mediaMetadata.trim(),
-      },
-      { autoCommit: false },
-    );
     await connection.commit();
     return {
       assetsUpdated: assetUpdate.rowsAffected ?? 0,
-      linksUpdated: linkUpdate.rowsAffected ?? 0,
+      linksUpdated: 0,
     };
   });
 }

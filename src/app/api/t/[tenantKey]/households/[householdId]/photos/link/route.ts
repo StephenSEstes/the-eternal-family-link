@@ -82,7 +82,6 @@ export async function POST(request: Request, { params }: RouteProps) {
   await upsertOciMediaAsset({
     mediaId,
     fileId,
-    storageProvider: "gdrive",
     mediaMetadata,
     createdAt: nowIso,
   });

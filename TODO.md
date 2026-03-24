@@ -4,6 +4,55 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Normalize media asset technical storage fields out of `media_metadata`
+  Priority: High
+  Est date: 2026-03-24
+  Desc: Move critical file-storage and duplicate-support fields out of `MediaAssets.media_metadata` JSON into normalized `MediaAssets` columns so media routes can read/write them directly in SQL, stop duplicating them into `MediaLinks`, and reduce the persisted metadata payload enough to avoid `ORA-12899` on intelligence/status writes.
+  Scope:
+  - Add normalized `MediaAssets` columns for:
+    - `source_provider`
+    - `source_file_id`
+    - `original_object_key`
+    - `thumbnail_object_key`
+    - `checksum_sha256`
+    - `media_width`
+    - `media_height`
+    - `media_duration_sec`
+  - Keep these as asset-level fields only; do not store them in `MediaLinks`.
+  - Update the OCI compatibility layer, upload routes, resolver paths, duplicate detection reads, and intelligence/status paths to read/write the new columns directly.
+  - Remove the migrated technical fields from newly written `media_metadata` JSON while keeping backward-compatible JSON fallback reads for older rows.
+  - Keep link-specific metadata behavior intact unless a route truly requires link-specific JSON.
+  Phases:
+  - Phase 1: Schema + compatibility layer
+    - Extend `oci-schema.sql` and `ensureMediaAssetsTableCompatibility()` with the approved normalized columns.
+    - Update `TABLES.MediaAssets.headers`, `OciMediaAssetLookup`, and asset query/upsert/update helpers to include the new columns.
+    - Leave `MediaLinks` schema unchanged, but stop treating it as the storage location for asset-level technical fields.
+  - Phase 2: Write-path cleanup
+    - Update person and household upload routes plus `syncPersonMediaAssociations()` to write the normalized fields to `MediaAssets`.
+    - Strip `sourceProvider`, `sourceFileId`, `objectStorage.originalObjectKey`, `objectStorage.thumbnailObjectKey`, `checksumSha256`, `width`, `height`, and `durationSec` out of newly written `media_metadata`.
+    - Stop mirroring `media_metadata` from `MediaAssets` into `MediaLinks` during asset metadata updates.
+  - Phase 3: Read-path cleanup
+    - Update photo resolver, face-recognition source-byte loads, processing-status helpers, search/attach duplicate detection, and intelligence routes to use normalized `MediaAssets` columns first.
+    - Keep JSON fallback reads for older rows that have not been normalized yet.
+    - Ensure `MediaLinks` reads still surface asset metadata when needed for UI compatibility, but do not rely on link-level copies of normalized asset fields.
+  - Phase 4: Validation + payload check
+    - Re-run the previously failing `/intelligence` and `/processing-status` write paths conceptually against the smaller metadata shape.
+    - Confirm the new asset metadata contract is small enough to avoid the known `VARCHAR2(4000)` overflow on the tested files.
+    - If payloads are still too large after the approved normalization, stop and ask Steve before adding more normalized columns or making a broader metadata redesign.
+  API/UI/data changes:
+  - API routes keep their existing external behavior, but asset writes/readbacks now come from normalized columns instead of parsing JSON for the approved fields.
+  - No new UI is required for this phase; existing photo/detail/attach flows should keep working with leaner metadata.
+  - Existing rows remain backward-compatible through JSON fallback until separately backfilled.
+  Validation:
+  - `npm run build` passes.
+  - Upload routes persist the approved fields on `MediaAssets` and no longer depend on `MediaLinks.media_metadata` for those fields.
+  - Resolver paths and duplicate checks can read object keys/checksum/dimensions without parsing JSON for newly written assets.
+  - The previously failing intelligence/status metadata writes fit within the current `VARCHAR2(4000)` limit for the known failing files.
+  Completion criteria:
+  - The approved technical storage fields are normalized on `MediaAssets`.
+  - Newly written `MediaLinks.media_metadata` does not carry duplicated asset technical fields.
+  - The affected media routes prefer normalized SQL columns with JSON fallback only for legacy rows.
+  - Build verification passes and the normalized design is documented.
 - [ ] Normalize person primary-photo model to one global canonical headshot
   Priority: High
   Est date: 2026-03-23

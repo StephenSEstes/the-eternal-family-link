@@ -259,3 +259,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep the generated `analyzeImage(...)` wrapper and continue patching error handling; replace the full OCI SDK stack instead of only the `analyzeImage` wrapper.
 - `Impact`: Vision request/response parsing is now owned by the app for this endpoint, which improves error visibility (`status`, `serviceCode`, raw body, `opc-request-id`) while preserving existing OCI auth/signing behavior and existing app-level Vision output shapes.
 - `Follow-up`: If Oracle fixes the generated wrapper behavior later, reevaluate whether returning to the higher-level SDK method is worthwhile.
+
+## 2026-03-24
+
+- `Area`: Media asset storage metadata normalization
+- `Decision`: Store asset-level technical media fields as normalized `MediaAssets` columns and keep `media_metadata` lean. The approved normalized fields are `source_provider`, `source_file_id`, `original_object_key`, `thumbnail_object_key`, `checksum_sha256`, `media_width`, `media_height`, and `media_duration_sec`. `MediaLinks` should not store copied asset technical metadata.
+- `Reason`: Asset technical fields were being buried in `media_metadata` JSON and duplicated into `MediaLinks.media_metadata`, which made SQL reads slower, inflated metadata payload size, and directly caused `ORA-12899` overflow failures on intelligence/status writes.
+- `Alternatives Considered`: Keep the catch-all JSON design; enlarge `media_metadata` to `CLOB`; continue mirroring asset metadata into `MediaLinks`.
+- `Impact`: Upload/resolver/intelligence/duplicate-detection paths should read and write the normalized asset fields directly on `MediaAssets`, while `media_metadata` is reserved for the remaining lean file/process payload. Legacy rows may still require JSON fallback reads until separately backfilled.
+- `Follow-up`: If more asset fields need normalization later, confirm the exact additional fields with Steve before expanding the schema beyond the approved set.

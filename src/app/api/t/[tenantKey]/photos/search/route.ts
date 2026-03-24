@@ -15,6 +15,12 @@ type SearchItem = {
   description: string;
   date: string;
   mediaMetadata?: string;
+  mimeType?: string;
+  fileSizeBytes?: string;
+  checksumSha256?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  mediaDurationSec?: number;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -149,6 +155,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         description: "",
         date: "",
         mediaMetadata: "",
+        mimeType: "",
+        fileSizeBytes: "",
+        checksumSha256: "",
+        mediaWidth: 0,
+        mediaHeight: 0,
+        mediaDurationSec: 0,
         people: [],
         households: [],
       });
@@ -193,6 +205,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     if (!item.description) item.description = row.description.trim();
     if (!item.date) item.date = row.photoDate.trim();
     if (!item.mediaMetadata) item.mediaMetadata = row.mediaMetadata.trim();
+    if (!item.mimeType) item.mimeType = row.mimeType.trim();
+    if (!item.fileSizeBytes) item.fileSizeBytes = row.fileSizeBytes.trim();
+    if (!item.checksumSha256) item.checksumSha256 = row.checksumSha256.trim();
+    if (!item.mediaWidth) item.mediaWidth = row.mediaWidth;
+    if (!item.mediaHeight) item.mediaHeight = row.mediaHeight;
+    if (!item.mediaDurationSec) item.mediaDurationSec = row.mediaDurationSec;
 
     if (entityType === "person") {
       if (!item.people.some((person) => person.personId === entityId)) {

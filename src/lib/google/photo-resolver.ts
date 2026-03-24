@@ -90,12 +90,14 @@ async function getObjectKeyByFileId(fileId: string) {
     asset && storageProvider === "oci_object"
       ? (() => {
           const objectStorageMetadata = normalizeObjectStorageMetadata(String(asset.mediaMetadata ?? ""));
-          if (!objectStorageMetadata.originalObjectKey) {
+          const originalObjectKey = String(asset.originalObjectKey ?? "").trim() || objectStorageMetadata.originalObjectKey;
+          const thumbnailObjectKey = String(asset.thumbnailObjectKey ?? "").trim() || objectStorageMetadata.thumbnailObjectKey;
+          if (!originalObjectKey) {
             return null;
           }
           return {
-            originalObjectKey: objectStorageMetadata.originalObjectKey,
-            thumbnailObjectKey: objectStorageMetadata.thumbnailObjectKey,
+            originalObjectKey,
+            thumbnailObjectKey,
             mimeType: String(asset.mimeType ?? "").trim() || "application/octet-stream",
           };
         })()

@@ -61,6 +61,9 @@ export async function getMediaProcessingStatusForFile(input: MediaProcessingStat
   return buildMediaProcessingStatus({
     fileId,
     rawMetadata: mediaMetadata,
+    fileName: asset?.fileName,
+    originalObjectKey: asset?.originalObjectKey,
+    thumbnailObjectKey: asset?.thumbnailObjectKey,
     exifExtractedAt: asset?.exifExtractedAt,
     exifCaptureDate: asset?.exifCaptureDate,
     faceInstanceCount: faceInstances.length,
