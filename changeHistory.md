@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-24: Added targeted `/intelligence` metadata-overflow diagnostics so failing requests now log which write step overflowed and the top-level JSON key sizes Oracle was asked to persist. See `docs/change-summary.md`.
 - 2026-03-24: Stopped persisting `photoIntelligenceDebug` in stored media metadata, so successful `/intelligence` runs no longer overflow `MEDIA_ASSETS.MEDIA_METADATA` because of debug payload size. See `docs/change-summary.md`.
 - 2026-03-24: Normalized asset-level storage fields (source/object keys, checksum, dimensions, duration) onto `MediaAssets`, stopped copying asset metadata into `MediaLinks`, and compacted newly written media JSON so the media routes no longer depend on oversized catch-all metadata blobs. See `docs/change-summary.md`.
 - 2026-03-24: Fixed the shared media metadata update helper so `intelligence` and `processing-status` routes no longer fail with Oracle `ORA-00932` when no EXIF numeric values are being written. See `docs/change-summary.md`.

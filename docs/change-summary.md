@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-24 (add intelligence metadata overflow diagnostics)
+
+- `Date`: 2026-03-24
+- `Change`: Added targeted overflow diagnostics around the two `/intelligence` media-metadata writes so failing requests log the exact attempted payload length and top-level key sizes.
+- `Type`: API
+- `Why`: Root cause was still unresolved for `Steve's Mission to Guatemala` after the earlier metadata compaction changes. Oracle only reported that `MEDIA_ASSETS.MEDIA_METADATA` exceeded `4000`, which was not enough to identify whether the overflow happened on the first or second write or which top-level key was responsible. Logging the exact write step and per-key sizes is the minimal way to turn the next failure into a decisive root-cause record.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - A failing `/api/t/[tenantKey]/photos/[fileId]/intelligence` request now logs `step=initial` or `step=response`, plus total metadata length and per-key lengths for the attempted payload.
+- `Rollback Notes`: Remove the temporary `console.error` payload summaries from the intelligence route once the remaining overflow cause is identified and fixed.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-24 (stop persisting photo intelligence debug payload)
 
 - `Date`: 2026-03-24

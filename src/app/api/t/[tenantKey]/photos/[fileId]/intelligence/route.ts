@@ -43,6 +43,20 @@ function parseMetadata(raw: string): Record<string, unknown> {
   }
 }
 
+function summarizeMetadataForLog(rawMetadata: string) {
+  const parsed = parseMetadata(rawMetadata);
+  const keyLengths = Object.fromEntries(
+    Object.entries(parsed)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [key, JSON.stringify(value).length]),
+  );
+  return {
+    totalLength: rawMetadata.length,
+    keys: Object.keys(parsed).sort(),
+    keyLengths,
+  };
+}
+
 export async function POST(request: Request, { params }: RouteProps) {
   const routeStartedAt = Date.now();
   const { tenantKey, fileId } = await params;
@@ -74,6 +88,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   }
 
   const baseMetadata = (asset?.mediaMetadata || links[0]?.mediaMetadata || "").trim();
+  const baseMetadataSummary = summarizeMetadataForLog(baseMetadata);
   const parsedMetadata = parseMetadata(baseMetadata);
   if (!canRunPhotoIntelligence(normalizedFileId, baseMetadata)) {
     return NextResponse.json({
@@ -287,11 +302,24 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
 
   const metadataUpdateStartedAt = Date.now();
-  await updateOciMediaMetadataForFile({
-    familyGroupKey: resolved.tenant.tenantKey,
-    fileId: normalizedFileId,
-    mediaMetadata: initialGenerated.mediaMetadata,
-  });
+  try {
+    await updateOciMediaMetadataForFile({
+      familyGroupKey: resolved.tenant.tenantKey,
+      fileId: normalizedFileId,
+      mediaMetadata: initialGenerated.mediaMetadata,
+    });
+  } catch (error) {
+    console.error("[photo-intelligence] metadata write failed", {
+      fileId: normalizedFileId,
+      tenantKey: resolved.tenant.tenantKey,
+      step: "initial",
+      baseMetadata: baseMetadataSummary,
+      attemptedMetadata: summarizeMetadataForLog(initialGenerated.mediaMetadata),
+      visionSucceeded,
+      detectedFaceCount: vision?.faceCount ?? 0,
+    });
+    throw error;
+  }
   debug.metadataUpdateLatencyMs = Date.now() - metadataUpdateStartedAt;
   debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
   const finalizedGenerated = buildPhotoIntelligenceSuggestion({
@@ -317,11 +345,25 @@ export async function POST(request: Request, { params }: RouteProps) {
     : finalizedGenerated.mediaMetadata;
   if (responseMediaMetadata !== initialGenerated.mediaMetadata) {
     const finalMetadataStartedAt = Date.now();
-    await updateOciMediaMetadataForFile({
-      familyGroupKey: resolved.tenant.tenantKey,
-      fileId: normalizedFileId,
-      mediaMetadata: responseMediaMetadata,
-    });
+    try {
+      await updateOciMediaMetadataForFile({
+        familyGroupKey: resolved.tenant.tenantKey,
+        fileId: normalizedFileId,
+        mediaMetadata: responseMediaMetadata,
+      });
+    } catch (error) {
+      console.error("[photo-intelligence] metadata write failed", {
+        fileId: normalizedFileId,
+        tenantKey: resolved.tenant.tenantKey,
+        step: "response",
+        baseMetadata: baseMetadataSummary,
+        initialMetadata: summarizeMetadataForLog(initialGenerated.mediaMetadata),
+        attemptedMetadata: summarizeMetadataForLog(responseMediaMetadata),
+        visionSucceeded,
+        detectedFaceCount: vision?.faceCount ?? 0,
+      });
+      throw error;
+    }
     debug.metadataUpdateLatencyMs += Date.now() - finalMetadataStartedAt;
   }
   debug.routeTotalLatencyMs = Date.now() - routeStartedAt;
