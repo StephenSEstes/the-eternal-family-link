@@ -16,6 +16,8 @@ import {
   validateUploadInput,
 } from "@/lib/media/upload";
 import { collectPersistedExifData } from "@/lib/media/exif";
+import { buildMediaProcessingStatus, writeMediaProcessingStatus } from "@/lib/media/processing-status";
+import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
 import { seedPersonFaceProfileFromUpload } from "@/lib/media/face-recognition";
 import { buildMediaFileId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
@@ -155,7 +157,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
     const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
-    const mediaMetadata = buildMediaMetadata({
+    const baseMediaMetadata = buildMediaMetadata({
       fileName: safeFileName,
       mimeType: validated.mimeType,
       sizeBytes: bytes.length,
@@ -183,6 +185,15 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
       },
     });
+    let mediaMetadata = writeMediaProcessingStatus(
+      baseMediaMetadata,
+      buildMediaProcessingStatus({
+        fileId,
+        rawMetadata: baseMediaMetadata,
+        exifExtractedAt: persistedExif?.extractedAt,
+        exifCaptureDate: persistedExif?.captureDate,
+      }),
+    );
 
     const existingPhotos = attributeType === "photo"
       ? toPersonMediaAttributes(
@@ -263,9 +274,41 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         personId,
         sourceFileId: fileId,
         imageBytes: bytes,
-      }).catch((profileError) => {
-        console.warn("[photos/upload] face profile seed skipped", profileError);
-      });
+      })
+        .then(async () => {
+          const processingStatus = await getMediaProcessingStatusForFile({
+            familyGroupKey: resolved.tenant.tenantKey,
+            fileId,
+            mediaMetadata,
+            preferFresh: true,
+          }).catch(() => null);
+          if (!processingStatus) {
+            return;
+          }
+          mediaMetadata = writeMediaProcessingStatus(mediaMetadata, processingStatus);
+          await syncPersonMediaAssociations({
+            tenantKey: resolved.tenant.tenantKey,
+            personId,
+            attributeId,
+            attributeType,
+            fileId,
+            label: shouldBePrimary ? "headshot" : label,
+            description,
+            photoDate: effectivePhotoDate,
+            isPrimary: shouldBePrimary,
+            sortOrder: 0,
+            mediaMetadata,
+            storageProvider: "oci_object",
+            mimeType: validated.mimeType,
+            fileName: safeFileName,
+            fileSizeBytes: String(bytes.length),
+            createdAt: createdAtIso,
+            replaceAttributeLinks: false,
+          });
+        })
+        .catch((profileError) => {
+          console.warn("[photos/upload] face profile seed skipped", profileError);
+        });
     }
 
     if (attributeType === "photo") {

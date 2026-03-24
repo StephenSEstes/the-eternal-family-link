@@ -138,6 +138,12 @@ I will update this list as we add, complete, or remove work.
     - Add a dedicated status tab to the media modal that shows the current step state for upload, EXIF, thumbnail generation, face coordinates identified, face vectors stored, and face identities verified.
     - Drive those status indicators from persisted media metadata, persisted EXIF columns, stored face-instance rows, confirmed face-match rows, and current suggestion/debug payloads instead of transient UI state alone.
     - Validate with `npm run build`, then confirm in production that new uploads already have EXIF before running suggestions and that the media modal status tab reflects both completed and pending steps correctly.
+  - 2026-03-23 analysis-tab on-demand status/exif plan:
+    - Stop computing processing status automatically on every media-detail open so the modal does not pay for extra status queries unless the user asks for them.
+    - Add a manual `Load Processing Status` action that recomputes the status snapshot on demand, persists it back to media metadata, and then lets future opens reuse the cached snapshot.
+    - Add a manual `Load EXIF` action for older image files whose EXIF was never collected at upload, and persist the extracted EXIF plus refreshed processing status when that button is used.
+    - Keep the `Face Vectors` and `Face Identities` tiles behavior unchanged, but show the original file name in the `Upload` tile, show the thumbnail file/object name in the `Thumbnail` tile, and show the detected face count directly in the `Face Coordinates` tile.
+    - Validate with `npm run build`, then confirm in production that opening the media modal no longer auto-loads processing status, that the two on-demand buttons work, and that the requested tile details display correctly.
   - Add confirm/reject APIs and UI actions.
   - Persist review actions + audit rows.
   - Update `person_face_profiles` from confirmed samples.

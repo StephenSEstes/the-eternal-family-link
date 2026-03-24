@@ -11,6 +11,7 @@ import {
   validateUploadInput,
 } from "@/lib/media/upload";
 import { collectPersistedExifData } from "@/lib/media/exif";
+import { buildMediaProcessingStatus, writeMediaProcessingStatus } from "@/lib/media/processing-status";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
@@ -146,7 +147,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       ? await collectPersistedExifData(bytes)
       : null;
 
-    const mediaMetadata = buildMediaMetadata({
+    const baseMediaMetadata = buildMediaMetadata({
       fileName: safeFileName,
       mimeType: validated.mimeType,
       sizeBytes: bytes.length,
@@ -174,6 +175,15 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
       },
     });
+    const mediaMetadata = writeMediaProcessingStatus(
+      baseMediaMetadata,
+      buildMediaProcessingStatus({
+        fileId,
+        rawMetadata: baseMediaMetadata,
+        exifExtractedAt: persistedExif?.extractedAt,
+        exifCaptureDate: persistedExif?.captureDate,
+      }),
+    );
 
     let photoId = buildEntityId("attr", `${resolved.tenant.tenantKey}|${householdId}|${Date.now()}|${fileId}`);
     let shouldBePrimary = !targetAttributeId && requestedPrimary;

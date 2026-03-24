@@ -13,6 +13,34 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-23 (make media analysis status and EXIF loading on-demand)
+
+- `Date`: 2026-03-23
+- `Change`: Stopped the media-detail route from auto-computing processing status on open, added explicit `Load/Refresh Processing Status` and `Load EXIF` actions in the media modal `Analysis` tab, and expanded the status tiles to show upload/thumbnail filenames while keeping face vector and face identity behavior unchanged.
+- `Type`: UI | API
+- `Why`: Root cause was a `code issue`. Opening a media item was still triggering processing-status work on the detail read path, so the modal paid for extra queries even when the user did not need that status immediately, and the UI could fall back to `Processing status will appear after the media details finish loading.` Older files that never collected EXIF at upload also had no recovery path. Moving status generation and EXIF extraction behind explicit actions removes unnecessary read-time work and gives legacy files a manual EXIF backfill path.
+- `Files`:
+  - `TODO.md`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/processing-status/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/exif/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/lib/media/processing-status.server.ts`
+  - `src/lib/media/processing-status.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/intelligence/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening a media item no longer needs to auto-compute processing status just to render the Analysis tab.
+  - `Load Processing Status` / `Refresh Processing Status` writes a cached status snapshot back into media metadata.
+  - `Load EXIF` is available only when EXIF has not been collected for an image and persists EXIF plus refreshed status on demand.
+  - The `Upload` and `Thumbnail` tiles show filenames, and the `Face Coordinates` tile continues to show the detected-face count.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-23 (move EXIF collection to upload and add media processing status tab)
 
 - `Date`: 2026-03-23

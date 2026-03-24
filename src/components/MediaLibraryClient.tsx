@@ -27,6 +27,7 @@ type MediaItem = {
   date: string;
   mediaMetadata?: string;
   processingStatus?: MediaProcessingStatus | null;
+  exifExtractedAt?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -67,6 +68,7 @@ type FaceAssociationResponse = {
   faceId?: string;
   mediaMetadata?: string;
   processingStatus?: MediaProcessingStatus | null;
+  exifExtractedAt?: string;
   personId?: string;
   personDisplayName?: string;
   sampleCount?: number;
@@ -76,6 +78,12 @@ type PhotoIntelligenceResponse = {
   debug?: PhotoIntelligenceDebug | null;
   mediaMetadata?: string;
   processingStatus?: MediaProcessingStatus | null;
+};
+
+type ProcessingStatusResponse = {
+  mediaMetadata?: string;
+  processingStatus?: MediaProcessingStatus | null;
+  exifExtractedAt?: string;
 };
 
 type MediaModalTab = "info" | "analysis";
@@ -189,6 +197,11 @@ function MediaProcessingStepCard({ step }: { step: MediaProcessingStep }) {
           Count: {step.count}
         </span>
       ) : null}
+      {step.fileName ? (
+        <span className="page-subtitle" style={{ margin: 0, overflowWrap: "anywhere" }}>
+          File: {step.fileName}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -268,6 +281,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [photoAssociationBusy, setPhotoAssociationBusy] = useState(false);
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [photoIntelligenceBusy, setPhotoIntelligenceBusy] = useState(false);
+  const [processingStatusBusy, setProcessingStatusBusy] = useState(false);
+  const [photoExifBusy, setPhotoExifBusy] = useState(false);
   const [photoIntelligenceDebug, setPhotoIntelligenceDebug] = useState<PhotoIntelligenceDebug | null>(null);
   const photoIntelligenceInFlightRef = useRef("");
   const photoIntelligenceAutoRequestedRef = useRef("");
@@ -423,6 +438,29 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     return true;
   };
 
+  const applySelectedPhotoExifExtractedAt = (fileId: string, exifExtractedAt: string | undefined) => {
+    const normalizedExtractedAt = String(exifExtractedAt ?? "").trim();
+    const currentDetail = selectedPhotoDetail;
+    if (!currentDetail || currentDetail.fileId !== fileId) {
+      return false;
+    }
+    if (!normalizedExtractedAt && !currentDetail.exifExtractedAt) {
+      return false;
+    }
+    applySelectedPhotoDetail(
+      {
+        ...currentDetail,
+        exifExtractedAt: normalizedExtractedAt,
+      },
+      {
+        editable: selectedPhotoEditable,
+        canEditName: selectedPhotoCanEditName,
+        preserveExistingText: true,
+      },
+    );
+    return true;
+  };
+
   const photoTagSearchResults = useMemo(() => {
     const q = photoTagQuery.trim().toLowerCase();
     if (!q) return [] as LinkedSearchResult[];
@@ -494,6 +532,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail?.processingStatus) return null;
     return selectedPhotoDetail.processingStatus;
   }, [selectedPhotoDetail]);
+  const selectedPhotoExifCollected = useMemo(() => {
+    return Boolean(String(selectedPhotoDetail?.exifExtractedAt ?? "").trim());
+  }, [selectedPhotoDetail?.exifExtractedAt]);
+  const selectedPhotoIsImage = useMemo(() => {
+    if (!selectedPhotoDetail) return false;
+    return inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "image";
+  }, [selectedPhotoDetail]);
   const selectedPhotoIntelligenceDebug = useMemo<PhotoIntelligenceDebug | null>(() => {
     if (photoIntelligenceDebug) return photoIntelligenceDebug;
     if (!selectedPhotoDetail) return null;
@@ -517,7 +562,33 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const selectedPhotoAnalysisContent = selectedPhotoDetail ? (
     <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
       <div className="card">
-        <h5 style={{ margin: "0 0 0.6rem" }}>Processing Status</h5>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+          <h5 style={{ margin: 0 }}>Processing Status</h5>
+          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="button secondary tap-button"
+              onClick={() => void refreshSelectedPhotoProcessingStatus()}
+              disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
+            >
+              {processingStatusBusy
+                ? "Loading Status..."
+                : selectedPhotoProcessingSteps.length > 0
+                  ? "Refresh Processing Status"
+                  : "Load Processing Status"}
+            </button>
+            {selectedPhotoIsImage && !selectedPhotoExifCollected ? (
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={() => void loadSelectedPhotoExif()}
+                disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
+              >
+                {photoExifBusy ? "Loading EXIF..." : "Load EXIF"}
+              </button>
+            ) : null}
+          </div>
+        </div>
         {selectedPhotoProcessingSteps.length > 0 ? (
           <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             {selectedPhotoProcessingSteps.map((stepItem) => (
@@ -526,7 +597,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           </div>
         ) : (
           <p className="page-subtitle" style={{ margin: 0 }}>
-            Processing status will appear after the media details finish loading.
+            Processing status loads on demand. Use Load Processing Status when you want to refresh these steps.
           </p>
         )}
       </div>
@@ -785,6 +856,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       date: serverItem.date || fallbackItem?.date || "",
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
       processingStatus: serverItem.processingStatus ?? fallbackItem?.processingStatus ?? null,
+      exifExtractedAt: serverItem.exifExtractedAt || fallbackItem?.exifExtractedAt || "",
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
       households: Array.isArray(serverItem.households) ? serverItem.households : [],
     };
@@ -797,6 +869,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const openPhotoEditor = async (fileId: string) => {
     setPhotoIntelligenceDebug(null);
+    setProcessingStatusBusy(false);
+    setPhotoExifBusy(false);
     photoIntelligenceAutoRequestedRef.current = "";
     setSelectedPhotoTab("info");
     setFaceAssociationSelections({});
@@ -869,11 +943,75 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     }
   };
 
+  const refreshSelectedPhotoProcessingStatus = async () => {
+    if (!selectedPhotoDetail) return;
+    const activeFileId = selectedPhotoDetail.fileId;
+    setProcessingStatusBusy(true);
+    setPhotoAssociationStatus(
+      selectedPhotoProcessingStatus ? "Refreshing processing status..." : "Loading processing status...",
+    );
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/processing-status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      await assertOk(res, "Failed to load processing status");
+      const body = (await res.json().catch(() => null)) as ProcessingStatusResponse | null;
+      const normalizedMetadata = String(body?.mediaMetadata ?? "").trim();
+      const normalizedExifExtractedAt = String(body?.exifExtractedAt ?? "").trim();
+      const appliedMetadata = normalizedMetadata ? applySelectedPhotoMetadata(activeFileId, normalizedMetadata) : true;
+      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
+      const appliedExif = normalizedExifExtractedAt ? applySelectedPhotoExifExtractedAt(activeFileId, normalizedExifExtractedAt) : true;
+      if (!appliedMetadata || !appliedStatus || !appliedExif) {
+        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
+      }
+      setPhotoAssociationStatus("Processing status ready.");
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "Processing status failed");
+    } finally {
+      setProcessingStatusBusy(false);
+    }
+  };
+
+  const loadSelectedPhotoExif = async () => {
+    if (!selectedPhotoDetail) return;
+    const activeFileId = selectedPhotoDetail.fileId;
+    setPhotoExifBusy(true);
+    setPhotoAssociationStatus("Loading EXIF...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/exif`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      await assertOk(res, "Failed to load EXIF");
+      const body = (await res.json().catch(() => null)) as ProcessingStatusResponse | null;
+      const normalizedMetadata = String(body?.mediaMetadata ?? "").trim();
+      const normalizedExifExtractedAt = String(body?.exifExtractedAt ?? "").trim();
+      const appliedMetadata = normalizedMetadata ? applySelectedPhotoMetadata(activeFileId, normalizedMetadata) : true;
+      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
+      const appliedExif = normalizedExifExtractedAt ? applySelectedPhotoExifExtractedAt(activeFileId, normalizedExifExtractedAt) : false;
+      if (!appliedMetadata || !appliedStatus || !appliedExif) {
+        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
+      }
+      setPhotoAssociationStatus("EXIF loaded.");
+    } catch (error) {
+      setPhotoAssociationStatus(error instanceof Error ? error.message : "EXIF load failed");
+    } finally {
+      setPhotoExifBusy(false);
+    }
+  };
+
   const runPhotoIntelligence = async (force = false) => {
     if (!selectedPhotoDetail) return;
     if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
     const activeFileId = selectedPhotoDetail.fileId;
-    if (photoIntelligenceBusy || photoIntelligenceInFlightRef.current === activeFileId) {
+    if (photoIntelligenceBusy || processingStatusBusy || photoExifBusy || photoIntelligenceInFlightRef.current === activeFileId) {
       return;
     }
     photoIntelligenceInFlightRef.current = activeFileId;
@@ -1338,7 +1476,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         type="button"
                         className="button secondary tap-button"
                         onClick={() => void runPhotoIntelligence(true)}
-                        disabled={photoAssociationBusy || photoIntelligenceBusy}
+                        disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
                       >
                         {photoIntelligenceBusy ? "Generating..." : "Generate Suggestions"}
                       </button>
@@ -1347,7 +1485,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       type="button"
                       className="button tap-button"
                       onClick={() => void saveSelectedPhotoMetadata()}
-                      disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
+                      disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy || !selectedPhotoEditable}
                     >
                       Save
                     </button>
@@ -1356,7 +1494,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         type="button"
                         className="button secondary tap-button"
                         onClick={() => void deleteSelectedPhoto()}
-                        disabled={photoAssociationBusy}
+                        disabled={photoAssociationBusy || processingStatusBusy || photoExifBusy}
                         style={{ color: "#991b1b", borderColor: "#fecaca", background: "#fff1f2" }}
                       >
                         Delete

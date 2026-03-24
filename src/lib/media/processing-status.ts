@@ -11,6 +11,7 @@ export type MediaProcessingStep = {
   state: MediaProcessingStepState;
   detail: string;
   count?: number;
+  fileName?: string;
 };
 
 export type MediaProcessingStatus = {
@@ -21,6 +22,9 @@ export type MediaProcessingStatus = {
   faceVectors: MediaProcessingStep;
   faceIdentities: MediaProcessingStep;
 };
+
+const PROCESSING_STATUS_METADATA_KEY = "processingStatus";
+const VALID_STEP_STATES = new Set<MediaProcessingStepState>(["completed", "pending", "failed", "not_applicable"]);
 
 type BuildMediaProcessingStatusInput = {
   fileId: string;
@@ -46,22 +50,108 @@ function parseRawMetadata(rawMetadata: string | undefined) {
   }
 }
 
+function parseRawMetadataForWrite(rawMetadata: string | undefined) {
+  const text = String(rawMetadata ?? "").trim();
+  if (!text) {
+    return {} as Record<string, unknown>;
+  }
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : ({} as Record<string, unknown>);
+  } catch {
+    return {} as Record<string, unknown>;
+  }
+}
+
 function step(
   label: string,
   state: MediaProcessingStepState,
   detail: string,
   count?: number,
+  fileName?: string,
 ): MediaProcessingStep {
   return {
     label,
     state,
     detail,
     ...(typeof count === "number" ? { count } : {}),
+    ...(fileName ? { fileName } : {}),
   };
 }
 
 function isImageMedia(fileId: string, rawMetadata?: string) {
   return inferStoredMediaKind(fileId, rawMetadata) === "image";
+}
+
+function normalizeStoredStep(
+  value: unknown,
+  fallbackLabel: string,
+): MediaProcessingStep | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const state = String(raw.state ?? "").trim() as MediaProcessingStepState;
+  if (!VALID_STEP_STATES.has(state)) {
+    return null;
+  }
+  const detail = String(raw.detail ?? "").trim();
+  if (!detail) {
+    return null;
+  }
+  const countValue = Number(raw.count);
+  const fileName = String(raw.fileName ?? "").trim();
+  return {
+    label: String(raw.label ?? "").trim() || fallbackLabel,
+    state,
+    detail,
+    ...(Number.isFinite(countValue) ? { count: Math.max(0, Math.trunc(countValue)) } : {}),
+    ...(fileName ? { fileName } : {}),
+  };
+}
+
+function extractObjectFileName(objectKey: string) {
+  const normalized = objectKey.trim();
+  if (!normalized) return "";
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || normalized;
+}
+
+export function readMediaProcessingStatus(rawMetadata?: string): MediaProcessingStatus | null {
+  const metadata = parseRawMetadata(rawMetadata);
+  const rawStatus = metadata[PROCESSING_STATUS_METADATA_KEY];
+  if (!rawStatus || typeof rawStatus !== "object") {
+    return null;
+  }
+  const parsed = rawStatus as Record<string, unknown>;
+  const upload = normalizeStoredStep(parsed.upload, "Upload");
+  const exif = normalizeStoredStep(parsed.exif, "EXIF");
+  const thumbnail = normalizeStoredStep(parsed.thumbnail, "Thumbnail");
+  const faceCoordinates = normalizeStoredStep(parsed.faceCoordinates, "Face Coordinates");
+  const faceVectors = normalizeStoredStep(parsed.faceVectors, "Face Vectors");
+  const faceIdentities = normalizeStoredStep(parsed.faceIdentities, "Face Identities");
+  if (!upload || !exif || !thumbnail || !faceCoordinates || !faceVectors || !faceIdentities) {
+    return null;
+  }
+  return {
+    upload,
+    exif,
+    thumbnail,
+    faceCoordinates,
+    faceVectors,
+    faceIdentities,
+  };
+}
+
+export function writeMediaProcessingStatus(
+  rawMetadata: string | undefined,
+  processingStatus: MediaProcessingStatus,
+): string {
+  const metadata = parseRawMetadataForWrite(rawMetadata);
+  metadata[PROCESSING_STATUS_METADATA_KEY] = processingStatus;
+  return JSON.stringify(metadata);
 }
 
 export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInput): MediaProcessingStatus {
@@ -74,6 +164,8 @@ export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInpu
     : null;
   const originalObjectKey = String(objectStorage?.originalObjectKey ?? metadata.originalObjectKey ?? "").trim();
   const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? metadata.thumbnailObjectKey ?? "").trim();
+  const originalFileName = String(metadata.fileName ?? "").trim();
+  const thumbnailFileName = extractObjectFileName(thumbnailObjectKey);
   const faceInstanceCount = Math.max(0, Math.trunc(input.faceInstanceCount ?? 0));
   const faceVectorCount = Math.max(
     0,
@@ -88,6 +180,8 @@ export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInpu
     "Upload",
     "completed",
     originalObjectKey ? "Original media bytes are stored and linked." : "Media record exists in the library.",
+    undefined,
+    originalFileName,
   );
 
   const exif = !imageMedia
@@ -105,7 +199,7 @@ export function buildMediaProcessingStatus(input: BuildMediaProcessingStatusInpu
   const thumbnail = !imageMedia
     ? step("Thumbnail", "not_applicable", "Thumbnail generation only applies to image uploads.")
     : thumbnailObjectKey
-      ? step("Thumbnail", "completed", "Preview thumbnail is stored for this image.")
+      ? step("Thumbnail", "completed", "Preview thumbnail is stored for this image.", undefined, thumbnailFileName)
       : step("Thumbnail", "pending", "Thumbnail has not been generated or stored.");
 
   const faceCoordinates = !imageMedia

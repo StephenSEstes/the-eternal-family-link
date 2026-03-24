@@ -13,6 +13,7 @@ import {
   buildDateSignalFromPersistedExif,
   readPersistedExifData,
 } from "@/lib/media/exif";
+import { writeMediaProcessingStatus } from "@/lib/media/processing-status";
 import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
 import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
 import { buildAndPersistFaceSuggestions } from "@/lib/media/face-recognition";
@@ -303,12 +304,22 @@ export async function POST(request: Request, { params }: RouteProps) {
     faceSuggestions,
     debug,
   });
-  if (finalizedGenerated.mediaMetadata !== initialGenerated.mediaMetadata) {
+  const freshProcessingStatus = await getMediaProcessingStatusForFile({
+    familyGroupKey: resolved.tenant.tenantKey,
+    fileId: normalizedFileId,
+    mediaMetadata: finalizedGenerated.mediaMetadata,
+    asset,
+    preferFresh: true,
+  }).catch(() => null);
+  const responseMediaMetadata = freshProcessingStatus
+    ? writeMediaProcessingStatus(finalizedGenerated.mediaMetadata, freshProcessingStatus)
+    : finalizedGenerated.mediaMetadata;
+  if (responseMediaMetadata !== initialGenerated.mediaMetadata) {
     const finalMetadataStartedAt = Date.now();
     await updateOciMediaMetadataForFile({
       familyGroupKey: resolved.tenant.tenantKey,
       fileId: normalizedFileId,
-      mediaMetadata: finalizedGenerated.mediaMetadata,
+      mediaMetadata: responseMediaMetadata,
     });
     debug.metadataUpdateLatencyMs += Date.now() - finalMetadataStartedAt;
   }
@@ -323,19 +334,13 @@ export async function POST(request: Request, { params }: RouteProps) {
     details: `Generated photo intelligence suggestions for file=${normalizedFileId}.`,
   });
 
-  const processingStatus = await getMediaProcessingStatusForFile({
-    familyGroupKey: resolved.tenant.tenantKey,
-    fileId: normalizedFileId,
-    mediaMetadata: finalizedGenerated.mediaMetadata,
-  }).catch(() => null);
-
   return NextResponse.json({
     ok: true,
     fileId: normalizedFileId,
     suggestion: finalizedGenerated.suggestion,
     debug,
-    mediaMetadata: finalizedGenerated.mediaMetadata,
-    processingStatus,
+    mediaMetadata: responseMediaMetadata,
+    processingStatus: freshProcessingStatus,
     cached: false,
   });
 }

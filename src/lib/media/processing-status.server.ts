@@ -1,6 +1,10 @@
 import "server-only";
 
-import { buildMediaProcessingStatus, type MediaProcessingStatus } from "@/lib/media/processing-status";
+import {
+  buildMediaProcessingStatus,
+  readMediaProcessingStatus,
+  type MediaProcessingStatus,
+} from "@/lib/media/processing-status";
 import { readPhotoIntelligenceDebug } from "@/lib/media/photo-intelligence";
 import {
   getOciFaceInstancesForFile,
@@ -15,6 +19,7 @@ type MediaProcessingStatusInput = {
   fileId: string;
   mediaMetadata?: string;
   asset?: OciMediaAssetLookup | null;
+  preferFresh?: boolean;
 };
 
 function countFaceVectorsFromInstances(embeddingJsonRows: string[]) {
@@ -35,6 +40,12 @@ export async function getMediaProcessingStatusForFile(input: MediaProcessingStat
       ? await getOciMediaAssetByFileId(fileId).catch(() => null)
       : input.asset;
   const mediaMetadata = String(input.mediaMetadata ?? asset?.mediaMetadata ?? "").trim();
+  if (!input.preferFresh) {
+    const cached = readMediaProcessingStatus(mediaMetadata);
+    if (cached) {
+      return cached;
+    }
+  }
   const [faceInstances, faceMatches, profileRows] = await Promise.all([
     getOciFaceInstancesForFile({ familyGroupKey, fileId }).catch(() => []),
     getOciFaceMatchesForFile({ familyGroupKey, fileId }).catch(() => []),
