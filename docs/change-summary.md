@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-23 (replace Vision analyzeImage wrapper with direct signed REST transport)
+
+- `Date`: 2026-03-23
+- `Change`: Replaced the runtime OCI Vision `analyzeImage` wrapper calls with direct signed REST requests that keep the existing SDK auth/signing/http transport but parse the Vision response and HTTP error payloads inside the app.
+- `Type`: API | Infra
+- `Why`: Root cause was a `code issue`. The same image and request shape succeeded through a direct signed OCI Vision REST call and failed only through `AIServiceVisionClient.analyzeImage(...)`, which made valid images fail unpredictably and obscured the real HTTP status/body when Vision returned a non-OK response. Moving only the `analyzeImage` transport to a direct signed request removes the unreliable generated wrapper while preserving the existing request shapes, image-preparation logic, and app-level Vision output contract.
+- `Files`:
+  - `TODO.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `src/lib/oci/vision.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - A known failing image like `Steve's Mission to Guatemala` now uses the same direct signed Vision transport that already returned `200 OK` in the diagnostic test.
+  - A known working image like `Brent Headshot - Working` still returns normal labels/objects/faces through the app path.
+  - Future non-OK Vision responses surface explicit `status`, `serviceCode`, raw body, and `opc-request-id` instead of only a wrapper-level formatter failure.
+- `Rollback Notes`: Revert the direct transport helper and restore `AIServiceVisionClient.analyzeImage(...)` only if Oracle fixes the generated wrapper behavior and you want to return to the higher-level SDK method.
+- `Design Decision Change`: Updated `docs/design-decisions.md` / `designchoices.md` to record the runtime Vision transport choice.
+
 ## 2026-03-23 (make media analysis status and EXIF loading on-demand)
 
 - `Date`: 2026-03-23

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-23: Replaced the runtime OCI Vision `analyzeImage` wrapper with a direct signed REST transport while keeping SDK auth/signing/http transport, so valid images no longer depend on the unreliable generated wrapper path and Vision errors can surface real HTTP/status/body details. See `docs/change-summary.md`.
 - 2026-03-23: Made media Analysis status and legacy EXIF loading fully on-demand, so media detail open reuses cached status, `Load/Refresh Processing Status` recomputes only when requested, and `Load EXIF` backfills missing EXIF for older image files. See `docs/change-summary.md`.
 - 2026-03-23: Moved EXIF collection to the image upload routes, stopped `Generate Suggestions` from reparsing EXIF, and added an `Analysis` tab on the media modal that shows persisted processing status for upload, EXIF, thumbnail, face coordinates, face vectors, and confirmed identities. See `docs/change-summary.md`.
 - 2026-03-23: Added a standalone signed OCI Vision direct-test script and `vision:direct:test` package command so failing images can be sent to OCI Vision without the SDK formatter masking the raw HTTP status, response body, or `opc-request-id`. See `docs/change-summary.md`.

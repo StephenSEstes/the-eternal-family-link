@@ -1,7 +1,7 @@
 import "server-only";
 
-import { createRequire } from "node:module";
 import sharp from "sharp";
+import * as common from "oci-common";
 import { AIServiceVisionClient, models } from "oci-aivision";
 import { getOciAuthenticationProvider } from "@/lib/oci/auth";
 
@@ -39,9 +39,6 @@ type OciVisionConfig = {
 
 let cachedClient: AIServiceVisionClient | null = null;
 let cachedConfigKey = "";
-let didPatchOciHelperErrorHandling = false;
-
-const require = createRequire(import.meta.url);
 
 const OCI_VISION_INLINE_TARGET_BYTES = 4_500_000;
 const OCI_VISION_SUPPORTED_FORMATS = new Set(["jpeg", "jpg", "png"]);
@@ -59,6 +56,31 @@ type PreparedVisionImage = {
   preparedFormat: string;
   normalizedFormat: boolean;
 };
+
+type DirectVisionClient = AIServiceVisionClient & {
+  _httpClient: {
+    send(
+      request: unknown,
+      forceExcludeBody?: boolean,
+      targetService?: string,
+      operationName?: string,
+      timestamp?: string,
+      endpoint?: string,
+      apiReferenceLink?: string,
+    ): Promise<Response>;
+  };
+};
+
+type OciVisionErrorShape = {
+  code: string;
+  statusCode: number;
+  serviceCode: string;
+  opcRequestId: string;
+  rawBody: string;
+};
+
+const OCI_VISION_ANALYZE_IMAGE_REFERENCE =
+  "https://docs.oracle.com/iaas/api/#/en/vision/20220125/AnalyzeImageResult/AnalyzeImage";
 
 function readOptionalEnv(name: string) {
   const value = String(process.env[name] ?? "").trim();
@@ -78,7 +100,6 @@ function readVisionConfig(): OciVisionConfig | null {
 }
 
 function getVisionClient(config: OciVisionConfig) {
-  ensurePatchedOciHelperErrorHandling();
   const auth = getOciAuthenticationProvider();
   const key = `${config.region}|${config.compartmentId}|${auth.cacheKey}`;
   if (cachedClient && key === cachedConfigKey) {
@@ -95,85 +116,6 @@ function getVisionClient(config: OciVisionConfig) {
 
 export function isOciVisionConfigured() {
   return readVisionConfig() != null;
-}
-
-function stringifyOciErrorBody(body: unknown) {
-  if (typeof body === "string") {
-    return body.trim();
-  }
-  if (body == null) {
-    return "";
-  }
-  try {
-    return JSON.stringify(body);
-  } catch {
-    return String(body);
-  }
-}
-
-function ensurePatchedOciHelperErrorHandling() {
-  if (didPatchOciHelperErrorHandling) {
-    return;
-  }
-  const helperModule = require("oci-common/lib/helper") as typeof import("oci-common/lib/helper") & {
-    handleErrorResponse: (...args: unknown[]) => unknown;
-  };
-  const current = helperModule.handleErrorResponse as ((...args: unknown[]) => unknown) & { __etflPatched?: boolean };
-  if (current.__etflPatched) {
-    didPatchOciHelperErrorHandling = true;
-    return;
-  }
-  const original = current;
-  const patched = ((
-    response: Response,
-    body: unknown,
-    targetService: string,
-    operationName: string,
-    timestamp: string,
-    endpoint: string,
-    apiReferenceLink: string,
-  ) => {
-    try {
-      return original(response, body, targetService, operationName, timestamp, endpoint, apiReferenceLink);
-    } catch (error) {
-      const rawBody = stringifyOciErrorBody(body);
-      const messageFromBody =
-        body && typeof body === "object" && "message" in body
-          ? String((body as { message?: unknown }).message ?? "").trim()
-          : "";
-      const serviceCode =
-        body && typeof body === "object" && "code" in body
-          ? String((body as { code?: unknown }).code ?? "UnknownServiceCode").trim() || "UnknownServiceCode"
-          : "UnknownServiceCode";
-      const statusCode = Number(response?.status ?? -1);
-      const opcRequestId = String(response?.headers?.get?.("opc-request-id") ?? "").trim();
-      const fallbackMessage = [
-        `OCI Vision service rejected the request (status=${statusCode}, serviceCode=${serviceCode || "UnknownServiceCode"})`,
-        messageFromBody ? `message=${messageFromBody}` : "",
-        opcRequestId ? `opcRequestId=${opcRequestId}` : "",
-        rawBody ? `rawBody=${rawBody}` : "",
-        error instanceof Error && error.message ? `sdkFormatterError=${error.message}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      return Object.assign(new Error(fallbackMessage), {
-        code: serviceCode || "UnknownServiceCode",
-        statusCode,
-        serviceCode: serviceCode || "UnknownServiceCode",
-        opcRequestId,
-        rawBody,
-        targetService,
-        operationName,
-        timestamp,
-        requestEndpoint: endpoint,
-        apiReferenceLink,
-        sdkFormatterError: error instanceof Error ? error.message : String(error ?? ""),
-      });
-    }
-  }) as typeof helperModule.handleErrorResponse & { __etflPatched?: boolean };
-  patched.__etflPatched = true;
-  helperModule.handleErrorResponse = patched;
-  didPatchOciHelperErrorHandling = true;
 }
 
 async function prepareImageBytesForVision(imageBytes: Buffer): Promise<PreparedVisionImage> {
@@ -228,53 +170,97 @@ async function prepareImageBytesForVision(imageBytes: Buffer): Promise<PreparedV
   );
 }
 
-function normalizeVisionError(error: unknown, context: {
-  originalBytes: number;
-  preparedBytes: number;
-  originalFormat: string;
-  preparedFormat: string;
-  normalizedFormat: boolean;
-}) {
-  const typed = error as {
-    message?: string;
-    rawBody?: string;
-    statusCode?: number;
-    serviceCode?: string;
-    opcRequestId?: string;
-    sdkFormatterError?: string;
-  };
-  const message = String(typed?.message ?? "");
-  const rawBody = String(typed?.rawBody ?? "").trim();
-  if (rawBody) {
-    const statusCode = Number.isFinite(Number(typed?.statusCode)) ? Number(typed?.statusCode) : -1;
-    const serviceCode = String(typed?.serviceCode ?? "").trim() || "UnknownServiceCode";
-    const opcRequestId = String(typed?.opcRequestId ?? "").trim();
-    const sdkFormatterError = String(typed?.sdkFormatterError ?? "").trim();
-    return Object.assign(
-      new Error(
-        [
-          `OCI Vision service rejected the request (status=${statusCode}, serviceCode=${serviceCode})`,
-          opcRequestId ? `opcRequestId=${opcRequestId}` : "",
-          `rawBody=${rawBody}`,
-          sdkFormatterError ? `sdkFormatterError=${sdkFormatterError}` : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      ),
-      {
-        code: serviceCode,
-        statusCode,
-        serviceCode,
-        opcRequestId,
-      },
-    );
+function parseMaybeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
   }
-  if (message.includes("toLowerCase is not a function")) {
-    return new Error(
-      `OCI Vision request failed before returning a readable service error. originalFormat=${context.originalFormat} preparedFormat=${context.preparedFormat} normalizedFormat=${String(context.normalizedFormat)} originalBytes=${context.originalBytes} preparedBytes=${context.preparedBytes}`,
-    );
+}
+
+function stringifyOciErrorBody(body: unknown) {
+  if (typeof body === "string") {
+    return body.trim();
   }
-  return error;
+  if (body == null) {
+    return "";
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+function buildDirectVisionError(response: Response, body: unknown): Error & OciVisionErrorShape {
+  const statusCode = Number(response.status ?? -1);
+  const serviceCode =
+    body && typeof body === "object" && "code" in body
+      ? String((body as { code?: unknown }).code ?? "UnknownServiceCode").trim() || "UnknownServiceCode"
+      : "UnknownServiceCode";
+  const messageFromBody =
+    body && typeof body === "object" && "message" in body
+      ? String((body as { message?: unknown }).message ?? "").trim()
+      : "";
+  const statusText = String(response.statusText ?? "").trim();
+  const opcRequestId = String(response.headers.get("opc-request-id") ?? "").trim();
+  const rawBody = stringifyOciErrorBody(body);
+  const message = [
+    `OCI Vision service rejected the request (status=${statusCode}, serviceCode=${serviceCode})`,
+    messageFromBody ? `message=${messageFromBody}` : "",
+    statusText ? `statusText=${statusText}` : "",
+    opcRequestId ? `opcRequestId=${opcRequestId}` : "",
+    rawBody ? `rawBody=${rawBody}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return Object.assign(new Error(message), {
+    code: serviceCode,
+    statusCode,
+    serviceCode,
+    opcRequestId,
+    rawBody,
+  });
+}
+
+async function sendAnalyzeImageRequest(input: {
+  client: AIServiceVisionClient;
+  analyzeImageDetails: models.AnalyzeImageDetails;
+}): Promise<models.AnalyzeImageResult> {
+  const request = await common.composeRequest({
+    baseEndpoint: input.client.endpoint,
+    defaultHeaders: {},
+    path: "/actions/analyzeImage",
+    method: "POST",
+    bodyContent: common.ObjectSerializer.serialize(
+      input.analyzeImageDetails,
+      "AnalyzeImageDetails",
+      models.AnalyzeImageDetails.getJsonObj,
+    ),
+    pathParams: {},
+    headerParams: {
+      "Content-Type": common.Constants.APPLICATION_JSON,
+    },
+    queryParams: {},
+  });
+  const response = await (input.client as DirectVisionClient)._httpClient.send(
+    request,
+    false,
+    "AIServiceVision",
+    "analyzeImage",
+    new Date().toISOString(),
+    `${request.method} ${request.uri}`,
+    OCI_VISION_ANALYZE_IMAGE_REFERENCE,
+  );
+  const rawText = await response.text();
+  const parsedBody = parseMaybeJson(rawText);
+  if (!response.ok) {
+    throw buildDirectVisionError(response, parsedBody);
+  }
+  if (!parsedBody || typeof parsedBody !== "object") {
+    throw new Error("OCI Vision returned a non-JSON response.");
+  }
+  return parsedBody as models.AnalyzeImageResult;
 }
 
 function toBoundingBox(item: {
@@ -334,13 +320,13 @@ async function analyzeInlineImageWithEmbedding(input: {
   const prepareLatencyMs = Date.now() - prepareStartedAt;
   const preparedImageBytes = prepared.imageBytes;
 
-  let response;
   let visionRequestLatencyMs = 0;
   const requestStartedAt = Date.now();
   const embeddingAttempted = true;
   let embeddingSucceeded = false;
   try {
-    response = await client.analyzeImage({
+    const result = await sendAnalyzeImageRequest({
+      client,
       analyzeImageDetails: {
         compartmentId: config.compartmentId,
         image: {
@@ -354,41 +340,56 @@ async function analyzeInlineImageWithEmbedding(input: {
     });
     visionRequestLatencyMs = Date.now() - requestStartedAt;
     embeddingSucceeded = true;
+    const labels: Array<{ name: string; confidence: number }> = [];
+    const objects: Array<{ name: string; confidence: number }> = [];
+    const faces = extractFaces(result);
+    let embeddingErrorMessage = "";
+    const embeddingFacesReturned = faces.length;
+    const embeddingFacesWithVectors = faces.filter((face) => face.embedding.length > 0).length;
+    if (faces.length > 0 && embeddingFacesWithVectors === 0) {
+      embeddingErrorMessage = "FACE_EMBEDDING returned faces without embedding vectors.";
+    }
+    const faceCount = faces.length;
+    return {
+      labels,
+      objects,
+      faces,
+      faceCount,
+      embeddingAttempted,
+      embeddingSucceeded,
+      embeddingErrorMessage,
+      embeddingFacesReturned,
+      embeddingFacesWithVectors,
+      prepareLatencyMs,
+      visionRequestLatencyMs,
+      totalLatencyMs: Date.now() - totalStartedAt,
+    };
   } catch (error) {
     visionRequestLatencyMs = Date.now() - requestStartedAt;
-    throw normalizeVisionError(error, {
-      originalBytes: input.imageBytes.length,
-      preparedBytes: preparedImageBytes.length,
-      originalFormat: prepared.originalFormat,
-      preparedFormat: prepared.preparedFormat,
-      normalizedFormat: prepared.normalizedFormat,
-    });
+    const typed = error as Partial<OciVisionErrorShape> & { message?: string };
+    const message = String(typed.message ?? "").trim();
+    if (typed.rawBody || typed.statusCode || typed.serviceCode || typed.opcRequestId) {
+      throw error;
+    }
+    throw Object.assign(
+      new Error(
+        [
+          message || "OCI Vision request failed before returning a readable service error.",
+          `originalFormat=${prepared.originalFormat}`,
+          `preparedFormat=${prepared.preparedFormat}`,
+          `normalizedFormat=${String(prepared.normalizedFormat)}`,
+          `originalBytes=${input.imageBytes.length}`,
+          `preparedBytes=${preparedImageBytes.length}`,
+        ].join(" "),
+      ),
+      {
+        code: "",
+        statusCode: -1,
+        serviceCode: "",
+        opcRequestId: "",
+      },
+    );
   }
-  const result = response.analyzeImageResult;
-  const labels: Array<{ name: string; confidence: number }> = [];
-  const objects: Array<{ name: string; confidence: number }> = [];
-  const faces = extractFaces(result);
-  let embeddingErrorMessage = "";
-  const embeddingFacesReturned = faces.length;
-  const embeddingFacesWithVectors = faces.filter((face) => face.embedding.length > 0).length;
-  if (faces.length > 0 && embeddingFacesWithVectors === 0) {
-    embeddingErrorMessage = "FACE_EMBEDDING returned faces without embedding vectors.";
-  }
-  const faceCount = faces.length;
-  return {
-    labels,
-    objects,
-    faces,
-    faceCount,
-    embeddingAttempted,
-    embeddingSucceeded,
-    embeddingErrorMessage,
-    embeddingFacesReturned,
-    embeddingFacesWithVectors,
-    prepareLatencyMs,
-    visionRequestLatencyMs,
-    totalLatencyMs: Date.now() - totalStartedAt,
-  };
 }
 
 export async function analyzeInlineImageWithVision(input: {
@@ -425,59 +426,73 @@ export async function detectFacesInlineWithVision(input: {
     ],
   };
 
-  let response;
   let visionRequestLatencyMs = 0;
   const requestStartedAt = Date.now();
   try {
-    response = await client.analyzeImage({
+    const result = await sendAnalyzeImageRequest({
+      client,
       analyzeImageDetails: primaryRequest,
     });
     visionRequestLatencyMs = Date.now() - requestStartedAt;
+    const labels = Array.isArray(result?.labels)
+      ? result.labels
+        .map((item) => ({
+          name: String(item?.name ?? "").trim(),
+          confidence: Number(item?.confidence ?? 0),
+        }))
+        .filter((item) => item.name)
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 6)
+      : [];
+    const objects = Array.isArray(result?.imageObjects)
+      ? result.imageObjects
+        .map((item) => ({
+          name: String(item?.name ?? "").trim(),
+          confidence: Number(item?.confidence ?? 0),
+        }))
+        .filter((item) => item.name)
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 8)
+      : [];
+    const faces = extractFaces(result);
+    return {
+      labels,
+      objects,
+      faces,
+      faceCount: faces.length,
+      embeddingAttempted: false,
+      embeddingSucceeded: false,
+      embeddingErrorMessage: "",
+      embeddingFacesReturned: 0,
+      embeddingFacesWithVectors: 0,
+      prepareLatencyMs,
+      visionRequestLatencyMs,
+      totalLatencyMs: Date.now() - totalStartedAt,
+    };
   } catch (error) {
     visionRequestLatencyMs = Date.now() - requestStartedAt;
-    throw normalizeVisionError(error, {
-      originalBytes: input.imageBytes.length,
-      preparedBytes: preparedImageBytes.length,
-      originalFormat: prepared.originalFormat,
-      preparedFormat: prepared.preparedFormat,
-      normalizedFormat: prepared.normalizedFormat,
-    });
+    const typed = error as Partial<OciVisionErrorShape> & { message?: string };
+    const message = String(typed.message ?? "").trim();
+    if (typed.rawBody || typed.statusCode || typed.serviceCode || typed.opcRequestId) {
+      throw error;
+    }
+    throw Object.assign(
+      new Error(
+        [
+          message || "OCI Vision request failed before returning a readable service error.",
+          `originalFormat=${prepared.originalFormat}`,
+          `preparedFormat=${prepared.preparedFormat}`,
+          `normalizedFormat=${String(prepared.normalizedFormat)}`,
+          `originalBytes=${input.imageBytes.length}`,
+          `preparedBytes=${preparedImageBytes.length}`,
+        ].join(" "),
+      ),
+      {
+        code: "",
+        statusCode: -1,
+        serviceCode: "",
+        opcRequestId: "",
+      },
+    );
   }
-
-  const result = response.analyzeImageResult;
-  const labels = Array.isArray(result?.labels)
-    ? result.labels
-      .map((item) => ({
-        name: String(item?.name ?? "").trim(),
-        confidence: Number(item?.confidence ?? 0),
-      }))
-      .filter((item) => item.name)
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 6)
-    : [];
-  const objects = Array.isArray(result?.imageObjects)
-    ? result.imageObjects
-      .map((item) => ({
-        name: String(item?.name ?? "").trim(),
-        confidence: Number(item?.confidence ?? 0),
-      }))
-      .filter((item) => item.name)
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 8)
-    : [];
-  const faces = extractFaces(result);
-  return {
-    labels,
-    objects,
-    faces,
-    faceCount: faces.length,
-    embeddingAttempted: false,
-    embeddingSucceeded: false,
-    embeddingErrorMessage: "",
-    embeddingFacesReturned: 0,
-    embeddingFacesWithVectors: 0,
-    prepareLatencyMs,
-    visionRequestLatencyMs,
-    totalLatencyMs: Date.now() - totalStartedAt,
-  };
 }

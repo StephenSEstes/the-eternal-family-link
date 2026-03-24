@@ -131,6 +131,12 @@ I will update this list as we add, complete, or remove work.
   - 2026-03-23 direct REST diagnostic:
     - Add a standalone signed OCI Vision diagnostic script that bypasses the SDK error formatter entirely and prints raw HTTP status, body, and `opc-request-id` for a local test image.
     - Support `mixed`, `detect`, and `embed` feature modes so the same image can be tested against the exact request shapes the app has been using.
+  - 2026-03-23 Vision transport replacement plan:
+    - Root cause from direct A/B testing showed that the same failing production image succeeds via a direct signed OCI Vision REST request and fails only through the high-level `AIServiceVisionClient.analyzeImage(...)` wrapper path.
+    - Replace the production Vision request path with direct signed REST calls that keep the existing OCI SDK auth/signing/http client, but bypass the generated `analyzeImage` response/error wrapper for `Generate Suggestions` and face-embedding requests.
+    - Keep the existing request shapes, image-preparation logic, and app-normalized Vision output contract unchanged so only the transport/error layer changes.
+    - Surface explicit HTTP status, service code, raw body, and `opc-request-id` from the direct response path whenever OCI returns a non-OK response.
+    - Validate with `npm run build`, then compare production behavior on a known failing image (`Steve's Mission to Guatemala`) and a known working image (`Brent Headshot - Working`).
   - 2026-03-23 EXIF-at-upload + media processing status plan:
     - Move EXIF extraction from the photo-intelligence route to every image upload path so file metadata is collected once when the original bytes are first written to OCI.
     - Persist the normalized EXIF fields during upload for both person-photo and household-photo uploads, and leave non-image uploads with empty EXIF fields.

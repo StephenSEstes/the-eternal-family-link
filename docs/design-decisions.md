@@ -250,3 +250,12 @@ This file captures product and engineering choices that affect behavior, data sh
 - `Alternatives Considered`: Keep EXIF transient inside the intelligence route only; store EXIF only inside `media_metadata` JSON; add EXIF columns plus indexes immediately.
 - `Impact`: `MediaAssets` now carries query-friendly EXIF fields for date/device/dimension metadata, later reruns can skip EXIF parsing when `exif_extracted_at` is populated, and duplicate tooling can use those fields in future without reading image bytes again. No EXIF indexes are added in this phase.
 - `Follow-up`: Decide which EXIF columns should be indexed after there is a concrete search or duplicate-review workload that benefits from them.
+
+## 2026-03-23
+
+- `Area`: OCI Vision request transport
+- `Decision`: Use direct signed OCI Vision REST requests for `analyzeImage` in the app runtime while keeping the OCI SDK for authentication, signing, endpoint resolution, and HTTP transport.
+- `Reason`: Production A/B testing showed that the same image and request shape succeeded through a direct signed REST call but failed through the generated `AIServiceVisionClient.analyzeImage(...)` wrapper path. The wrapper was obscuring failures and made the Vision pipeline unreliable on some valid images.
+- `Alternatives Considered`: Keep the generated `analyzeImage(...)` wrapper and continue patching error handling; replace the full OCI SDK stack instead of only the `analyzeImage` wrapper.
+- `Impact`: Vision request/response parsing is now owned by the app for this endpoint, which improves error visibility (`status`, `serviceCode`, raw body, `opc-request-id`) while preserving existing OCI auth/signing behavior and existing app-level Vision output shapes.
+- `Follow-up`: If Oracle fixes the generated wrapper behavior later, reevaluate whether returning to the higher-level SDK method is worthwhile.
