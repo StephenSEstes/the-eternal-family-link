@@ -22,6 +22,7 @@ type MediaItem = {
   name: string;
   description: string;
   date: string;
+  createdAt?: string;
   mediaMetadata?: string;
   processingStatus?: MediaProcessingStatus | null;
   exifExtractedAt?: string;
@@ -230,8 +231,13 @@ async function assertOk(res: Response, fallbackMessage: string) {
   throw new Error(String(message));
 }
 
-const INITIAL_MEDIA_LIBRARY_LIMIT = 100;
+const INITIAL_MEDIA_LIBRARY_LIMIT = 10;
 const SEARCH_MEDIA_LIBRARY_LIMIT = 5000;
+
+function parseSortableTimestamp(value: string | undefined) {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -412,15 +418,30 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   }, [linkedFilterQuery, linkedFilterPersonIds, linkedFilterHouseholdIds, peopleOptions, householdOptions]);
 
   const visibleMediaItems = useMemo(() => {
-    if (linkedFilterPersonIds.length === 0 && linkedFilterHouseholdIds.length === 0) return mediaItems;
     const personSet = new Set(linkedFilterPersonIds);
     const householdSet = new Set(linkedFilterHouseholdIds);
-    return mediaItems.filter((item) => {
-      const hasPerson = item.people.some((entry) => personSet.has(entry.personId));
-      const hasHousehold = item.households.some((entry) => householdSet.has(entry.householdId));
-      return hasPerson || hasHousehold;
-    });
-  }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds]);
+    const filtered =
+      linkedFilterPersonIds.length === 0 && linkedFilterHouseholdIds.length === 0
+        ? mediaItems
+        : mediaItems.filter((item) => {
+            const hasPerson = item.people.some((entry) => personSet.has(entry.personId));
+            const hasHousehold = item.households.some((entry) => householdSet.has(entry.householdId));
+            return hasPerson || hasHousehold;
+          });
+
+    if (search.trim()) {
+      return filtered;
+    }
+
+    return filtered
+      .filter((item) => inferMediaKind(item.fileId, item.mediaMetadata) === "image")
+      .sort((a, b) => {
+        const byCreatedAt = parseSortableTimestamp(b.createdAt) - parseSortableTimestamp(a.createdAt);
+        if (byCreatedAt !== 0) return byCreatedAt;
+        return a.fileId.localeCompare(b.fileId);
+      })
+      .slice(0, INITIAL_MEDIA_LIBRARY_LIMIT);
+  }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds, search]);
 
   const selectedPhotoIntelligenceSuggestion = useMemo<PhotoIntelligenceSuggestion | null>(() => {
     if (!selectedPhotoDetail) return null;

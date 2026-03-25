@@ -14,6 +14,7 @@ type SearchItem = {
   name: string;
   description: string;
   date: string;
+  createdAt?: string;
   mediaMetadata?: string;
   mimeType?: string;
   fileSizeBytes?: string;
@@ -37,6 +38,11 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
     }
   }
   return "";
+}
+
+function parseSortableTimestamp(value: string | undefined) {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 const MEDIA_SEARCH_CACHE_TTL_MS = 20_000;
@@ -154,6 +160,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         name: "",
         description: "",
         date: "",
+        createdAt: "",
         mediaMetadata: "",
         mimeType: "",
         fileSizeBytes: "",
@@ -204,6 +211,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     if (!item.name) item.name = row.label.trim() || row.fileName.trim();
     if (!item.description) item.description = row.description.trim();
     if (!item.date) item.date = row.photoDate.trim();
+    if (!item.createdAt) item.createdAt = row.createdAt.trim();
     if (!item.mediaMetadata) item.mediaMetadata = row.mediaMetadata.trim();
     if (!item.mimeType) item.mimeType = row.mimeType.trim();
     if (!item.fileSizeBytes) item.fileSizeBytes = row.fileSizeBytes.trim();
@@ -290,6 +298,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         const item = ensureItem(file.fileId);
         if (!item.name) item.name = file.name;
         if (!item.date) item.date = file.createdTime.slice(0, 10) || file.modifiedTime.slice(0, 10);
+        if (!item.createdAt) item.createdAt = file.createdTime || file.modifiedTime || "";
       }
     } catch {
       // Drive listing is best-effort so media search still returns table-linked results when Drive lookup fails.
@@ -316,7 +325,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         .toLowerCase();
       return haystack.includes(query);
     })
-    .sort((a, b) => a.name.localeCompare(b.name) || a.fileId.localeCompare(b.fileId))
+    .sort((a, b) => {
+      if (!query) {
+        const byCreatedAt = parseSortableTimestamp(b.createdAt) - parseSortableTimestamp(a.createdAt);
+        if (byCreatedAt !== 0) return byCreatedAt;
+      }
+      return a.name.localeCompare(b.name) || a.fileId.localeCompare(b.fileId);
+    })
     .slice(0, limit);
 
   const payload = {

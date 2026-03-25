@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-25 (limit default media library display to newest 10 images)
+
+- `Date`: 2026-03-25
+- `Change`: Changed the default media-library view to show only the most recent 10 image items, sorted newest-first by `createdAt`, while leaving explicit search behavior broad.
+- `Type`: UI
+- `Why`: Root cause was a `code/performance issue`. The media library was loading up to 100 items by default and ordering them by name, which increased thumbnail pressure on the preview path and did not match the need to focus the screen on the newest image items first.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening the media library with no search term shows at most 10 image items.
+  - Those default items are ordered newest-first by stored `createdAt`.
+  - Entering a search term still returns the broader matching media set.
+- `Rollback Notes`: Restore the old default limit and name-based ordering if the library should again load a larger default catalog.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-25 (remove image-delivery metadata fallback)
 
 - `Date`: 2026-03-25
