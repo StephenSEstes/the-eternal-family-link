@@ -2779,7 +2779,10 @@ export async function getOciMediaLinksForFile(input: {
   );
 }
 
-export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMediaAssetLookup | null> {
+export async function getOciMediaAssetByFileId(
+  fileId: string,
+  options?: { allowLegacyMetadataFallback?: boolean },
+): Promise<OciMediaAssetLookup | null> {
   const normalizedFileId = fileId.trim();
   if (!normalizedFileId) {
     return null;
@@ -2829,20 +2832,37 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
       return null;
     }
     const rawMetadata = fromDbValue(row.MEDIA_METADATA);
+    const allowLegacyMetadataFallback = options?.allowLegacyMetadataFallback !== false;
     return {
       fileId: fromDbValue(row.FILE_ID),
       storageProvider: fromDbValue(row.STORAGE_PROVIDER),
-      sourceProvider: fromDbValue(row.SOURCE_PROVIDER) || readLegacyMediaMetadataString(rawMetadata, "sourceProvider"),
-      sourceFileId: fromDbValue(row.SOURCE_FILE_ID) || readLegacyMediaMetadataString(rawMetadata, "sourceFileId"),
-      originalObjectKey: fromDbValue(row.ORIGINAL_OBJECT_KEY) || readLegacyMediaMetadataString(rawMetadata, "originalObjectKey"),
-      thumbnailObjectKey: fromDbValue(row.THUMBNAIL_OBJECT_KEY) || readLegacyMediaMetadataString(rawMetadata, "thumbnailObjectKey"),
-      checksumSha256: fromDbValue(row.CHECKSUM_SHA256) || readLegacyMediaMetadataString(rawMetadata, "checksumSha256"),
+      sourceProvider:
+        fromDbValue(row.SOURCE_PROVIDER) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "sourceProvider") : ""),
+      sourceFileId:
+        fromDbValue(row.SOURCE_FILE_ID) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "sourceFileId") : ""),
+      originalObjectKey:
+        fromDbValue(row.ORIGINAL_OBJECT_KEY) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "originalObjectKey") : ""),
+      thumbnailObjectKey:
+        fromDbValue(row.THUMBNAIL_OBJECT_KEY) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "thumbnailObjectKey") : ""),
+      checksumSha256:
+        fromDbValue(row.CHECKSUM_SHA256) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "checksumSha256") : ""),
       mimeType: fromDbValue(row.MIME_TYPE),
       fileName: fromDbValue(row.FILE_NAME),
       fileSizeBytes: fromDbValue(row.FILE_SIZE_BYTES),
-      mediaWidth: parseStoredNumber(row.MEDIA_WIDTH) || readLegacyMediaMetadataNumber(rawMetadata, "width"),
-      mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT) || readLegacyMediaMetadataNumber(rawMetadata, "height"),
-      mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC) || readLegacyMediaMetadataNumber(rawMetadata, "durationSec"),
+      mediaWidth:
+        parseStoredNumber(row.MEDIA_WIDTH) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "width") : 0),
+      mediaHeight:
+        parseStoredNumber(row.MEDIA_HEIGHT) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "height") : 0),
+      mediaDurationSec:
+        parseStoredNumber(row.MEDIA_DURATION_SEC) ||
+        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "durationSec") : 0),
       mediaMetadata: rawMetadata,
       createdAt: fromDbValue(row.CREATED_AT),
       exifExtractedAt: fromDbValue(row.EXIF_EXTRACTED_AT),

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-25: Removed `media_metadata` fallback from the active image-delivery path so preview URLs always request the preview variant and OCI-backed image reads use normalized `MediaAssets` object-key columns only. See `docs/change-summary.md`.
 - 2026-03-24: Reset the media modal to stored detail and stored analysis/process snapshots only, removing active intelligence, EXIF/status refresh, and face-association actions from the modal UI. See `docs/change-summary.md`.
 - 2026-03-24: Added targeted `/intelligence` metadata-overflow diagnostics so failing requests now log which write step overflowed and the top-level JSON key sizes Oracle was asked to persist. See `docs/change-summary.md`.
 - 2026-03-24: Stopped persisting `photoIntelligenceDebug` in stored media metadata, so successful `/intelligence` runs no longer overflow `MEDIA_ASSETS.MEDIA_METADATA` because of debug payload size. See `docs/change-summary.md`.

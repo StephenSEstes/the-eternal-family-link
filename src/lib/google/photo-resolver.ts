@@ -37,22 +37,6 @@ function dedupe(values: string[]) {
   return out;
 }
 
-function normalizeObjectStorageMetadata(rawMetadata: string) {
-  const raw = String(rawMetadata ?? "").trim();
-  if (!raw || (!raw.startsWith("{") && !raw.startsWith("["))) {
-    return { originalObjectKey: "", thumbnailObjectKey: "" };
-  }
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const objectStorage = parsed.objectStorage as Record<string, unknown> | undefined;
-    const originalObjectKey = String(objectStorage?.originalObjectKey ?? "").trim();
-    const thumbnailObjectKey = String(objectStorage?.thumbnailObjectKey ?? "").trim();
-    return { originalObjectKey, thumbnailObjectKey };
-  } catch {
-    return { originalObjectKey: "", thumbnailObjectKey: "" };
-  }
-}
-
 async function getKnownPhotoFolderIds(preferredTenantKey?: string) {
   const preferredFolderId = preferredTenantKey ? (await getTenantConfig(preferredTenantKey)).photosFolderId : "";
   const now = Date.now();
@@ -84,14 +68,15 @@ async function getObjectKeyByFileId(fileId: string) {
   if (cacheEntry && cacheEntry.expiresAt > now) {
     return cacheEntry.value;
   }
-  const asset = await getOciMediaAssetByFileId(normalizedFileId).catch(() => null);
+  const asset = await getOciMediaAssetByFileId(normalizedFileId, {
+    allowLegacyMetadataFallback: false,
+  }).catch(() => null);
   const storageProvider = String(asset?.storageProvider ?? "").trim().toLowerCase();
   const resolvedValue =
     asset && storageProvider === "oci_object"
       ? (() => {
-          const objectStorageMetadata = normalizeObjectStorageMetadata(String(asset.mediaMetadata ?? ""));
-          const originalObjectKey = String(asset.originalObjectKey ?? "").trim() || objectStorageMetadata.originalObjectKey;
-          const thumbnailObjectKey = String(asset.thumbnailObjectKey ?? "").trim() || objectStorageMetadata.thumbnailObjectKey;
+          const originalObjectKey = String(asset.originalObjectKey ?? "").trim();
+          const thumbnailObjectKey = String(asset.thumbnailObjectKey ?? "").trim();
           if (!originalObjectKey) {
             return null;
           }

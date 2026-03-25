@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-25 (remove image-delivery metadata fallback)
+
+- `Date`: 2026-03-25
+- `Change`: Removed `media_metadata` dependency from the active image-delivery path so preview URLs always request the preview variant directly and the server-side OCI image resolver now uses normalized `MediaAssets` object-key columns only.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The viewer/photo path was still parsing legacy `media_metadata` JSON to recover `originalObjectKey` and `thumbnailObjectKey`, and the preview URL helper also consulted metadata before requesting `?variant=preview`. That contradicted the normalized-media design and kept thumbnail/image delivery dependent on a JSON fallback that should no longer be part of the active path.
+- `Files`:
+  - `src/lib/google/photo-path.ts`
+  - `src/lib/google/photo-resolver.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Preview image URLs always target the preview variant without parsing `media_metadata`.
+  - OCI-backed image delivery resolves object keys from normalized `MediaAssets.original_object_key` and `MediaAssets.thumbnail_object_key` only.
+- `Rollback Notes`: Restore legacy metadata fallback in the resolver and preview helper if older rows without normalized object keys must be supported again.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-24 (reset media modal to stored-detail and stored-snapshot mode)
 
 - `Date`: 2026-03-24
