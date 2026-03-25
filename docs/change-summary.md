@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-24 (reset media modal to stored-detail and stored-snapshot mode)
+
+- `Date`: 2026-03-24
+- `Change`: Removed active intelligence behavior from the media modal so the modal now shows stored media detail, linked entities, and stored analysis/process snapshots only.
+- `Type`: UI
+- `Why`: Root cause was a `code/design issue`. The media modal had become an unstable catch-all workflow that mixed ordinary media-detail editing with slow and unreliable live intelligence, EXIF loading, processing-status recompute, and face-association actions. Disabling those modal-triggered paths reduces coupling and restores the modal to a predictable stored-data view while the intelligence workflow is redesigned.
+- `Files`:
+  - `TODO.md`
+  - `docs/design-decisions.md`
+  - `designchoices.md`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Opening the media modal no longer auto-runs intelligence.
+  - The modal header no longer exposes `Generate Suggestions`.
+  - The `Analysis` tab shows stored snapshots/status only, and the modal no longer exposes processing-status refresh, EXIF load, title/description/date apply, or face-association actions.
+- `Rollback Notes`: Re-enable modal intelligence actions only after a narrower redesigned intelligence workflow is documented and implemented.
+- `Design Decision Change`: Yes. The media modal is now explicitly a stored-detail and stored-snapshot surface only until intelligence is redesigned.
+
 ## 2026-03-24 (add intelligence metadata overflow diagnostics)
 
 - `Date`: 2026-03-24

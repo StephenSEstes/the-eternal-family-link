@@ -4,6 +4,52 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Reset media modal to stored-detail and stored-snapshot mode
+  Priority: High
+  Est date: 2026-03-24
+  Desc: Remove live intelligence behavior from the media modal so the modal only displays stored media detail, stored links, and stored analysis/process snapshots. The modal should stop triggering or offering any active intelligence, EXIF, processing-status refresh, or face-association actions until the intelligence workflow is redesigned.
+  Scope:
+  - Remove active modal controls for:
+    - `Generate Suggestions`
+    - `Load Processing Status`
+    - `Load EXIF`
+    - `Use Title`
+    - `Use Description`
+    - `Use Date`
+    - `Associate Face`
+  - Remove any auto-run intelligence behavior when the modal opens.
+  - Keep media detail editing, linked people/households editing, and stored analysis/process snapshot display.
+  - Do not delete intelligence routes/tables in this phase; only deactivate them from the modal UI and modal-triggered behavior.
+  Phases:
+  - Phase 1: Design reset documentation
+    - Record that the media modal is now a stored-data/read-only intelligence surface.
+    - State explicitly that modal intelligence actions are inactive pending redesign.
+  - Phase 2: Modal UI shutdown
+    - Remove the active intelligence button from the modal header.
+    - Remove the embedded interactive photo-suggestions card from the `Info` tab.
+    - Convert the `Analysis` tab to read-only stored snapshot display only.
+    - Remove modal-triggered EXIF/status refresh and face-association actions.
+  - Phase 3: Active behavior shutdown
+    - Remove the modal auto-run intelligence effect.
+    - Ensure opening the modal does not trigger intelligence/status/exif requests.
+    - Ensure the modal no longer posts to intelligence or face-association routes from any button path.
+  - Phase 4: Validation
+    - Confirm the media modal still opens and shows media detail plus stored snapshot/process data.
+    - Confirm modal open no longer triggers intelligence/status/exif network activity.
+    - Confirm linked people/households editing and normal media detail save still work.
+  API/UI/data changes:
+  - UI: Media modal becomes a stored-detail and stored-snapshot surface with no active intelligence controls.
+  - API: Existing intelligence-related routes remain available but are no longer invoked from the media modal.
+  - Data: No schema/data migration in this phase.
+  Validation:
+  - `npm run build` passes.
+  - Media modal header contains no active intelligence action.
+  - Opening the modal no longer auto-runs intelligence.
+  - `Analysis` tab shows stored snapshot/process data only.
+  Completion criteria:
+  - No modal control can trigger intelligence, EXIF loading, processing-status recompute, or face association.
+  - Media detail and stored snapshot display remain functional.
+  - The design reset is documented.
 - [ ] Normalize media asset technical storage fields out of `media_metadata`
   Priority: High
   Est date: 2026-03-24

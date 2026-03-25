@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
@@ -8,10 +8,7 @@ import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrato
 import { inferStoredMediaKind } from "@/lib/media/upload";
 import type { MediaProcessingStatus, MediaProcessingStep, MediaProcessingStepState } from "@/lib/media/processing-status";
 import {
-  canRunPhotoIntelligence,
-  readPhotoIntelligenceDebug,
   readPhotoIntelligenceSuggestion,
-  type PhotoIntelligenceDebug,
   type PhotoIntelligenceSuggestion,
 } from "@/lib/media/photo-intelligence";
 
@@ -63,28 +60,6 @@ type LinkedSearchResult =
       displayName: string;
       householdId: string;
     };
-
-type FaceAssociationResponse = {
-  faceId?: string;
-  mediaMetadata?: string;
-  processingStatus?: MediaProcessingStatus | null;
-  exifExtractedAt?: string;
-  personId?: string;
-  personDisplayName?: string;
-  sampleCount?: number;
-};
-
-type PhotoIntelligenceResponse = {
-  debug?: PhotoIntelligenceDebug | null;
-  mediaMetadata?: string;
-  processingStatus?: MediaProcessingStatus | null;
-};
-
-type ProcessingStatusResponse = {
-  mediaMetadata?: string;
-  processingStatus?: MediaProcessingStatus | null;
-  exifExtractedAt?: string;
-};
 
 type MediaModalTab = "info" | "analysis";
 
@@ -280,17 +255,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   }>({ people: [], households: [] });
   const [photoAssociationBusy, setPhotoAssociationBusy] = useState(false);
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
-  const [photoIntelligenceBusy, setPhotoIntelligenceBusy] = useState(false);
-  const [processingStatusBusy, setProcessingStatusBusy] = useState(false);
-  const [photoExifBusy, setPhotoExifBusy] = useState(false);
-  const [photoIntelligenceDebug, setPhotoIntelligenceDebug] = useState<PhotoIntelligenceDebug | null>(null);
-  const photoIntelligenceInFlightRef = useRef("");
-  const photoIntelligenceAutoRequestedRef = useRef("");
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
-  const [faceAssociationSelections, setFaceAssociationSelections] = useState<Record<string, string>>({});
-  const [pendingFaceAssociations, setPendingFaceAssociations] = useState<Set<string>>(new Set());
-  const [confirmedFaceAssociations, setConfirmedFaceAssociations] = useState<Record<string, string>>({});
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
@@ -393,74 +359,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     upsertMediaItem(nextItem);
   };
 
-  const applySelectedPhotoMetadata = (fileId: string, mediaMetadata: string) => {
-    const normalizedMetadata = mediaMetadata.trim();
-    if (!normalizedMetadata) {
-      return false;
-    }
-    const currentDetail = selectedPhotoDetail;
-    if (!currentDetail || currentDetail.fileId !== fileId) {
-      return false;
-    }
-    applySelectedPhotoDetail(
-      {
-        ...currentDetail,
-        mediaMetadata: normalizedMetadata,
-      },
-      {
-        editable: selectedPhotoEditable,
-        canEditName: selectedPhotoCanEditName,
-        preserveExistingText: true,
-      },
-    );
-    return true;
-  };
-
-  const applySelectedPhotoProcessingStatus = (fileId: string, processingStatus: MediaProcessingStatus | null | undefined) => {
-    if (!processingStatus) {
-      return false;
-    }
-    const currentDetail = selectedPhotoDetail;
-    if (!currentDetail || currentDetail.fileId !== fileId) {
-      return false;
-    }
-    applySelectedPhotoDetail(
-      {
-        ...currentDetail,
-        processingStatus,
-      },
-      {
-        editable: selectedPhotoEditable,
-        canEditName: selectedPhotoCanEditName,
-        preserveExistingText: true,
-      },
-    );
-    return true;
-  };
-
-  const applySelectedPhotoExifExtractedAt = (fileId: string, exifExtractedAt: string | undefined) => {
-    const normalizedExtractedAt = String(exifExtractedAt ?? "").trim();
-    const currentDetail = selectedPhotoDetail;
-    if (!currentDetail || currentDetail.fileId !== fileId) {
-      return false;
-    }
-    if (!normalizedExtractedAt && !currentDetail.exifExtractedAt) {
-      return false;
-    }
-    applySelectedPhotoDetail(
-      {
-        ...currentDetail,
-        exifExtractedAt: normalizedExtractedAt,
-      },
-      {
-        editable: selectedPhotoEditable,
-        canEditName: selectedPhotoCanEditName,
-        preserveExistingText: true,
-      },
-    );
-    return true;
-  };
-
   const photoTagSearchResults = useMemo(() => {
     const q = photoTagQuery.trim().toLowerCase();
     if (!q) return [] as LinkedSearchResult[];
@@ -532,21 +430,9 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     if (!selectedPhotoDetail?.processingStatus) return null;
     return selectedPhotoDetail.processingStatus;
   }, [selectedPhotoDetail]);
-  const selectedPhotoExifCollected = useMemo(() => {
-    return Boolean(String(selectedPhotoDetail?.exifExtractedAt ?? "").trim());
-  }, [selectedPhotoDetail?.exifExtractedAt]);
   const selectedPhotoIsImage = useMemo(() => {
     if (!selectedPhotoDetail) return false;
     return inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "image";
-  }, [selectedPhotoDetail]);
-  const selectedPhotoIntelligenceDebug = useMemo<PhotoIntelligenceDebug | null>(() => {
-    if (photoIntelligenceDebug) return photoIntelligenceDebug;
-    if (!selectedPhotoDetail) return null;
-    return readPhotoIntelligenceDebug(selectedPhotoDetail.mediaMetadata);
-  }, [selectedPhotoDetail, photoIntelligenceDebug]);
-  const selectedPhotoSupportsIntelligence = useMemo(() => {
-    if (!selectedPhotoDetail) return false;
-    return canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata);
   }, [selectedPhotoDetail]);
   const selectedPhotoProcessingSteps = useMemo(() => {
     if (!selectedPhotoProcessingStatus) return [] as MediaProcessingStep[];
@@ -562,33 +448,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const selectedPhotoAnalysisContent = selectedPhotoDetail ? (
     <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.6rem" }}>
-          <h5 style={{ margin: 0 }}>Processing Status</h5>
-          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="button secondary tap-button"
-              onClick={() => void refreshSelectedPhotoProcessingStatus()}
-              disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
-            >
-              {processingStatusBusy
-                ? "Loading Status..."
-                : selectedPhotoProcessingSteps.length > 0
-                  ? "Refresh Processing Status"
-                  : "Load Processing Status"}
-            </button>
-            {selectedPhotoIsImage && !selectedPhotoExifCollected ? (
-              <button
-                type="button"
-                className="button secondary tap-button"
-                onClick={() => void loadSelectedPhotoExif()}
-                disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
-              >
-                {photoExifBusy ? "Loading EXIF..." : "Load EXIF"}
-              </button>
-            ) : null}
-          </div>
-        </div>
+        <h5 style={{ margin: "0 0 0.6rem" }}>Processing Status</h5>
         {selectedPhotoProcessingSteps.length > 0 ? (
           <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             {selectedPhotoProcessingSteps.map((stepItem) => (
@@ -597,11 +457,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           </div>
         ) : (
           <p className="page-subtitle" style={{ margin: 0 }}>
-            Processing status loads on demand. Use Load Processing Status when you want to refresh these steps.
+            No stored processing snapshot is available for this media.
           </p>
         )}
       </div>
-      {selectedPhotoSupportsIntelligence ? (
+      {selectedPhotoIsImage ? (
         <div
           className="card"
           style={{
@@ -611,9 +471,24 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             background: "#f8fafc",
           }}
         >
-          <strong style={{ fontSize: "0.9rem" }}>Photo Suggestions</strong>
+          <strong style={{ fontSize: "0.9rem" }}>Stored Analysis Snapshot</strong>
           {selectedPhotoIntelligenceSuggestion ? (
             <>
+              {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Title: {selectedPhotoIntelligenceSuggestion.labelSuggestion}
+                </span>
+              ) : null}
+              {selectedPhotoIntelligenceSuggestion.descriptionSuggestion ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Description: {selectedPhotoIntelligenceSuggestion.descriptionSuggestion}
+                </span>
+              ) : null}
+              {selectedPhotoIntelligenceSuggestion.dateSuggestion ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Suggested date: {selectedPhotoIntelligenceSuggestion.dateSuggestion}
+                </span>
+              ) : null}
               <span className="page-subtitle" style={{ margin: 0 }}>
                 Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
               </span>
@@ -622,46 +497,19 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   Vision labels: {selectedPhotoIntelligenceSuggestion.visionLabels.slice(0, 4).join(", ")}
                 </span>
               ) : null}
+              {selectedPhotoIntelligenceSuggestion.visionObjects && selectedPhotoIntelligenceSuggestion.visionObjects.length > 0 ? (
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  Vision objects: {selectedPhotoIntelligenceSuggestion.visionObjects.slice(0, 4).join(", ")}
+                </span>
+              ) : null}
               {typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" ? (
                 <span className="page-subtitle" style={{ margin: 0 }}>
                   Faces detected: {selectedPhotoIntelligenceSuggestion.detectedFaceCount}
                 </span>
               ) : null}
-              <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoCanEditName}
-                    onClick={() => setSelectedPhotoName(selectedPhotoIntelligenceSuggestion.labelSuggestion)}
-                  >
-                    Use Title
-                  </button>
-                ) : null}
-                {selectedPhotoIntelligenceSuggestion.descriptionSuggestion ? (
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
-                    onClick={() => setSelectedPhotoDescription(selectedPhotoIntelligenceSuggestion.descriptionSuggestion)}
-                  >
-                    Use Description
-                  </button>
-                ) : null}
-                {selectedPhotoIntelligenceSuggestion.dateSuggestion ? (
-                  <button
-                    type="button"
-                    className="button secondary tap-button"
-                    disabled={photoAssociationBusy || photoIntelligenceBusy || !selectedPhotoEditable}
-                    onClick={() => setSelectedPhotoDate(selectedPhotoIntelligenceSuggestion.dateSuggestion)}
-                  >
-                    Use Date
-                  </button>
-                ) : null}
-              </div>
               {selectedPhotoIntelligenceSuggestion.faceSuggestions && selectedPhotoIntelligenceSuggestion.faceSuggestions.length > 0 ? (
                 <div style={{ display: "grid", gap: "0.45rem" }}>
-                  <strong style={{ fontSize: "0.88rem" }}>Face Suggestions</strong>
+                  <strong style={{ fontSize: "0.88rem" }}>Stored Face Snapshot</strong>
                   {selectedPhotoIntelligenceSuggestion.faceSuggestions.map((face, index) => (
                     <div
                       key={face.faceId || `face-suggestion-${index}`}
@@ -695,128 +543,38 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         </div>
                       ) : (
                         <span className="page-subtitle" style={{ margin: 0 }}>
-                          No candidate people yet.
+                          No stored candidate people for this face.
                         </span>
                       )}
-                      <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.15rem" }}>
-                        <strong style={{ fontSize: "0.82rem" }}>Associate Face</strong>
-                        <div style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-                          <FaceCropPreview
-                            fileId={selectedPhotoDetail.fileId}
-                            tenantKey={tenantKey}
-                            bbox={face.bbox}
-                          />
-                          <div style={{ display: "grid", gap: "0.35rem", minWidth: "220px", flex: "1 1 220px" }}>
-                            <select
-                              className="input"
-                              value={faceAssociationSelections[face.faceId] ?? ""}
-                              disabled={photoAssociationBusy || photoIntelligenceBusy || pendingFaceAssociations.has(face.faceId)}
-                              onChange={(event) =>
-                                setFaceAssociationSelections((current) => ({
-                                  ...current,
-                                  [face.faceId]: event.target.value,
-                                }))}
-                            >
-                              <option value="">Select person...</option>
-                              {peopleOptions.map((person) => (
-                                <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
-                                  {person.displayName}
-                                </option>
-                              ))}
-                            </select>
-                            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
-                              <button
-                                type="button"
-                                className="button secondary tap-button"
-                                disabled={
-                                  photoAssociationBusy
-                                  || photoIntelligenceBusy
-                                  || pendingFaceAssociations.has(face.faceId)
-                                  || !String(faceAssociationSelections[face.faceId] ?? "").trim()
-                                }
-                                onClick={() => {
-                                  void associateFaceToPerson(face.faceId);
-                                }}
-                              >
-                                {pendingFaceAssociations.has(face.faceId) ? "Associating..." : "Associate Face"}
-                              </button>
-                              {confirmedFaceAssociations[face.faceId] ? (
-                                <span className="page-subtitle" style={{ margin: 0 }}>
-                                  Saved to {confirmedFaceAssociations[face.faceId]}.
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <FaceCropPreview
+                        fileId={selectedPhotoDetail.fileId}
+                        tenantKey={tenantKey}
+                        bbox={face.bbox}
+                      />
                     </div>
                   ))}
                 </div>
               ) : typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" &&
                 selectedPhotoIntelligenceSuggestion.detectedFaceCount > 0 ? (
                 <span className="page-subtitle" style={{ margin: 0 }}>
-                  Faces were detected, but no person candidates are ready yet.
+                  Faces were detected, but no stored candidate people are available.
                 </span>
               ) : null}
             </>
           ) : (
             <span className="page-subtitle" style={{ margin: 0 }}>
-              {photoIntelligenceBusy
-                ? "Generating suggestions for this photo..."
-                : "No AI suggestions yet. Use Generate Suggestions to analyze this photo."}
+              No stored analysis snapshot is available for this media.
             </span>
           )}
-          {selectedPhotoIntelligenceDebug ? (
-            <details style={{ marginTop: "0.25rem" }}>
-              <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>
-              <div style={{ marginTop: "0.45rem", display: "grid", gap: "0.3rem" }}>
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  configured={String(selectedPhotoIntelligenceDebug.visionConfigured)} attempted={String(selectedPhotoIntelligenceDebug.visionAttempted)} succeeded={String(selectedPhotoIntelligenceDebug.visionSucceeded)}
-                </span>
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  embeddingAttempted={String(selectedPhotoIntelligenceDebug.embeddingAttempted)} embeddingSucceeded={String(selectedPhotoIntelligenceDebug.embeddingSucceeded)} embeddingFacesReturned={String(selectedPhotoIntelligenceDebug.embeddingFacesReturned)} embeddingFacesWithVectors={String(selectedPhotoIntelligenceDebug.embeddingFacesWithVectors)}
-                </span>
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  sourceLoadMs={String(selectedPhotoIntelligenceDebug.sourceLoadLatencyMs)} exifMs={String(selectedPhotoIntelligenceDebug.exifLatencyMs)} visionPrepareMs={String(selectedPhotoIntelligenceDebug.visionPrepareLatencyMs)} visionRequestMs={String(selectedPhotoIntelligenceDebug.visionRequestLatencyMs)} visionTotalMs={String(selectedPhotoIntelligenceDebug.visionTotalLatencyMs)}
-                </span>
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  facePersistMs={String(selectedPhotoIntelligenceDebug.facePersistenceLatencyMs)} captionMs={String(selectedPhotoIntelligenceDebug.captionLatencyMs)} metadataUpdateMs={String(selectedPhotoIntelligenceDebug.metadataUpdateLatencyMs)} routeTotalMs={String(selectedPhotoIntelligenceDebug.routeTotalLatencyMs)}
-                </span>
-                {selectedPhotoIntelligenceDebug.visionErrorMessage ? (
-                  <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
-                    {selectedPhotoIntelligenceDebug.visionErrorMessage}
-                  </span>
-                ) : null}
-                {selectedPhotoIntelligenceDebug.embeddingErrorMessage ? (
-                  <span className="page-subtitle" style={{ margin: 0, color: "#991b1b" }}>
-                    {selectedPhotoIntelligenceDebug.embeddingErrorMessage}
-                  </span>
-                ) : null}
-                {(selectedPhotoIntelligenceDebug.visionErrorCode || selectedPhotoIntelligenceDebug.visionStatusCode || selectedPhotoIntelligenceDebug.visionServiceCode || selectedPhotoIntelligenceDebug.visionOpcRequestId) ? (
-                  <span className="page-subtitle" style={{ margin: 0 }}>
-                    code={selectedPhotoIntelligenceDebug.visionErrorCode || "-"} status={selectedPhotoIntelligenceDebug.visionStatusCode || "-"} service={selectedPhotoIntelligenceDebug.visionServiceCode || "-"} requestId={selectedPhotoIntelligenceDebug.visionOpcRequestId || "-"}
-                  </span>
-                ) : null}
-                {selectedPhotoIntelligenceDebug.visionRawResult ? (
-                  <textarea className="textarea" readOnly value={selectedPhotoIntelligenceDebug.visionRawResult} style={{ minHeight: "120px" }} />
-                ) : (
-                  <span className="page-subtitle" style={{ margin: 0 }}>
-                    No raw Vision result captured.
-                  </span>
-                )}
-              </div>
-            </details>
-          ) : null}
         </div>
       ) : (
         <div className="card">
-          <h5 style={{ margin: "0 0 0.6rem" }}>Photo Suggestions</h5>
+          <h5 style={{ margin: "0 0 0.6rem" }}>Stored Analysis Snapshot</h5>
           <p className="page-subtitle" style={{ margin: 0 }}>
-            AI analysis is only available for image media.
+            Analysis snapshots are only available for image media.
           </p>
         </div>
       )}
-      {photoAssociationStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{photoAssociationStatus}</p> : null}
     </div>
   ) : null;
 
@@ -868,14 +626,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const openPhotoEditor = async (fileId: string) => {
-    setPhotoIntelligenceDebug(null);
-    setProcessingStatusBusy(false);
-    setPhotoExifBusy(false);
-    photoIntelligenceAutoRequestedRef.current = "";
     setSelectedPhotoTab("info");
-    setFaceAssociationSelections({});
-    setPendingFaceAssociations(new Set());
-    setConfirmedFaceAssociations({});
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -940,161 +691,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setPhotoAssociationStatus(error instanceof Error ? error.message : "Save failed");
     } finally {
       setPhotoAssociationBusy(false);
-    }
-  };
-
-  const refreshSelectedPhotoProcessingStatus = async () => {
-    if (!selectedPhotoDetail) return;
-    const activeFileId = selectedPhotoDetail.fileId;
-    setProcessingStatusBusy(true);
-    setPhotoAssociationStatus(
-      selectedPhotoProcessingStatus ? "Refreshing processing status..." : "Loading processing status...",
-    );
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/processing-status`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      await assertOk(res, "Failed to load processing status");
-      const body = (await res.json().catch(() => null)) as ProcessingStatusResponse | null;
-      const normalizedMetadata = String(body?.mediaMetadata ?? "").trim();
-      const normalizedExifExtractedAt = String(body?.exifExtractedAt ?? "").trim();
-      const appliedMetadata = normalizedMetadata ? applySelectedPhotoMetadata(activeFileId, normalizedMetadata) : true;
-      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
-      const appliedExif = normalizedExifExtractedAt ? applySelectedPhotoExifExtractedAt(activeFileId, normalizedExifExtractedAt) : true;
-      if (!appliedMetadata || !appliedStatus || !appliedExif) {
-        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
-      }
-      setPhotoAssociationStatus("Processing status ready.");
-    } catch (error) {
-      setPhotoAssociationStatus(error instanceof Error ? error.message : "Processing status failed");
-    } finally {
-      setProcessingStatusBusy(false);
-    }
-  };
-
-  const loadSelectedPhotoExif = async () => {
-    if (!selectedPhotoDetail) return;
-    const activeFileId = selectedPhotoDetail.fileId;
-    setPhotoExifBusy(true);
-    setPhotoAssociationStatus("Loading EXIF...");
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/exif`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      await assertOk(res, "Failed to load EXIF");
-      const body = (await res.json().catch(() => null)) as ProcessingStatusResponse | null;
-      const normalizedMetadata = String(body?.mediaMetadata ?? "").trim();
-      const normalizedExifExtractedAt = String(body?.exifExtractedAt ?? "").trim();
-      const appliedMetadata = normalizedMetadata ? applySelectedPhotoMetadata(activeFileId, normalizedMetadata) : true;
-      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
-      const appliedExif = normalizedExifExtractedAt ? applySelectedPhotoExifExtractedAt(activeFileId, normalizedExifExtractedAt) : false;
-      if (!appliedMetadata || !appliedStatus || !appliedExif) {
-        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
-      }
-      setPhotoAssociationStatus("EXIF loaded.");
-    } catch (error) {
-      setPhotoAssociationStatus(error instanceof Error ? error.message : "EXIF load failed");
-    } finally {
-      setPhotoExifBusy(false);
-    }
-  };
-
-  const runPhotoIntelligence = async (force = false) => {
-    if (!selectedPhotoDetail) return;
-    if (!canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata)) return;
-    const activeFileId = selectedPhotoDetail.fileId;
-    if (photoIntelligenceBusy || processingStatusBusy || photoExifBusy || photoIntelligenceInFlightRef.current === activeFileId) {
-      return;
-    }
-    photoIntelligenceInFlightRef.current = activeFileId;
-    setPhotoIntelligenceBusy(true);
-    setPhotoAssociationStatus(force ? "Regenerating photo suggestions..." : "Generating photo suggestions...");
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(activeFileId)}/intelligence`,
-        {
-          credentials: "same-origin",
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ force }),
-        },
-      );
-      await assertOk(res, "Failed to generate photo suggestions");
-      const body = (await res.json().catch(() => null)) as PhotoIntelligenceResponse | null;
-      setPhotoIntelligenceDebug(body?.debug ?? null);
-      const appliedMetadata = applySelectedPhotoMetadata(activeFileId, String(body?.mediaMetadata ?? ""));
-      const appliedStatus = applySelectedPhotoProcessingStatus(activeFileId, body?.processingStatus ?? null);
-      if (!appliedMetadata || !appliedStatus) {
-        await loadSelectedPhotoDetail(activeFileId, { noStore: true });
-      }
-      setPhotoAssociationStatus("Photo suggestions ready.");
-    } catch (error) {
-      setPhotoAssociationStatus(error instanceof Error ? error.message : "Photo suggestion failed");
-    } finally {
-      if (photoIntelligenceInFlightRef.current === activeFileId) {
-        photoIntelligenceInFlightRef.current = "";
-      }
-      setPhotoIntelligenceBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!showPhotoEditor || !selectedPhotoDetail) return;
-    if (!selectedPhotoSupportsIntelligence) return;
-    if (selectedPhotoIntelligenceSuggestion) return;
-    if (photoIntelligenceAutoRequestedRef.current === selectedPhotoDetail.fileId) return;
-    photoIntelligenceAutoRequestedRef.current = selectedPhotoDetail.fileId;
-    void runPhotoIntelligence(false);
-  }, [showPhotoEditor, selectedPhotoDetail?.fileId, selectedPhotoSupportsIntelligence, selectedPhotoIntelligenceSuggestion]);
-
-  const associateFaceToPerson = async (faceId: string) => {
-    if (!selectedPhotoDetail) return;
-    const normalizedFaceId = faceId.trim();
-    const personId = String(faceAssociationSelections[normalizedFaceId] ?? "").trim();
-    if (!normalizedFaceId || !personId) {
-      setPhotoAssociationStatus("Select a person before associating a face.");
-      return;
-    }
-    setPendingFaceAssociations((current) => new Set(current).add(normalizedFaceId));
-    setPhotoAssociationStatus("Associating face to person...");
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/faces/${encodeURIComponent(normalizedFaceId)}/associate`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ personId }),
-        },
-      );
-      await assertOk(res, "Failed to associate face");
-      const body = (await res.json().catch(() => null)) as FaceAssociationResponse | null;
-      const displayName = String(body?.personDisplayName ?? peopleById.get(personId)?.displayName ?? personId).trim() || personId;
-      setConfirmedFaceAssociations((current) => ({
-        ...current,
-        [normalizedFaceId]: displayName,
-      }));
-      const appliedMetadata = applySelectedPhotoMetadata(selectedPhotoDetail.fileId, String(body?.mediaMetadata ?? ""));
-      const appliedStatus = applySelectedPhotoProcessingStatus(selectedPhotoDetail.fileId, body?.processingStatus ?? null);
-      if (!appliedMetadata || !appliedStatus) {
-        await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
-      }
-      setPhotoAssociationStatus(`Associated face to ${displayName}.`);
-    } catch (error) {
-      setPhotoAssociationStatus(error instanceof Error ? error.message : "Face association failed");
-    } finally {
-      setPendingFaceAssociations((current) => {
-        const next = new Set(current);
-        next.delete(normalizedFaceId);
-        return next;
-      });
     }
   };
 
@@ -1471,21 +1067,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 <div className="person-photo-detail-head">
                   <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Edit Media</h4>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    {canRunPhotoIntelligence(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) ? (
-                      <button
-                        type="button"
-                        className="button secondary tap-button"
-                        onClick={() => void runPhotoIntelligence(true)}
-                        disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy}
-                      >
-                        {photoIntelligenceBusy ? "Generating..." : "Generate Suggestions"}
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       className="button tap-button"
                       onClick={() => void saveSelectedPhotoMetadata()}
-                      disabled={photoAssociationBusy || photoIntelligenceBusy || processingStatusBusy || photoExifBusy || !selectedPhotoEditable}
+                      disabled={photoAssociationBusy || !selectedPhotoEditable}
                     >
                       Save
                     </button>
@@ -1494,7 +1080,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         type="button"
                         className="button secondary tap-button"
                         onClick={() => void deleteSelectedPhoto()}
-                        disabled={photoAssociationBusy || processingStatusBusy || photoExifBusy}
+                        disabled={photoAssociationBusy}
                         style={{ color: "#991b1b", borderColor: "#fecaca", background: "#fff1f2" }}
                       >
                         Delete
@@ -1578,7 +1164,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     onChange={(event) => setSelectedPhotoDate(event.target.value)}
                     disabled={photoAssociationBusy || !selectedPhotoEditable}
                   />
-                  {selectedPhotoSupportsIntelligence ? (
+                  {/*
                     <div
                       style={{
                         marginTop: "0.65rem",
@@ -1787,7 +1373,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         </details>
                       ) : null}
                     </div>
-                  ) : null}
+                  */}
                   {!selectedPhotoEditable ? (
                     <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
                       Link this file to a person or household before editing app metadata.

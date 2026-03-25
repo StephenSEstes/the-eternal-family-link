@@ -262,6 +262,13 @@ This file captures product and engineering choices that affect behavior, data sh
 
 ## 2026-03-24
 
+- `Area`: Media modal intelligence behavior
+- `Decision`: The media modal is now a stored-data surface only for analysis. It may display stored processing-status snapshots and stored photo-analysis snapshots, but it must not auto-run intelligence or expose modal actions for `Generate Suggestions`, `Load Processing Status`, `Load EXIF`, `Use Title/Description/Date`, or `Associate Face` until the intelligence workflow is redesigned.
+- `Reason`: The modal had become an unstable catch-all workflow that mixed core media detail editing with slow and unreliable intelligence, EXIF, status recompute, and face-association actions. Removing active intelligence from the modal reduces coupling and restores the modal to a predictable detail view.
+- `Alternatives Considered`: Keep the active intelligence controls and continue patching the modal incrementally; remove the analysis tab entirely instead of keeping stored snapshot display.
+- `Impact`: Media detail editing and link editing remain in the modal, while intelligence-related routes become inactive from this UI surface. The `Analysis` tab should be read-only and reflect only already-stored snapshot/process data.
+- `Follow-up`: Redesign intelligence as a narrower, explicitly triggered workflow outside the modal or in a dedicated reviewed flow before re-enabling any active analysis actions.
+
 - `Area`: Media asset storage metadata normalization
 - `Decision`: Store asset-level technical media fields as normalized `MediaAssets` columns and keep `media_metadata` lean. The approved normalized fields are `source_provider`, `source_file_id`, `original_object_key`, `thumbnail_object_key`, `checksum_sha256`, `media_width`, `media_height`, and `media_duration_sec`. `MediaLinks` should not store copied asset technical metadata.
 - `Reason`: Asset technical fields were being buried in `media_metadata` JSON and duplicated into `MediaLinks.media_metadata`, which made SQL reads slower, inflated metadata payload size, and directly caused `ORA-12899` overflow failures on intelligence/status writes.
