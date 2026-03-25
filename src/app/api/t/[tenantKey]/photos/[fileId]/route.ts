@@ -4,14 +4,14 @@ import { appendSessionAuditLog } from "@/lib/audit/log";
 import { ATTRIBUTES_TABLE } from "@/lib/attributes/store";
 import { getPeople, updateTableRecordById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { readMediaProcessingStatus, type MediaProcessingStatus } from "@/lib/media/processing-status";
+import { buildMediaKindMetadata } from "@/lib/media/upload";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
   getOciMediaAssetByFileId,
   getOciHouseholdsForTenant,
   getOciMediaLinksForFile,
   getOciPersonMediaAttributeRowsForFile,
-  updateOciMediaLinksForFile,
+  updateOciMediaAssetDetailsForFile,
 } from "@/lib/oci/tables";
 
 type RouteProps = {
@@ -24,7 +24,6 @@ type MediaDetailItem = {
   description: string;
   date: string;
   mediaMetadata?: string;
-  processingStatus?: MediaProcessingStatus | null;
   exifExtractedAt?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
@@ -88,6 +87,13 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     households: [],
   };
 
+  if (mediaAsset) {
+    detail.name = mediaAsset.label.trim() || mediaAsset.fileName.trim();
+    detail.description = mediaAsset.description.trim();
+    detail.date = mediaAsset.photoDate.trim();
+    detail.mediaMetadata = buildMediaKindMetadata(mediaAsset.mediaKind);
+  }
+
   for (const link of mediaLinks) {
     if (!detail.name) detail.name = link.label.trim() || link.fileName.trim();
     if (!detail.description) detail.description = link.description.trim();
@@ -139,14 +145,13 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     }
   }
 
-  if (!detail.mediaMetadata && mediaAsset?.mediaMetadata) {
-    detail.mediaMetadata = mediaAsset.mediaMetadata.trim();
+  if (!detail.mediaMetadata && mediaAsset) {
+    detail.mediaMetadata = buildMediaKindMetadata(mediaAsset.mediaKind);
   }
   if (!detail.name && mediaAsset?.fileName) {
     detail.name = mediaAsset.fileName.trim();
   }
   detail.exifExtractedAt = mediaAsset?.exifExtractedAt?.trim() || "";
-  detail.processingStatus = readMediaProcessingStatus(detail.mediaMetadata || mediaAsset?.mediaMetadata || "");
 
   detail.people.sort((a, b) => a.displayName.localeCompare(b.displayName));
   detail.households.sort((a, b) => a.label.localeCompare(b.label));
@@ -154,7 +159,7 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
   return {
     item: detail,
     editable: mediaLinks.length > 0 || personMediaAttributes.length > 0,
-    canEditName: mediaLinks.length > 0,
+    canEditName: mediaLinks.length > 0 || personMediaAttributes.length > 0,
   };
 }
 
@@ -211,25 +216,12 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   const nextDescription = parsed.data.description.trim();
   const nextDate = parsed.data.date.trim();
 
-  if (!hasWritableLinks && nextName !== before.item.name.trim()) {
-    return NextResponse.json(
-      {
-        error: "name_not_editable",
-        message: "Name can only be edited when this file has a stored media link in the app.",
-      },
-      { status: 400 },
-    );
-  }
-
-  if (hasWritableLinks) {
-    await updateOciMediaLinksForFile({
-      familyGroupKey: resolved.tenant.tenantKey,
-      fileId: normalizedFileId,
-      label: nextName,
-      description: nextDescription,
-      photoDate: nextDate,
-    });
-  }
+  await updateOciMediaAssetDetailsForFile({
+    fileId: normalizedFileId,
+    label: nextName,
+    description: nextDescription,
+    photoDate: nextDate,
+  });
 
   if (hasWritableAttributes) {
     const nowIso = new Date().toISOString();

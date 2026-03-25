@@ -238,7 +238,10 @@ BEGIN
     CREATE TABLE media_assets (
       media_id VARCHAR2(128 CHAR) NOT NULL,
       file_id VARCHAR2(512 CHAR) NOT NULL,
-      storage_provider VARCHAR2(64 CHAR),
+      media_kind VARCHAR2(32 CHAR),
+      label VARCHAR2(512 CHAR),
+      description VARCHAR2(4000 CHAR),
+      photo_date VARCHAR2(32 CHAR),
       source_provider VARCHAR2(64 CHAR),
       source_file_id VARCHAR2(512 CHAR),
       original_object_key VARCHAR2(1024 CHAR),

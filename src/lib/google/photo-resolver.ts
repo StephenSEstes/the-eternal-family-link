@@ -71,9 +71,8 @@ async function getObjectKeyByFileId(fileId: string) {
   const asset = await getOciMediaAssetByFileId(normalizedFileId, {
     allowLegacyMetadataFallback: false,
   }).catch(() => null);
-  const storageProvider = String(asset?.storageProvider ?? "").trim().toLowerCase();
   const resolvedValue =
-    asset && storageProvider === "oci_object"
+    asset
       ? (() => {
           const originalObjectKey = String(asset.originalObjectKey ?? "").trim();
           const thumbnailObjectKey = String(asset.thumbnailObjectKey ?? "").trim();

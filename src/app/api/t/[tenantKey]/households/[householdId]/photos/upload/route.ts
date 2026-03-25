@@ -5,13 +5,12 @@ import { buildEntityId } from "@/lib/entity-id";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildMediaFileId, buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
 import {
-  buildMediaMetadata,
+  buildMediaKindMetadata,
   fallbackUploadExtension,
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
 import { collectPersistedExifData } from "@/lib/media/exif";
-import { buildMediaProcessingStatus, writeMediaProcessingStatus } from "@/lib/media/processing-status";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
 import { setOciPrimaryMediaLink, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
@@ -72,7 +71,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const mediaWidth = String(formData?.get("mediaWidth") ?? "").trim();
     const mediaHeight = String(formData?.get("mediaHeight") ?? "").trim();
     const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
-    const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const requestedPrimary = String(formData?.get("isPrimary") ?? "").trim().toLowerCase() === "true";
     const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
 
@@ -151,47 +149,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const normalizedMediaHeight = Number.parseFloat(mediaHeight);
     const normalizedMediaDurationSec = Number.parseFloat(mediaDurationSec);
 
-    const baseMediaMetadata = buildMediaMetadata({
-      fileName: safeFileName,
-      mimeType: validated.mimeType,
-      sizeBytes: bytes.length,
-      createdAt: createdAtIso,
-      mediaKind: validated.mediaKind,
-      width: mediaWidth,
-      height: mediaHeight,
-      durationSec: mediaDurationSec,
-      captureSource,
-      extra: {
-        checksumSha256,
-        objectStorage: {
-          provider: "oci_object",
-          namespace: objectStorage.namespace,
-          bucketName: objectStorage.bucketName,
-          originalObjectKey,
-          thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-          migratedAt: new Date().toISOString(),
-          sourceFileId: fileId,
-        },
-        thumbnailObjectKey: thumbnailUpload?.objectKey,
-        thumbnailMimeType: thumbnailUpload?.mimeType,
-        thumbnailWidth: thumbnailUpload?.width,
-        thumbnailHeight: thumbnailUpload?.height,
-        thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
-      },
-    });
-    const mediaMetadata = writeMediaProcessingStatus(
-      baseMediaMetadata,
-      buildMediaProcessingStatus({
-        fileId,
-        rawMetadata: baseMediaMetadata,
-        fileName: safeFileName,
-        originalObjectKey,
-        thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-        exifExtractedAt: persistedExif?.extractedAt,
-        exifCaptureDate: persistedExif?.captureDate,
-      }),
-    );
-
     let photoId = buildEntityId("attr", `${resolved.tenant.tenantKey}|${householdId}|${Date.now()}|${fileId}`);
     let shouldBePrimary = !targetAttributeId && requestedPrimary;
     const existing = await getTableRecords("MediaLinks", resolved.tenant.tenantKey).catch(() => []);
@@ -209,7 +166,10 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     await upsertOciMediaAsset({
       mediaId,
       fileId,
-      storageProvider: "oci_object",
+      mediaKind: validated.mediaKind,
+      label: name || file.name || "photo",
+      description,
+      photoDate: effectivePhotoDate,
       sourceProvider: "oci_object",
       sourceFileId: fileId,
       originalObjectKey,
@@ -221,7 +181,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
       mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
       mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
-      mediaMetadata,
       createdAt: createdAtIso,
       exifExtractedAt: persistedExif?.extractedAt,
       exifSourceTag: persistedExif?.sourceTag,
@@ -248,7 +207,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         photoDate: effectivePhotoDate,
         isPrimary: shouldBePrimary,
         sortOrder: 0,
-        mediaMetadata,
         createdAt: createdAtIso,
       });
       if (shouldBePrimary) {
@@ -285,7 +243,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         photoDate: effectivePhotoDate,
         isPrimary: false,
         sortOrder: 0,
-        mediaMetadata,
         createdAt: createdAtIso,
       });
     }
@@ -309,7 +266,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       fileId,
       isPrimary: shouldBePrimary,
       attributeId: targetAttributeId || "",
-      mediaMetadata,
+      mediaMetadata: buildMediaKindMetadata(validated.mediaKind),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

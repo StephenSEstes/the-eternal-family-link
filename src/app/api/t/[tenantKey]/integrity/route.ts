@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildEntityId } from "@/lib/entity-id";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 import {
   createTableRecord,
   createTableRecords,
@@ -333,12 +334,20 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
     new Set(missingExpectedLinks.map((entry) => entry.fileId)),
   );
   const missingAssetFileIds = orphanFileIds.filter((fileId) => !knownAssetByFileId.has(fileId));
+  const mediaSeedByFileId = new Map<string, (typeof missingExpectedLinks)[number]>();
+  for (const candidate of missingExpectedLinks) {
+    if (!candidate.fileId || mediaSeedByFileId.has(candidate.fileId)) {
+      continue;
+    }
+    mediaSeedByFileId.set(candidate.fileId, candidate);
+  }
 
   let createdMediaAssets = 0;
   let createdMediaLinks = 0;
   if (applyChanges) {
     const nowIso = new Date().toISOString();
     for (const fileId of missingAssetFileIds) {
+      const seed = mediaSeedByFileId.get(fileId);
       const mediaId = mediaIdByFileId.get(fileId) || buildMediaId(fileId);
       if (!mediaIdByFileId.has(fileId)) {
         mediaIdByFileId.set(fileId, mediaId);
@@ -346,11 +355,13 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
       await createTableRecord("MediaAssets", {
         media_id: mediaId,
         file_id: fileId,
-        storage_provider: "gdrive",
+        media_kind: inferStoredMediaKind(fileId, seed?.mediaMetadata || ""),
+        label: seed?.label || "",
+        description: seed?.description || "",
+        photo_date: seed?.photoDate || "",
         mime_type: "",
         file_name: "",
         file_size_bytes: "",
-        media_metadata: "",
         created_at: nowIso,
       }, tenantKey);
       knownAssetByFileId.add(fileId);
@@ -372,21 +383,21 @@ async function auditOrRepairOrphanMediaLinks(tenantKey: string, applyChanges: bo
       if (existingLinkIds.has(linkId)) {
         continue;
       }
-      await createTableRecord("MediaLinks", {
-        family_group_key: candidate.familyGroupKey,
-        link_id: linkId,
-        media_id: mediaId,
+        await createTableRecord("MediaLinks", {
+          family_group_key: candidate.familyGroupKey,
+          link_id: linkId,
+          media_id: mediaId,
         entity_type: candidate.entityType,
         entity_id: candidate.entityId,
         usage_type: candidate.usageType,
         label: candidate.label,
         description: candidate.description,
-        photo_date: candidate.photoDate,
-        is_primary: "FALSE",
-        sort_order: "0",
-        media_metadata: candidate.mediaMetadata,
-        created_at: nowIso,
-      }, tenantKey);
+          photo_date: candidate.photoDate,
+          is_primary: "FALSE",
+          sort_order: "0",
+          media_metadata: "",
+          created_at: nowIso,
+        }, tenantKey);
       existingLinkIds.add(linkId);
       createdMediaLinks += 1;
     }

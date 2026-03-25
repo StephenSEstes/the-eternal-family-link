@@ -51,12 +51,11 @@
 
 ## Documentation Discipline
 - For any code/data/schema change that is committed, update docs in the same commit:
-  - `docs/design-decisions.md` when a design or architecture choice changed.
+  - `designchoices.md` when a design or architecture choice changed.
   - `docs/change-summary.md` with a concise release entry (what changed, why, verify).
-- Keep `designchoices.md` aligned with `docs/design-decisions.md` (same intent, naming compatibility).
 - Keep `changeHistory.md` aligned with `docs/change-summary.md` (quick release log entry + link/reference).
 - If no design decision changed, explicitly note "No design decision change" in the change summary entry.
-- Before making changes, check design rules in `docs/design-decisions.md` (and `designchoices.md`).
+- Before making changes, check design rules in `designchoices.md`.
 - If a requested change may deviate from design rules:
   - pause and ask Steve for confirmation before implementation,
   - ask whether to update design decisions,
@@ -66,7 +65,7 @@
 - For schema-normalization work, if additional normalized fields seem necessary beyond the set Steve explicitly approved, stop and ask before adding them.
 
 ## Session Startup Behavior
-- At the start of each new repo session, read `TODO.md`, `docs/design-decisions.md`, and `designchoices.md`.
+- At the start of each new repo session, read `TODO.md` and `designchoices.md`.
 - List current `Priority: High` items first.
 - Prompt the user: "Do you want to work on one of these now?"
 - If the user chooses one, prioritize that task before lower-priority work unless the user explicitly changes scope.

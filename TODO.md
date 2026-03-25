@@ -50,55 +50,80 @@ I will update this list as we add, complete, or remove work.
   - No modal control can trigger intelligence, EXIF loading, processing-status recompute, or face association.
   - Media detail and stored snapshot display remain functional.
   - The design reset is documented.
-- [ ] Normalize media asset technical storage fields out of `media_metadata`
+- [ ] Canonicalize media asset fields on `MediaAssets` and stop `media_metadata` writes
   Priority: High
-  Est date: 2026-03-24
-  Desc: Move critical file-storage and duplicate-support fields out of `MediaAssets.media_metadata` JSON into normalized `MediaAssets` columns so media routes can read/write them directly in SQL, stop duplicating them into `MediaLinks`, and reduce the persisted metadata payload enough to avoid `ORA-12899` on intelligence/status writes.
+  Status: In progress
+  Est date: 2026-03-25
+  Desc: Move the remaining canonical photo-level fields onto `MediaAssets`, stop writing runtime JSON into `MediaAssets.media_metadata`, treat `created_at` as the immutable asset timestamp, and reduce `MediaLinks` to association-only runtime behavior. Defer the `media_id` / `file_id` simplification until this task is complete so the current release stays focused on one storage-model cutover.
   Scope:
-  - Add normalized `MediaAssets` columns for:
-    - `source_provider`
-    - `source_file_id`
-    - `original_object_key`
-    - `thumbnail_object_key`
-    - `checksum_sha256`
-    - `media_width`
-    - `media_height`
-    - `media_duration_sec`
-  - Keep these as asset-level fields only; do not store them in `MediaLinks`.
-  - Update the OCI compatibility layer, upload routes, resolver paths, duplicate detection reads, and intelligence/status paths to read/write the new columns directly.
-  - Remove the migrated technical fields from newly written `media_metadata` JSON while keeping backward-compatible JSON fallback reads for older rows.
-  - Keep link-specific metadata behavior intact unless a route truly requires link-specific JSON.
+  - Add canonical `MediaAssets` columns for:
+    - `media_kind`
+    - `label`
+    - `description`
+    - `photo_date`
+  - Keep `created_at` as the canonical immutable asset timestamp and stop any route/helper from overwriting it after the first asset write.
+  - Remove active runtime dependence on `MediaAssets.media_metadata` for:
+    - `captureSource`
+    - `processingStatus`
+    - `photoIntelligence`
+    - `photoIntelligenceDebug`
+    - legacy object-key/source/checksum/dimension data
+    - leftover thumbnail detail payload fields
+  - Remove active runtime dependence on `MediaLinks.label`, `MediaLinks.description`, and `MediaLinks.photo_date` as canonical media metadata; keep link rows for association only.
+  - Remove `storage_provider` from the active schema/runtime contract in this phase because OCI object storage is now the only supported backend.
+  - Do not address `media_id` / `file_id` redundancy in this task; keep that as an explicitly deferred follow-up after the new canonical asset model is stable.
   Phases:
-  - Phase 1: Schema + compatibility layer
-    - Extend `oci-schema.sql` and `ensureMediaAssetsTableCompatibility()` with the approved normalized columns.
-    - Update `TABLES.MediaAssets.headers`, `OciMediaAssetLookup`, and asset query/upsert/update helpers to include the new columns.
-    - Leave `MediaLinks` schema unchanged, but stop treating it as the storage location for asset-level technical fields.
-  - Phase 2: Write-path cleanup
-    - Update person and household upload routes plus `syncPersonMediaAssociations()` to write the normalized fields to `MediaAssets`.
-    - Strip `sourceProvider`, `sourceFileId`, `objectStorage.originalObjectKey`, `objectStorage.thumbnailObjectKey`, `checksumSha256`, `width`, `height`, and `durationSec` out of newly written `media_metadata`.
-    - Stop mirroring `media_metadata` from `MediaAssets` into `MediaLinks` during asset metadata updates.
-  - Phase 3: Read-path cleanup
-    - Update photo resolver, face-recognition source-byte loads, processing-status helpers, search/attach duplicate detection, and intelligence routes to use normalized `MediaAssets` columns first.
-    - Keep JSON fallback reads for older rows that have not been normalized yet.
-    - Ensure `MediaLinks` reads still surface asset metadata when needed for UI compatibility, but do not rely on link-level copies of normalized asset fields.
-  - Phase 4: Validation + payload check
-    - Re-run the previously failing `/intelligence` and `/processing-status` write paths conceptually against the smaller metadata shape.
-    - Confirm the new asset metadata contract is small enough to avoid the known `VARCHAR2(4000)` overflow on the tested files.
-    - If payloads are still too large after the approved normalization, stop and ask Steve before adding more normalized columns or making a broader metadata redesign.
+  - Phase 1: Design + schema contract
+    - Update `designchoices.md` and `docs/data-schema.md` to state that canonical media-level name, description, user date, media kind, and immutable created timestamp live on `MediaAssets`.
+    - Extend `oci-schema.sql` and `ensureMediaAssetsTableCompatibility()` for `media_kind`, `label`, `description`, and `photo_date`.
+    - Remove `storage_provider` from the active documented contract and plan the schema/runtime cleanup for the same release.
+  - Phase 2: Data backfill + timestamp normalization
+    - Backfill `MediaAssets.label`, `MediaAssets.description`, and `MediaAssets.photo_date` from existing `MediaLinks` using deterministic per-`file_id` precedence rules.
+    - Backfill missing `media_kind` from existing metadata or file-extension/mime inference.
+    - Normalize `MediaAssets.created_at` so each asset keeps one stable timestamp and future writes never replace it.
+    - Do not derive `created_at` from EXIF capture date or user-entered `photo_date`; those remain separate concepts.
+  - Phase 3: Write-path cutover
+    - Update upload, link, detail edit, and media association flows to write canonical media fields to `MediaAssets`.
+    - Stop writing `MediaAssets.media_metadata` for capture source, processing status, intelligence/debug payloads, legacy object-storage data, and thumbnail detail payloads.
+    - Stop updating `MediaLinks.label`, `MediaLinks.description`, and `MediaLinks.photo_date` as the canonical write target.
+  - Phase 4: Read-path cutover
+    - Update media library/detail/order logic to read canonical media name, description, user date, media kind, and created timestamp from `MediaAssets`.
+    - Update UI media-type detection to read `MediaAssets.media_kind` instead of parsing JSON.
+    - Remove active runtime reads of `processingStatus`, `photoIntelligence`, and other media-metadata JSON from media library/detail surfaces.
+  - Phase 5: Cleanup + validation
+    - Remove `storage_provider` from remaining code paths and schema references.
+    - Verify `MediaAssets.media_metadata` is no longer written by active routes.
+    - Confirm the media library and detail APIs still return the expected item shape using normalized columns only.
+    - Leave `media_id` / `file_id` simplification deferred to a later dedicated task.
   API/UI/data changes:
-  - API routes keep their existing external behavior, but asset writes/readbacks now come from normalized columns instead of parsing JSON for the approved fields.
-  - No new UI is required for this phase; existing photo/detail/attach flows should keep working with leaner metadata.
-  - Existing rows remain backward-compatible through JSON fallback until separately backfilled.
+  - API: `/photos/search`, `/photos/[fileId]`, upload routes, and edit routes should resolve canonical media metadata from `MediaAssets`.
+  - UI: Media detail and media library should display asset-level name/date/description from `MediaAssets`; stored processing/intelligence snapshots should no longer come from JSON on these surfaces after cutover.
+  - Data: One-time backfill is required for the new `MediaAssets` columns and immutable `created_at` normalization.
   Validation:
   - `npm run build` passes.
-  - Upload routes persist the approved fields on `MediaAssets` and no longer depend on `MediaLinks.media_metadata` for those fields.
-  - Resolver paths and duplicate checks can read object keys/checksum/dimensions without parsing JSON for newly written assets.
-  - The previously failing intelligence/status metadata writes fit within the current `VARCHAR2(4000)` limit for the known failing files.
+  - Media upload/link/edit flows persist `media_kind`, `label`, `description`, `photo_date`, and stable `created_at` on `MediaAssets`.
+  - Media library ordering uses `MediaAssets.created_at`, not link timestamps.
+  - No active route writes new `media_metadata` payloads.
+  - `storage_provider` is gone from active schema/runtime behavior.
   Completion criteria:
-  - The approved technical storage fields are normalized on `MediaAssets`.
-  - Newly written `MediaLinks.media_metadata` does not carry duplicated asset technical fields.
-  - The affected media routes prefer normalized SQL columns with JSON fallback only for legacy rows.
-  - Build verification passes and the normalized design is documented.
+  - `MediaAssets` is the only canonical storage location for media-level metadata.
+  - `MediaLinks` is association-only in active runtime behavior.
+  - `created_at` is immutable after initial asset write.
+  - `media_metadata` is no longer used by active runtime writes.
+  - `media_id` / `file_id` redundancy is explicitly deferred, not mixed into this change.
+- [ ] Rework media display controls after the `MediaAssets` canonicalization cutover
+  Priority: Med
+  Est date: 2026-03-26
+  Desc: After the canonical `MediaAssets` cutover lands, fix the media display so it no longer behaves like an implicit newest-10 image list driven by non-canonical ordering. Add explicit filters and `Next 12` / `Last 12` navigation based on canonical asset fields.
+  Scope:
+  - Change the default media display to use canonical `MediaAssets` ordering instead of `MediaLinks.created_at`.
+  - Add user-facing filter controls for the agreed media slices.
+  - Replace the current implicit limit behavior with explicit batched navigation using `Next 12` and `Last 12`.
+  - Keep the media detail editor and link-management flows working with the new list controls.
+  Validation:
+  - Media display order matches canonical `MediaAssets.created_at`.
+  - Users can filter the media list without losing the current selection state unexpectedly.
+  - `Next 12` and `Last 12` navigation work without falling back to the current hidden top-10 behavior.
 - [ ] Normalize person primary-photo model to one global canonical headshot
   Priority: High
   Est date: 2026-03-23
@@ -273,13 +298,14 @@ I will update this list as we add, complete, or remove work.
   - Add caption generation for photos after upload.
   - Add date extraction/inference with confidence and estimated flag behavior.
   - Integrate face-tag suggestions with person-link confirmation UI.
-  - Persist outputs in existing app storage shape (`MediaAssets`, `MediaLinks`, media detail fields) without schema drift from current model.
-  Data mapping (current app model):
-  - `MediaLinks.label`: short title/caption (editable, user-facing).
-  - `MediaLinks.description`: richer AI photo description (editable).
-  - `MediaLinks.photo_date`: resolved date (explicit or inferred).
-  - `MediaLinks.media_metadata`: inference details (caption confidence, date source, date confidence, OCR clues, face candidate metadata).
-  - `MediaAssets.media_metadata`: technical extraction payload (model/version, EXIF read result, processing hashes/checkpoints).
+  - Persist outputs in the canonical media model without reintroducing active `media_metadata` JSON writes.
+  Data mapping (current app model after `MediaAssets` canonicalization):
+  - `MediaAssets.label`: short title/caption (editable, user-facing).
+  - `MediaAssets.description`: richer AI photo description (editable).
+  - `MediaAssets.photo_date`: resolved date (explicit or inferred).
+  - `MediaLinks`: reviewed people/household/attribute associations only.
+  - `Audit`: log AI suggestion generation and user confirm/reject/edit actions.
+  - If inference/debug payload persistence is needed later, use a dedicated storage model instead of reviving active `media_metadata` writes.
   - `Audit`: log AI suggestion generation and user confirm/reject/edit actions.
   Date resolution policy:
   - Priority order:

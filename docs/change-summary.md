@@ -13,6 +13,36 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-25 (consolidate design docs and canonicalize media asset fields)
+
+- `Date`: 2026-03-25
+- `Change`: Consolidated the repo onto `designchoices.md` as the single canonical design document, updated the schema/docs contract to make `MediaAssets` the canonical home for media-level fields, and cut the active media runtime over to canonical `MediaAssets` fields (`media_kind`, `label`, `description`, `photo_date`, immutable `created_at`) instead of treating link rows and metadata JSON as canonical asset state.
+- `Type`: Schema
+- `Why`: Root cause was a `mixed design/code issue`. The repo was maintaining two design-document entry points and the media model had canonical photo-level fields split across `MediaAssets`, `MediaLinks`, and `media_metadata`, which caused drift in implementation rules, inconsistent edit behavior, and ordering based on link timestamps instead of stable asset timestamps.
+- `Files`:
+  - `AGENTS.md`
+  - `TODO.md`
+  - `designchoices.md`
+  - `docs/design-decisions.md`
+  - `docs/data-schema.md`
+  - `oci-schema.sql`
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/link/route.ts`
+  - `src/lib/attributes/person-media.ts`
+  - `src/lib/google/photo-resolver.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: Active runtime now writes canonical media-level values to `MediaAssets` and stops writing new runtime payloads into `MediaAssets.media_metadata`. Existing rows still rely on temporary fallback reads until a separate backfill normalizes older asset rows.
+- `Verify`:
+  - `npm run build` passes when run from the canonical Windows repo path (`C:\Users\steph\the-eternal-family-link`).
+  - Upload/link/edit flows write canonical media fields to `MediaAssets`.
+  - Media detail reads prefer `MediaAssets.label`, `MediaAssets.description`, `MediaAssets.photo_date`, and `MediaAssets.created_at`.
+  - Active media resolution no longer branches on `storage_provider`.
+- `Rollback Notes`: Revert the `MediaAssets` canonical-field writes, doc consolidation, and asset-first read paths together if the app must temporarily return to link-level canonical media fields and metadata-driven fallback behavior.
+- `Design Decision Change`: Yes. `designchoices.md` is now the canonical design document, and the canonical media asset model is now explicitly `MediaAssets`-first.
+
 ## 2026-03-25 (limit default media library display to newest 10 images)
 
 - `Date`: 2026-03-25

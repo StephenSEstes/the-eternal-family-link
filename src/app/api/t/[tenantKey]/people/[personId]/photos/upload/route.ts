@@ -10,14 +10,12 @@ import {
   resolvePersonPhotoFileId,
 } from "@/lib/attributes/store";
 import {
-  buildMediaMetadata,
+  buildMediaKindMetadata,
   fallbackUploadExtension,
   sanitizeUploadFileName,
   validateUploadInput,
 } from "@/lib/media/upload";
 import { collectPersistedExifData } from "@/lib/media/exif";
-import { buildMediaProcessingStatus, writeMediaProcessingStatus } from "@/lib/media/processing-status";
-import { getMediaProcessingStatusForFile } from "@/lib/media/processing-status.server";
 import { seedPersonFaceProfileFromUpload } from "@/lib/media/face-recognition";
 import { buildMediaFileId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
@@ -83,7 +81,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const mediaWidth = String(formData?.get("mediaWidth") ?? "").trim();
     const mediaHeight = String(formData?.get("mediaHeight") ?? "").trim();
     const mediaDurationSec = String(formData?.get("mediaDurationSec") ?? "").trim();
-    const captureSource = String(formData?.get("captureSource") ?? "").trim();
     const targetAttributeId = String(formData?.get("attributeId") ?? "").trim();
     const arrayBuffer = await file.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
@@ -161,46 +158,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       ? new Date(fileCreatedAt).toISOString()
       : new Date().toISOString();
     const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
-    const baseMediaMetadata = buildMediaMetadata({
-      fileName: safeFileName,
-      mimeType: validated.mimeType,
-      sizeBytes: bytes.length,
-      createdAt: createdAtIso,
-      mediaKind: validated.mediaKind,
-      width: mediaWidth,
-      height: mediaHeight,
-      durationSec: mediaDurationSec,
-      captureSource,
-      extra: {
-        checksumSha256,
-        objectStorage: {
-          provider: "oci_object",
-          namespace: objectStorage.namespace,
-          bucketName: objectStorage.bucketName,
-          originalObjectKey,
-          thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-          migratedAt: new Date().toISOString(),
-          sourceFileId: fileId,
-        },
-        thumbnailObjectKey: thumbnailUpload?.objectKey,
-        thumbnailMimeType: thumbnailUpload?.mimeType,
-        thumbnailWidth: thumbnailUpload?.width,
-        thumbnailHeight: thumbnailUpload?.height,
-        thumbnailSizeBytes: thumbnailUpload?.sizeBytes,
-      },
-    });
-    let mediaMetadata = writeMediaProcessingStatus(
-      baseMediaMetadata,
-      buildMediaProcessingStatus({
-        fileId,
-        rawMetadata: baseMediaMetadata,
-        fileName: safeFileName,
-        originalObjectKey,
-        thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-        exifExtractedAt: persistedExif?.extractedAt,
-        exifCaptureDate: persistedExif?.captureDate,
-      }),
-    );
 
     const existingPhotos = attributeType === "photo"
       ? toPersonMediaAttributes(
@@ -250,13 +207,12 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       attributeId,
       attributeType,
       fileId,
+      mediaKind: validated.mediaKind,
       label: shouldBePrimary ? "headshot" : label,
       description,
       photoDate: effectivePhotoDate,
       isPrimary: shouldBePrimary,
       sortOrder: 0,
-      mediaMetadata,
-      storageProvider: "oci_object",
       sourceProvider: "oci_object",
       sourceFileId: fileId,
       originalObjectKey,
@@ -290,45 +246,6 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
         sourceFileId: fileId,
         imageBytes: bytes,
       })
-        .then(async () => {
-          const processingStatus = await getMediaProcessingStatusForFile({
-            familyGroupKey: resolved.tenant.tenantKey,
-            fileId,
-            mediaMetadata,
-            preferFresh: true,
-          }).catch(() => null);
-          if (!processingStatus) {
-            return;
-          }
-          mediaMetadata = writeMediaProcessingStatus(mediaMetadata, processingStatus);
-          await syncPersonMediaAssociations({
-            tenantKey: resolved.tenant.tenantKey,
-            personId,
-            attributeId,
-            attributeType,
-            fileId,
-            label: shouldBePrimary ? "headshot" : label,
-            description,
-            photoDate: effectivePhotoDate,
-            isPrimary: shouldBePrimary,
-            sortOrder: 0,
-            mediaMetadata,
-            storageProvider: "oci_object",
-            sourceProvider: "oci_object",
-            sourceFileId: fileId,
-            originalObjectKey,
-            thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-            checksumSha256,
-            mimeType: validated.mimeType,
-            fileName: safeFileName,
-            fileSizeBytes: String(bytes.length),
-            mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
-            mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
-            mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
-            createdAt: createdAtIso,
-            replaceAttributeLinks: false,
-          });
-        })
         .catch((profileError) => {
           console.warn("[photos/upload] face profile seed skipped", profileError);
         });
@@ -365,7 +282,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       isHeadshot: shouldBePrimary,
       attributeType,
       attributeId,
-      mediaMetadata,
+      mediaMetadata: buildMediaKindMetadata(validated.mediaKind),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected upload failure";

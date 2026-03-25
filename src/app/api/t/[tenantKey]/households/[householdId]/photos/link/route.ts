@@ -3,6 +3,7 @@ import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 import {
   getOciHouseholdsForTenant,
   getOciMediaLinksForEntity,
@@ -57,6 +58,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   const description = parsed.data.description.trim();
   const photoDate = parsed.data.photoDate.trim();
   const mediaMetadata = parsed.data.mediaMetadata.trim();
+  const mediaKind = inferStoredMediaKind(fileId, mediaMetadata);
   const nowIso = new Date().toISOString();
 
   const existingForHousehold = await getOciMediaLinksForEntity({
@@ -82,7 +84,10 @@ export async function POST(request: Request, { params }: RouteProps) {
   await upsertOciMediaAsset({
     mediaId,
     fileId,
-    mediaMetadata,
+    mediaKind,
+    label: name,
+    description,
+    photoDate,
     createdAt: nowIso,
   });
   await upsertOciMediaLink({
@@ -97,7 +102,6 @@ export async function POST(request: Request, { params }: RouteProps) {
     photoDate,
     isPrimary: shouldBePrimary,
     sortOrder: 0,
-    mediaMetadata,
     createdAt: nowIso,
   });
   if (shouldBePrimary) {

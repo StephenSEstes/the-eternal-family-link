@@ -171,6 +171,14 @@ export function buildMediaMetadata(input: {
   return JSON.stringify(metadata);
 }
 
+export function buildMediaKindMetadata(rawMediaKind: string | undefined) {
+  const mediaKind = String(rawMediaKind ?? "").trim().toLowerCase();
+  if (mediaKind === "image" || mediaKind === "video" || mediaKind === "audio" || mediaKind === "document") {
+    return JSON.stringify({ mediaKind });
+  }
+  return "";
+}
+
 export function parseMediaMetadata(rawMetadata: string | undefined): MediaMetadataParsed | null {
   const value = String(rawMetadata ?? "").trim();
   if (!value) return null;

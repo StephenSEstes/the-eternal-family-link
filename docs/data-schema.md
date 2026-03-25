@@ -32,13 +32,16 @@ This section is a quick reference for the three data areas that drive profile/me
 
 - Supported runtime media kinds are `image`, `video`, `audio`, and `document`.
 - File registry: `MediaAssets`
-  - One logical media row per file (`media_id`, `file_id`, metadata)
+  - One logical media row per file (`media_id`, `file_id`)
+  - Canonical media-level fields live here: `media_kind`, `label`, `description`, `photo_date`, immutable `created_at`
+  - Asset technical fields and EXIF fields also live here
 - Association table: `MediaLinks`
   - One association row per family/entity/media relationship
   - Scope: `family_group_key`
   - Target: `entity_type` + `entity_id` (`person` | `household` | `attribute`)
   - Link to file: `media_id -> MediaAssets.media_id`
-  - Display semantics: `usage_type`, `label`, `description`, `photo_date`, `is_primary`
+  - Association semantics: `usage_type`, `is_primary`, `sort_order`, family/entity visibility
+  - Legacy compatibility columns such as `label`, `description`, and `photo_date` may still exist physically, but active runtime should treat `MediaAssets` as canonical for those media-level values
   - Person-note: person primary-headshot authority does not live here; person links are non-authoritative associations, and `People.photo_file_id` is the canonical person headshot field
 
 ### 4) Face Suggestions
@@ -311,7 +314,10 @@ This section is a quick reference for the three data areas that drive profile/me
 - Columns:
   - `media_id`
   - `file_id`
-  - `storage_provider`
+  - `media_kind`
+  - `label`
+  - `description`
+  - `photo_date`
   - `source_provider`
   - `source_file_id`
   - `original_object_key`
@@ -337,10 +343,14 @@ This section is a quick reference for the three data areas that drive profile/me
   - `exif_orientation`
   - `exif_fingerprint`
 - Purpose:
-  - Canonical uploaded media file metadata registry, including normalized asset technical fields (source/object keys/checksum/dimensions/duration) plus normalized EXIF fields that are extracted once and reused on later photo-intelligence runs.
+  - Canonical uploaded media file registry.
+  - Stores canonical media-level display/edit fields (`media_kind`, `label`, `description`, `photo_date`) plus the immutable asset timestamp `created_at`.
+  - Stores normalized asset technical fields (source/object keys/checksum/dimensions/duration) plus normalized EXIF fields that are extracted once and reused on later photo-intelligence runs.
+  - `media_metadata` is retained only as a historical/compatibility field; active runtime should not persist new JSON payloads into it.
 - Logical index/key:
   - Unique: `media_id`
   - Common lookup: `file_id`
+  - `created_at` note: this is the canonical immutable asset timestamp and must not be overwritten after the asset row is first created.
   - EXIF note: EXIF columns are intentionally unindexed in the current phase; they are persisted now so future search/duplicate tooling can use them without rereading file bytes.
 
 ## MediaLinks
@@ -361,7 +371,8 @@ This section is a quick reference for the three data areas that drive profile/me
   - `created_at`
 - Purpose:
   - Link uploaded media to people, households, or attributes without duplicating files.
-  - `media_metadata` on links is legacy/compatibility-only and should not be used as the storage location for copied asset technical fields.
+  - Active runtime treats this as the association/scope table, not the canonical storage location for media-level name, description, user date, or asset timestamp.
+  - `label`, `description`, `photo_date`, and `media_metadata` are legacy/compatibility columns only and should not be treated as canonical sources in new runtime work.
 - Logical index/key:
   - Unique: `link_id`
   - Common lookup: (`family_group_key`, `entity_type`, `entity_id`, `usage_type`)
@@ -506,19 +517,15 @@ This section is a quick reference for the three data areas that drive profile/me
   - Person `MediaLinks.is_primary` is legacy/non-authoritative and should not be used as the source of truth.
 - Photo gallery:
   - Use `MediaLinks` rows to associate files to people/households/attributes.
+  - Use `MediaAssets` as the canonical source for media-level title/description/date/kind/created timestamp.
 - Attribute media:
   - `MediaLinks` supports `entity_type = "attribute"` with `entity_id = Attributes.attribute_id`.
 - Media metadata:
-  - `MediaAssets.media_metadata` is now intended to stay lean and may include:
-    - `mediaKind`
-    - `captureSource`
-    - `processingStatus`
-    - `photoIntelligence`
-    - `photoIntelligenceDebug`
-    - `photoIntelligence.faceSuggestions` (compact read model derived from `FaceInstances`/`FaceMatches`)
-  - Asset technical fields such as object keys, checksum, dimensions, duration, and source-file pointers should be read from normalized `MediaAssets` columns instead of JSON.
+  - `MediaAssets.media_metadata` and `MediaLinks.media_metadata` are no longer active runtime write targets.
+  - Historical rows may still contain legacy JSON.
+  - Active runtime should not depend on those JSON fields for canonical media behavior.
 - Media storage:
-  - Files uploaded to Google Drive folder from `FamilyConfig.photos_folder_id`.
+  - Files are stored in OCI Object Storage using normalized object-key columns on `MediaAssets`.
 - Media delivery:
   - Proxied via:
     - `/viewer/photo/[fileId]`

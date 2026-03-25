@@ -6,11 +6,6 @@ import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/me
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { inferStoredMediaKind } from "@/lib/media/upload";
-import type { MediaProcessingStatus, MediaProcessingStep, MediaProcessingStepState } from "@/lib/media/processing-status";
-import {
-  readPhotoIntelligenceSuggestion,
-  type PhotoIntelligenceSuggestion,
-} from "@/lib/media/photo-intelligence";
 
 type MediaLibraryClientProps = {
   tenantKey: string;
@@ -24,7 +19,6 @@ type MediaItem = {
   date: string;
   createdAt?: string;
   mediaMetadata?: string;
-  processingStatus?: MediaProcessingStatus | null;
   exifExtractedAt?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
@@ -62,8 +56,6 @@ type LinkedSearchResult =
       householdId: string;
     };
 
-type MediaModalTab = "info" | "analysis";
-
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
@@ -93,137 +85,6 @@ function inferMediaKind(fileId: string, rawMetadata?: string) {
   return inferStoredMediaKind(fileId, rawMetadata);
 }
 
-function formatConfidencePercent(value: number) {
-  const normalized = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
-  return `${Math.round(normalized * 100)}%`;
-}
-
-function getProcessingStepPalette(state: MediaProcessingStepState) {
-  if (state === "completed") {
-    return {
-      border: "#bbf7d0",
-      background: "#f0fdf4",
-      badgeBackground: "#dcfce7",
-      badgeColor: "#166534",
-      label: "Complete",
-    };
-  }
-  if (state === "failed") {
-    return {
-      border: "#fecaca",
-      background: "#fff1f2",
-      badgeBackground: "#fee2e2",
-      badgeColor: "#991b1b",
-      label: "Failed",
-    };
-  }
-  if (state === "not_applicable") {
-    return {
-      border: "#dbe4ee",
-      background: "#f8fafc",
-      badgeBackground: "#e2e8f0",
-      badgeColor: "#475569",
-      label: "N/A",
-    };
-  }
-  return {
-    border: "#fde68a",
-    background: "#fffbeb",
-    badgeBackground: "#fef3c7",
-    badgeColor: "#92400e",
-    label: "Pending",
-  };
-}
-
-function MediaProcessingStepCard({ step }: { step: MediaProcessingStep }) {
-  const palette = getProcessingStepPalette(step.state);
-  return (
-    <div
-      style={{
-        border: `1px solid ${palette.border}`,
-        borderRadius: "12px",
-        background: palette.background,
-        padding: "0.8rem 0.9rem",
-        display: "grid",
-        gap: "0.45rem",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center" }}>
-        <strong style={{ fontSize: "0.9rem" }}>{step.label}</strong>
-        <span
-          style={{
-            padding: "0.18rem 0.5rem",
-            borderRadius: "999px",
-            background: palette.badgeBackground,
-            color: palette.badgeColor,
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.02em",
-          }}
-        >
-          {palette.label}
-        </span>
-      </div>
-      <span className="page-subtitle" style={{ margin: 0 }}>
-        {step.detail}
-      </span>
-      {typeof step.count === "number" ? (
-        <span className="page-subtitle" style={{ margin: 0 }}>
-          Count: {step.count}
-        </span>
-      ) : null}
-      {step.fileName ? (
-        <span className="page-subtitle" style={{ margin: 0, overflowWrap: "anywhere" }}>
-          File: {step.fileName}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function FaceCropPreview({
-  fileId,
-  tenantKey,
-  bbox,
-}: {
-  fileId: string;
-  tenantKey: string;
-  bbox: { x: number; y: number; width: number; height: number };
-}) {
-  const safeWidth = Math.max(0.05, Math.min(1, bbox.width || 0));
-  const safeHeight = Math.max(0.05, Math.min(1, bbox.height || 0));
-  const safeX = Math.max(0, Math.min(1 - safeWidth, bbox.x || 0));
-  const safeY = Math.max(0, Math.min(1 - safeHeight, bbox.y || 0));
-  return (
-    <div
-      style={{
-        width: "84px",
-        height: "84px",
-        borderRadius: "10px",
-        overflow: "hidden",
-        border: "1px solid #dbe4ee",
-        background: "#e2e8f0",
-        position: "relative",
-        flexShrink: 0,
-      }}
-    >
-      <img
-        src={getPhotoProxyPath(fileId, tenantKey)}
-        alt=""
-        style={{
-          position: "absolute",
-          left: `${-(safeX / safeWidth) * 100}%`,
-          top: `${-(safeY / safeHeight) * 100}%`,
-          width: `${100 / safeWidth}%`,
-          height: `${100 / safeHeight}%`,
-          maxWidth: "none",
-        }}
-      />
-    </div>
-  );
-}
-
 async function assertOk(res: Response, fallbackMessage: string) {
   if (res.ok) return;
   const body = await res.json().catch(() => null);
@@ -248,7 +109,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [status, setStatus] = useState("");
   const [showAttachWizard, setShowAttachWizard] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
-  const [selectedPhotoTab, setSelectedPhotoTab] = useState<MediaModalTab>("info");
   const [selectedPhotoDetail, setSelectedPhotoDetail] = useState<MediaItem | null>(null);
   const [selectedPhotoEditable, setSelectedPhotoEditable] = useState(false);
   const [selectedPhotoCanEditName, setSelectedPhotoCanEditName] = useState(false);
@@ -443,162 +303,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       .slice(0, INITIAL_MEDIA_LIBRARY_LIMIT);
   }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds, search]);
 
-  const selectedPhotoIntelligenceSuggestion = useMemo<PhotoIntelligenceSuggestion | null>(() => {
-    if (!selectedPhotoDetail) return null;
-    return readPhotoIntelligenceSuggestion(selectedPhotoDetail.mediaMetadata);
-  }, [selectedPhotoDetail]);
-  const selectedPhotoProcessingStatus = useMemo<MediaProcessingStatus | null>(() => {
-    if (!selectedPhotoDetail?.processingStatus) return null;
-    return selectedPhotoDetail.processingStatus;
-  }, [selectedPhotoDetail]);
-  const selectedPhotoIsImage = useMemo(() => {
-    if (!selectedPhotoDetail) return false;
-    return inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "image";
-  }, [selectedPhotoDetail]);
-  const selectedPhotoProcessingSteps = useMemo(() => {
-    if (!selectedPhotoProcessingStatus) return [] as MediaProcessingStep[];
-    return [
-      selectedPhotoProcessingStatus.upload,
-      selectedPhotoProcessingStatus.exif,
-      selectedPhotoProcessingStatus.thumbnail,
-      selectedPhotoProcessingStatus.faceCoordinates,
-      selectedPhotoProcessingStatus.faceVectors,
-      selectedPhotoProcessingStatus.faceIdentities,
-    ];
-  }, [selectedPhotoProcessingStatus]);
-  const selectedPhotoAnalysisContent = selectedPhotoDetail ? (
-    <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
-      <div className="card">
-        <h5 style={{ margin: "0 0 0.6rem" }}>Processing Status</h5>
-        {selectedPhotoProcessingSteps.length > 0 ? (
-          <div style={{ display: "grid", gap: "0.65rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-            {selectedPhotoProcessingSteps.map((stepItem) => (
-              <MediaProcessingStepCard key={stepItem.label} step={stepItem} />
-            ))}
-          </div>
-        ) : (
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            No stored processing snapshot is available for this media.
-          </p>
-        )}
-      </div>
-      {selectedPhotoIsImage ? (
-        <div
-          className="card"
-          style={{
-            padding: "0.8rem",
-            display: "grid",
-            gap: "0.45rem",
-            background: "#f8fafc",
-          }}
-        >
-          <strong style={{ fontSize: "0.9rem" }}>Stored Analysis Snapshot</strong>
-          {selectedPhotoIntelligenceSuggestion ? (
-            <>
-              {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Title: {selectedPhotoIntelligenceSuggestion.labelSuggestion}
-                </span>
-              ) : null}
-              {selectedPhotoIntelligenceSuggestion.descriptionSuggestion ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Description: {selectedPhotoIntelligenceSuggestion.descriptionSuggestion}
-                </span>
-              ) : null}
-              {selectedPhotoIntelligenceSuggestion.dateSuggestion ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Suggested date: {selectedPhotoIntelligenceSuggestion.dateSuggestion}
-                </span>
-              ) : null}
-              <span className="page-subtitle" style={{ margin: 0 }}>
-                Date source: {selectedPhotoIntelligenceSuggestion.dateSource.replace(/_/g, " ")} ({selectedPhotoIntelligenceSuggestion.dateConfidence})
-              </span>
-              {selectedPhotoIntelligenceSuggestion.visionLabels && selectedPhotoIntelligenceSuggestion.visionLabels.length > 0 ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Vision labels: {selectedPhotoIntelligenceSuggestion.visionLabels.slice(0, 4).join(", ")}
-                </span>
-              ) : null}
-              {selectedPhotoIntelligenceSuggestion.visionObjects && selectedPhotoIntelligenceSuggestion.visionObjects.length > 0 ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Vision objects: {selectedPhotoIntelligenceSuggestion.visionObjects.slice(0, 4).join(", ")}
-                </span>
-              ) : null}
-              {typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Faces detected: {selectedPhotoIntelligenceSuggestion.detectedFaceCount}
-                </span>
-              ) : null}
-              {selectedPhotoIntelligenceSuggestion.faceSuggestions && selectedPhotoIntelligenceSuggestion.faceSuggestions.length > 0 ? (
-                <div style={{ display: "grid", gap: "0.45rem" }}>
-                  <strong style={{ fontSize: "0.88rem" }}>Stored Face Snapshot</strong>
-                  {selectedPhotoIntelligenceSuggestion.faceSuggestions.map((face, index) => (
-                    <div
-                      key={face.faceId || `face-suggestion-${index}`}
-                      style={{
-                        border: "1px solid #dbe4ee",
-                        borderRadius: "10px",
-                        padding: "0.55rem 0.65rem",
-                        display: "grid",
-                        gap: "0.35rem",
-                        background: "#fff",
-                      }}
-                    >
-                      <span className="page-subtitle" style={{ margin: 0 }}>
-                        Face {index + 1} · quality {formatConfidencePercent(face.qualityScore)} · detection {formatConfidencePercent(face.detectionConfidence)}
-                      </span>
-                      {face.matches.length > 0 ? (
-                        <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                          {face.matches.map((match) => (
-                            <span
-                              key={`${face.faceId}-${match.personId}`}
-                              className="status-chip status-chip--neutral"
-                              style={{
-                                background: match.confidenceBand === "high" ? "#ecfdf3" : match.confidenceBand === "medium" ? "#f8fafc" : "#fff7ed",
-                                borderColor: match.confidenceBand === "high" ? "#bbf7d0" : match.confidenceBand === "medium" ? "#dbe4ee" : "#fed7aa",
-                                color: match.confidenceBand === "high" ? "#166534" : match.confidenceBand === "medium" ? "#334155" : "#9a3412",
-                              }}
-                            >
-                              {match.displayName} · {formatConfidencePercent(match.confidenceScore)}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="page-subtitle" style={{ margin: 0 }}>
-                          No stored candidate people for this face.
-                        </span>
-                      )}
-                      <FaceCropPreview
-                        fileId={selectedPhotoDetail.fileId}
-                        tenantKey={tenantKey}
-                        bbox={face.bbox}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : typeof selectedPhotoIntelligenceSuggestion.detectedFaceCount === "number" &&
-                selectedPhotoIntelligenceSuggestion.detectedFaceCount > 0 ? (
-                <span className="page-subtitle" style={{ margin: 0 }}>
-                  Faces were detected, but no stored candidate people are available.
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="page-subtitle" style={{ margin: 0 }}>
-              No stored analysis snapshot is available for this media.
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="card">
-          <h5 style={{ margin: "0 0 0.6rem" }}>Stored Analysis Snapshot</h5>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            Analysis snapshots are only available for image media.
-          </p>
-        </div>
-      )}
-    </div>
-  ) : null;
-
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
       setLinkedFilterPersonIds((current) => (current.includes(candidate.personId) ? current : [...current, candidate.personId]));
@@ -634,7 +338,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       description: serverItem.description || fallbackItem?.description || "",
       date: serverItem.date || fallbackItem?.date || "",
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
-      processingStatus: serverItem.processingStatus ?? fallbackItem?.processingStatus ?? null,
       exifExtractedAt: serverItem.exifExtractedAt || fallbackItem?.exifExtractedAt || "",
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
       households: Array.isArray(serverItem.households) ? serverItem.households : [],
@@ -647,7 +350,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const openPhotoEditor = async (fileId: string) => {
-    setSelectedPhotoTab("info");
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -1112,24 +814,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </button>
                   </div>
                 </div>
-                <div className="person-modal-tabs" style={{ marginTop: "0.75rem", top: 0 }}>
-                  <button
-                    type="button"
-                    className={`tab-pill ${selectedPhotoTab === "info" ? "active" : ""}`}
-                    onClick={() => setSelectedPhotoTab("info")}
-                  >
-                    Info
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-pill ${selectedPhotoTab === "analysis" ? "active" : ""}`}
-                    onClick={() => setSelectedPhotoTab("analysis")}
-                  >
-                    Analysis
-                  </button>
-                </div>
-                {selectedPhotoTab === "info" ? (
-                  <>
                 <div style={{ marginTop: "0.75rem" }}>
                   {inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "video" ? (
                     <video
@@ -1400,11 +1084,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       Link this file to a person or household before editing app metadata.
                     </p>
                   ) : null}
-                  {selectedPhotoEditable && !selectedPhotoCanEditName ? (
-                    <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
-                      Name becomes editable when this file has a stored media link in the app.
-                    </p>
-                  ) : null}
                 </div>
                 <div className="person-photo-tags-card card">
                   <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>
@@ -1516,10 +1195,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   ) : null}
                   {photoAssociationStatus ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p> : null}
                 </div>
-                </>
-                ) : (
-                  selectedPhotoAnalysisContent
-                )}
               </div>
             </div>
           </div>

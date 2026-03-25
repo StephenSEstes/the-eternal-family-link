@@ -1,4 +1,5 @@
 import { buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { inferStoredMediaKind } from "@/lib/media/upload";
 import { deleteOciMediaLink, getOciMediaLinksForEntity, upsertOciMediaAsset, upsertOciMediaLink } from "@/lib/oci/tables";
 
 export type PersonMediaAttributeType = "photo" | "video" | "audio" | "media";
@@ -53,13 +54,13 @@ export async function syncPersonMediaAssociations(input: {
   attributeId: string;
   attributeType: PersonMediaAttributeType;
   fileId: string;
+  mediaKind?: string;
   label?: string;
   description?: string;
   photoDate?: string;
   isPrimary?: boolean;
   sortOrder?: number;
   mediaMetadata?: string;
-  storageProvider?: string;
   sourceProvider?: string;
   sourceFileId?: string;
   originalObjectKey?: string;
@@ -97,6 +98,7 @@ export async function syncPersonMediaAssociations(input: {
     new Set([fileId, ...(input.replacePersonLinksForFileIds ?? [])].map((value) => value.trim()).filter(Boolean)),
   );
   const persistedIsPrimary = false;
+  const mediaKind = String(input.mediaKind ?? "").trim().toLowerCase() || inferStoredMediaKind(fileId, input.mediaMetadata);
 
   await Promise.all([
     input.replaceAttributeLinks === false ? Promise.resolve() : deleteAttributeLinks(input.tenantKey, input.attributeId),
@@ -124,7 +126,10 @@ export async function syncPersonMediaAssociations(input: {
   await upsertOciMediaAsset({
     mediaId,
     fileId,
-    storageProvider: input.storageProvider?.trim(),
+    mediaKind,
+    label: input.label,
+    description: input.description,
+    photoDate: input.photoDate,
     sourceProvider: input.sourceProvider,
     sourceFileId: input.sourceFileId,
     originalObjectKey: input.originalObjectKey,
@@ -136,7 +141,6 @@ export async function syncPersonMediaAssociations(input: {
     mediaWidth: input.mediaWidth,
     mediaHeight: input.mediaHeight,
     mediaDurationSec: input.mediaDurationSec,
-    mediaMetadata,
     createdAt,
     exifExtractedAt: input.exifExtractedAt,
     exifSourceTag: input.exifSourceTag,
