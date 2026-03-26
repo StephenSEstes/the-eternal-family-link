@@ -50,9 +50,9 @@ I will update this list as we add, complete, or remove work.
   - No modal control can trigger intelligence, EXIF loading, processing-status recompute, or face association.
   - Media detail and stored snapshot display remain functional.
   - The design reset is documented.
-- [ ] Canonicalize media asset fields on `MediaAssets` and stop `media_metadata` writes
+- [x] Canonicalize media asset fields on `MediaAssets` and stop `media_metadata` writes
   Priority: High
-  Status: In progress
+  Status: Completed 2026-03-25
   Est date: 2026-03-25
   Desc: Move the remaining canonical photo-level fields onto `MediaAssets`, stop writing runtime JSON into `MediaAssets.media_metadata`, treat `created_at` as the immutable asset timestamp, and reduce `MediaLinks` to association-only runtime behavior. Defer the `media_id` / `file_id` simplification until this task is complete so the current release stays focused on one storage-model cutover.
   Scope:
@@ -113,6 +113,7 @@ I will update this list as we add, complete, or remove work.
   - `media_id` / `file_id` redundancy is explicitly deferred, not mixed into this change.
 - [ ] Rework media display controls after the `MediaAssets` canonicalization cutover
   Priority: Med
+  Status: In progress
   Est date: 2026-03-26
   Desc: After the canonical `MediaAssets` cutover lands, fix the media display so it no longer behaves like an implicit newest-10 image list driven by non-canonical ordering. Add explicit filters and `Next 12` / `Last 12` navigation based on canonical asset fields.
   Scope:

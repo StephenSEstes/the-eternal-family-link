@@ -18,6 +18,7 @@ type MediaItem = {
   description: string;
   date: string;
   createdAt?: string;
+  mediaKind?: string;
   mediaMetadata?: string;
   exifExtractedAt?: string;
   people: Array<{ personId: string; displayName: string }>;
@@ -85,6 +86,14 @@ function inferMediaKind(fileId: string, rawMetadata?: string) {
   return inferStoredMediaKind(fileId, rawMetadata);
 }
 
+function readMediaKind(item: Pick<MediaItem, "fileId" | "mediaKind" | "mediaMetadata">) {
+  const explicit = String(item.mediaKind ?? "").trim().toLowerCase();
+  if (explicit === "image" || explicit === "video" || explicit === "audio" || explicit === "document") {
+    return explicit;
+  }
+  return inferMediaKind(item.fileId, item.mediaMetadata);
+}
+
 async function assertOk(res: Response, fallbackMessage: string) {
   if (res.ok) return;
   const body = await res.json().catch(() => null);
@@ -92,8 +101,17 @@ async function assertOk(res: Response, fallbackMessage: string) {
   throw new Error(String(message));
 }
 
-const INITIAL_MEDIA_LIBRARY_LIMIT = 10;
-const SEARCH_MEDIA_LIBRARY_LIMIT = 5000;
+type MediaTypeFilter = "all" | "image" | "video" | "audio" | "document";
+
+const MEDIA_LIBRARY_FETCH_LIMIT = 5000;
+const MEDIA_LIBRARY_PAGE_SIZE = 12;
+const MEDIA_TYPE_FILTER_OPTIONS: Array<{ value: MediaTypeFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "image", label: "Images" },
+  { value: "video", label: "Videos" },
+  { value: "audio", label: "Audio" },
+  { value: "document", label: "Documents" },
+];
 
 function parseSortableTimestamp(value: string | undefined) {
   const parsed = Date.parse(String(value ?? "").trim());
@@ -126,13 +144,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
+  const [pageOffset, setPageOffset] = useState(0);
+  const linkedFilterPeopleKey = linkedFilterPersonIds.join("|");
+  const linkedFilterHouseholdsKey = linkedFilterHouseholdIds.join("|");
 
   const loadLibrary = async (query = "", options?: { noCache?: boolean }) => {
     const normalizedQuery = query.trim();
-    const limit = normalizedQuery ? SEARCH_MEDIA_LIBRARY_LIMIT : INITIAL_MEDIA_LIBRARY_LIMIT;
     const noCache = options?.noCache ? "&noCache=1" : "";
     const res = await fetch(
-      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(normalizedQuery)}&limit=${limit}&includeDrive=${includeDrive ? "1" : "0"}${noCache}`,
+      `/api/t/${encodeURIComponent(tenantKey)}/photos/search?q=${encodeURIComponent(normalizedQuery)}&limit=${MEDIA_LIBRARY_FETCH_LIMIT}&includeDrive=${includeDrive ? "1" : "0"}${noCache}`,
       { cache: options?.noCache ? "no-store" : "default" },
     );
     await assertOk(res, "Failed to load media library");
@@ -185,6 +206,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       }
     })();
   }, [tenantKey]);
+
+  useEffect(() => {
+    setPageOffset(0);
+  }, [
+    tenantKey,
+    search,
+    includeDrive,
+    mediaTypeFilter,
+    linkedFilterPeopleKey,
+    linkedFilterHouseholdsKey,
+  ]);
 
   const peopleById = useMemo(() => new Map(peopleOptions.map((item) => [item.personId, item])), [peopleOptions]);
   const householdsById = useMemo(() => new Map(householdOptions.map((item) => [item.householdId, item])), [householdOptions]);
@@ -277,7 +309,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     return [...peopleMatches, ...householdMatches].slice(0, 15);
   }, [linkedFilterQuery, linkedFilterPersonIds, linkedFilterHouseholdIds, peopleOptions, householdOptions]);
 
-  const visibleMediaItems = useMemo(() => {
+  const filteredMediaItems = useMemo(() => {
     const personSet = new Set(linkedFilterPersonIds);
     const householdSet = new Set(linkedFilterHouseholdIds);
     const filtered =
@@ -289,19 +321,34 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             return hasPerson || hasHousehold;
           });
 
-    if (search.trim()) {
-      return filtered;
-    }
-
     return filtered
-      .filter((item) => inferMediaKind(item.fileId, item.mediaMetadata) === "image")
+      .filter((item) => mediaTypeFilter === "all" || readMediaKind(item) === mediaTypeFilter)
       .sort((a, b) => {
         const byCreatedAt = parseSortableTimestamp(b.createdAt) - parseSortableTimestamp(a.createdAt);
         if (byCreatedAt !== 0) return byCreatedAt;
-        return a.fileId.localeCompare(b.fileId);
-      })
-      .slice(0, INITIAL_MEDIA_LIBRARY_LIMIT);
-  }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds, search]);
+        return a.name.localeCompare(b.name) || a.fileId.localeCompare(b.fileId);
+      });
+  }, [mediaItems, linkedFilterPersonIds, linkedFilterHouseholdIds, mediaTypeFilter]);
+
+  useEffect(() => {
+    setPageOffset((current) => {
+      if (filteredMediaItems.length === 0) {
+        return 0;
+      }
+      const maxOffset = Math.floor((filteredMediaItems.length - 1) / MEDIA_LIBRARY_PAGE_SIZE) * MEDIA_LIBRARY_PAGE_SIZE;
+      return current > maxOffset ? maxOffset : current;
+    });
+  }, [filteredMediaItems.length]);
+
+  const visibleMediaItems = useMemo(
+    () => filteredMediaItems.slice(pageOffset, pageOffset + MEDIA_LIBRARY_PAGE_SIZE),
+    [filteredMediaItems, pageOffset],
+  );
+
+  const visibleRangeStart = filteredMediaItems.length === 0 ? 0 : pageOffset + 1;
+  const visibleRangeEnd = Math.min(pageOffset + MEDIA_LIBRARY_PAGE_SIZE, filteredMediaItems.length);
+  const canShowLastPage = pageOffset > 0;
+  const canShowNextPage = pageOffset + MEDIA_LIBRARY_PAGE_SIZE < filteredMediaItems.length;
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -337,6 +384,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       name: serverItem.name || fallbackItem?.name || "",
       description: serverItem.description || fallbackItem?.description || "",
       date: serverItem.date || fallbackItem?.date || "",
+      createdAt: serverItem.createdAt || fallbackItem?.createdAt || "",
+      mediaKind: serverItem.mediaKind || fallbackItem?.mediaKind || "",
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
       exifExtractedAt: serverItem.exifExtractedAt || fallbackItem?.exifExtractedAt || "",
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
@@ -606,7 +655,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       <div className="card" style={{ marginBottom: "1rem" }}>
         <h1 className="page-title" style={{ marginBottom: "0.25rem" }}>Media Library</h1>
         <p className="page-subtitle" style={{ marginBottom: "1rem" }}>
-          Attach and catalog images across people and households.
+          Attach and catalog media across people and households.
         </p>
         <button type="button" className="button tap-button" onClick={() => setShowAttachWizard(true)}>
           Add Media
@@ -650,6 +699,39 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             />
             Include unlinked Drive files
           </label>
+          <span className="page-subtitle" style={{ margin: 0 }}>
+            Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.75rem" }}>
+          {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={mediaTypeFilter === option.value ? "button tap-button" : "button secondary tap-button"}
+              onClick={() => setMediaTypeFilter(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+          <div style={{ display: "flex", gap: "0.45rem", marginLeft: "auto" }}>
+            <button
+              type="button"
+              className="button secondary tap-button"
+              disabled={!canShowLastPage}
+              onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
+            >
+              Last 12
+            </button>
+            <button
+              type="button"
+              className="button secondary tap-button"
+              disabled={!canShowNextPage}
+              onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
+            >
+              Next 12
+            </button>
+          </div>
         </div>
         <label className="label">Selected Linked Filters</label>
         <div className="person-chip-row" style={{ marginTop: "0.3rem" }}>
@@ -729,9 +811,15 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           </div>
         ) : null}
 
+        {visibleMediaItems.length === 0 ? (
+          <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
+            No media matches the current search and filters.
+          </p>
+        ) : null}
+
         <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {visibleMediaItems.map((item) => {
-            const kind = inferMediaKind(item.fileId, item.mediaMetadata);
+            const kind = readMediaKind(item);
             return (
               <article key={item.fileId} className="card" style={{ padding: "0.6rem" }}>
                 <button
@@ -815,16 +903,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   </div>
                 </div>
                 <div style={{ marginTop: "0.75rem" }}>
-                  {inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "video" ? (
+                  {readMediaKind(selectedPhotoDetail) === "video" ? (
                     <video
                       src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
                       className="person-photo-detail-preview"
                       controls
                       playsInline
                     />
-                  ) : inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "audio" ? (
+                  ) : readMediaKind(selectedPhotoDetail) === "audio" ? (
                     <audio src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)} className="person-photo-detail-preview" controls />
-                  ) : inferMediaKind(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata) === "document" ? (
+                  ) : readMediaKind(selectedPhotoDetail) === "document" ? (
                     <div className="person-photo-detail-preview" style={{ display: "grid", placeItems: "center", gap: "0.65rem", alignContent: "center", padding: "1.5rem", textAlign: "center" }}>
                       <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
                       <strong>{selectedPhotoDetail.name || "Document"}</strong>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { listFilesInFolder } from "@/lib/google/drive";
+import { inferStoredMediaKind, normalizeMediaKind } from "@/lib/media/upload";
 import { getPeople, getTenantConfig } from "@/lib/data/runtime";
 import { resolvePersonDisplayName } from "@/lib/person/display-name";
 import {
@@ -15,6 +16,7 @@ type SearchItem = {
   description: string;
   date: string;
   createdAt?: string;
+  mediaKind?: string;
   mediaMetadata?: string;
   mimeType?: string;
   fileSizeBytes?: string;
@@ -161,6 +163,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         description: "",
         date: "",
         createdAt: "",
+        mediaKind: "",
         mediaMetadata: "",
         mimeType: "",
         fileSizeBytes: "",
@@ -212,6 +215,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     if (!item.description) item.description = row.description.trim();
     if (!item.date) item.date = row.photoDate.trim();
     if (!item.createdAt) item.createdAt = row.createdAt.trim();
+    if (!item.mediaKind) item.mediaKind = row.mediaKind.trim();
     if (!item.mediaMetadata) item.mediaMetadata = row.mediaMetadata.trim();
     if (!item.mimeType) item.mimeType = row.mimeType.trim();
     if (!item.fileSizeBytes) item.fileSizeBytes = row.fileSizeBytes.trim();
@@ -299,6 +303,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         if (!item.name) item.name = file.name;
         if (!item.date) item.date = file.createdTime.slice(0, 10) || file.modifiedTime.slice(0, 10);
         if (!item.createdAt) item.createdAt = file.createdTime || file.modifiedTime || "";
+        if (!item.mediaKind) {
+          const driveMediaKind = normalizeMediaKind(file.mimeType, file.name);
+          item.mediaKind = driveMediaKind === "unknown" ? "" : driveMediaKind;
+        }
       }
     } catch {
       // Drive listing is best-effort so media search still returns table-linked results when Drive lookup fails.
@@ -308,6 +316,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
   const matches = Array.from(catalog.values())
     .map((item) => ({
       ...item,
+      mediaKind: item.mediaKind || inferStoredMediaKind(item.fileId, item.mediaMetadata),
       people: item.people.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       households: item.households.sort((a, b) => a.label.localeCompare(b.label)),
     }))

@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-25 (replace implicit top-10 media library behavior with explicit filters and 12-item paging)
+
+- `Date`: 2026-03-25
+- `Change`: Reworked the media library so it no longer behaves like a hidden newest-10 image view. The library now carries explicit media kind in the search/detail payloads, applies user-visible media-type filters, and pages the canonical created-at-ordered result set in `Last 12` / `Next 12` batches.
+- `Type`: UI
+- `Why`: Root cause was a `code/display issue`. The media screen was mixing API limiting, client-side image-only filtering, and an extra top-10 slice, which made the default view look arbitrary and hid the real ordering model from the user. Making filtering and paging explicit fixes the actual behavior mismatch instead of only changing the number of items returned.
+- `Files`:
+  - `TODO.md`
+  - `src/app/api/t/[tenantKey]/photos/search/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - The library shows explicit media-type filter buttons instead of silently forcing images-only.
+  - The visible media range is paged in `12`-item batches through `Last 12` / `Next 12`.
+  - Default ordering continues to follow canonical `createdAt`.
+- `Rollback Notes`: Restore the old default-limit/image-only slice only if the library should intentionally return to an implicit newest-images preview instead of an explicit filtered catalog.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-25 (consolidate design docs and canonicalize media asset fields)
 
 - `Date`: 2026-03-25

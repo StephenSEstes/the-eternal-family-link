@@ -23,6 +23,8 @@ type MediaDetailItem = {
   name: string;
   description: string;
   date: string;
+  createdAt?: string;
+  mediaKind?: string;
   mediaMetadata?: string;
   exifExtractedAt?: string;
   people: Array<{ personId: string; displayName: string }>;
@@ -81,6 +83,8 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     name: "",
     description: "",
     date: "",
+    createdAt: "",
+    mediaKind: "",
     mediaMetadata: "",
     exifExtractedAt: "",
     people: [],
@@ -91,6 +95,8 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     detail.name = mediaAsset.label.trim() || mediaAsset.fileName.trim();
     detail.description = mediaAsset.description.trim();
     detail.date = mediaAsset.photoDate.trim();
+    detail.createdAt = mediaAsset.createdAt.trim();
+    detail.mediaKind = mediaAsset.mediaKind.trim();
     detail.mediaMetadata = buildMediaKindMetadata(mediaAsset.mediaKind);
   }
 
@@ -98,6 +104,8 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     if (!detail.name) detail.name = link.label.trim() || link.fileName.trim();
     if (!detail.description) detail.description = link.description.trim();
     if (!detail.date) detail.date = link.photoDate.trim();
+    if (!detail.createdAt) detail.createdAt = link.createdAt.trim();
+    if (!detail.mediaKind) detail.mediaKind = link.mediaKind.trim();
     if (!detail.mediaMetadata) detail.mediaMetadata = link.mediaMetadata.trim();
 
     if (link.entityType.trim().toLowerCase() === "person") {

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-25: Reworked the media library to use explicit media-type filters and `Last 12` / `Next 12` paging on the canonical created-at order instead of the hidden newest-10 image behavior. See `docs/change-summary.md`.
 - 2026-03-25: Consolidated the repo onto `designchoices.md` as the one design document and moved canonical media-level fields onto `MediaAssets`, so media reads/writes now treat asset rows as the source of truth instead of link rows and metadata JSON. See `docs/change-summary.md`.
 - 2026-03-25: Limited the default media library view to the 10 newest image items, ordered newest-first by `createdAt`, while leaving explicit search behavior broad. See `docs/change-summary.md`.
 - 2026-03-25: Removed `media_metadata` fallback from the active image-delivery path so preview URLs always request the preview variant and OCI-backed image reads use normalized `MediaAssets` object-key columns only. See `docs/change-summary.md`.
