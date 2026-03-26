@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (reflow media library controls)
+
+- `Date`: 2026-03-26
+- `Change`: Reflowed the media library controls so the media-type filter buttons render in a single top row above the `Library` search row, and the `Last 12` / `Next 12` buttons sit next to the visible-range label.
+- `Type`: UI
+- `Why`: Root cause was a `UI layout issue`. The filter buttons and paging controls were split across separate rows, which made the control hierarchy harder to scan and separated the paging actions from the visible-range status they affect.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Media-type filters render in one row above the search row.
+  - `Last 12` and `Next 12` render next to `Showing x-y of z`.
+- `Rollback Notes`: Revert only if the older split-row control layout is preferred.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (reset media library paging after media-tab attach save)
 
 - `Date`: 2026-03-26

@@ -683,6 +683,19 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       />
 
       <div className="card">
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "nowrap", overflowX: "auto", marginBottom: "0.75rem", paddingBottom: "0.1rem" }}>
+          {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={mediaTypeFilter === option.value ? "button tap-button" : "button secondary tap-button"}
+              onClick={() => setMediaTypeFilter(option.value)}
+              style={{ flex: "0 0 auto" }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
           <strong>Library</strong>
           <input
@@ -700,22 +713,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             />
             Include unlinked Drive files
           </label>
-          <span className="page-subtitle" style={{ margin: 0 }}>
-            Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.75rem" }}>
-          {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={mediaTypeFilter === option.value ? "button tap-button" : "button secondary tap-button"}
-              onClick={() => setMediaTypeFilter(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-          <div style={{ display: "flex", gap: "0.45rem", marginLeft: "auto" }}>
+          <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap", marginLeft: "auto" }}>
+            <span className="page-subtitle" style={{ margin: 0 }}>
+              Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
+            </span>
             <button
               type="button"
               className="button secondary tap-button"
