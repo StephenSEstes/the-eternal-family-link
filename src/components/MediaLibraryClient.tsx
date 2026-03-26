@@ -647,6 +647,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const handleAttachWizardComplete = async (summary: MediaAttachExecutionSummary) => {
     setStatus(formatMediaAttachUserSummary(summary));
+    setPageOffset(0);
     await loadLibrary(search.trim(), { noCache: true });
   };
 

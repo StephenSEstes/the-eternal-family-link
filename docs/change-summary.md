@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (reset media library paging after media-tab attach save)
+
+- `Date`: 2026-03-26
+- `Change`: Reset the media library back to the first 12-item page after a successful media-tab attach save, then reload the library with cache bypass.
+- `Type`: UI
+- `Why`: Root cause was a `code issue`. The media tab already reloaded after the attach wizard completed, but it preserved the current `pageOffset`. Because the library sorts newest-first and only slices the visible page after sorting, uploads made while viewing page 2 or later landed correctly at the top of page 1 while the UI stayed on the old later slice, making the new uploads look missing.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Upload and save from the media tab while viewing page 2 or later returns the library to page 1.
+  - The newly uploaded items are visible immediately after save without manually paging back.
+- `Rollback Notes`: Revert only if the media tab should intentionally preserve the current later page even when new uploads are inserted at the top of the sorted library.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (prevent ghost media references when person upload fails mid-route)
 
 - `Date`: 2026-03-26
