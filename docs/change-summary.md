@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (shrink media type filter buttons to fit the row)
+
+- `Date`: 2026-03-26
+- `Change`: Tightened the media-type filter row so the buttons share the available width and fit within the screen instead of sizing only to their content.
+- `Type`: UI
+- `Why`: Root cause was a `UI layout issue`. The filter buttons were set to fixed content width, which could overflow the available row width on smaller screens even after the controls were moved into a single top row.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - The four media-type buttons fit in one row within the card width.
+  - The buttons remain readable and clickable on smaller screens.
+- `Rollback Notes`: Revert only if content-width filter buttons are preferred over fixed shared-width buttons.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (reflow media library controls)
 
 - `Date`: 2026-03-26

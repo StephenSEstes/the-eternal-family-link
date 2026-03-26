@@ -683,14 +683,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       />
 
       <div className="card">
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "nowrap", overflowX: "auto", marginBottom: "0.75rem", paddingBottom: "0.1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "0.4rem", alignItems: "center", marginBottom: "0.75rem" }}>
           {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               className={mediaTypeFilter === option.value ? "button tap-button" : "button secondary tap-button"}
               onClick={() => setMediaTypeFilter(option.value)}
-              style={{ flex: "0 0 auto" }}
+              style={{ minWidth: 0, width: "100%", paddingInline: "0.65rem", whiteSpace: "nowrap" }}
             >
               {option.label}
             </button>

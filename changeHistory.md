@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-26: Tightened the media-type filter buttons so they share the available width and fit within the screen in the single-row control layout. See `docs/change-summary.md`.
 - 2026-03-26: Reflowed the media library controls so the media-type filters sit above the search row and the paging buttons sit next to the visible-range label. See `docs/change-summary.md`.
 - 2026-03-26: Reset the media library back to page 1 after a successful media-tab attach save so new uploads appear immediately instead of being hidden on later paged slices. See `docs/change-summary.md`.
 - 2026-03-26: Hardened person media upload cleanup so failed uploads no longer leave ghost `mfile-...` attribute references without `MediaAssets`/`MediaLinks`, and repaired the broken `test2` file row from existing OCI objects. See `docs/change-summary.md`.
