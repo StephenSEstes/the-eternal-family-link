@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-25 (harden auth-gated photo preview delivery against stale cache state)
+
+- `Date`: 2026-03-25
+- `Change`: Hardened the viewer photo routes and OCI object-key resolver so media previews no longer rely on public cache headers or sticky null object-key cache entries. Auth-gated photo responses now return private non-stored responses, and the resolver no longer caches null object-key lookups after a missing-row state.
+- `Type`: API
+- `Why`: Root cause was a `code issue`. The thumbnail routes were auth/cookie-gated but still returned `Cache-Control: public, max-age=3600`, which is not safe for protected media delivery and could preserve stale bad preview responses. Separately, the OCI resolver cached null object-key lookups for five minutes, which let repaired media rows stay invisible on a server instance even after the data was fixed. Removing those two sticky-cache behaviors addresses the actual preview-delivery fault path instead of masking it in the UI.
+- `Files`:
+  - `src/app/t/[tenantKey]/viewer/photo/[fileId]/route.ts`
+  - `src/app/viewer/photo/[fileId]/route.ts`
+  - `src/lib/google/photo-resolver.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` passes.
+  - Auth-gated viewer/photo responses no longer advertise `public` caching.
+  - Repaired media rows are visible to the OCI resolver on the next request instead of after a five-minute null-cache TTL.
+- `Rollback Notes`: Restore cacheable viewer/photo responses and null object-key caching only if you intentionally want auth-dependent photo bytes to be cache-sticky again.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-25 (replace implicit top-10 media library behavior with explicit filters and 12-item paging)
 
 - `Date`: 2026-03-25

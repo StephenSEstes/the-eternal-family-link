@@ -30,7 +30,8 @@ export async function GET(request: Request, { params }: TenantPhotoRouteProps) {
     return new NextResponse(blob, {
       headers: {
         "Content-Type": photo.mimeType,
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "private, no-store",
+        Vary: "Cookie",
       },
     });
   } catch {

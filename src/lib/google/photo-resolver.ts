@@ -86,10 +86,14 @@ async function getObjectKeyByFileId(fileId: string) {
           };
         })()
       : null;
-  objectKeyCache.set(normalizedFileId, {
-    expiresAt: now + OBJECT_KEY_CACHE_TTL_MS,
-    value: resolvedValue,
-  });
+  if (resolvedValue) {
+    objectKeyCache.set(normalizedFileId, {
+      expiresAt: now + OBJECT_KEY_CACHE_TTL_MS,
+      value: resolvedValue,
+    });
+  } else {
+    objectKeyCache.delete(normalizedFileId);
+  }
   return resolvedValue;
 }
 
@@ -107,6 +111,7 @@ export async function resolvePhotoContentAcrossFamilies(
           : objectTarget.originalObjectKey;
       return await getOciObjectContentByKey(objectKey, objectTarget.mimeType);
     } catch {
+      objectKeyCache.delete(String(fileId ?? "").trim());
       // Fall back to legacy Drive retrieval.
     }
   }
