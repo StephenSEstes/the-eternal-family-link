@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (prevent ghost media references when person upload fails mid-route)
+
+- `Date`: 2026-03-26
+- `Change`: Hardened the person media upload route so it no longer leaves a new attribute pointing at a generated `mfile-...` when media asset/link sync fails after the attribute row is created. The route now cleans up the just-created attribute and any partial links before surfacing the upload failure.
+- `Type`: API
+- `Why`: Root cause was a `mixed issue`. The route created the person attribute before writing `MediaAssets` and `MediaLinks`, so a mid-route failure could leave a ghost file reference visible in the media library with no asset row, no link row, no thumbnail data, and blank recency. That exact failure happened for `mfile-aeced75a55a6d530` (`test2`), where OCI objects existed but the DB writes did not complete.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+- `Data Changes`: Live OCI repair recreated the missing `MediaAssets` and `MediaLinks` rows for `mfile-aeced75a55a6d530` from the existing attribute row and OCI original/thumbnail objects.
+- `Verify`:
+  - `npm run build` passes.
+  - A failed person-media upload no longer leaves a ghost `attribute_detail = mfile-...` reference with no `MediaAssets` row.
+  - Repaired file `mfile-aeced75a55a6d530` now has populated asset/link rows, valid thumbnail object key, and ranks first by recency in the `snowestes` linked image set.
+- `Rollback Notes`: Revert commit only if you intentionally want failed person-media uploads to leave orphaned attribute references behind.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-25 (harden auth-gated photo preview delivery against stale cache state)
 
 - `Date`: 2026-03-25

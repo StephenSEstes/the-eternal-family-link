@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-26: Hardened person media upload cleanup so failed uploads no longer leave ghost `mfile-...` attribute references without `MediaAssets`/`MediaLinks`, and repaired the broken `test2` file row from existing OCI objects. See `docs/change-summary.md`.
 - 2026-03-25: Hardened auth-gated photo preview delivery so viewer/photo responses no longer use public caching and repaired media rows are no longer hidden behind sticky null object-key cache entries. See `docs/change-summary.md`.
 - 2026-03-25: Reworked the media library to use explicit media-type filters and `Last 12` / `Next 12` paging on the canonical created-at order instead of the hidden newest-10 image behavior. See `docs/change-summary.md`.
 - 2026-03-25: Consolidated the repo onto `designchoices.md` as the one design document and moved canonical media-level fields onto `MediaAssets`, so media reads/writes now treat asset rows as the source of truth instead of link rows and metadata JSON. See `docs/change-summary.md`.

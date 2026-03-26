@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { toPersonMediaAttributes } from "@/lib/attributes/media-response";
-import { syncPersonMediaAssociations, type PersonMediaAttributeType } from "@/lib/attributes/person-media";
+import {
+  removePersonMediaAssociations,
+  syncPersonMediaAssociations,
+  type PersonMediaAttributeType,
+} from "@/lib/attributes/person-media";
 import {
   createAttribute,
+  deleteAttribute,
   getAttributeById,
   getAttributesForEntityWithMedia,
   resolvePersonPhotoFileId,
@@ -173,6 +178,7 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       (requestedHeadshot || existingPhotos.length === 0);
 
     let attributeId = targetAttributeId;
+    const createdAttributeHere = !targetAttributeId;
     if (!targetAttributeId) {
       const created = await createAttribute(resolved.tenant.tenantKey, {
         entityType: "person",
@@ -202,43 +208,60 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       }
     }
 
-    await syncPersonMediaAssociations({
-      tenantKey: resolved.tenant.tenantKey,
-      personId,
-      attributeId,
-      attributeType,
-      fileId,
-      mediaKind: validated.mediaKind,
-      label: shouldBePrimary ? "headshot" : label,
-      description,
-      photoDate: effectivePhotoDate,
-      isPrimary: shouldBePrimary,
-      sortOrder: 0,
-      sourceProvider: "oci_object",
-      sourceFileId: fileId,
-      originalObjectKey,
-      thumbnailObjectKey: thumbnailUpload?.objectKey || "",
-      checksumSha256,
-      mimeType: validated.mimeType,
-      fileName: safeFileName,
-      fileSizeBytes: String(bytes.length),
-      mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
-      mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
-      mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
-      createdAt: createdAtIso,
-      exifExtractedAt: persistedExif?.extractedAt,
-      exifSourceTag: persistedExif?.sourceTag,
-      exifCaptureDate: persistedExif?.captureDate,
-      exifCaptureTimestampRaw: persistedExif?.captureTimestampRaw,
-      exifMake: persistedExif?.make,
-      exifModel: persistedExif?.model,
-      exifSoftware: persistedExif?.software,
-      exifWidth: persistedExif?.width,
-      exifHeight: persistedExif?.height,
-      exifOrientation: persistedExif?.orientation,
-      exifFingerprint: persistedExif?.fingerprint,
-      replaceAttributeLinks: !targetAttributeId,
-    });
+    try {
+      await syncPersonMediaAssociations({
+        tenantKey: resolved.tenant.tenantKey,
+        personId,
+        attributeId,
+        attributeType,
+        fileId,
+        mediaKind: validated.mediaKind,
+        label: shouldBePrimary ? "headshot" : label,
+        description,
+        photoDate: effectivePhotoDate,
+        isPrimary: shouldBePrimary,
+        sortOrder: 0,
+        sourceProvider: "oci_object",
+        sourceFileId: fileId,
+        originalObjectKey,
+        thumbnailObjectKey: thumbnailUpload?.objectKey || "",
+        checksumSha256,
+        mimeType: validated.mimeType,
+        fileName: safeFileName,
+        fileSizeBytes: String(bytes.length),
+        mediaWidth: Number.isFinite(normalizedMediaWidth) ? normalizedMediaWidth : persistedExif?.width,
+        mediaHeight: Number.isFinite(normalizedMediaHeight) ? normalizedMediaHeight : persistedExif?.height,
+        mediaDurationSec: Number.isFinite(normalizedMediaDurationSec) ? normalizedMediaDurationSec : undefined,
+        createdAt: createdAtIso,
+        exifExtractedAt: persistedExif?.extractedAt,
+        exifSourceTag: persistedExif?.sourceTag,
+        exifCaptureDate: persistedExif?.captureDate,
+        exifCaptureTimestampRaw: persistedExif?.captureTimestampRaw,
+        exifMake: persistedExif?.make,
+        exifModel: persistedExif?.model,
+        exifSoftware: persistedExif?.software,
+        exifWidth: persistedExif?.width,
+        exifHeight: persistedExif?.height,
+        exifOrientation: persistedExif?.orientation,
+        exifFingerprint: persistedExif?.fingerprint,
+        replaceAttributeLinks: !targetAttributeId,
+      });
+    } catch (syncError) {
+      if (createdAttributeHere && attributeId) {
+        try {
+          await removePersonMediaAssociations({
+            tenantKey: resolved.tenant.tenantKey,
+            personId,
+            attributeId,
+            fileIds: [fileId],
+          });
+          await deleteAttribute(resolved.tenant.tenantKey, attributeId);
+        } catch (cleanupError) {
+          console.warn("[photos/upload] cleanup after media sync failure failed", cleanupError);
+        }
+      }
+      throw syncError;
+    }
 
     if (attributeType === "photo" && validated.mediaKind === "image" && shouldBePrimary) {
       void seedPersonFaceProfileFromUpload({
