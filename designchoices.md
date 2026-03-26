@@ -258,6 +258,15 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Impact`: The app now owns request/response parsing for that endpoint and surfaces clearer failure details.
 - `Follow-up`: Reevaluate only if Oracle later fixes the wrapper behavior.
 
+## 2026-03-25
+
+- `Area`: Media asset recency semantics
+- `Decision`: Treat `MediaAssets.created_at` as the immutable database add/upload timestamp for a media asset, not as the photo's capture date or the browser file's `lastModified` value.
+- `Reason`: Using file-age timestamps for `created_at` caused newly uploaded older photos to sort incorrectly in the media library and made "recent" behavior misleading.
+- `Alternatives Considered`: Keep file-age semantics, or add a second upload-timestamp column while leaving `created_at` ambiguous.
+- `Impact`: Upload/write paths must set `created_at` from upload-now, media-library recency must sort on that timestamp, and `photo_date` plus EXIF fields remain the canonical media-date model.
+- `Follow-up`: Backfill existing `MediaAssets.created_at` values from upload audit evidence where available so current rows match the corrected rule.
+
 ## 2026-03-24
 
 - `Area`: Media modal intelligence behavior

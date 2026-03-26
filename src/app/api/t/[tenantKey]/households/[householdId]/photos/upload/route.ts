@@ -80,10 +80,11 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
       return NextResponse.json({ error: "invalid_payload", message: validated.error }, { status: 400 });
     }
 
-    const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
+    const createdAtIso = new Date().toISOString();
+    const photoDateSourceIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
-      : new Date().toISOString();
-    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
+      : createdAtIso;
+    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(photoDateSourceIso);
     const safeFileName = sanitizeUploadFileName(
       file.name || "",
       `${householdId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,

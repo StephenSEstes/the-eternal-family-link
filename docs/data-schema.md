@@ -34,6 +34,8 @@ This section is a quick reference for the three data areas that drive profile/me
 - File registry: `MediaAssets`
   - One logical media row per file (`media_id`, `file_id`)
   - Canonical media-level fields live here: `media_kind`, `label`, `description`, `photo_date`, immutable `created_at`
+  - `created_at` means the database add/upload timestamp for the asset
+  - `photo_date` and EXIF capture fields carry the media's own date model separately
   - Asset technical fields and EXIF fields also live here
 - Association table: `MediaLinks`
   - One association row per family/entity/media relationship
@@ -344,13 +346,14 @@ This section is a quick reference for the three data areas that drive profile/me
   - `exif_fingerprint`
 - Purpose:
   - Canonical uploaded media file registry.
-  - Stores canonical media-level display/edit fields (`media_kind`, `label`, `description`, `photo_date`) plus the immutable asset timestamp `created_at`.
+  - Stores canonical media-level display/edit fields (`media_kind`, `label`, `description`, `photo_date`) plus the immutable asset upload timestamp `created_at`.
   - Stores normalized asset technical fields (source/object keys/checksum/dimensions/duration) plus normalized EXIF fields that are extracted once and reused on later photo-intelligence runs.
   - `media_metadata` is retained only as a historical/compatibility field; active runtime should not persist new JSON payloads into it.
 - Logical index/key:
   - Unique: `media_id`
   - Common lookup: `file_id`
-  - `created_at` note: this is the canonical immutable asset timestamp and must not be overwritten after the asset row is first created.
+  - `created_at` note: this is the canonical immutable database add/upload timestamp and must not be overwritten after the asset row is first created.
+  - `photo_date` note: this is the canonical user/media date and may differ from `created_at`.
   - EXIF note: EXIF columns are intentionally unindexed in the current phase; they are persisted now so future search/duplicate tooling can use them without rereading file bytes.
 
 ## MediaLinks
@@ -518,6 +521,7 @@ This section is a quick reference for the three data areas that drive profile/me
 - Photo gallery:
   - Use `MediaLinks` rows to associate files to people/households/attributes.
   - Use `MediaAssets` as the canonical source for media-level title/description/date/kind/created timestamp.
+  - Treat `MediaAssets.created_at` as upload recency and `MediaAssets.photo_date` as the media date.
 - Attribute media:
   - `MediaLinks` supports `entity_type = "attribute"` with `entity_id = Attributes.attribute_id`.
 - Media metadata:

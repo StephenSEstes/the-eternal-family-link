@@ -154,10 +154,11 @@ export async function POST(request: Request, { params }: UploadRouteProps) {
     const normalizedMediaHeight = Number.parseFloat(mediaHeight);
     const normalizedMediaDurationSec = Number.parseFloat(mediaDurationSec);
 
-    const createdAtIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
+    const createdAtIso = new Date().toISOString();
+    const photoDateSourceIso = !Number.isNaN(new Date(fileCreatedAt).getTime())
       ? new Date(fileCreatedAt).toISOString()
-      : new Date().toISOString();
-    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(createdAtIso);
+      : createdAtIso;
+    const effectivePhotoDate = requestedPhotoDate || normalizeDateFromTimestamp(photoDateSourceIso);
 
     const existingPhotos = attributeType === "photo"
       ? toPersonMediaAttributes(

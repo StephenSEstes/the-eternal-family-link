@@ -4,6 +4,46 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Correct media recency to use database add timestamp
+  Priority: High
+  Status: In progress 2026-03-25
+  Est date: 2026-03-25
+  Desc: Fix media ordering so "recent" means the date/time the file was added to the database, not the file's old browser `lastModified` timestamp or the photo's capture date. Keep `photo_date` and EXIF fields as the media-date model, and make `MediaAssets.created_at` the immutable database add/upload timestamp used for library recency.
+  Scope:
+  - Redefine `MediaAssets.created_at` in active runtime behavior as the immutable database add/upload timestamp.
+  - Stop seeding `MediaAssets.created_at` from browser `fileCreatedAt` / `lastModified`.
+  - Preserve `MediaAssets.photo_date` as the canonical user/media date and keep EXIF capture fields separate.
+  - Backfill existing `MediaAssets.created_at` rows where upload audit data proves the real add time.
+  - Reverify media library sorting using the new timestamp semantics.
+  Phases:
+  - Phase 1: Design + schema contract
+    - Update `designchoices.md` and `docs/data-schema.md` so `created_at` means database add/upload timestamp, not media creation/capture time.
+    - Record that `photo_date` and EXIF fields remain the media-date model.
+  - Phase 2: Write-path correction
+    - Update person and household upload routes so `created_at` is set to `new Date().toISOString()` at upload time.
+    - Keep `photo_date` defaulting from the requested user date or the file timestamp fallback, not from the upload timestamp.
+    - Preserve the existing immutable-upsert rule so later links/edits do not overwrite asset `created_at`.
+  - Phase 3: Data backfill
+    - Backfill `MediaAssets.created_at` from `AuditLog.timestamp` for upload events where `AuditLog.entity_id = MediaAssets.file_id`.
+    - Restrict the backfill to rows where the upload audit timestamp is authoritative for the original add event.
+    - Leave rows without upload-audit evidence unchanged in this phase rather than inventing a weaker timestamp.
+  - Phase 4: Validation
+    - Verify the just-uploaded OCI-native file sorts into the first page by `created_at`.
+    - Verify top-12 ordering from `/photos/search` matches `MediaAssets.created_at DESC`.
+    - Verify newly uploaded old photos no longer inherit 2022-style file timestamps as recency values.
+  API/UI/data changes:
+  - API: Media search/detail continue returning `createdAt`, but it now represents database add/upload time.
+  - UI: Media library recency becomes true upload recency.
+  - Data: Targeted OCI backfill updates existing `MediaAssets.created_at` values from authoritative audit evidence.
+  Validation:
+  - `npm run build` passes.
+  - The latest uploaded file appears in the top 12 when sorted by recent.
+  - `MediaAssets.created_at` for new uploads reflects current upload time, not browser file age.
+  - Existing rows with upload audit evidence are normalized to audit-backed add timestamps.
+  Completion criteria:
+  - `created_at` means database add/upload time everywhere in active media runtime behavior.
+  - `photo_date` and EXIF remain separate from upload recency.
+  - The media library's recent ordering matches actual upload timing.
 - [ ] Reset media modal to stored-detail and stored-snapshot mode
   Priority: High
   Est date: 2026-03-24
@@ -111,9 +151,9 @@ I will update this list as we add, complete, or remove work.
   - `created_at` is immutable after initial asset write.
   - `media_metadata` is no longer used by active runtime writes.
   - `media_id` / `file_id` redundancy is explicitly deferred, not mixed into this change.
-- [ ] Rework media display controls after the `MediaAssets` canonicalization cutover
+- [x] Rework media display controls after the `MediaAssets` canonicalization cutover
   Priority: Med
-  Status: In progress
+  Status: Completed 2026-03-25
   Est date: 2026-03-26
   Desc: After the canonical `MediaAssets` cutover lands, fix the media display so it no longer behaves like an implicit newest-10 image list driven by non-canonical ordering. Add explicit filters and `Next 12` / `Last 12` navigation based on canonical asset fields.
   Scope:

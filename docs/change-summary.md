@@ -270,6 +270,25 @@ Concise release notes for what changed, why it changed, and what to verify.
   - The `Upload` and `Thumbnail` tiles show filenames, and the `Face Coordinates` tile continues to show the detected-face count.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+## 2026-03-25 (fix media recency to use database add time)
+
+- `Change`: Corrected media upload recency so `MediaAssets.created_at` now represents the immutable database add/upload timestamp instead of the browser file's old `lastModified` value, while `photo_date` remains the media-date field.
+- `Type`: Media Ordering, Data Semantics, OCI Data Repair
+- `Why`: Root cause was the upload write path seeding `created_at` from `fileCreatedAt`, which caused newly uploaded older photos to sort behind much newer uploads even though the library was already ordering by `created_at`.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/people/[personId]/photos/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/households/[householdId]/photos/upload/route.ts`
+  - `designchoices.md`
+  - `docs/data-schema.md`
+  - `TODO.md`
+- `Data Changes`: Live OCI backfill updated `MediaAssets.created_at` for 26 assets using authoritative upload timestamps from `AuditLog` where `AuditLog.entity_id = MediaAssets.file_id`.
+- `Verify`:
+  - `npm run build` passes.
+  - New upload `mfile-67ee722e3211e846` now has `created_at = 2026-03-23T19:48:54.947Z` and remains normalized with OCI object keys populated.
+  - Post-backfill verification showed `0` remaining mismatches between audit-backed upload timestamps and `MediaAssets.created_at`.
+  - In the linked `snowestes` image set, `mfile-67ee722e3211e846` now ranks `1` by recency.
+- `Rollback Notes`: Revert commit and restore the previous `created_at` semantics only if you intentionally want file-age ordering back.
+- `Design Decision Change`: Yes. `MediaAssets.created_at` is now explicitly defined as the immutable database add/upload timestamp, with `photo_date` and EXIF remaining separate media-date fields.
 
 ## 2026-03-23 (move EXIF collection to upload and add media processing status tab)
 
