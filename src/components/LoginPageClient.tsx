@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { AsyncActionButton, ModalStatusBanner, inferStatusTone } from "@/components/ui/primitives";
@@ -39,6 +40,16 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
   return (
     <main className="section" style={{ maxWidth: "540px", marginTop: "8vh" }}>
       <section className="card">
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+          <Image
+            src="/brand/logo-arch-tree.png"
+            alt="The Eternal Family Link logo"
+            width={200}
+            height={290}
+            priority
+            style={{ width: "150px", height: "auto" }}
+          />
+        </div>
         <h1 className="page-title">Sign In</h1>
         <p className="page-subtitle">Use your username and password for this family group.</p>
         <div className="card" style={{ marginBottom: "1rem" }}>
