@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (unify media search and linked-filter entry)
+
+- `Date`: 2026-03-26
+- `Change`: Replaced the separate media-text search bar and linked-filter search bar on the media page with one omnibox that can either commit a media text query or add person/household filter chips from the same input.
+- `Type`: UI
+- `Why`: Root cause was a `UI consistency and interaction issue`. The media tab exposed two different search boxes that looked redundant but actually drove different query paths, which made combining a text term like `wedding` with a linked person like `Dale Estes` harder to understand than it should be.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Typing a term and pressing `Enter` adds a removable text-search chip and refreshes the media results.
+  - Typing a person or household name shows suggestion rows under the same input and selecting one adds the corresponding filter chip.
+  - Combined filtering works for a text query plus one or more linked people/households.
+  - `Include unlinked Drive files` remains beside the unified search control.
+- `Rollback Notes`: Revert if separate dedicated search inputs are preferred over the combined omnibox model.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (align media page with people-tab layout)
 
 - `Date`: 2026-03-26

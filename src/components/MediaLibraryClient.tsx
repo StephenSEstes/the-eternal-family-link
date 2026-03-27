@@ -57,6 +57,9 @@ type LinkedSearchResult =
       householdId: string;
     };
 
+type PersonSearchResult = Extract<LinkedSearchResult, { kind: "person" }>;
+type HouseholdSearchResult = Extract<LinkedSearchResult, { kind: "household" }>;
+
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
@@ -196,6 +199,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
   const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [includeDrive, setIncludeDrive] = useState(false);
   const [status, setStatus] = useState("");
@@ -215,13 +219,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
-  const [linkedFilterQuery, setLinkedFilterQuery] = useState("");
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
   const [pageOffset, setPageOffset] = useState(0);
   const linkedFilterPeopleKey = linkedFilterPersonIds.join("|");
   const linkedFilterHouseholdsKey = linkedFilterHouseholdIds.join("|");
+  const normalizedSearchInput = searchInput.trim();
 
   const loadLibrary = async (query = "", options?: { noCache?: boolean }) => {
     const normalizedQuery = query.trim();
@@ -359,11 +363,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   }, [photoTagQuery, selectedPhotoAssociations.people, selectedPhotoAssociations.households, peopleOptions, canManage, householdOptions]);
 
   const linkedFilterSearchResults = useMemo(() => {
-    const q = linkedFilterQuery.trim().toLowerCase();
-    if (!q) return [] as LinkedSearchResult[];
+    const q = normalizedSearchInput.toLowerCase();
+    if (!q) {
+      return {
+        people: [] as PersonSearchResult[],
+        households: [] as HouseholdSearchResult[],
+      };
+    }
     const selectedPeople = new Set(linkedFilterPersonIds);
     const selectedHouseholds = new Set(linkedFilterHouseholdIds);
-    const peopleMatches: LinkedSearchResult[] = peopleOptions
+    const peopleMatches: PersonSearchResult[] = peopleOptions
       .filter((item) => item.displayName.toLowerCase().includes(q) && !selectedPeople.has(item.personId))
       .map((item) => ({
         kind: "person",
@@ -372,7 +381,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         personId: item.personId,
         gender: item.gender ?? "unspecified",
       }));
-    const householdMatches: LinkedSearchResult[] = householdOptions
+    const householdMatches: HouseholdSearchResult[] = householdOptions
       .filter((item) => item.label.toLowerCase().includes(q) && !selectedHouseholds.has(item.householdId))
       .map((item) => ({
         kind: "household",
@@ -380,8 +389,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         displayName: item.label,
         householdId: item.householdId,
       }));
-    return [...peopleMatches, ...householdMatches].slice(0, 15);
-  }, [linkedFilterQuery, linkedFilterPersonIds, linkedFilterHouseholdIds, peopleOptions, householdOptions]);
+    return {
+      people: peopleMatches.slice(0, 8),
+      households: householdMatches.slice(0, 8),
+    };
+  }, [normalizedSearchInput, linkedFilterPersonIds, linkedFilterHouseholdIds, peopleOptions, householdOptions]);
 
   const filteredMediaItems = useMemo(() => {
     const personSet = new Set(linkedFilterPersonIds);
@@ -423,15 +435,25 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const visibleRangeEnd = Math.min(pageOffset + MEDIA_LIBRARY_PAGE_SIZE, filteredMediaItems.length);
   const canShowPrevPage = pageOffset > 0;
   const canShowNextPage = pageOffset + MEDIA_LIBRARY_PAGE_SIZE < filteredMediaItems.length;
+  const hasActiveFilters = Boolean(search.trim()) || linkedFilterPersonIds.length > 0 || linkedFilterHouseholdIds.length > 0;
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
       setLinkedFilterPersonIds((current) => (current.includes(candidate.personId) ? current : [...current, candidate.personId]));
+      setSearchInput("");
       return;
     }
     setLinkedFilterHouseholdIds((current) =>
       current.includes(candidate.householdId) ? current : [...current, candidate.householdId],
     );
+    setSearchInput("");
+  };
+
+  const applyTextSearch = (value: string) => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    setSearch(normalized);
+    setSearchInput("");
   };
 
   const loadSelectedPhotoDetail = async (
@@ -785,28 +807,99 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", flex: "1 1 460px", minWidth: "280px" }}>
-            <label className="search-wrap" htmlFor="media-library-search" style={{ flex: "1 1 360px", minWidth: "260px", marginTop: 0 }}>
-              <span className="search-icon" aria-hidden="true">
-                <SearchIcon />
-              </span>
-              <input
-                id="media-library-search"
-                className="search-input"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by labels and text"
-              />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
-              <input
-                type="checkbox"
-                checked={includeDrive}
-                onChange={(e) => setIncludeDrive(e.target.checked)}
-              />
-              Include unlinked Drive files
-            </label>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gap: "0.5rem", flex: "1 1 460px", minWidth: "280px" }}>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+              <label className="search-wrap" htmlFor="media-library-search" style={{ flex: "1 1 360px", minWidth: "260px", marginTop: 0 }}>
+                <span className="search-icon" aria-hidden="true">
+                  <SearchIcon />
+                </span>
+                <input
+                  id="media-library-search"
+                  className="search-input"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      applyTextSearch(searchInput);
+                    }
+                    if (event.key === "Escape") {
+                      setSearchInput("");
+                    }
+                  }}
+                  placeholder="Search media, people, or households"
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
+                <input
+                  type="checkbox"
+                  checked={includeDrive}
+                  onChange={(e) => setIncludeDrive(e.target.checked)}
+                />
+                Include unlinked Drive files
+              </label>
+            </div>
+            {normalizedSearchInput ? (
+              <div className="person-typeahead-list" style={{ marginBottom: "0.1rem" }}>
+                <button
+                  type="button"
+                  className="person-typeahead-item"
+                  onClick={() => applyTextSearch(searchInput)}
+                >
+                  <span className="person-linked-main">
+                    <span className="person-linked-icon" aria-hidden="true">
+                      <SearchIcon />
+                    </span>
+                    <span>Search media for &quot;{normalizedSearchInput}&quot;</span>
+                  </span>
+                </button>
+                {linkedFilterSearchResults.people.length > 0 ? (
+                  <div>
+                    <div style={{ padding: "0.35rem 0.85rem 0.15rem", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                      People
+                    </div>
+                    {linkedFilterSearchResults.people.map((entry) => (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        className="person-typeahead-item"
+                        onClick={() => addLinkedFilterTarget(entry)}
+                      >
+                        <span className="person-linked-main">
+                          <span className="person-linked-icon" aria-hidden="true">
+                            <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
+                          </span>
+                          <span>{entry.displayName}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {linkedFilterSearchResults.households.length > 0 ? (
+                  <div>
+                    <div style={{ padding: "0.35rem 0.85rem 0.15rem", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                      Households
+                    </div>
+                    {linkedFilterSearchResults.households.map((entry) => (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        className="person-typeahead-item"
+                        onClick={() => addLinkedFilterTarget(entry)}
+                      >
+                        <span className="person-linked-main">
+                          <span className="person-linked-icon person-linked-icon--household" aria-hidden="true">
+                            <HouseholdIcon />
+                          </span>
+                          <span>{entry.displayName}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
             <span className="page-subtitle" style={{ margin: 0, textAlign: "right" }}>
@@ -838,8 +931,26 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             ) : null}
           </div>
         </div>
-        <label className="label">Selected Linked Filters</label>
+        <label className="label">Active Filters</label>
         <div className="person-chip-row" style={{ marginTop: "0.3rem" }}>
+          {search.trim() ? (
+            <span key="filter-selected-search" className="person-linked-row">
+              <span className="person-linked-main">
+                <span className="person-linked-icon" aria-hidden="true">
+                  <SearchIcon />
+                </span>
+                <span>Text: {search}</span>
+              </span>
+              <button
+                type="button"
+                className="person-chip-remove"
+                onClick={() => setSearch("")}
+                aria-label={`Remove text search ${search}`}
+              >
+                x
+              </button>
+            </span>
+          ) : null}
           {linkedFilterPersonIds.map((personId) => (
             <span key={`filter-selected-person-${personId}`} className="person-linked-row">
               <span className="person-linked-main">
@@ -876,45 +987,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
               </button>
             </span>
           ))}
-          {linkedFilterPersonIds.length === 0 && linkedFilterHouseholdIds.length === 0 ? (
+          {!hasActiveFilters ? (
             <span className="status-chip status-chip--neutral">No filters selected</span>
           ) : null}
         </div>
-        <label className="label" style={{ marginTop: "0.55rem", marginBottom: 0 }}>Search to Add Linked Filters</label>
-        <input
-          className="input"
-          value={linkedFilterQuery}
-          onChange={(e) => setLinkedFilterQuery(e.target.value)}
-          placeholder="Type person or household name"
-          style={{ maxWidth: "420px" }}
-        />
-        {linkedFilterQuery.trim() ? (
-          <div className="person-typeahead-list" style={{ marginTop: "0.45rem", marginBottom: "0.7rem" }}>
-            {linkedFilterSearchResults.length > 0 ? (
-              linkedFilterSearchResults.map((entry) => (
-                <button
-                  key={entry.key}
-                  type="button"
-                  className="person-typeahead-item"
-                  onClick={() => addLinkedFilterTarget(entry)}
-                >
-                  <span className="person-linked-main">
-                    <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
-                      {entry.kind === "person" ? (
-                        <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
-                      ) : (
-                        <HouseholdIcon />
-                      )}
-                    </span>
-                    <span>{entry.displayName}</span>
-                  </span>
-                </button>
-              ))
-            ) : (
-              <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
-            )}
-          </div>
-        ) : null}
 
         {visibleMediaItems.length === 0 ? (
           <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
