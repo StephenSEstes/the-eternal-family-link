@@ -8,6 +8,7 @@ import {
   getFamilyGroupAccesses,
   getFamilyGroupContext,
 } from "@/lib/family-group/context";
+import { getEnabledUserAccessList, getEnabledUserAccessListByPersonId } from "@/lib/data/store";
 
 const payloadSchema = z.object({
   familyGroupKey: z.string().trim().min(1).max(80).optional(),
@@ -27,10 +28,24 @@ export async function POST(request: Request) {
   }
 
   const requestedKey = parsed.data.familyGroupKey ?? parsed.data.tenantKey ?? "";
-  const familyGroups = getFamilyGroupAccesses(session);
-  const selected = familyGroups.find((entry) => entry.tenantKey === requestedKey);
+  let familyGroups = getFamilyGroupAccesses(session);
+  let selected = familyGroups.find((entry) => entry.tenantKey === requestedKey);
   if (!selected) {
-    return NextResponse.json({ error: "unknown_family_group" }, { status: 403 });
+    if (process.env.ENABLE_MULTI_TENANT_SESSION === "true") {
+      const refreshed =
+        (session.user?.person_id
+          ? await getEnabledUserAccessListByPersonId(session.user.person_id).catch(() => [])
+          : session.user?.email
+            ? await getEnabledUserAccessList(session.user.email).catch(() => [])
+            : []) || [];
+      if (refreshed.length > 0) {
+        familyGroups = refreshed;
+        selected = familyGroups.find((entry) => entry.tenantKey === requestedKey);
+      }
+    }
+    if (!selected) {
+      return NextResponse.json({ error: "unknown_family_group" }, { status: 403 });
+    }
   }
 
   const context = getFamilyGroupContext(session, selected.tenantKey);

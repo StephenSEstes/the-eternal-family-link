@@ -6132,6 +6132,23 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Existing JSON response schema and allowed category/type constraints remain unchanged.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+# Change Summary
+
+## 2026-03-27 (multi-tenant session refresh paths)
+
+- `Change`: Added feature-flag-aware tenant access refresh paths so family switches no longer 401/403 when the session is missing the target tenant: middleware now defers to server guard when `ENABLE_MULTI_TENANT_SESSION` is on, the family-group switch API refreshes access from the database when needed, and `accessibleTenants` is typed on the session shape.
+- `Type`: Auth Reliability, Tenant Switching
+- `Why`: Root cause was the single-tenant session check in middleware and the switch API, which blocked valid multi-family users before the server guard could refresh access.
+- `Files`:
+  - `src/middleware.ts`
+  - `src/app/api/family-groups/active/route.ts`
+  - `src/types/next-auth.d.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` (timed out in sandbox; not completed in this run).
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.

@@ -23,6 +23,14 @@ declare module "next-auth" {
     tenantName?: string;
     familyGroupKey?: string;
     familyGroupName?: string;
+    accessibleTenants?: {
+      tenantKey: string;
+      tenantName: string;
+      familyGroupKey?: string;
+      familyGroupName?: string;
+      role: "ADMIN" | "USER";
+      personId: string;
+    }[];
   }
 }
 

@@ -246,4 +246,5 @@ This file is a quick release-log entry point.
 - 2026-03-07: Person modal family-group switch now updates in place without closing the panel. See `docs/change-summary.md`.
 - 2026-03-07: Fixed OCI relationship bind mismatch causing family-switch errors and added household header fallback to spouse headshots when wedding photo is missing. See `docs/change-summary.md`.
 - 2026-03-07: Fixed person family-switch trim crash and added household->person return flow with clickable child avatar rows. See `docs/change-summary.md`.
+- 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.

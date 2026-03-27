@@ -75,13 +75,18 @@ export default async function middleware(request: NextRequest) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
+  const multiTenantEnabled = process.env.ENABLE_MULTI_TENANT_SESSION === "true";
   if (!hasTenantAccess(token, tenantPath.tenantKey)) {
-    const deniedUrl = request.nextUrl.clone();
-    deniedUrl.pathname = "/access-denied";
-    deniedUrl.searchParams.set("tenantKey", tenantPath.tenantKey);
-    deniedUrl.searchParams.set("from", pathname);
-    deniedUrl.searchParams.set("reason", "missing_tenant_access");
-    return NextResponse.redirect(deniedUrl);
+    if (!multiTenantEnabled) {
+      const deniedUrl = request.nextUrl.clone();
+      deniedUrl.pathname = "/access-denied";
+      deniedUrl.searchParams.set("tenantKey", tenantPath.tenantKey);
+      deniedUrl.searchParams.set("from", pathname);
+      deniedUrl.searchParams.set("reason", "missing_tenant_access");
+      return NextResponse.redirect(deniedUrl);
+    }
+    // When multi-tenant session refresh is enabled, allow the request to continue.
+    // The server-side tenant guard will refresh access from the database and return 403 if truly unauthorized.
   }
 
   return response;

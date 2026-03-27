@@ -167,7 +167,7 @@ I will update this list as we add, complete, or remove work.
   - `Next 12` and `Last 12` navigation work without falling back to the current hidden top-10 behavior.
 - [ ] Make auth/session multi-tenant (no re-auth on family switch)
   Priority: High
-  Status: Planned 2026-03-27
+  Status: In progress 2026-03-27
   Desc: Replace the single-tenant session model with one session that lists all accessible family groups so switching families no longer causes 401/403, with a feature flag to fall back to current behavior.
   Scope:
   - Session payload includes `accessibleTenants[]` and `preferredTenant` on sign-in.
@@ -175,9 +175,9 @@ I will update this list as we add, complete, or remove work.
   - Callback/session validity is tenant-agnostic; derive tenant from the request path.
   - `active_tenant` becomes UI preference only; switching tenants just reloads data.
   Phases:
-  - Phase 1: Feature flag + guard support (multi-tenant guard when flag on, existing behavior when off).
+  - Phase 1: Feature flag + guard support (multi-tenant guard when flag on, existing behavior when off). ✅ Done in `requireTenantAccess`, gated by `ENABLE_MULTI_TENANT_SESSION`.
   - Phase 2: Session issuance populates `accessibleTenants`/`preferredTenant`.
-  - Phase 3: Client updates remove assumptions that session tenant === active tenant.
+  - Phase 3: Client updates remove assumptions that session tenant === active tenant. (Middleware and family switch API now allow refresh when flag is on; still need wider client fetch use of refreshed access list.)
   - Phase 4: Validation with multi-family user (API/media/viewer) and intentional forbidden tenant check.
   Validation:
   - `npm run build` passes.
