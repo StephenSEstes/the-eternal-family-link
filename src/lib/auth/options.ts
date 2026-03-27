@@ -356,6 +356,8 @@ export const authOptions: NextAuthOptions = {
       }
       session.tenantKey = (token.tenantKey as string | undefined) ?? DEFAULT_TENANT_KEY;
       session.tenantName = (token.tenantName as string | undefined) ?? DEFAULT_TENANT_NAME;
+      (session as Session & { accessibleTenants?: typeof session.user.tenantAccesses }).accessibleTenants =
+        (token.tenantAccesses as typeof session.user.tenantAccesses) ?? [];
       return session;
     },
   },
