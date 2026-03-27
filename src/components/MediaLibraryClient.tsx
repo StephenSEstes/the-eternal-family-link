@@ -1201,7 +1201,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     />
                   )}
                 </div>
-                <div className="settings-chip-list" style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
+                <div
+                  className="settings-chip-list"
+                  style={{ marginTop: "0.75rem", marginBottom: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "nowrap" }}
+                >
                   <button
                     type="button"
                     className={`button secondary tap-button ${selectedPhotoTab === "details" ? "active" : ""}`}
@@ -1236,25 +1239,27 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                             value={selectedPhotoName}
                             onChange={(event) => setSelectedPhotoName(event.target.value)}
                             disabled={photoAssociationBusy || !selectedPhotoCanEditName}
-                          />
-                        </div>
-                        <div style={{ flex: "0 0 180px" }}>
-                          <label className="label">Date</label>
-                          <input
-                            className="input"
-                            value={selectedPhotoDate}
-                            onChange={(event) => setSelectedPhotoDate(event.target.value)}
-                            disabled={photoAssociationBusy || !selectedPhotoEditable}
-                          />
-                        </div>
-                      </div>
-                      <label className="label">Description</label>
+                      />
+                    </div>
+                    <div style={{ flex: "0 0 180px" }}>
+                      <label className="label">Date</label>
                       <input
                         className="input"
-                        value={selectedPhotoDescription}
-                        onChange={(event) => setSelectedPhotoDescription(event.target.value)}
+                        value={selectedPhotoDate}
+                        onChange={(event) => setSelectedPhotoDate(event.target.value)}
                         disabled={photoAssociationBusy || !selectedPhotoEditable}
                       />
+                    </div>
+                  </div>
+                  <label className="label">Description</label>
+                  <textarea
+                    className="input"
+                    rows={2}
+                    value={selectedPhotoDescription}
+                    onChange={(event) => setSelectedPhotoDescription(event.target.value)}
+                    disabled={photoAssociationBusy || !selectedPhotoEditable}
+                    style={{ resize: "vertical" }}
+                  />
                   {/*
                     <div
                       style={{

@@ -6175,6 +6175,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-27 (media modal tab row + description textarea)
+
+- `Change`: Kept Details/Metadata/AI tab buttons on a single row and enlarged the description editor to a 2-row textarea.
+- `Type`: UI polish
+- `Why`: Align tab layout and give more room for descriptions.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Not rerun locally (build requires secret env; rely on CI).
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.
