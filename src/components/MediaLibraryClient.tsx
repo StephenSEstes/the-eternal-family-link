@@ -81,6 +81,14 @@ function SearchIcon() {
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ImageIcon() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -719,23 +727,19 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   return (
     <main className="section">
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
-          <h1 className="page-title" style={{ marginBottom: 0 }}>Media Library</h1>
-          <button
-            type="button"
-            className="button secondary tap-button"
-            onClick={() => setShowAttachWizard(true)}
-            style={{ padding: "0.4rem 0.75rem", fontSize: "0.85rem", lineHeight: 1.1 }}
-          >
-            Add Media
-          </button>
+      <section className="people-hero">
+        <div>
+          <h1 className="page-title">Media Library</h1>
+          <p className="page-subtitle">Attach and catalog media across people and households.</p>
+          {status ? <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>{status}</p> : null}
         </div>
-        <p className="page-subtitle" style={{ marginBottom: 0, marginTop: "0.5rem" }}>
-          Attach and catalog media across people and households.
-        </p>
-        {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
-      </div>
+        <button type="button" className="button button-primary add-person-trigger" onClick={() => setShowAttachWizard(true)}>
+          <span className="button-icon" aria-hidden="true">
+            <PlusIcon />
+          </span>
+          <span>Add Media</span>
+        </button>
+      </section>
 
       <MediaAttachWizard
         open={showAttachWizard}
@@ -754,8 +758,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         onComplete={(summary) => void handleAttachWizardComplete(summary)}
       />
 
-      <div className="card">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "0.25rem", alignItems: "stretch", marginBottom: "0.75rem" }}>
+      <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "0.25rem", alignItems: "stretch", marginBottom: "0.85rem" }}>
           {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -781,68 +785,57 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-          <div style={{ display: "grid", gap: "0.45rem", flex: "1 1 420px", minWidth: "280px" }}>
-            <label className="label" style={{ margin: 0 }}>Search by labels and text</label>
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ position: "relative", maxWidth: "420px", flex: "1 1 320px" }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    left: "0.8rem",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#6b7280",
-                    display: "inline-flex",
-                  }}
-                >
-                  <SearchIcon />
-                </span>
-                <input
-                  className="input"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search files, people, households"
-                  style={{ maxWidth: "420px", paddingLeft: "2.35rem" }}
-                />
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
-                <input
-                  type="checkbox"
-                  checked={includeDrive}
-                  onChange={(e) => setIncludeDrive(e.target.checked)}
-                />
-                Include unlinked Drive files
-              </label>
-            </div>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", flex: "1 1 460px", minWidth: "280px" }}>
+            <label className="search-wrap" htmlFor="media-library-search" style={{ flex: "1 1 360px", minWidth: "260px", marginTop: 0 }}>
+              <span className="search-icon" aria-hidden="true">
+                <SearchIcon />
+              </span>
+              <input
+                id="media-library-search"
+                className="search-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by labels and text"
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
+              <input
+                type="checkbox"
+                checked={includeDrive}
+                onChange={(e) => setIncludeDrive(e.target.checked)}
+              />
+              Include unlinked Drive files
+            </label>
           </div>
-          <div style={{ display: "grid", gap: "0.35rem", alignItems: "center", justifyItems: "end", marginLeft: "auto" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
             <span className="page-subtitle" style={{ margin: 0, textAlign: "right" }}>
               Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
             </span>
-            <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-              {canShowPrevPage ? (
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
-                  style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
-                >
-                  Prev 12
-                </button>
-              ) : null}
-              {canShowNextPage ? (
-                <button
-                  type="button"
-                  className="button secondary tap-button"
-                  onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
-                  style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
-                >
-                  Next 12
-                </button>
-              ) : null}
-            </div>
+            {(canShowPrevPage || canShowNextPage) ? (
+              <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                {canShowPrevPage ? (
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
+                    style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                  >
+                    Prev 12
+                  </button>
+                ) : null}
+                {canShowNextPage ? (
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
+                    style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                  >
+                    Next 12
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <label className="label">Selected Linked Filters</label>

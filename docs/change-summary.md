@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (align media page with people-tab layout)
+
+- `Date`: 2026-03-26
+- `Change`: Restyled the top of the media page to follow the People tab pattern with an unboxed `Media Library` hero, a black `Add Media` button with a plus icon, unboxed filter/search controls, and added icons to the `People` and `Households` buttons on the People page.
+- `Type`: UI
+- `Why`: Root cause was a `UI consistency issue`. The top-level tabs were using different header and control treatments, which made the media page feel like a separate design system instead of following the established People-page pattern.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/PeopleDirectory.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Build not run in this pass.
+  - The media page header is no longer wrapped in a card.
+  - `Add Media` uses the same compact black plus-button treatment as `Add Person`.
+  - The media filter/search rows are unboxed and visually aligned with the People page.
+  - The `People` and `Households` buttons on the People page show left-side icons.
+- `Rollback Notes`: Revert if the media page should keep its separate card-style header treatment.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (restructure media header and search controls)
 
 - `Date`: 2026-03-26

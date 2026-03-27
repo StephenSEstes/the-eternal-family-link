@@ -58,6 +58,23 @@ function BirthdayIcon() {
   );
 }
 
+function PeopleModeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M8 11.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zm8 1a2.7 2.7 0 1 1 0-5.4 2.7 2.7 0 0 1 0 5.4z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4.5 18.8a4.7 4.7 0 0 1 7 0M13.2 18.4a4.05 4.05 0 0 1 5.3-.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HouseholdModeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M4 10.4L12 4l8 6.4v8.6a1 1 0 0 1-1 1h-4.8a.7.7 0 0 1-.7-.7V14a1.5 1.5 0 0 0-3 0v5.3a.7.7 0 0 1-.7.7H5a1 1 0 0 1-1-1v-8.6z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function normalizeDateLabel(value: string) {
   const raw = value.trim();
   if (!raw) return "Birthdate not set";
@@ -181,14 +198,20 @@ export function PeopleDirectory({
           className={`button secondary tap-button ${mode === "people" ? "active" : ""}`}
           onClick={() => setMode("people")}
         >
-          People
+          <span className="button-icon" aria-hidden="true">
+            <PeopleModeIcon />
+          </span>
+          <span>People</span>
         </button>
         <button
           type="button"
           className={`button secondary tap-button ${mode === "households" ? "active" : ""}`}
           onClick={() => setMode("households")}
         >
-          Households
+          <span className="button-icon" aria-hidden="true">
+            <HouseholdModeIcon />
+          </span>
+          <span>Households</span>
         </button>
       </div>
 
