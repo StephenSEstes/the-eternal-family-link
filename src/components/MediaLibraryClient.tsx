@@ -72,12 +72,58 @@ function HouseholdIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16 16l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="9" cy="10" r="1.6" fill="currentColor" />
+      <path d="M6.5 16l4-4 2.7 2.7L16 12l2 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <rect x="3.5" y="6" width="12.5" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M16 10l4.5-2.5v9L16 14z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AudioIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M14 5v10.3a2.8 2.8 0 1 1-1.7-2.6V8.6l6-1.4v7.1a2.8 2.8 0 1 1-1.7-2.6V5.8z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function DocumentIcon() {
   return (
     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
       <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
       <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zm7 1.2V8h3.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
       <path d="M8.5 12.2h7M8.5 15h7M8.5 17.8h4.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DocumentFilterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M7 3.8h7l3.2 3.2v13a1 1 0 0 1-1 1H7A1.8 1.8 0 0 1 5.2 19.2V5.6A1.8 1.8 0 0 1 7 3.8z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M14 4.6V8h3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8.5 12.1h7M8.5 15h7M8.5 17.9h4.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
   );
 }
@@ -112,6 +158,26 @@ const MEDIA_TYPE_FILTER_OPTIONS: Array<{ value: MediaTypeFilter; label: string }
   { value: "audio", label: "Audio" },
   { value: "document", label: "Documents" },
 ];
+
+function MediaTypeFilterIcon({ type }: { type: MediaTypeFilter }) {
+  if (type === "image") {
+    return <ImageIcon />;
+  }
+  if (type === "video") {
+    return <VideoIcon />;
+  }
+  if (type === "audio") {
+    return <AudioIcon />;
+  }
+  if (type === "document") {
+    return <DocumentFilterIcon />;
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M5 5h5v5H5zm9 0h5v5h-5zM5 14h5v5H5zm9 0h5v5h-5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function parseSortableTimestamp(value: string | undefined) {
   const parsed = Date.parse(String(value ?? "").trim());
@@ -654,8 +720,18 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   return (
     <main className="section">
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <h1 className="page-title" style={{ marginBottom: "0.25rem" }}>Media Library</h1>
-        <p className="page-subtitle" style={{ marginBottom: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h1 className="page-title" style={{ marginBottom: 0 }}>Media Library</h1>
+          <button
+            type="button"
+            className="button secondary tap-button"
+            onClick={() => setShowAttachWizard(true)}
+            style={{ padding: "0.4rem 0.75rem", fontSize: "0.85rem", lineHeight: 1.1 }}
+          >
+            Add Media
+          </button>
+        </div>
+        <p className="page-subtitle" style={{ marginBottom: 0, marginTop: "0.5rem" }}>
           Attach and catalog media across people and households.
         </p>
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
@@ -696,49 +772,77 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                 fontSize: "0.8rem",
               }}
             >
-              {option.label}
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%" }}>
+                <span aria-hidden="true" style={{ display: "inline-flex", flex: "0 0 auto" }}>
+                  <MediaTypeFilterIcon type={option.value} />
+                </span>
+                <span>{option.label}</span>
+              </span>
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-          <strong>Library</strong>
-          <input
-            className="input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search files, people, households"
-            style={{ maxWidth: "360px" }}
-          />
-          <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
-            <input
-              type="checkbox"
-              checked={includeDrive}
-              onChange={(e) => setIncludeDrive(e.target.checked)}
-            />
-            Include unlinked Drive files
-          </label>
-          <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap", marginLeft: "auto" }}>
-            <span className="page-subtitle" style={{ margin: 0 }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gap: "0.45rem", flex: "1 1 420px", minWidth: "280px" }}>
+            <label className="label" style={{ margin: 0 }}>Search by labels and text</label>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ position: "relative", maxWidth: "420px", flex: "1 1 320px" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    left: "0.8rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#6b7280",
+                    display: "inline-flex",
+                  }}
+                >
+                  <SearchIcon />
+                </span>
+                <input
+                  className="input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search files, people, households"
+                  style={{ maxWidth: "420px", paddingLeft: "2.35rem" }}
+                />
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.9rem" }}>
+                <input
+                  type="checkbox"
+                  checked={includeDrive}
+                  onChange={(e) => setIncludeDrive(e.target.checked)}
+                />
+                Include unlinked Drive files
+              </label>
+            </div>
+          </div>
+          <div style={{ display: "grid", gap: "0.35rem", alignItems: "center", justifyItems: "end", marginLeft: "auto" }}>
+            <span className="page-subtitle" style={{ margin: 0, textAlign: "right" }}>
               Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
             </span>
-            {canShowPrevPage ? (
-              <button
-                type="button"
-                className="button secondary tap-button"
-                onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
-              >
-                Prev 12
-              </button>
-            ) : null}
-            {canShowNextPage ? (
-              <button
-                type="button"
-                className="button secondary tap-button"
-                onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
-              >
-                Next 12
-              </button>
-            ) : null}
+            <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+              {canShowPrevPage ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
+                  style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                >
+                  Prev 12
+                </button>
+              ) : null}
+              {canShowNextPage ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
+                  style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                >
+                  Next 12
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
         <label className="label">Selected Linked Filters</label>
@@ -783,17 +887,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             <span className="status-chip status-chip--neutral">No filters selected</span>
           ) : null}
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", justifyContent: "space-between", marginTop: "0.55rem", flexWrap: "wrap" }}>
-          <label className="label" style={{ margin: 0 }}>Search to Add Linked Filters</label>
-          <button
-            type="button"
-            className="button secondary tap-button"
-            onClick={() => setShowAttachWizard(true)}
-            style={{ padding: "0.35rem 0.7rem", fontSize: "0.85rem", lineHeight: 1.1 }}
-          >
-            Add Media
-          </button>
-        </div>
+        <label className="label" style={{ marginTop: "0.55rem", marginBottom: 0 }}>Search to Add Linked Filters</label>
         <input
           className="input"
           value={linkedFilterQuery}

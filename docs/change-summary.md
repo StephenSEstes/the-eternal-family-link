@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (restructure media header and search controls)
+
+- `Date`: 2026-03-26
+- `Change`: Moved `Add Media` back into the top `Media Library` header row, added left-side icons to the media-type filters, changed the filter/search stack so the search row sits below the buttons with a magnifying-glass input and right-aligned range/paging block, and kept the people/household filter controls below that row.
+- `Type`: UI
+- `Why`: Root cause was a `UI layout issue`. The control hierarchy still did not match the intended visual order, `Add Media` was competing with the linked-filter controls, the filter buttons had no visual icon anchor, and the search/status/paging information was not grouped the way you specified.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Build not run in this pass.
+  - `Add Media` sits on the top header row at the far right.
+  - Media-type filters render with left-side icons.
+  - The search row sits directly below the filter buttons with a search icon in the input.
+  - `Showing x-y of z` is right-aligned with narrow side-by-side paging buttons.
+  - People/household linked filters remain below the search row.
+- `Rollback Notes`: Revert only if the previous header/control placement is preferred.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (compact media filter row and linked-filter controls)
 
 - `Date`: 2026-03-26
