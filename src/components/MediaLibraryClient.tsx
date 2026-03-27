@@ -163,6 +163,18 @@ async function assertOk(res: Response, fallbackMessage: string) {
   throw new Error(String(message));
 }
 
+function authError(res: Response) {
+  return res.status === 401 || res.status === 403;
+}
+
+async function assertOkWithAuth(res: Response, fallbackMessage: string) {
+  if (res.ok) return;
+  if (authError(res)) {
+    throw new Error("Session expired. Please refresh and sign in again.");
+  }
+  await assertOk(res, fallbackMessage);
+}
+
 type MediaTypeFilter = "all" | "image" | "video" | "audio" | "document";
 
 const MEDIA_LIBRARY_FETCH_LIMIT = 5000;
@@ -661,7 +673,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           notes: selectedPhotoDescription || selectedPhotoDetail.description || "",
         }),
       });
-      await assertOk(res, "Failed to link person");
+      await assertOkWithAuth(res, "Failed to link person");
       await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Person linked.");
     } catch (error) {
@@ -681,7 +693,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         { cache: "no-store" },
       );
       const attrsBody = await attrsRes.json().catch(() => null);
-      await assertOk(attrsRes, "Failed to load person attributes");
+      await assertOkWithAuth(attrsRes, "Failed to load person attributes");
       const attrs = Array.isArray(attrsBody?.attributes) ? (attrsBody.attributes as AttributeWithMedia[]) : [];
       const matches = attrs.filter((item) => matchesCanonicalMediaFileId(item, selectedPhotoDetail.fileId));
       for (const match of matches) {
@@ -689,13 +701,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/attributes/${encodeURIComponent(match.attributeId)}`,
           { method: "DELETE" },
         );
-        await assertOk(delRes, "Failed to remove person link");
+        await assertOkWithAuth(delRes, "Failed to remove person link");
       }
       const unlinkRes = await fetch(
         `/api/t/${encodeURIComponent(tenantKey)}/people/${encodeURIComponent(personId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
         { method: "DELETE" },
       );
-      await assertOk(unlinkRes, "Failed to remove person photo link");
+      await assertOkWithAuth(unlinkRes, "Failed to remove person photo link");
       await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Person link removed.");
     } catch (error) {
@@ -725,7 +737,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           }),
         },
       );
-      await assertOk(res, "Failed to link household");
+      await assertOkWithAuth(res, "Failed to link household");
       await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Household linked.");
     } catch (error) {
@@ -744,7 +756,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         `/api/t/${encodeURIComponent(tenantKey)}/households/${encodeURIComponent(householdId)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}`,
         { method: "DELETE" },
       );
-      await assertOk(res, "Failed to remove household link");
+      await assertOkWithAuth(res, "Failed to remove household link");
       await loadSelectedPhotoDetail(selectedPhotoDetail.fileId, { noStore: true });
       setPhotoAssociationStatus("Household link removed.");
     } catch (error) {
