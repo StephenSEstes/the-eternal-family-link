@@ -13,6 +13,7 @@ type MediaLibraryClientProps = {
 };
 
 type MediaItem = {
+  mediaId?: string;
   fileId: string;
   name: string;
   description: string;
@@ -21,6 +22,8 @@ type MediaItem = {
   mediaKind?: string;
   mediaMetadata?: string;
   exifExtractedAt?: string;
+  sourceProvider?: string;
+  thumbnailObjectKey?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -60,7 +63,7 @@ type LinkedSearchResult =
 type PersonSearchResult = Extract<LinkedSearchResult, { kind: "person" }>;
 type HouseholdSearchResult = Extract<LinkedSearchResult, { kind: "household" }>;
 
-type MediaEditorTab = "details" | "metadata";
+type MediaEditorTab = "details" | "metadata" | "ai";
 
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
@@ -543,6 +546,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     }
     const fallbackItem = options?.fallbackItem ?? selectedPhotoDetail;
     const mergedItem: MediaItem = {
+      mediaId: serverItem.mediaId || fallbackItem?.mediaId || "",
       fileId: serverItem.fileId,
       name: serverItem.name || fallbackItem?.name || "",
       description: serverItem.description || fallbackItem?.description || "",
@@ -551,6 +555,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       mediaKind: serverItem.mediaKind || fallbackItem?.mediaKind || "",
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
       exifExtractedAt: serverItem.exifExtractedAt || fallbackItem?.exifExtractedAt || "",
+      sourceProvider: serverItem.sourceProvider || fallbackItem?.sourceProvider || "",
+      thumbnailObjectKey: serverItem.thumbnailObjectKey || fallbackItem?.thumbnailObjectKey || "",
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
       households: Array.isArray(serverItem.households) ? serverItem.households : [],
     };
@@ -1198,6 +1204,13 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   >
                     Metadata
                   </button>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${selectedPhotoTab === "ai" ? "active" : ""}`}
+                    onClick={() => setSelectedPhotoTab("ai")}
+                  >
+                    AI
+                  </button>
                 </div>
                 {selectedPhotoTab === "details" ? (
                   <>
@@ -1557,14 +1570,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     {photoAssociationStatus ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p> : null}
                   </div>
                 </>
-                ) : (
+                ) : selectedPhotoTab === "metadata" ? (
                   <div className="card" style={{ marginTop: 0 }}>
                     <h5 style={{ margin: "0 0 0.75rem" }}>Stored Metadata</h5>
                     <div style={{ display: "grid", gap: "0.75rem" }}>
                       <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                         {[
+                          { label: "Media ID", value: selectedPhotoDetail.mediaId || "" },
                           { label: "File ID", value: selectedPhotoDetail.fileId },
                           { label: "Media Kind", value: readMediaKind(selectedPhotoDetail) },
+                          { label: "Source Provider", value: selectedPhotoDetail.sourceProvider || "" },
+                          { label: "Thumbnail Key", value: selectedPhotoDetail.thumbnailObjectKey || "" },
                           { label: "Added To Library", value: selectedPhotoDetail.createdAt || "" },
                           { label: "EXIF Extracted At", value: selectedPhotoDetail.exifExtractedAt || "" },
                         ].map((field) => (
@@ -1598,7 +1614,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       )}
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

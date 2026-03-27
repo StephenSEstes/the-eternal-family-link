@@ -1400,6 +1400,7 @@ export type OciMediaLinkRow = {
 };
 
 export type OciMediaAssetLookup = {
+  mediaId: string;
   fileId: string;
   mediaKind: string;
   label: string;
@@ -2835,6 +2836,7 @@ export async function getOciMediaAssetByFileId(
     await ensureTableCompatibility(connection, "media_assets");
     const result = await connection.execute(
       `SELECT
+         a.media_id,
          a.file_id,
          a.media_kind,
          a.label,
@@ -2889,6 +2891,7 @@ export async function getOciMediaAssetByFileId(
       rawMetadata,
     });
     return {
+      mediaId: fromDbValue(row.MEDIA_ID),
       fileId: fromDbValue(row.FILE_ID),
       mediaKind,
       label: fromDbValue(row.LABEL),

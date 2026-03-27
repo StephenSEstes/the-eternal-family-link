@@ -13,6 +13,40 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (add empty AI tab to media modal)
+
+- `Date`: 2026-03-26
+- `Change`: Added a third `AI` tab to the media modal tab strip and left its body intentionally empty for now.
+- `Type`: UI
+- `Why`: Root cause was a `UI structure gap`. The modal tab model only supported `Details` and `Metadata`, so there was no reserved place to introduce an `AI` surface later without changing the tab structure again.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - The media modal shows `Details`, `Metadata`, and `AI` tabs.
+  - Clicking `AI` switches the active tab without rendering any additional content yet.
+  - `Details` and `Metadata` continue to render normally.
+- `Rollback Notes`: Revert if the modal should not expose an empty placeholder tab.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-26 (extend metadata tab with asset identifiers)
+
+- `Date`: 2026-03-26
+- `Change`: Added `Media ID`, `Source Provider`, and `Thumbnail Key` to the media modal Metadata tab by extending the detail API payload with those asset-level fields.
+- `Type`: UI
+- `Why`: Root cause was a `code wiring issue`. The Metadata tab could only display fields that the media detail route returned, and the route was not exposing these asset identifiers even though they exist on the `MediaAssets` lookup.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Opening the media modal `Metadata` tab shows `Media ID`, `Source Provider`, and `Thumbnail Key` as read-only fields when present.
+  - Existing metadata tab fields still render normally.
+  - The modal still opens and the metadata detail API returns successfully.
+- `Rollback Notes`: Revert if these asset identifiers should remain hidden from the modal.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (switch media paging to full rows and split modal metadata)
 
 - `Date`: 2026-03-26

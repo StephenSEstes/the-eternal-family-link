@@ -19,6 +19,7 @@ type RouteProps = {
 };
 
 type MediaDetailItem = {
+  mediaId?: string;
   fileId: string;
   name: string;
   description: string;
@@ -27,6 +28,8 @@ type MediaDetailItem = {
   mediaKind?: string;
   mediaMetadata?: string;
   exifExtractedAt?: string;
+  sourceProvider?: string;
+  thumbnailObjectKey?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -79,6 +82,7 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
   );
 
   const detail: MediaDetailItem = {
+    mediaId: "",
     fileId,
     name: "",
     description: "",
@@ -87,17 +91,22 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     mediaKind: "",
     mediaMetadata: "",
     exifExtractedAt: "",
+    sourceProvider: "",
+    thumbnailObjectKey: "",
     people: [],
     households: [],
   };
 
   if (mediaAsset) {
+    detail.mediaId = mediaAsset.mediaId.trim();
     detail.name = mediaAsset.label.trim() || mediaAsset.fileName.trim();
     detail.description = mediaAsset.description.trim();
     detail.date = mediaAsset.photoDate.trim();
     detail.createdAt = mediaAsset.createdAt.trim();
     detail.mediaKind = mediaAsset.mediaKind.trim();
     detail.mediaMetadata = buildMediaKindMetadata(mediaAsset.mediaKind);
+    detail.sourceProvider = mediaAsset.sourceProvider.trim();
+    detail.thumbnailObjectKey = mediaAsset.thumbnailObjectKey.trim();
   }
 
   for (const link of mediaLinks) {
