@@ -347,7 +347,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const visibleRangeStart = filteredMediaItems.length === 0 ? 0 : pageOffset + 1;
   const visibleRangeEnd = Math.min(pageOffset + MEDIA_LIBRARY_PAGE_SIZE, filteredMediaItems.length);
-  const canShowLastPage = pageOffset > 0;
+  const canShowPrevPage = pageOffset > 0;
   const canShowNextPage = pageOffset + MEDIA_LIBRARY_PAGE_SIZE < filteredMediaItems.length;
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
@@ -658,10 +658,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         <p className="page-subtitle" style={{ marginBottom: "1rem" }}>
           Attach and catalog media across people and households.
         </p>
-        <button type="button" className="button tap-button" onClick={() => setShowAttachWizard(true)}>
-          Add Media
-        </button>
-
         {status ? <p style={{ marginTop: "0.75rem" }}>{status}</p> : null}
       </div>
 
@@ -683,14 +679,22 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       />
 
       <div className="card">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "0.4rem", alignItems: "center", marginBottom: "0.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "0.25rem", alignItems: "stretch", marginBottom: "0.75rem" }}>
           {MEDIA_TYPE_FILTER_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               className={mediaTypeFilter === option.value ? "button tap-button" : "button secondary tap-button"}
               onClick={() => setMediaTypeFilter(option.value)}
-              style={{ minWidth: 0, width: "100%", paddingInline: "0.65rem", whiteSpace: "nowrap" }}
+              style={{
+                minWidth: 0,
+                width: "100%",
+                paddingInline: "0.35rem",
+                paddingBlock: "0.45rem",
+                whiteSpace: "normal",
+                lineHeight: 1.1,
+                fontSize: "0.8rem",
+              }}
             >
               {option.label}
             </button>
@@ -717,22 +721,24 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             <span className="page-subtitle" style={{ margin: 0 }}>
               Showing {visibleRangeStart}-{visibleRangeEnd} of {filteredMediaItems.length}
             </span>
-            <button
-              type="button"
-              className="button secondary tap-button"
-              disabled={!canShowLastPage}
-              onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
-            >
-              Last 12
-            </button>
-            <button
-              type="button"
-              className="button secondary tap-button"
-              disabled={!canShowNextPage}
-              onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
-            >
-              Next 12
-            </button>
+            {canShowPrevPage ? (
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
+              >
+                Prev 12
+              </button>
+            ) : null}
+            {canShowNextPage ? (
+              <button
+                type="button"
+                className="button secondary tap-button"
+                onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
+              >
+                Next 12
+              </button>
+            ) : null}
           </div>
         </div>
         <label className="label">Selected Linked Filters</label>
@@ -777,7 +783,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             <span className="status-chip status-chip--neutral">No filters selected</span>
           ) : null}
         </div>
-        <label className="label" style={{ marginTop: "0.55rem" }}>Search to Add Linked Filters</label>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", justifyContent: "space-between", marginTop: "0.55rem", flexWrap: "wrap" }}>
+          <label className="label" style={{ margin: 0 }}>Search to Add Linked Filters</label>
+          <button
+            type="button"
+            className="button secondary tap-button"
+            onClick={() => setShowAttachWizard(true)}
+            style={{ padding: "0.35rem 0.7rem", fontSize: "0.85rem", lineHeight: 1.1 }}
+          >
+            Add Media
+          </button>
+        </div>
         <input
           className="input"
           value={linkedFilterQuery}

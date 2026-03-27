@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (compact media filter row and linked-filter controls)
+
+- `Date`: 2026-03-26
+- `Change`: Tightened the five media-type filter buttons to fit in one row, changed `Last 12` to `Prev 12`, hid paging buttons unless they can actually page, and moved `Add Media` into the linked-filter controls as a smaller button.
+- `Type`: UI
+- `Why`: Root cause was a `UI layout issue`. The filter row still consumed too much width, the paging controls were visible even when inactive, and the top-card `Add Media` action was taking space away from the more relevant linked-filter controls.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Build not run in this pass per user instruction.
+  - `All`, `Images`, `Videos`, `Audio`, and `Documents` fit on one row within the media card.
+  - `Prev 12` only appears when there is a previous page.
+  - `Next 12` only appears when there is another page.
+  - `Add Media` appears as a compact button on the linked-filter row.
+- `Rollback Notes`: Revert only if the wider filter buttons, always-visible paging controls, and top-card `Add Media` placement are preferred.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (shrink media type filter buttons to fit the row)
 
 - `Date`: 2026-03-26
