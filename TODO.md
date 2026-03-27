@@ -165,6 +165,37 @@ I will update this list as we add, complete, or remove work.
   - Media display order matches canonical `MediaAssets.created_at`.
   - Users can filter the media list without losing the current selection state unexpectedly.
   - `Next 12` and `Last 12` navigation work without falling back to the current hidden top-10 behavior.
+- [ ] Make auth/session multi-tenant (no re-auth on family switch)
+  Priority: High
+  Status: Planned 2026-03-27
+  Desc: Replace the single-tenant session model with one session that lists all accessible family groups so switching families no longer causes 401/403, with a feature flag to fall back to current behavior.
+  Scope:
+  - Session payload includes `accessibleTenants[]` and `preferredTenant` on sign-in.
+  - `requireTenantAccess` allows any tenant in `accessibleTenants`; still denies tenants not in the list.
+  - Callback/session validity is tenant-agnostic; derive tenant from the request path.
+  - `active_tenant` becomes UI preference only; switching tenants just reloads data.
+  Phases:
+  - Phase 1: Feature flag + guard support (multi-tenant guard when flag on, existing behavior when off).
+  - Phase 2: Session issuance populates `accessibleTenants`/`preferredTenant`.
+  - Phase 3: Client updates remove assumptions that session tenant === active tenant.
+  - Phase 4: Validation with multi-family user (API/media/viewer) and intentional forbidden tenant check.
+  Validation:
+  - `npm run build` passes.
+  - Switching family groups for a user with multiple memberships requires no re-auth and no 401/403 for allowed tenants.
+  - Accessing a non-member tenant still returns 403.
+  Completion criteria:
+  - Tenant switches are auth-stable; feature flag can revert to single-tenant checks if needed.
+- [ ] Update login screen UX (show password, add logo)
+  Priority: Med
+  Status: Planned 2026-03-27
+  Desc: Modernize login: show a password field, remove “look for password in email” messaging, and display the app logo.
+  Scope:
+  - Add visible password input to the login form.
+  - Remove any “check email for password” text.
+  - Add the app logo to the login page header.
+  Validation:
+  - `npm run build` passes.
+  - Login page renders with logo and password field; no legacy messaging.
 - [ ] Normalize person primary-photo model to one global canonical headshot
   Priority: High
   Est date: 2026-03-23
