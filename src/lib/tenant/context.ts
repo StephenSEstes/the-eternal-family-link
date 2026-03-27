@@ -53,7 +53,10 @@ export function getFamilyGroupBasePath(familyGroupKey?: string) {
   return getTenantBasePath(familyGroupKey);
 }
 
-export function getTenantAccesses(session: Session | null): TenantAccess[] {
+export function getTenantAccesses(session: Session | null, override?: TenantAccess[]): TenantAccess[] {
+  if (override && override.length > 0) {
+    return override;
+  }
   const tenantSession = session as SessionTenantShape | null;
   const accesses = tenantSession?.user?.tenantAccesses ?? [];
   if (accesses.length > 0) {
@@ -72,9 +75,13 @@ export function getTenantAccesses(session: Session | null): TenantAccess[] {
 
 export const getFamilyGroupAccesses = getTenantAccesses;
 
-export function getTenantContext(session: Session | null, requestedTenantKey?: string): TenantContext {
+export function getTenantContext(
+  session: Session | null,
+  requestedTenantKey?: string,
+  overrideTenants?: TenantAccess[],
+): TenantContext {
   const tenantSession = session as SessionTenantShape | null;
-  const tenants = getTenantAccesses(session);
+  const tenants = getTenantAccesses(session, overrideTenants);
   const selectedKey = normalizeTenantKey(requestedTenantKey);
   const selected = tenants.find((entry) => normalizeTenantKey(entry.tenantKey) === selectedKey) ?? tenants[0];
 

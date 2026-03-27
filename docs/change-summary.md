@@ -31,6 +31,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert the route cleanup and typed numeric binds if they cause unintended write behavior, and delete the repaired Brent `media_links` rows if you need to restore the pre-fix partial state.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-27 (multi-tenant session guard refresh)
+
+- `Date`: 2026-03-27
+- `Change`: Added a feature-flagged multi-tenant guard refresh so API requests can authorize against all accessible family groups without re-auth when switching tenants. The guard now optionally refreshes tenant accesses on 401/403 scenarios and supports an env flag `ENABLE_MULTI_TENANT_SESSION`.
+- `Type`: API
+- `Why`: Root cause was a `session/tenant mismatch`. Users switching family groups could hit 401/403 because the session carried a primary tenant while `active_tenant` pointed to another; the guard did not re-evaluate access for the requested tenant.
+- `Files`:
+  - `src/lib/tenant/guard.ts`
+  - `src/lib/tenant/context.ts`
+  - `src/lib/env.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - With `ENABLE_MULTI_TENANT_SESSION=true`, a user with multiple family memberships can access `/api/t/{tenant}/...` for each membership without re-auth.
+  - Access to a tenant the user is not a member of still returns 403.
+- `Rollback Notes`: Set `ENABLE_MULTI_TENANT_SESSION` unset/false to revert to the prior single-tenant guard behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (add empty AI tab to media modal)
 
 - `Date`: 2026-03-26

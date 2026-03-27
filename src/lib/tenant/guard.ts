@@ -1,7 +1,15 @@
 import type { Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/auth/session";
-import { getTenantContext, hasTenantAccess, normalizeTenantRouteKey, type TenantContext } from "@/lib/family-group/context";
+import {
+  getTenantContext,
+  getTenantAccesses,
+  hasTenantAccess,
+  normalizeTenantRouteKey,
+  type TenantContext,
+} from "@/lib/family-group/context";
+import { getEnv } from "@/lib/env";
+import { getEnabledUserAccessList, getEnabledUserAccessListByPersonId } from "@/lib/data/store";
 export {
   TENANT_GUARD_CHECKLIST,
   buildTenantGuardChecklistState,
@@ -25,11 +33,22 @@ export async function requireTenantAccess(tenantKey: string): Promise<TenantAcce
   }
 
   const normalizedTenantKey = normalizeTenant(tenantKey);
+  const tenants = getTenantAccesses(session);
   if (!hasTenantAccess(session, normalizedTenantKey)) {
+    if (getEnv().ENABLE_MULTI_TENANT_SESSION === "true") {
+      const refreshed =
+        (session.user.person_id
+          ? await getEnabledUserAccessListByPersonId(session.user.person_id).catch(() => [])
+          : await getEnabledUserAccessList(session.user.email ?? "").catch(() => [])) || [];
+      if (!refreshed.some((entry) => normalizeTenant(entry.tenantKey) === normalizedTenantKey)) {
+        return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
+      }
+      return { session, tenant: getTenantContext(session, normalizedTenantKey, refreshed) };
+    }
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
 
-  return { session, tenant: getTenantContext(session, normalizedTenantKey) };
+  return { session, tenant: getTenantContext(session, normalizedTenantKey, tenants) };
 }
 
 export async function requireTenantAdmin(tenantKey: string): Promise<TenantAccessResult> {

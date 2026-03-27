@@ -11,6 +11,7 @@ const envSchema = z.object({
   GMAIL_REFRESH_TOKEN: z.string().trim().min(1).optional(),
   PHOTOS_FOLDER_ID: z.string().min(1),
   VIEWER_PIN: z.string().min(1),
+  ENABLE_MULTI_TENANT_SESSION: z.string().trim().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

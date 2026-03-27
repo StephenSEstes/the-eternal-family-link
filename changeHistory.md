@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-27: Added feature-flagged multi-tenant session guard refresh so family switches don’t require re-auth; see `docs/change-summary.md`.
 - 2026-03-27: Fixed partial media-modal person-link failures by correcting the `MediaAssets` numeric bind typing, cleaning up failed link attempts, and repairing the broken Brent media links for `media-bedfb9c3`. See `docs/change-summary.md`.
 - 2026-03-26: Added an empty `AI` tab to the media modal so the tab strip now reserves a separate AI surface without changing current modal behavior. See `docs/change-summary.md`.
 - 2026-03-26: Extended the media modal Metadata tab to show `Media ID`, `Source Provider`, and `Thumbnail Key` from the asset detail payload. See `docs/change-summary.md`.
