@@ -2468,6 +2468,10 @@ export async function upsertOciMediaAsset(input: {
   }
   return withConnection(async (connection) => {
     await ensureTableCompatibility(connection, "media_assets");
+    const numberBind = (value: number | undefined) => ({
+      val: Number.isFinite(value) ? value : null,
+      type: oracledb.NUMBER,
+    });
     await connection.execute(
       `MERGE INTO media_assets t
        USING (
@@ -2608,9 +2612,9 @@ export async function upsertOciMediaAsset(input: {
         mimeType: (input.mimeType ?? "").trim(),
         fileName: (input.fileName ?? "").trim(),
         fileSizeBytes: (input.fileSizeBytes ?? "").trim(),
-        mediaWidth: Number.isFinite(input.mediaWidth) ? input.mediaWidth : null,
-        mediaHeight: Number.isFinite(input.mediaHeight) ? input.mediaHeight : null,
-        mediaDurationSec: Number.isFinite(input.mediaDurationSec) ? input.mediaDurationSec : null,
+        mediaWidth: numberBind(input.mediaWidth),
+        mediaHeight: numberBind(input.mediaHeight),
+        mediaDurationSec: numberBind(input.mediaDurationSec),
         createdAt: (input.createdAt ?? "").trim(),
         exifExtractedAt: input.exifExtractedAt ? input.exifExtractedAt.trim() : null,
         exifSourceTag: input.exifSourceTag ? input.exifSourceTag.trim() : null,
@@ -2619,9 +2623,9 @@ export async function upsertOciMediaAsset(input: {
         exifMake: input.exifMake ? input.exifMake.trim() : null,
         exifModel: input.exifModel ? input.exifModel.trim() : null,
         exifSoftware: input.exifSoftware ? input.exifSoftware.trim() : null,
-        exifWidth: Number.isFinite(input.exifWidth) ? input.exifWidth : null,
-        exifHeight: Number.isFinite(input.exifHeight) ? input.exifHeight : null,
-        exifOrientation: Number.isFinite(input.exifOrientation) ? input.exifOrientation : null,
+        exifWidth: numberBind(input.exifWidth),
+        exifHeight: numberBind(input.exifHeight),
+        exifOrientation: numberBind(input.exifOrientation),
         exifFingerprint: input.exifFingerprint ? input.exifFingerprint.trim() : null,
       },
       { autoCommit: true },

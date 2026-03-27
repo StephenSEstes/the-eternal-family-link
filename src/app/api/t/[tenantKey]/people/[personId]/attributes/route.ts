@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
 import { toPersonMediaAttribute, type AttributeWithMedia } from "@/lib/attributes/media-response";
-import { normalizePersonMediaAttributeType, syncPersonMediaAssociations } from "@/lib/attributes/person-media";
+import {
+  normalizePersonMediaAttributeType,
+  removePersonMediaAssociations,
+  syncPersonMediaAssociations,
+} from "@/lib/attributes/person-media";
 import {
   createAttribute,
+  deleteAttribute,
   getAttributesForEntityWithMedia,
   resolvePersonPhotoFileId,
 } from "@/lib/attributes/store";
@@ -148,30 +153,47 @@ export async function POST(request: Request, { params }: PersonAttributeRoutePro
   const mediaAttributeType = normalizePersonMediaAttributeType(parsed.data.attributeType);
   if (mediaAttributeType && parsed.data.valueText.trim()) {
     const fileId = parsed.data.valueText.trim();
-    await syncPersonMediaAssociations({
-      tenantKey: resolved.tenant.tenantKey,
-      personId,
-      attributeId: created.attributeId,
-      attributeType: mediaAttributeType,
-      fileId,
-      label: parsed.data.label,
-      description: parsed.data.notes,
-      photoDate: parsed.data.startDate,
-      isPrimary: parsed.data.isPrimary,
-      sortOrder: parsed.data.sortOrder,
-      mediaMetadata: parsed.data.valueJson,
-    });
-    if (mediaAttributeType === "photo") {
-      const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
-        preferredFileId: parsed.data.isPrimary ? fileId : "",
-        currentPhotoFileId: person.photoFileId,
-      })) ?? "";
-      await updateTableRecordById(
-        PEOPLE_TABLE,
+    try {
+      await syncPersonMediaAssociations({
+        tenantKey: resolved.tenant.tenantKey,
         personId,
-        { photo_file_id: primaryPhotoFileId },
-        "person_id",
-        resolved.tenant.tenantKey,
+        attributeId: created.attributeId,
+        attributeType: mediaAttributeType,
+        fileId,
+        label: parsed.data.label,
+        description: parsed.data.notes,
+        photoDate: parsed.data.startDate,
+        isPrimary: parsed.data.isPrimary,
+        sortOrder: parsed.data.sortOrder,
+        mediaMetadata: parsed.data.valueJson,
+      });
+      if (mediaAttributeType === "photo") {
+        const primaryPhotoFileId = (await resolvePersonPhotoFileId(resolved.tenant.tenantKey, personId, {
+          preferredFileId: parsed.data.isPrimary ? fileId : "",
+          currentPhotoFileId: person.photoFileId,
+        })) ?? "";
+        await updateTableRecordById(
+          PEOPLE_TABLE,
+          personId,
+          { photo_file_id: primaryPhotoFileId },
+          "person_id",
+          resolved.tenant.tenantKey,
+        );
+      }
+    } catch {
+      await removePersonMediaAssociations({
+        tenantKey: resolved.tenant.tenantKey,
+        personId,
+        attributeId: created.attributeId,
+        fileIds: [fileId],
+      }).catch(() => undefined);
+      await deleteAttribute(resolved.tenant.tenantKey, created.attributeId).catch(() => undefined);
+      return NextResponse.json(
+        {
+          error: "media_link_sync_failed",
+          message: "Failed to finish linking media to this person.",
+        },
+        { status: 500 },
       );
     }
   }

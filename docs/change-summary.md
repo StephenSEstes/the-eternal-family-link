@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-27 (fix partial person-link failures from the media modal)
+
+- `Date`: 2026-03-27
+- `Change`: Fixed media-modal person linking so `MediaAssets` upserts no longer fail with Oracle `ORA-00932` on null numeric binds, and the person attribute POST route now cleans up a newly created attribute if the follow-up media sync fails. Repaired the broken `Brent Testing5` media row by creating the missing person and attribute `media_links`.
+- `Type`: API | Data
+- `Why`: Root cause was a `mixed code/data issue`. For existing media like `media-bedfb9c3`, the person-link route created the person attribute first and then called `syncPersonMediaAssociations(...)`. The asset upsert inside that sync used untyped null numeric binds, which reproduced an `ORA-00932` failure before any `media_links` were written. That left a partial attribute row behind, and the modal later showed the person chip from the attribute fallback even though the link request had failed.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/people/[personId]/attributes/route.ts`
+- `Data Changes`: Inserted the missing `attribute` and `person` `media_links` rows for `media_id = media-bedfb9c3`, `file_id = 1cZC4cg467s6XWRaZ8piKWtwAYVTpnfDi`, `attribute_id = attr-e48f29be`, and `person_id = p-c0efc168`.
+- `Verify`:
+  - Linking an existing image to a person from the media modal returns success instead of `Failed to link person`.
+  - The modal shows the new person chip immediately after a successful link without requiring `Save` + reopen.
+  - Brent’s file now has `household`, `attribute`, and `person` `media_links`.
+  - A rollback-only dry run of the `media_assets` upsert for `media-bedfb9c3` succeeds without `ORA-00932`.
+- `Rollback Notes`: Revert the route cleanup and typed numeric binds if they cause unintended write behavior, and delete the repaired Brent `media_links` rows if you need to restore the pre-fix partial state.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (add empty AI tab to media modal)
 
 - `Date`: 2026-03-26
