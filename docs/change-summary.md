@@ -6145,7 +6145,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `src/types/next-auth.d.ts`
 - `Data Changes`: None.
 - `Verify`:
-  - `npm run build` (timed out in sandbox; not completed in this run).
+  - `npm run build` (fails locally without secret env vars; rely on CI with real env).
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
