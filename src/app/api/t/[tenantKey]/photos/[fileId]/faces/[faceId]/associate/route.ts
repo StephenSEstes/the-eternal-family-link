@@ -59,7 +59,6 @@ export async function POST(request: Request, { params }: RouteProps) {
   };
 
   await replaceOciFaceMatchesForFace({
-    familyGroupKey: resolved.tenant.tenantKey,
     faceId: normalizedFaceId,
     matches: [
       {
