@@ -15,6 +15,7 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
+  const [pendingGoogle, setPendingGoogle] = useState(false);
 
   const onCredentialsLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -44,7 +45,6 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
           <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>First Time Here?</h2>
           <ol style={{ margin: 0, paddingLeft: "1.1rem" }}>
             <li>Open your invite link first.</li>
-            <li>Choose your password on the invite page.</li>
             <li>Then sign in here with your username and password.</li>
           </ol>
         </div>
@@ -74,8 +74,29 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
             Sign In
           </AsyncActionButton>
         </form>
-        <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-          <Link href="/forgot-password">Forgot Password?</Link>
+        {username.trim().toLowerCase() === "stephen estes" ? (
+          <div style={{ marginTop: "0.75rem" }}>
+            <AsyncActionButton
+              type="button"
+              className="tap-button secondary"
+              pending={pendingGoogle}
+              pendingLabel="Opening Google..."
+              disabled={pendingGoogle}
+              onClick={async () => {
+                setPendingGoogle(true);
+                setStatus("Opening Google sign-in...");
+                await signIn("google", { callbackUrl });
+              }}
+            >
+              Continue with Google
+            </AsyncActionButton>
+            <p className="page-subtitle" style={{ marginTop: "0.35rem" }}>Google sign-in unlocked.</p>
+          </div>
+        ) : null}
+        <p className="page-subtitle" style={{ marginTop: "0.85rem" }}>
+          <Link href="/forgot-password" className="button secondary tap-button" style={{ textDecoration: "none" }}>
+            Forgot Password?
+          </Link>
         </p>
         <p className="page-subtitle" style={{ marginTop: "1rem" }}>
           On iPhone or iPad, install the app from Safari using Share &gt; Add to Home Screen after you sign in.

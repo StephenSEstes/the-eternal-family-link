@@ -6149,6 +6149,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-27 (login easter-egg + clearer reset CTA)
+
+- `Change`: Hid Google sign-in behind an easter egg (enter username `Stephen Estes` to reveal), simplified the first-time instructions, and restyled “Forgot Password?” as a button.
+- `Type`: Auth UX
+- `Why`: Avoided confusing most users with Google while still allowing the super-access account to sign in; made password reset more discoverable.
+- `Files`:
+  - `src/components/LoginPageClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` not rerun here (local build requires secret env; rely on CI).
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.
