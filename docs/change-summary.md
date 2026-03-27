@@ -6188,6 +6188,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-27 (AI tab face detection and linking)
+
+- `Change`: Added on-demand face detection on the Media modal AI tab (OCI Vision), overlays bounding boxes, lists detected faces, and lets you link a face to a person or mark as not family with a label. Adds debug JSON showing call timings.
+- `Type`: Feature, Media AI
+- `Why`: Allow manual, opt-in face extraction/linking without running intelligence automatically.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/route.ts`
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/[faceId]/associate/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: Uses existing face instance/match tables; no new schema.
+- `Verify`:
+  - Not rerun locally (build requires secret env; rely on CI).
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.

@@ -65,6 +65,25 @@ type HouseholdSearchResult = Extract<LinkedSearchResult, { kind: "household" }>;
 
 type MediaEditorTab = "details" | "metadata" | "ai";
 
+type FaceRecord = {
+  faceId: string;
+  bbox: { x: number; y: number; width: number; height: number };
+  detectionConfidence: number;
+  qualityScore: number;
+  embeddingPresent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  link: {
+    personId: string;
+    status: string;
+    label: string;
+    note: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    confidenceScore?: number;
+  } | null;
+};
+
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
@@ -244,6 +263,11 @@ function formatStoredMetadataValue(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
+function formatConfidencePercent(value: number) {
+  const pct = Math.max(0, Math.min(1, Number(value) || 0));
+  return `${(pct * 100).toFixed(1)}%`;
+}
+
 export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
@@ -269,6 +293,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [photoTagQuery, setPhotoTagQuery] = useState("");
   const [pendingPhotoOps, setPendingPhotoOps] = useState<Set<string>>(new Set());
+  const [faces, setFaces] = useState<FaceRecord[]>([]);
+  const [facesLoading, setFacesLoading] = useState(false);
+  const [facesDebug, setFacesDebug] = useState<Record<string, unknown> | null>(null);
+  const [faceLabelInput, setFaceLabelInput] = useState<Record<string, string>>({});
+  const [facePersonInput, setFacePersonInput] = useState<Record<string, string>>({});
+  const [faceSaving, setFaceSaving] = useState<Set<string>>(new Set());
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
@@ -596,6 +626,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setSelectedPhotoDescription("");
       setSelectedPhotoDate("");
       setSelectedPhotoAssociations({ people: [], households: [] });
+      setFaces([]);
+      setFacesDebug(null);
+      setFaceLabelInput({});
+      setFacePersonInput({});
     }
     setPhotoAssociationStatus("Refreshing links...");
     setShowPhotoEditor(true);
@@ -647,6 +681,85 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setPhotoAssociationBusy(false);
     }
   };
+
+  const facesLoadedFor = useRef<string | null>(null);
+
+  const loadFaces = async (options?: { detect?: boolean }) => {
+    if (!selectedPhotoDetail) return;
+    setFacesLoading(true);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/faces`,
+        {
+          method: options?.detect ? "POST" : "GET",
+          headers: { "Content-Type": "application/json" },
+          body: options?.detect ? JSON.stringify({}) : undefined,
+          cache: "no-store",
+        },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFacesDebug({ error: body?.error ?? `status_${res.status}` });
+        return;
+      }
+      const items: FaceRecord[] = Array.isArray(body?.faces) ? body.faces : [];
+      setFaces(items);
+      setFacesDebug(body?.debug ?? null);
+      facesLoadedFor.current = selectedPhotoDetail.fileId;
+    } catch (error) {
+      setFacesDebug({ error: (error as Error)?.message ?? "face_load_failed" });
+    } finally {
+      setFacesLoading(false);
+    }
+  };
+
+  const associateFace = async (face: FaceRecord, intent: "link" | "not_family" | "label_only") => {
+    if (!selectedPhotoDetail) return;
+    const personId = intent === "link" ? (facePersonInput[face.faceId] ?? "").trim() : "";
+    if (intent === "link" && !personId) {
+      setFacesDebug({ error: "person_required" });
+      return;
+    }
+    const label = (faceLabelInput[face.faceId] ?? "").trim();
+    const note = intent === "label_only" ? label : (face.link?.note ?? "");
+    const status = intent === "not_family" ? "not_family" : intent === "label_only" ? "unknown" : "linked";
+    const next = new Set(faceSaving);
+    next.add(face.faceId);
+    setFaceSaving(next);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/faces/${encodeURIComponent(face.faceId)}/associate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            personId,
+            label,
+            note,
+            status,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setFacesDebug({ error: body?.error ?? `status_${res.status}` });
+      } else {
+        await loadFaces();
+      }
+    } finally {
+      const cleared = new Set(faceSaving);
+      cleared.delete(face.faceId);
+      setFaceSaving(cleared);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPhotoTab === "ai" && selectedPhotoDetail) {
+      if (facesLoadedFor.current !== selectedPhotoDetail.fileId) {
+        void loadFaces();
+      }
+    }
+  }, [selectedPhotoTab, selectedPhotoDetail?.fileId]);
 
   const linkPhotoToPerson = async (personId: string) => {
     if (!selectedPhotoDetail) return;
@@ -1629,6 +1742,154 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                           No stored media-metadata JSON is available for this file.
                         </p>
                       )}
+                    </div>
+                  </div>
+                ) : selectedPhotoTab === "ai" ? (
+                  <div className="card" style={{ marginTop: 0, display: "grid", gap: "0.85rem" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => void loadFaces({ detect: true })}
+                        disabled={facesLoading}
+                      >
+                        {facesLoading ? "Detecting..." : "Detect faces (OCI Vision)"}
+                      </button>
+                      {facesDebug ? (
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          {facesDebug.routeMs ? `Route ${facesDebug.routeMs}ms` : null}
+                          {facesDebug.visionMs ? ` · Vision ${facesDebug.visionMs}ms` : null}
+                          {facesDebug.faceCount !== undefined ? ` · Faces ${facesDebug.faceCount}` : null}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div style={{ display: "grid", gap: "0.6rem" }}>
+                      <div style={{ position: "relative", width: "100%", maxHeight: "360px", overflow: "hidden", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                        <img
+                          src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                          alt={selectedPhotoDetail.name || "photo"}
+                          style={{ width: "100%", height: "auto", display: "block" }}
+                        />
+                        {faces.map((face) => (
+                          <div
+                            key={face.faceId}
+                            style={{
+                              position: "absolute",
+                              left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
+                              top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
+                              width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
+                              height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
+                              border: "2px solid #0f4c81",
+                              boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
+                              borderRadius: "4px",
+                              pointerEvents: "none",
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {faces.length === 0 ? (
+                        <p className="page-subtitle" style={{ margin: 0 }}>
+                          {facesLoading ? "Detecting faces..." : "No faces detected yet. Run detection to populate faces."}
+                        </p>
+                      ) : (
+                        <div style={{ display: "grid", gap: "0.65rem" }}>
+                          {faces.map((face, index) => {
+                            const saving = faceSaving.has(face.faceId);
+                            return (
+                              <div
+                                key={face.faceId}
+                                className="card"
+                                style={{ margin: 0, padding: "0.75rem", display: "grid", gap: "0.45rem" }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                                  <strong>Face {index + 1}</strong>
+                                  <span className="page-subtitle" style={{ margin: 0 }}>
+                                    det {formatConfidencePercent(face.detectionConfidence)} · quality {formatConfidencePercent(face.qualityScore)}
+                                  </span>
+                                </div>
+                                <div style={{ display: "grid", gap: "0.3rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                                  <div>
+                                    <label className="label">Person</label>
+                                    <select
+                                      className="input"
+                                      value={facePersonInput[face.faceId] ?? face.link?.personId ?? ""}
+                                      onChange={(e) =>
+                                        setFacePersonInput((current) => ({ ...current, [face.faceId]: e.target.value }))
+                                      }
+                                      disabled={saving}
+                                    >
+                                      <option value="">Select person...</option>
+                                      {peopleOptions.map((person) => (
+                                        <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
+                                          {person.displayName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="label">Label / Name</label>
+                                    <input
+                                      className="input"
+                                      value={faceLabelInput[face.faceId] ?? face.link?.label ?? ""}
+                                      onChange={(e) =>
+                                        setFaceLabelInput((current) => ({ ...current, [face.faceId]: e.target.value }))
+                                      }
+                                      placeholder="Unknown / not family label"
+                                      disabled={saving}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="label">Status</label>
+                                    <input className="input" value={face.link?.status || "unlinked"} readOnly />
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                  <button
+                                    type="button"
+                                    className="button tap-button"
+                                    disabled={saving || !(facePersonInput[face.faceId] ?? face.link?.personId ?? "")}
+                                    onClick={() => void associateFace(face, "link")}
+                                  >
+                                    {saving ? "Saving..." : "Link person"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button secondary tap-button"
+                                    disabled={saving}
+                                    onClick={() => void associateFace(face, "not_family")}
+                                  >
+                                    {saving ? "Saving..." : "Mark not family"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="button secondary tap-button"
+                                    disabled={saving}
+                                    onClick={() => void associateFace(face, "label_only")}
+                                  >
+                                    {saving ? "Saving..." : "Save label only"}
+                                  </button>
+                                </div>
+                                {face.link?.reviewedAt ? (
+                                  <span className="page-subtitle" style={{ margin: 0 }}>
+                                    Last updated {face.link.reviewedAt} by {face.link.reviewedBy || "unknown"}
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {facesDebug ? (
+                        <details>
+                          <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Debug</summary>
+                          <textarea
+                            className="textarea"
+                            readOnly
+                            value={JSON.stringify(facesDebug, null, 2)}
+                            style={{ minHeight: "140px" }}
+                          />
+                        </details>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
