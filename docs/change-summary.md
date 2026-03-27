@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-26 (switch media paging to full rows and split modal metadata)
+
+- `Date`: 2026-03-26
+- `Change`: Replaced the fixed 12-item media page size with a measured three-row page size based on the current grid columns, moved the media date field onto the same row as the name field in the modal, and split the modal into `Details` and `Metadata` tabs while keeping `Linked To` on the first tab.
+- `Type`: UI
+- `Why`: Root cause was a `UI code issue`. The media library was still paging by a hard-coded 12 even though the grid is responsive, so pages could not represent three full rows consistently, and the modal was forcing editable fields and stored metadata into one uninterrupted layout.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - Media paging now advances by three full visible rows instead of a fixed 12 items.
+  - The modal `Name` and `Date` fields render on the same row when there is enough width.
+  - The modal shows `Details` and `Metadata` tabs.
+  - `Linked To` remains on the `Details` tab.
+  - The `Metadata` tab shows read-only labeled stored metadata values.
+- `Rollback Notes`: Revert if the media grid should return to fixed-size paging and single-pane modal metadata display.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-26 (unify media search and linked-filter entry)
 
 - `Date`: 2026-03-26

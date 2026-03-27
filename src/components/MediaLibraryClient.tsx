@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
@@ -59,6 +59,8 @@ type LinkedSearchResult =
 
 type PersonSearchResult = Extract<LinkedSearchResult, { kind: "person" }>;
 type HouseholdSearchResult = Extract<LinkedSearchResult, { kind: "household" }>;
+
+type MediaEditorTab = "details" | "metadata";
 
 function getGenderAvatarSrc(gender: "male" | "female" | "unspecified") {
   return gender === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
@@ -161,7 +163,9 @@ async function assertOk(res: Response, fallbackMessage: string) {
 type MediaTypeFilter = "all" | "image" | "video" | "audio" | "document";
 
 const MEDIA_LIBRARY_FETCH_LIMIT = 5000;
-const MEDIA_LIBRARY_PAGE_SIZE = 12;
+const MEDIA_LIBRARY_GRID_MIN_WIDTH = 220;
+const MEDIA_LIBRARY_GRID_GAP_PX = 12;
+const MEDIA_LIBRARY_PAGE_ROWS = 3;
 const MEDIA_TYPE_FILTER_OPTIONS: Array<{ value: MediaTypeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "image", label: "Images" },
@@ -195,6 +199,36 @@ function parseSortableTimestamp(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseStoredMetadata(raw: string | undefined) {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function formatStoredMetadataLabel(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\w/, (char) => char.toUpperCase());
+}
+
+function formatStoredMetadataValue(value: unknown) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
 export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
@@ -205,6 +239,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [status, setStatus] = useState("");
   const [showAttachWizard, setShowAttachWizard] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
+  const [selectedPhotoTab, setSelectedPhotoTab] = useState<MediaEditorTab>("details");
   const [selectedPhotoDetail, setSelectedPhotoDetail] = useState<MediaItem | null>(null);
   const [selectedPhotoEditable, setSelectedPhotoEditable] = useState(false);
   const [selectedPhotoCanEditName, setSelectedPhotoCanEditName] = useState(false);
@@ -223,9 +258,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
   const [pageOffset, setPageOffset] = useState(0);
+  const [mediaGridColumns, setMediaGridColumns] = useState(4);
   const linkedFilterPeopleKey = linkedFilterPersonIds.join("|");
   const linkedFilterHouseholdsKey = linkedFilterHouseholdIds.join("|");
   const normalizedSearchInput = searchInput.trim();
+  const mediaGridRef = useRef<HTMLDivElement | null>(null);
+  const mediaPageSize = Math.max(1, mediaGridColumns * MEDIA_LIBRARY_PAGE_ROWS);
 
   const loadLibrary = async (query = "", options?: { noCache?: boolean }) => {
     const normalizedQuery = query.trim();
@@ -295,6 +333,27 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     linkedFilterPeopleKey,
     linkedFilterHouseholdsKey,
   ]);
+
+  useEffect(() => {
+    const node = mediaGridRef.current;
+    if (!node || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const updateColumns = () => {
+      const width = node.clientWidth;
+      const nextColumns = Math.max(
+        1,
+        Math.floor((width + MEDIA_LIBRARY_GRID_GAP_PX) / (MEDIA_LIBRARY_GRID_MIN_WIDTH + MEDIA_LIBRARY_GRID_GAP_PX)),
+      );
+      setMediaGridColumns((current) => (current === nextColumns ? current : nextColumns));
+    };
+    updateColumns();
+    const observer = new ResizeObserver(() => {
+      updateColumns();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const peopleById = useMemo(() => new Map(peopleOptions.map((item) => [item.personId, item])), [peopleOptions]);
   const householdsById = useMemo(() => new Map(householdOptions.map((item) => [item.householdId, item])), [householdOptions]);
@@ -421,21 +480,29 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       if (filteredMediaItems.length === 0) {
         return 0;
       }
-      const maxOffset = Math.floor((filteredMediaItems.length - 1) / MEDIA_LIBRARY_PAGE_SIZE) * MEDIA_LIBRARY_PAGE_SIZE;
+      const maxOffset = Math.floor((filteredMediaItems.length - 1) / mediaPageSize) * mediaPageSize;
       return current > maxOffset ? maxOffset : current;
     });
-  }, [filteredMediaItems.length]);
+  }, [filteredMediaItems.length, mediaPageSize]);
 
   const visibleMediaItems = useMemo(
-    () => filteredMediaItems.slice(pageOffset, pageOffset + MEDIA_LIBRARY_PAGE_SIZE),
-    [filteredMediaItems, pageOffset],
+    () => filteredMediaItems.slice(pageOffset, pageOffset + mediaPageSize),
+    [filteredMediaItems, pageOffset, mediaPageSize],
   );
 
   const visibleRangeStart = filteredMediaItems.length === 0 ? 0 : pageOffset + 1;
-  const visibleRangeEnd = Math.min(pageOffset + MEDIA_LIBRARY_PAGE_SIZE, filteredMediaItems.length);
+  const visibleRangeEnd = Math.min(pageOffset + mediaPageSize, filteredMediaItems.length);
   const canShowPrevPage = pageOffset > 0;
-  const canShowNextPage = pageOffset + MEDIA_LIBRARY_PAGE_SIZE < filteredMediaItems.length;
+  const canShowNextPage = pageOffset + mediaPageSize < filteredMediaItems.length;
   const hasActiveFilters = Boolean(search.trim()) || linkedFilterPersonIds.length > 0 || linkedFilterHouseholdIds.length > 0;
+  const selectedPhotoStoredMetadata = useMemo(
+    () => parseStoredMetadata(selectedPhotoDetail?.mediaMetadata),
+    [selectedPhotoDetail?.mediaMetadata],
+  );
+  const selectedPhotoStoredMetadataEntries = useMemo(
+    () => (selectedPhotoStoredMetadata ? Object.entries(selectedPhotoStoredMetadata) : []),
+    [selectedPhotoStoredMetadata],
+  );
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -495,6 +562,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   };
 
   const openPhotoEditor = async (fileId: string) => {
+    setSelectedPhotoTab("details");
     setPhotoTagQuery("");
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
@@ -911,20 +979,20 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   <button
                     type="button"
                     className="button secondary tap-button"
-                    onClick={() => setPageOffset((current) => Math.max(0, current - MEDIA_LIBRARY_PAGE_SIZE))}
-                    style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                    onClick={() => setPageOffset((current) => Math.max(0, current - mediaPageSize))}
+                    style={{ padding: "0.35rem 0.55rem", minWidth: "62px", lineHeight: 1.1 }}
                   >
-                    Prev 12
+                    Prev
                   </button>
                 ) : null}
                 {canShowNextPage ? (
                   <button
                     type="button"
                     className="button secondary tap-button"
-                    onClick={() => setPageOffset((current) => current + MEDIA_LIBRARY_PAGE_SIZE)}
-                    style={{ padding: "0.35rem 0.55rem", minWidth: "76px", lineHeight: 1.1 }}
+                    onClick={() => setPageOffset((current) => current + mediaPageSize)}
+                    style={{ padding: "0.35rem 0.55rem", minWidth: "62px", lineHeight: 1.1 }}
                   >
-                    Next 12
+                    Next
                   </button>
                 ) : null}
               </div>
@@ -998,7 +1066,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
           </p>
         ) : null}
 
-        <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+        <div ref={mediaGridRef} style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
           {visibleMediaItems.map((item) => {
             const kind = readMediaKind(item);
             return (
@@ -1115,29 +1183,53 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     />
                   )}
                 </div>
-                <div className="card" style={{ marginTop: "0.75rem" }}>
-                  <h5 style={{ margin: "0 0 0.5rem" }}>Media Info</h5>
-                  <label className="label">Name</label>
-                  <input
-                    className="input"
-                    value={selectedPhotoName}
-                    onChange={(event) => setSelectedPhotoName(event.target.value)}
-                    disabled={photoAssociationBusy || !selectedPhotoCanEditName}
-                  />
-                  <label className="label">Description</label>
-                  <input
-                    className="input"
-                    value={selectedPhotoDescription}
-                    onChange={(event) => setSelectedPhotoDescription(event.target.value)}
-                    disabled={photoAssociationBusy || !selectedPhotoEditable}
-                  />
-                  <label className="label">Date</label>
-                  <input
-                    className="input"
-                    value={selectedPhotoDate}
-                    onChange={(event) => setSelectedPhotoDate(event.target.value)}
-                    disabled={photoAssociationBusy || !selectedPhotoEditable}
-                  />
+                <div className="settings-chip-list" style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${selectedPhotoTab === "details" ? "active" : ""}`}
+                    onClick={() => setSelectedPhotoTab("details")}
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${selectedPhotoTab === "metadata" ? "active" : ""}`}
+                    onClick={() => setSelectedPhotoTab("metadata")}
+                  >
+                    Metadata
+                  </button>
+                </div>
+                {selectedPhotoTab === "details" ? (
+                  <>
+                    <div className="card" style={{ marginTop: 0 }}>
+                      <h5 style={{ margin: "0 0 0.5rem" }}>Media Info</h5>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+                        <div style={{ flex: "1 1 320px", minWidth: "240px" }}>
+                          <label className="label">Name</label>
+                          <input
+                            className="input"
+                            value={selectedPhotoName}
+                            onChange={(event) => setSelectedPhotoName(event.target.value)}
+                            disabled={photoAssociationBusy || !selectedPhotoCanEditName}
+                          />
+                        </div>
+                        <div style={{ flex: "0 0 180px" }}>
+                          <label className="label">Date</label>
+                          <input
+                            className="input"
+                            value={selectedPhotoDate}
+                            onChange={(event) => setSelectedPhotoDate(event.target.value)}
+                            disabled={photoAssociationBusy || !selectedPhotoEditable}
+                          />
+                        </div>
+                      </div>
+                      <label className="label">Description</label>
+                      <input
+                        className="input"
+                        value={selectedPhotoDescription}
+                        onChange={(event) => setSelectedPhotoDescription(event.target.value)}
+                        disabled={photoAssociationBusy || !selectedPhotoEditable}
+                      />
                   {/*
                     <div
                       style={{
@@ -1348,122 +1440,165 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       ) : null}
                     </div>
                   */}
-                  {!selectedPhotoEditable ? (
-                    <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
-                      Link this file to a person or household before editing app metadata.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="person-photo-tags-card card">
-                  <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>
-                  <label className="label">Selected Links</label>
-                  <div className="person-association-list">
-                    {selectedPhotoAssociations.people.map((item) => (
-                      <span key={`editor-person-${item.personId}`} className="person-linked-row">
-                        <span className="person-linked-main">
-                          <span className="person-linked-icon" aria-hidden="true">
-                            <img
-                              src={getGenderAvatarSrc(peopleById.get(item.personId)?.gender ?? "unspecified")}
-                              alt=""
-                              className="person-linked-avatar"
-                            />
-                          </span>
-                          <span>{item.displayName}</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="person-chip-remove"
-                          disabled={photoAssociationBusy || pendingPhotoOps.has(`p-${item.personId}`)}
-                          onClick={() => {
-                            const key = `p-${item.personId}`;
-                            setPendingPhotoOps((current) => new Set(current).add(key));
-                            void (async () => {
-                              await unlinkPhotoFromPerson(item.personId);
-                              setPendingPhotoOps((current) => {
-                                const next = new Set(current);
-                                next.delete(key);
-                                return next;
-                              });
-                            })();
-                          }}
-                          aria-label={`Remove ${item.displayName} from photo`}
-                        >
-                          {pendingPhotoOps.has(`p-${item.personId}`) ? "..." : "x"}
-                        </button>
-                      </span>
-                    ))}
-                    {selectedPhotoAssociations.households.map((item) => (
-                      <span key={`editor-household-${item.householdId}`} className="person-linked-row">
-                        <span className="person-linked-main">
-                          <span className="person-linked-icon person-linked-icon--household" aria-hidden="true">
-                            <HouseholdIcon />
-                          </span>
-                          <span>{item.label || item.householdId}</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="person-chip-remove"
-                          disabled={photoAssociationBusy || pendingPhotoOps.has(`h-${item.householdId}`)}
-                          onClick={() => {
-                            const key = `h-${item.householdId}`;
-                            setPendingPhotoOps((current) => new Set(current).add(key));
-                            void (async () => {
-                              await unlinkPhotoFromHousehold(item.householdId);
-                              setPendingPhotoOps((current) => {
-                                const next = new Set(current);
-                                next.delete(key);
-                                return next;
-                              });
-                            })();
-                          }}
-                          aria-label={`Remove ${item.label || item.householdId} from photo`}
-                        >
-                          {pendingPhotoOps.has(`h-${item.householdId}`) ? "..." : "x"}
-                        </button>
-                      </span>
-                    ))}
-                    {selectedPhotoAssociations.people.length === 0 && selectedPhotoAssociations.households.length === 0 ? (
-                      <span className="status-chip status-chip--neutral">None</span>
+                    {!selectedPhotoEditable ? (
+                      <p className="page-subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
+                        Link this file to a person or household before editing app metadata.
+                      </p>
                     ) : null}
                   </div>
-                  <label className="label" style={{ marginTop: "0.75rem" }}>Search to Add Links</label>
-                  <input
-                    className="input"
-                    value={photoTagQuery}
-                    onChange={(e) => setPhotoTagQuery(e.target.value)}
-                    placeholder="Search people, households"
-                    disabled={photoAssociationBusy}
-                  />
-                  {photoTagQuery.trim() ? (
-                    <div className="person-typeahead-list">
-                      {photoTagSearchResults.length > 0 ? (
-                        photoTagSearchResults.map((entry) => (
-                          <button
-                            key={entry.key}
-                            type="button"
-                            className="person-typeahead-item"
-                            onClick={() => void applyPhotoTagCandidate(entry)}
-                            disabled={photoAssociationBusy}
-                          >
-                            <span className="person-linked-main">
-                              <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
-                                {entry.kind === "person" ? (
-                                  <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
-                                ) : (
-                                  <HouseholdIcon />
-                                )}
-                              </span>
-                              <span>{entry.displayName}</span>
+                  <div className="person-photo-tags-card card">
+                    <h5 style={{ margin: "0 0 0.5rem" }}>Linked To</h5>
+                    <label className="label">Selected Links</label>
+                    <div className="person-association-list">
+                      {selectedPhotoAssociations.people.map((item) => (
+                        <span key={`editor-person-${item.personId}`} className="person-linked-row">
+                          <span className="person-linked-main">
+                            <span className="person-linked-icon" aria-hidden="true">
+                              <img
+                                src={getGenderAvatarSrc(peopleById.get(item.personId)?.gender ?? "unspecified")}
+                                alt=""
+                                className="person-linked-avatar"
+                              />
                             </span>
+                            <span>{item.displayName}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="person-chip-remove"
+                            disabled={photoAssociationBusy || pendingPhotoOps.has(`p-${item.personId}`)}
+                            onClick={() => {
+                              const key = `p-${item.personId}`;
+                              setPendingPhotoOps((current) => new Set(current).add(key));
+                              void (async () => {
+                                await unlinkPhotoFromPerson(item.personId);
+                                setPendingPhotoOps((current) => {
+                                  const next = new Set(current);
+                                  next.delete(key);
+                                  return next;
+                                });
+                              })();
+                            }}
+                            aria-label={`Remove ${item.displayName} from photo`}
+                          >
+                            {pendingPhotoOps.has(`p-${item.personId}`) ? "..." : "x"}
                           </button>
-                        ))
+                        </span>
+                      ))}
+                      {selectedPhotoAssociations.households.map((item) => (
+                        <span key={`editor-household-${item.householdId}`} className="person-linked-row">
+                          <span className="person-linked-main">
+                            <span className="person-linked-icon person-linked-icon--household" aria-hidden="true">
+                              <HouseholdIcon />
+                            </span>
+                            <span>{item.label || item.householdId}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="person-chip-remove"
+                            disabled={photoAssociationBusy || pendingPhotoOps.has(`h-${item.householdId}`)}
+                            onClick={() => {
+                              const key = `h-${item.householdId}`;
+                              setPendingPhotoOps((current) => new Set(current).add(key));
+                              void (async () => {
+                                await unlinkPhotoFromHousehold(item.householdId);
+                                setPendingPhotoOps((current) => {
+                                  const next = new Set(current);
+                                  next.delete(key);
+                                  return next;
+                                });
+                              })();
+                            }}
+                            aria-label={`Remove ${item.label || item.householdId} from photo`}
+                          >
+                            {pendingPhotoOps.has(`h-${item.householdId}`) ? "..." : "x"}
+                          </button>
+                        </span>
+                      ))}
+                      {selectedPhotoAssociations.people.length === 0 && selectedPhotoAssociations.households.length === 0 ? (
+                        <span className="status-chip status-chip--neutral">None</span>
+                      ) : null}
+                    </div>
+                    <label className="label" style={{ marginTop: "0.75rem" }}>Search to Add Links</label>
+                    <input
+                      className="input"
+                      value={photoTagQuery}
+                      onChange={(e) => setPhotoTagQuery(e.target.value)}
+                      placeholder="Search people, households"
+                      disabled={photoAssociationBusy}
+                    />
+                    {photoTagQuery.trim() ? (
+                      <div className="person-typeahead-list">
+                        {photoTagSearchResults.length > 0 ? (
+                          photoTagSearchResults.map((entry) => (
+                            <button
+                              key={entry.key}
+                              type="button"
+                              className="person-typeahead-item"
+                              onClick={() => void applyPhotoTagCandidate(entry)}
+                              disabled={photoAssociationBusy}
+                            >
+                              <span className="person-linked-main">
+                                <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
+                                  {entry.kind === "person" ? (
+                                    <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
+                                  ) : (
+                                    <HouseholdIcon />
+                                  )}
+                                </span>
+                                <span>{entry.displayName}</span>
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
+                        )}
+                      </div>
+                    ) : null}
+                    {photoAssociationStatus ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p> : null}
+                  </div>
+                </>
+                ) : (
+                  <div className="card" style={{ marginTop: 0 }}>
+                    <h5 style={{ margin: "0 0 0.75rem" }}>Stored Metadata</h5>
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                        {[
+                          { label: "File ID", value: selectedPhotoDetail.fileId },
+                          { label: "Media Kind", value: readMediaKind(selectedPhotoDetail) },
+                          { label: "Added To Library", value: selectedPhotoDetail.createdAt || "" },
+                          { label: "EXIF Extracted At", value: selectedPhotoDetail.exifExtractedAt || "" },
+                        ].map((field) => (
+                          <div key={`stored-field-${field.label}`}>
+                            <label className="label">{field.label}</label>
+                            <input className="input" value={field.value} readOnly />
+                          </div>
+                        ))}
+                      </div>
+                      {selectedPhotoStoredMetadataEntries.length > 0 ? (
+                        <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                          {selectedPhotoStoredMetadataEntries.map(([key, value]) => {
+                            const formattedValue = formatStoredMetadataValue(value);
+                            const useTextarea = formattedValue.includes("\n") || formattedValue.length > 120;
+                            return (
+                              <div key={`stored-metadata-${key}`}>
+                                <label className="label">{formatStoredMetadataLabel(key)}</label>
+                                {useTextarea ? (
+                                  <textarea className="textarea" value={formattedValue} readOnly style={{ minHeight: "120px" }} />
+                                ) : (
+                                  <input className="input" value={formattedValue} readOnly />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       ) : (
-                        <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
+                        <p className="page-subtitle" style={{ margin: 0 }}>
+                          No stored media-metadata JSON is available for this file.
+                        </p>
                       )}
                     </div>
-                  ) : null}
-                  {photoAssociationStatus ? <p className="page-subtitle" style={{ marginTop: "0.65rem" }}>{photoAssociationStatus}</p> : null}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

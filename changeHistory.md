@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-26: Changed media paging to three full visible rows per page and split the media modal into `Details` and read-only `Metadata` tabs while keeping `Linked To` on the first tab. See `docs/change-summary.md`.
 - 2026-03-26: Unified the media page’s text search and linked-filter entry into one omnibox that supports a committed text-search chip plus person and household filter chips from the same field. See `docs/change-summary.md`.
 - 2026-03-26: Aligned the media page header and controls to the People-tab layout pattern and added icons to the `People` and `Households` buttons on the People page. See `docs/change-summary.md`.
 - 2026-03-26: Moved `Add Media` back to the `Media Library` header row, added icons to the media-type filters, and regrouped the search, range, and paging controls into the requested stacked layout. See `docs/change-summary.md`.
