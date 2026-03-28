@@ -37,6 +37,7 @@ function localUsernameFromEmail(email?: string | null) {
 
 const STEVE_ACCESS_EMAIL = "stephensestes@gmail.com";
 const STEVE_PERSON_ID = "19660812-stephen-snow-estes";
+const TENANT_ACCESS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function hasSteveAccess(email?: string | null) {
   return (email ?? "").trim().toLowerCase() === STEVE_ACCESS_EMAIL;
@@ -262,6 +263,7 @@ export const authOptions: NextAuthOptions = {
         token.tenantKey = primaryLocalAccess?.tenantKey ?? local.tenantKey;
         token.tenantName = primaryLocalAccess?.tenantName ?? local.tenantName;
         token.tenantAccesses = localAccesses.length > 0 ? localAccesses : local.tenantAccesses ?? [];
+        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
         return token;
       }
 
@@ -311,6 +313,7 @@ export const authOptions: NextAuthOptions = {
         token.tenantName = primary.tenantName;
         token.tenantAccesses = allAccesses;
         token.steveAccess = true;
+        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
         return token;
       }
 
@@ -326,18 +329,48 @@ export const authOptions: NextAuthOptions = {
         token.tenantKey = primary.tenantKey;
         token.tenantName = primary.tenantName;
         token.tenantAccesses = accesses;
+        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
       }
 
       const tokenPersonId = typeof token.person_id === "string" ? token.person_id.trim() : "";
+      const cachedAccesses =
+        Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
+          ? (token.tenantAccesses as {
+              tenantKey: string;
+              tenantName: string;
+              role: "ADMIN" | "USER";
+              personId: string;
+            }[])
+          : [];
+      const lastSyncedAt = Number((token as Record<string, unknown>).tenantAccessesSyncedAt ?? 0);
+      const shouldRefreshAccesses =
+        cachedAccesses.length === 0 ||
+        !Number.isFinite(lastSyncedAt) ||
+        Date.now() - lastSyncedAt > TENANT_ACCESS_REFRESH_INTERVAL_MS;
       if (tokenPersonId) {
-        const accesses = await getEnabledUserAccessListByPersonId(tokenPersonId);
-        if (accesses.length > 0) {
-          const primary = accesses[0];
+        if (shouldRefreshAccesses) {
+          const accesses = await getEnabledUserAccessListByPersonId(tokenPersonId);
+          if (accesses.length > 0) {
+            const primary = accesses[0];
+            token.role = primary.role;
+            token.person_id = primary.personId;
+            token.tenantKey = primary.tenantKey;
+            token.tenantName = primary.tenantName;
+            token.tenantAccesses = accesses;
+            (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+          } else {
+            token.tenantAccesses = [];
+            token.tenantKey = DEFAULT_TENANT_KEY;
+            token.tenantName = DEFAULT_TENANT_NAME;
+            (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+          }
+        } else if (cachedAccesses.length > 0) {
+          const primary = cachedAccesses[0];
           token.role = primary.role;
           token.person_id = primary.personId;
           token.tenantKey = primary.tenantKey;
           token.tenantName = primary.tenantName;
-          token.tenantAccesses = accesses;
+          token.tenantAccesses = cachedAccesses;
         } else {
           token.tenantAccesses = [];
           token.tenantKey = DEFAULT_TENANT_KEY;

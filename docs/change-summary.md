@@ -57,6 +57,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`: Detect faces on a photo with multiple faces; `/faces` POST should no longer fail with `ORA-00001` and should return `faceCount > 1` where applicable.
 - `Rollback Notes`: Revert this change.
 
+## 2026-03-28 (Reduce per-request auth DB lookups for media proxy performance)
+
+- `Date`: 2026-03-28
+- `Change`: Added short-lived token-side caching for `tenantAccesses` in the NextAuth JWT callback and stopped re-querying access rows on every request when cached data is still fresh.
+- `Type`: API | Performance
+- `Why`: Image/proxy requests were repeatedly triggering Oracle lookups through JWT callback refresh logic, causing slow tile/original image loads and higher sensitivity to transient DB connectivity.
+- `Files`: `src/lib/auth/options.ts`
+- `Data Changes`: None.
+- `Verify`: Repeated image tile requests should avoid frequent access-list DB calls for up to 5 minutes per session token; media proxy responses should be more stable/faster under load.
+- `Rollback Notes`: Revert this change.
+
 ## 2026-03-27 (fix partial person-link failures from the media modal)
 
 - `Date`: 2026-03-27
