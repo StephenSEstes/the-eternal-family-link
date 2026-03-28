@@ -24,6 +24,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`: `npm run lint` passes; Next.js build should compile without the previous JSX syntax error. Faces image only appears after clicking Detect/Load; empty state prompts detection.
 - `Rollback Notes`: Revert commit; remove `backups` from tsconfig exclude and restore prior ESLint rules if needed.
 
+## 2026-03-28 (Face crops and unclipped AI preview)
+
+- `Date`: 2026-03-28
+- `Change`: Stopped clipping the AI-tab preview image and switched to contain-fit, then added per-face cropped previews derived from the detection bbox so each detected face shows its own thumbnail alongside the linking controls.
+- `Type`: UI
+- `Why`: Bounding boxes appeared too high because tall images were cropped; showing per-face crops makes linking easier.
+- `Files`: `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`: On the AI tab, the full image is visible (no top/bottom clipping) and each detected face shows a cropped thumbnail; bounding boxes align to faces.
+- `Rollback Notes`: Revert this commit.
+
 ## 2026-03-27 (fix partial person-link failures from the media modal)
 
 - `Date`: 2026-03-27
