@@ -46,6 +46,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`: Photo URLs load without requiring `viewer_access` cookies; authenticated users with tenant access still allowed; unauthorized users still get 403.
 - `Rollback Notes`: Revert this change to re-enable the PIN gate.
 
+## 2026-03-28 (Fix ORA-00001 collisions in face detection IDs)
+
+- `Date`: 2026-03-28
+- `Change`: Replaced face ID generation in the detect-faces route with a real SHA-256 hash of `fileId + faceIndex + bbox` so each detected face gets a stable unique ID.
+- `Type`: API
+- `Why`: Root cause of frequent `vision_failed` with `serviceCode=ORA-00001` was duplicate `face_id` values during multi-face inserts; previous logic truncated the hex-encoded seed prefix instead of hashing it.
+- `Files`: `src/app/api/t/[tenantKey]/photos/[fileId]/faces/route.ts`
+- `Data Changes`: None.
+- `Verify`: Detect faces on a photo with multiple faces; `/faces` POST should no longer fail with `ORA-00001` and should return `faceCount > 1` where applicable.
+- `Rollback Notes`: Revert this change.
+
 ## 2026-03-27 (fix partial person-link failures from the media modal)
 
 - `Date`: 2026-03-27

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/tenant/guard";
 import { resolvePhotoContentAcrossFamilies } from "@/lib/google/photo-resolver";
@@ -17,7 +18,8 @@ type RouteProps = {
 function buildFaceId(fileId: string, faceIndex: number, bbox: { x: number; y: number; width: number; height: number }) {
   const stable = (value: number) => Number.isFinite(value) ? value.toFixed(6) : "0";
   const seed = `${fileId}|${faceIndex}|${stable(bbox.x)}|${stable(bbox.y)}|${stable(bbox.width)}|${stable(bbox.height)}`;
-  return `face-${Buffer.from(seed).toString("hex").slice(0, 12)}`;
+  const digest = createHash("sha256").update(seed).digest("hex").slice(0, 24);
+  return `face-${digest}`;
 }
 
 function parseMatchMetadata(raw: string | null | undefined): Record<string, unknown> {
