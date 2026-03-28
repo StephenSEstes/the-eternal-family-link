@@ -13,6 +13,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-28 (AI tab render fix + lint noise suppression)
+
+- `Date`: 2026-03-28
+- `Change`: Adjusted the Media modal AI tab so the photo/face boxes render only after a Detect/Load run (no duplicate image before detection), excluded backup snapshots from TypeScript, and relaxed ESLint rules to stop build-time noise from hook-deps and `<img>` warnings.
+- `Type`: UI | Build
+- `Why`: The AI tab JSX broke a Vercel build and showed the photo twice; backups were being type-checked; build output was cluttered by non-blocking lint hints.
+- `Files`: `src/components/MediaLibraryClient.tsx`, `tsconfig.json`, `.eslintrc.json`, `.eslintignore`
+- `Data Changes`: None.
+- `Verify`: `npm run lint` passes; Next.js build should compile without the previous JSX syntax error. Faces image only appears after clicking Detect/Load; empty state prompts detection.
+- `Rollback Notes`: Revert commit; remove `backups` from tsconfig exclude and restore prior ESLint rules if needed.
+
 ## 2026-03-27 (fix partial person-link failures from the media modal)
 
 - `Date`: 2026-03-27

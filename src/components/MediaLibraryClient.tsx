@@ -1389,7 +1389,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         <span className="page-subtitle" style={{ margin: 0 }}>
                           Faces detected: {selectedPhotoIntelligenceSuggestion.detectedFaceCount}
                         </span>
-                      ) : null}
+                      )}
                       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                         {selectedPhotoIntelligenceSuggestion.labelSuggestion ? (
                           <button
@@ -1528,7 +1528,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                             ? "Generating suggestions for this photo..."
                             : "No AI suggestions yet. Use Generate Suggestions to analyze this photo."}
                         </span>
-                      )}
+                      ) : null}
                       {selectedPhotoIntelligenceDebug ? (
                         <details style={{ marginTop: "0.25rem" }}>
                           <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Vision Debug</summary>
@@ -1763,36 +1763,37 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       ) : null}
                     </div>
                     <div style={{ display: "grid", gap: "0.6rem" }}>
-                      <div style={{ display: "grid", gap: "0.35rem" }}>
-                        <div style={{ position: "relative", width: "100%", maxHeight: "320px", overflow: "hidden", borderRadius: "10px", border: "1px solid var(--border)" }}>
-                          <img
-                            src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
-                            alt={selectedPhotoDetail.name || "photo"}
-                            style={{ width: "100%", height: "auto", display: "block" }}
-                          />
-                          {faces.map((face) => (
-                            <div
-                              key={face.faceId}
-                              style={{
-                                position: "absolute",
-                                left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
-                                top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
-                                width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
-                                height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
-                                border: "2px solid #0f4c81",
-                                boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
-                                borderRadius: "4px",
-                                pointerEvents: "none",
-                              }}
+                      {faces.length > 0 ? (
+                        <div style={{ display: "grid", gap: "0.35rem" }}>
+                          <div style={{ position: "relative", width: "100%", maxHeight: "320px", overflow: "hidden", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                            <img
+                              src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                              alt={selectedPhotoDetail.name || "photo"}
+                              style={{ width: "100%", height: "auto", display: "block" }}
                             />
-                          ))}
+                            {faces.map((face) => (
+                              <div
+                                key={face.faceId}
+                                style={{
+                                  position: "absolute",
+                                  left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
+                                  top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
+                                  width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
+                                  height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
+                                  border: "2px solid #0f4c81",
+                                  boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
+                                  borderRadius: "4px",
+                                  pointerEvents: "none",
+                                }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        {faces.length === 0 ? (
-                          <p className="page-subtitle" style={{ margin: 0 }}>
-                            {facesLoading ? "Detecting faces..." : "Faces not loaded yet. Use Detect or Load saved faces."}
-                          </p>
-                        ) : null}
-                      </div>
+                      ) : (
+                        <p className="page-subtitle" style={{ margin: 0 }}>
+                          {facesLoading ? "Detecting faces..." : "Faces not loaded yet. Use Detect faces to populate boxes."}
+                        </p>
+                      )}
                       {faces.length > 0 ? (
                         <div style={{ display: "grid", gap: "0.65rem" }}>
                           {faces.map((face, index) => {
@@ -1880,7 +1881,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                             );
                           })}
                         </div>
-                      )}
+                      ) : null}
                       {facesDebug ? (
                         <details>
                           <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Debug</summary>
