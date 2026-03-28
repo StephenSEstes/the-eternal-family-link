@@ -27,12 +27,12 @@ Concise release notes for what changed, why it changed, and what to verify.
 ## 2026-03-28 (Face crops and unclipped AI preview)
 
 - `Date`: 2026-03-28
-- `Change`: Stopped clipping the AI-tab preview image and switched to contain-fit, added per-face cropped previews derived from the detection bbox, and reset face/detect state when opening a new photo so old errors don’t linger.
+- `Change`: Removed the large full-image panel from the AI tab, kept per-face cropped previews directly under each `Face X` heading, tightened action buttons to one narrow row, and reset face/detect state when opening a new photo so old errors don’t linger.
 - `Type`: UI
-- `Why`: Bounding boxes appeared too high because tall images were cropped; showing per-face crops makes linking easier.
+- `Why`: Full-image preview was covering face-link controls and made face numbering unclear; per-face crops with compact actions make assignment faster.
 - `Files`: `src/components/MediaLibraryClient.tsx`
 - `Data Changes`: None.
-- `Verify`: On the AI tab, the full image is visible (no top/bottom clipping) and each detected face shows a cropped thumbnail; bounding boxes align to faces.
+- `Verify`: On the AI tab, no full-image panel is shown; each card shows the isolated face crop under `Face X`, and `Link person` / `Mark not family` / `Save label only` render as narrow one-row buttons.
 - `Rollback Notes`: Revert this commit.
 
 ## 2026-03-28 (Disable viewer PIN gate for photos)

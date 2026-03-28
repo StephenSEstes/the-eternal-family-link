@@ -1768,37 +1768,11 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       ) : null}
                     </div>
                     <div style={{ display: "grid", gap: "0.6rem" }}>
-                      {faces.length > 0 ? (
-                        <div style={{ display: "grid", gap: "0.35rem" }}>
-                          <div style={{ position: "relative", width: "100%", maxHeight: "420px", borderRadius: "10px", border: "1px solid var(--border)" }}>
-                            <img
-                              src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
-                              alt={selectedPhotoDetail.name || "photo"}
-                              style={{ width: "100%", height: "auto", display: "block", objectFit: "contain" }}
-                            />
-                            {faces.map((face) => (
-                              <div
-                                key={face.faceId}
-                                style={{
-                                  position: "absolute",
-                                  left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
-                                  top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
-                                  width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
-                                  height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
-                                  border: "2px solid #0f4c81",
-                                  boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
-                                  borderRadius: "4px",
-                                  pointerEvents: "none",
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
+                      {faces.length === 0 ? (
                         <p className="page-subtitle" style={{ margin: 0 }}>
                           {facesLoading ? "Detecting faces..." : "Faces not loaded yet. Use Detect faces to populate boxes."}
                         </p>
-                      )}
+                      ) : null}
                       {faces.length > 0 ? (
                         <div style={{ display: "grid", gap: "0.65rem" }}>
                           {faces.map((face, index) => {
@@ -1816,65 +1790,64 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                     det {formatConfidencePercent(face.detectionConfidence)} · quality {formatConfidencePercent(face.qualityScore)}
                                   </span>
                                 </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.75rem", alignItems: "center" }}>
-                                  <div
-                                    aria-label={`Face ${index + 1} crop`}
-                                    style={{
-                                      width: "120px",
-                                      borderRadius: "8px",
-                                      overflow: "hidden",
-                                      backgroundImage: `url(${getPhotoPreviewProxyPath(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata, tenantKey)})`,
-                                      backgroundRepeat: "no-repeat",
-                                      backgroundSize: `${bbox.width > 0 ? (1 / bbox.width) * 100 : 100}% ${bbox.height > 0 ? (1 / bbox.height) * 100 : 100}%`,
-                                      backgroundPosition: `${bbox.width > 0 ? (-bbox.x / bbox.width) * 100 : 0}% ${bbox.height > 0 ? (-bbox.y / bbox.height) * 100 : 0}%`,
-                                      position: "relative",
-                                    }}
-                                  >
-                                    <div style={{ paddingBottom: bbox.width > 0 ? `${(bbox.height / bbox.width) * 100}%` : "100%" }} />
+                                <div
+                                  aria-label={`Face ${index + 1} crop`}
+                                  style={{
+                                    width: "140px",
+                                    borderRadius: "8px",
+                                    overflow: "hidden",
+                                    backgroundImage: `url(${getPhotoPreviewProxyPath(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata, tenantKey)})`,
+                                    backgroundRepeat: "no-repeat",
+                                    backgroundSize: `${bbox.width > 0 ? (1 / bbox.width) * 100 : 100}% ${bbox.height > 0 ? (1 / bbox.height) * 100 : 100}%`,
+                                    backgroundPosition: `${bbox.width > 0 ? (-bbox.x / bbox.width) * 100 : 0}% ${bbox.height > 0 ? (-bbox.y / bbox.height) * 100 : 0}%`,
+                                    position: "relative",
+                                  }}
+                                >
+                                  <div style={{ paddingBottom: bbox.width > 0 ? `${(bbox.height / bbox.width) * 100}%` : "100%" }} />
+                                </div>
+                                <div style={{ display: "grid", gap: "0.3rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                                  <div>
+                                    <label className="label">Person</label>
+                                    <select
+                                      className="input"
+                                      value={facePersonInput[face.faceId] ?? face.link?.personId ?? ""}
+                                      onChange={(e) =>
+                                        setFacePersonInput((current) => ({ ...current, [face.faceId]: e.target.value }))
+                                      }
+                                      disabled={saving}
+                                    >
+                                      <option value="">Select person...</option>
+                                      {peopleOptions.map((person) => (
+                                        <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
+                                          {person.displayName}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
-                                  <div style={{ display: "grid", gap: "0.3rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-                                    <div>
-                                      <label className="label">Person</label>
-                                      <select
-                                        className="input"
-                                        value={facePersonInput[face.faceId] ?? face.link?.personId ?? ""}
-                                        onChange={(e) =>
-                                          setFacePersonInput((current) => ({ ...current, [face.faceId]: e.target.value }))
-                                        }
-                                        disabled={saving}
-                                      >
-                                        <option value="">Select person...</option>
-                                        {peopleOptions.map((person) => (
-                                          <option key={`face-person-${face.faceId}-${person.personId}`} value={person.personId}>
-                                            {person.displayName}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="label">Label / Name</label>
-                                      <input
-                                        className="input"
-                                        value={faceLabelInput[face.faceId] ?? face.link?.label ?? ""}
-                                        onChange={(e) =>
-                                          setFaceLabelInput((current) => ({ ...current, [face.faceId]: e.target.value }))
-                                        }
-                                        placeholder="Unknown / not family label"
-                                        disabled={saving}
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="label">Status</label>
-                                      <input className="input" value={face.link?.status || "unlinked"} readOnly />
-                                    </div>
+                                  <div>
+                                    <label className="label">Label / Name</label>
+                                    <input
+                                      className="input"
+                                      value={faceLabelInput[face.faceId] ?? face.link?.label ?? ""}
+                                      onChange={(e) =>
+                                        setFaceLabelInput((current) => ({ ...current, [face.faceId]: e.target.value }))
+                                      }
+                                      placeholder="Unknown / not family label"
+                                      disabled={saving}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="label">Status</label>
+                                    <input className="input" value={face.link?.status || "unlinked"} readOnly />
                                   </div>
                                 </div>
-                                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", gap: "0.4rem", flexWrap: "nowrap", overflowX: "auto", paddingBottom: "0.1rem" }}>
                                   <button
                                     type="button"
                                     className="button tap-button"
                                     disabled={saving || !(facePersonInput[face.faceId] ?? face.link?.personId ?? "")}
                                     onClick={() => void associateFace(face, "link")}
+                                    style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
                                   >
                                     {saving ? "Saving..." : "Link person"}
                                   </button>
@@ -1883,6 +1856,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                     className="button secondary tap-button"
                                     disabled={saving}
                                     onClick={() => void associateFace(face, "not_family")}
+                                    style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
                                   >
                                     {saving ? "Saving..." : "Mark not family"}
                                   </button>
@@ -1891,6 +1865,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                     className="button secondary tap-button"
                                     disabled={saving}
                                     onClick={() => void associateFace(face, "label_only")}
+                                    style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
                                   >
                                     {saving ? "Saving..." : "Save label only"}
                                   </button>
