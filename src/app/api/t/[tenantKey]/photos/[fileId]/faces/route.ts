@@ -77,15 +77,22 @@ async function listFaces(familyGroupKey: string, fileId: string) {
 }
 
 export async function GET(request: Request, { params }: RouteProps) {
-  const { tenantKey, fileId } = await params;
-  const resolved = await requireTenantAccess(tenantKey);
-  if ("error" in resolved) return resolved.error;
-  const faces = await listFaces(resolved.tenant.tenantKey, fileId.trim());
-  return NextResponse.json({
-    ok: true,
-    faces,
-    debug: { fetchedAt: new Date().toISOString() },
-  });
+  try {
+    const { tenantKey, fileId } = await params;
+    const resolved = await requireTenantAccess(tenantKey);
+    if ("error" in resolved) return resolved.error;
+    const faces = await listFaces(resolved.tenant.tenantKey, fileId.trim());
+    return NextResponse.json({
+      ok: true,
+      faces,
+      debug: { fetchedAt: new Date().toISOString(), faceCount: faces.length },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: "list_failed", message: (error as Error)?.message ?? "unknown_error" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request, { params }: RouteProps) {
@@ -107,43 +114,55 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "media_not_found" }, { status: 404 });
   }
 
-  const [content, people] = await Promise.all([
-    resolvePhotoContentAcrossFamilies(normalizedFileId, resolved.tenant.tenantKey, { variant: "original" }),
-    getPeople(resolved.tenant.tenantKey).catch(() => []),
-  ]);
+  try {
+    const [content, people] = await Promise.all([
+      resolvePhotoContentAcrossFamilies(normalizedFileId, resolved.tenant.tenantKey, { variant: "original" }),
+      getPeople(resolved.tenant.tenantKey).catch(() => []),
+    ]);
 
-  const visionStartedAt = Date.now();
-  const detection = await detectFacesInlineWithVision({ imageBytes: Buffer.from(content.data) });
-  const visionMs = Date.now() - visionStartedAt;
+    const visionStartedAt = Date.now();
+    const detection = await detectFacesInlineWithVision({ imageBytes: Buffer.from(content.data) });
+    const visionMs = Date.now() - visionStartedAt;
 
-  const timestamp = new Date().toISOString();
-  await replaceOciFaceAnalysisForFile({
-    familyGroupKey: resolved.tenant.tenantKey,
-    fileId: normalizedFileId,
-    instances: detection.faces.map((face, index) => ({
-      faceId: buildFaceId(normalizedFileId, index, face.boundingBox),
-      bboxX: face.boundingBox.x,
-      bboxY: face.boundingBox.y,
-      bboxW: face.boundingBox.width,
-      bboxH: face.boundingBox.height,
-      detectionConfidence: face.confidence,
-      qualityScore: face.qualityScore,
-      embeddingJson: JSON.stringify(face.embedding ?? []),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      matches: [],
-    })),
-  });
+    const timestamp = new Date().toISOString();
+    await replaceOciFaceAnalysisForFile({
+      familyGroupKey: resolved.tenant.tenantKey,
+      fileId: normalizedFileId,
+      instances: detection.faces.map((face, index) => ({
+        faceId: buildFaceId(normalizedFileId, index, face.boundingBox),
+        bboxX: face.boundingBox.x,
+        bboxY: face.boundingBox.y,
+        bboxW: face.boundingBox.width,
+        bboxH: face.boundingBox.height,
+        detectionConfidence: face.confidence,
+        qualityScore: face.qualityScore,
+        embeddingJson: JSON.stringify(face.embedding ?? []),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        matches: [],
+      })),
+    });
 
-  const faces = await listFaces(resolved.tenant.tenantKey, normalizedFileId);
-  return NextResponse.json({
-    ok: true,
-    faces,
-    debug: {
-      routeMs: Date.now() - routeStartedAt,
-      visionMs,
-      faceCount: detection.faces.length,
-      peopleLoaded: people.length,
-    },
-  });
+    const faces = await listFaces(resolved.tenant.tenantKey, normalizedFileId);
+    return NextResponse.json({
+      ok: true,
+      faces,
+      debug: {
+        routeMs: Date.now() - routeStartedAt,
+        visionMs,
+        faceCount: detection.faces.length,
+        peopleLoaded: people.length,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "vision_failed",
+        message: (error as Error)?.message ?? "vision_error",
+        debug: { routeMs: Date.now() - routeStartedAt },
+      },
+      { status: 500 },
+    );
+  }
 }

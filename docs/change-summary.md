@@ -6215,6 +6215,19 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-28 (AI face detect error reporting)
+
+- `Change`: Face-detect API now returns structured errors and timings; UI surfaces error/debug info on the AI tab.
+- `Type`: Observability, Error UX
+- `Why`: Diagnose Vision failures (e.g., 500) with clear user-visible feedback instead of silent blanks.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/photos/[fileId]/faces/route.ts`
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`: Build not rerun locally (requires secrets); rely on CI.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.

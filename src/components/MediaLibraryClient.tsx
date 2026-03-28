@@ -1753,8 +1753,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         {facesLoading ? "Loading..." : "Load saved faces"}
                       </button>
                       {facesDebug ? (
-                        <span className="page-subtitle" style={{ margin: 0 }}>
-                          {facesDebug.routeMs ? `Route ${facesDebug.routeMs}ms` : null}
+                        <span className="page-subtitle" style={{ margin: 0, color: facesDebug.error ? "#b91c1c" : "inherit" }}>
+                          {facesDebug.error ? `Error: ${facesDebug.error}` : null}
+                          {facesDebug.message ? ` · ${facesDebug.message}` : null}
+                          {facesDebug.routeMs ? ` · Route ${facesDebug.routeMs}ms` : null}
                           {facesDebug.visionMs ? ` · Vision ${facesDebug.visionMs}ms` : null}
                           {facesDebug.faceCount !== undefined ? ` · Faces ${facesDebug.faceCount}` : null}
                         </span>

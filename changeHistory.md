@@ -250,6 +250,7 @@ This file is a quick release-log entry point.
 - 2026-03-27: Added the app logo to the login screen header. See `docs/change-summary.md`.
 - 2026-03-27: Kept media modal tabs on one row and expanded description to a 2-row textarea. See `docs/change-summary.md`.
 - 2026-03-27: Added opt-in AI tab face detection/linking with OCI Vision, bounding boxes, and debug output. See `docs/change-summary.md`.
+- 2026-03-28: Improved AI face detect error/debug reporting in API and UI. See `docs/change-summary.md`.
 - 2026-03-28: Stopped auto-loading faces on AI tab; detection/loading happens only on button click with improved empty state. See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.
