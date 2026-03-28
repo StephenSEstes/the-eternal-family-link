@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth/options";
@@ -13,9 +12,7 @@ export async function GET(request: Request, { params }: PhotoRouteProps) {
   try {
     const { fileId } = await params;
     const session = await getServerSession(authOptions);
-    const cookieStore = await cookies();
-    const viewerUnlocked = cookieStore.get("viewer_access")?.value === "granted";
-    const allowed = viewerUnlocked || hasTenantAccess(session, DEFAULT_TENANT_KEY);
+    const allowed = hasTenantAccess(session, DEFAULT_TENANT_KEY);
     if (!allowed) {
       return new NextResponse("Forbidden", { status: 403 });
     }

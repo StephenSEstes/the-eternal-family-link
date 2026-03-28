@@ -35,6 +35,17 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`: On the AI tab, the full image is visible (no top/bottom clipping) and each detected face shows a cropped thumbnail; bounding boxes align to faces.
 - `Rollback Notes`: Revert this commit.
 
+## 2026-03-28 (Disable viewer PIN gate for photos)
+
+- `Date`: 2026-03-28
+- `Change`: Removed the PIN cookie check from the photo viewer proxy routes so signed-in users with tenant access can fetch photos without the extra unlock step.
+- `Type`: API
+- `Why`: Improve responsiveness and reduce 403s from missing viewer cookies; security trade-off accepted for now.
+- `Files`: `src/app/viewer/photo/[fileId]/route.ts`, `src/app/t/[tenantKey]/viewer/photo/[fileId]/route.ts`
+- `Data Changes`: None.
+- `Verify`: Photo URLs load without requiring `viewer_access` cookies; authenticated users with tenant access still allowed; unauthorized users still get 403.
+- `Rollback Notes`: Revert this change to re-enable the PIN gate.
+
 ## 2026-03-27 (fix partial person-link failures from the media modal)
 
 - `Date`: 2026-03-27
