@@ -697,7 +697,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       );
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setFacesDebug({ error: body?.error ?? `status_${res.status}` });
+        const debugPayload =
+          body && typeof body === "object" && body.debug && typeof body.debug === "object" ? (body.debug as Record<string, unknown>) : null;
+        setFacesDebug({
+          ...(debugPayload ?? {}),
+          error: body?.error ?? `status_${res.status}`,
+        });
         return;
       }
       const items: FaceRecord[] = Array.isArray(body?.faces) ? body.faces : [];
