@@ -252,6 +252,6 @@ This file is a quick release-log entry point.
 - 2026-03-27: Added opt-in AI tab face detection/linking with OCI Vision, bounding boxes, and debug output. See `docs/change-summary.md`.
 - 2026-03-28: Improved AI face detect error/debug reporting in API and UI. See `docs/change-summary.md`.
 - 2026-03-28: Stopped auto-loading faces on AI tab; detection/loading happens only on button click with improved empty state. See `docs/change-summary.md`.
-- 2026-03-28: Fixed AI tab duplicate-photo render and excluded backups from type-check; relaxed ESLint to silence build-only warnings. See `docs/change-summary.md`.
+- 2026-03-28: Fixed AI tab duplicate-photo render, surfaced Vision error details in face detect API, and excluded backups from type-check; relaxed ESLint to silence build-only warnings. See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.

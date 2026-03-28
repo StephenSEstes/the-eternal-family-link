@@ -155,12 +155,26 @@ export async function POST(request: Request, { params }: RouteProps) {
       },
     });
   } catch (error) {
+    const err = error as {
+      message?: string;
+      statusCode?: number;
+      serviceCode?: string;
+      opcRequestId?: string;
+      rawBody?: string;
+      code?: string;
+    };
     return NextResponse.json(
       {
         ok: false,
         error: "vision_failed",
-        message: (error as Error)?.message ?? "vision_error",
-        debug: { routeMs: Date.now() - routeStartedAt },
+        message: err?.message ?? "vision_error",
+        debug: {
+          routeMs: Date.now() - routeStartedAt,
+          statusCode: err?.statusCode ?? null,
+          serviceCode: err?.serviceCode ?? err?.code ?? null,
+          opcRequestId: err?.opcRequestId ?? null,
+          rawBody: err?.rawBody ?? null,
+        },
       },
       { status: 500 },
     );
