@@ -163,6 +163,15 @@ export async function POST(request: Request, { params }: RouteProps) {
       rawBody?: string;
       code?: string;
     };
+    console.error("[faces] vision_failed", {
+      fileId: normalizedFileId,
+      tenantKey: resolved.tenant.tenantKey,
+      message: err?.message,
+      statusCode: err?.statusCode,
+      serviceCode: err?.serviceCode ?? err?.code,
+      opcRequestId: err?.opcRequestId,
+      rawBody: err?.rawBody,
+    });
     return NextResponse.json(
       {
         ok: false,
