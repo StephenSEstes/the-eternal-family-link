@@ -15,6 +15,7 @@ export type OciVisionFace = {
     height: number;
   };
   embedding: number[];
+  vertices?: Array<{ x: number; y: number }>;
 };
 
 export type OciVisionInsight = {
@@ -285,6 +286,7 @@ function toBoundingBox(item: {
     y: minY,
     width: Math.max(0, maxX - minX),
     height: Math.max(0, maxY - minY),
+    vertices,
   };
 }
 
@@ -300,6 +302,11 @@ function extractFaces(result: models.AnalyzeImageResult | undefined): OciVisionF
             .map((value) => Number(value))
             .filter((value) => Number.isFinite(value))
           : [],
+        vertices: Array.isArray(item?.boundingPolygon?.normalizedVertices)
+          ? (item.boundingPolygon?.normalizedVertices ?? [])
+              .map((v) => ({ x: Number(v?.x ?? 0), y: Number(v?.y ?? 0) }))
+              .filter((v) => Number.isFinite(v.x) && Number.isFinite(v.y))
+          : undefined,
       }))
       .filter((item) => item.boundingBox.width > 0 && item.boundingBox.height > 0)
       .sort((a, b) => b.qualityScore - a.qualityScore)

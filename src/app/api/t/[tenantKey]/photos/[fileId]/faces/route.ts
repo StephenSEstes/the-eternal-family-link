@@ -152,6 +152,11 @@ export async function POST(request: Request, { params }: RouteProps) {
         visionMs,
         faceCount: detection.faces.length,
         peopleLoaded: people.length,
+        faces: detection.faces.map((face) => ({
+          bbox: face.boundingBox,
+          vertices: face.vertices?.slice(0, 8),
+          embeddingLen: face.embedding?.length ?? 0,
+        })),
       },
     });
   } catch (error) {
