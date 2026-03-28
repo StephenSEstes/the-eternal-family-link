@@ -682,8 +682,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     }
   };
 
-  const facesLoadedFor = useRef<string | null>(null);
-
   const loadFaces = async (options?: { detect?: boolean }) => {
     if (!selectedPhotoDetail) return;
     setFacesLoading(true);
@@ -705,7 +703,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       const items: FaceRecord[] = Array.isArray(body?.faces) ? body.faces : [];
       setFaces(items);
       setFacesDebug(body?.debug ?? null);
-      facesLoadedFor.current = selectedPhotoDetail.fileId;
     } catch (error) {
       setFacesDebug({ error: (error as Error)?.message ?? "face_load_failed" });
     } finally {
@@ -752,14 +749,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setFaceSaving(cleared);
     }
   };
-
-  useEffect(() => {
-    if (selectedPhotoTab === "ai" && selectedPhotoDetail) {
-      if (facesLoadedFor.current !== selectedPhotoDetail.fileId) {
-        void loadFaces();
-      }
-    }
-  }, [selectedPhotoTab, selectedPhotoDetail?.fileId]);
 
   const linkPhotoToPerson = async (personId: string) => {
     if (!selectedPhotoDetail) return;
@@ -1755,6 +1744,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       >
                         {facesLoading ? "Detecting..." : "Detect faces (OCI Vision)"}
                       </button>
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => void loadFaces({ detect: false })}
+                        disabled={facesLoading}
+                      >
+                        {facesLoading ? "Loading..." : "Load saved faces"}
+                      </button>
                       {facesDebug ? (
                         <span className="page-subtitle" style={{ margin: 0 }}>
                           {facesDebug.routeMs ? `Route ${facesDebug.routeMs}ms` : null}
@@ -1764,34 +1761,37 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       ) : null}
                     </div>
                     <div style={{ display: "grid", gap: "0.6rem" }}>
-                      <div style={{ position: "relative", width: "100%", maxHeight: "360px", overflow: "hidden", borderRadius: "10px", border: "1px solid var(--border)" }}>
-                        <img
-                          src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
-                          alt={selectedPhotoDetail.name || "photo"}
-                          style={{ width: "100%", height: "auto", display: "block" }}
-                        />
-                        {faces.map((face) => (
-                          <div
-                            key={face.faceId}
-                            style={{
-                              position: "absolute",
-                              left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
-                              top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
-                              width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
-                              height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
-                              border: "2px solid #0f4c81",
-                              boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
-                              borderRadius: "4px",
-                              pointerEvents: "none",
-                            }}
+                      <div style={{ display: "grid", gap: "0.35rem" }}>
+                        <div style={{ position: "relative", width: "100%", maxHeight: "320px", overflow: "hidden", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                          <img
+                            src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                            alt={selectedPhotoDetail.name || "photo"}
+                            style={{ width: "100%", height: "auto", display: "block" }}
                           />
-                        ))}
+                          {faces.map((face) => (
+                            <div
+                              key={face.faceId}
+                              style={{
+                                position: "absolute",
+                                left: `${Math.max(0, Math.min(1, face.bbox.x)) * 100}%`,
+                                top: `${Math.max(0, Math.min(1, face.bbox.y)) * 100}%`,
+                                width: `${Math.max(0, Math.min(1, face.bbox.width)) * 100}%`,
+                                height: `${Math.max(0, Math.min(1, face.bbox.height)) * 100}%`,
+                                border: "2px solid #0f4c81",
+                                boxShadow: "0 0 0 1px rgba(15,76,129,0.35)",
+                                borderRadius: "4px",
+                                pointerEvents: "none",
+                              }}
+                            />
+                          ))}
+                        </div>
+                        {faces.length === 0 ? (
+                          <p className="page-subtitle" style={{ margin: 0 }}>
+                            {facesLoading ? "Detecting faces..." : "Faces not loaded yet. Use Detect or Load saved faces."}
+                          </p>
+                        ) : null}
                       </div>
-                      {faces.length === 0 ? (
-                        <p className="page-subtitle" style={{ margin: 0 }}>
-                          {facesLoading ? "Detecting faces..." : "No faces detected yet. Run detection to populate faces."}
-                        </p>
-                      ) : (
+                      {faces.length > 0 ? (
                         <div style={{ display: "grid", gap: "0.65rem" }}>
                           {faces.map((face, index) => {
                             const saving = faceSaving.has(face.faceId);

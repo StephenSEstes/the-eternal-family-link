@@ -6203,6 +6203,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this commit.
 - `Design Decision Change`: No design decision change.
 
+## 2026-03-28 (AI tab loads only on demand)
+
+- `Change`: AI tab no longer auto-loads faces; user must click Detect/Load. Improved empty state copy and tightened face overlay layout.
+- `Type`: UX polish
+- `Why`: Avoid unnecessary network calls and reduce noise when switching tabs.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`: Build not rerun locally (requires secrets); rely on CI.
+- `Rollback Notes`: Revert this commit.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-21 (vignette segmentation anti-merging prompt update)
 
 - `Change`: Updated story-import prompt segmentation instructions to improve vignette splitting by section/theme detection and explicit anti-merging guidance, including section/theme splitting rules, multiple-vignette tests, anti-merging constraints, and a tie-breaker preferring multiple proposals when headings/themes differ.
