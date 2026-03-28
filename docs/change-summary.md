@@ -27,7 +27,7 @@ Concise release notes for what changed, why it changed, and what to verify.
 ## 2026-03-28 (Face crops and unclipped AI preview)
 
 - `Date`: 2026-03-28
-- `Change`: Stopped clipping the AI-tab preview image and switched to contain-fit, then added per-face cropped previews derived from the detection bbox so each detected face shows its own thumbnail alongside the linking controls.
+- `Change`: Stopped clipping the AI-tab preview image and switched to contain-fit, added per-face cropped previews derived from the detection bbox, and reset face/detect state when opening a new photo so old errors don’t linger.
 - `Type`: UI
 - `Why`: Bounding boxes appeared too high because tall images were cropped; showing per-face crops makes linking easier.
 - `Files`: `src/components/MediaLibraryClient.tsx`

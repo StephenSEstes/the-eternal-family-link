@@ -612,6 +612,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const openPhotoEditor = async (fileId: string) => {
     setSelectedPhotoTab("details");
     setPhotoTagQuery("");
+    setFaces([]);
+    setFacesDebug(null);
+    setFaceLabelInput({});
+    setFacePersonInput({});
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
       applySelectedPhotoDetail(prefill, {
@@ -626,10 +630,6 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setSelectedPhotoDescription("");
       setSelectedPhotoDate("");
       setSelectedPhotoAssociations({ people: [], households: [] });
-      setFaces([]);
-      setFacesDebug(null);
-      setFaceLabelInput({});
-      setFacePersonInput({});
     }
     setPhotoAssociationStatus("Refreshing links...");
     setShowPhotoEditor(true);
