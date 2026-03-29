@@ -23,7 +23,10 @@ type MediaItem = {
   mediaMetadata?: string;
   exifExtractedAt?: string;
   sourceProvider?: string;
+  originalObjectKey?: string;
   thumbnailObjectKey?: string;
+  previewUrl?: string;
+  originalUrl?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -299,6 +302,8 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [faceLabelInput, setFaceLabelInput] = useState<Record<string, string>>({});
   const [facePersonInput, setFacePersonInput] = useState<Record<string, string>>({});
   const [faceSaving, setFaceSaving] = useState<Set<string>>(new Set());
+  const [failedDirectPreviewFileIds, setFailedDirectPreviewFileIds] = useState<Set<string>>(new Set());
+  const [failedDirectOriginalFileIds, setFailedDirectOriginalFileIds] = useState<Set<string>>(new Set());
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
@@ -320,6 +325,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     await assertOk(res, "Failed to load media library");
     const body = (await res.json()) as { items?: MediaItem[] };
     setMediaItems(Array.isArray(body.items) ? body.items : []);
+    setFailedDirectPreviewFileIds(new Set());
   };
 
   useEffect(() => {
@@ -548,6 +554,20 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     () => (selectedPhotoStoredMetadata ? Object.entries(selectedPhotoStoredMetadata) : []),
     [selectedPhotoStoredMetadata],
   );
+  const getMediaTilePreviewSrc = (item: MediaItem) =>
+    item.previewUrl && !failedDirectPreviewFileIds.has(item.fileId)
+      ? item.previewUrl
+      : getPhotoPreviewProxyPath(item.fileId, item.mediaMetadata, tenantKey);
+  const selectedPhotoPreviewSrc = selectedPhotoDetail
+    ? (selectedPhotoDetail.previewUrl && !failedDirectPreviewFileIds.has(selectedPhotoDetail.fileId)
+        ? selectedPhotoDetail.previewUrl
+        : getPhotoPreviewProxyPath(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata, tenantKey))
+    : "";
+  const selectedPhotoOriginalSrc = selectedPhotoDetail
+    ? (selectedPhotoDetail.originalUrl && !failedDirectOriginalFileIds.has(selectedPhotoDetail.fileId)
+        ? selectedPhotoDetail.originalUrl
+        : getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey))
+    : "";
 
   const addLinkedFilterTarget = (candidate: LinkedSearchResult) => {
     if (candidate.kind === "person") {
@@ -598,7 +618,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       mediaMetadata: serverItem.mediaMetadata || fallbackItem?.mediaMetadata || "",
       exifExtractedAt: serverItem.exifExtractedAt || fallbackItem?.exifExtractedAt || "",
       sourceProvider: serverItem.sourceProvider || fallbackItem?.sourceProvider || "",
+      originalObjectKey: serverItem.originalObjectKey || fallbackItem?.originalObjectKey || "",
       thumbnailObjectKey: serverItem.thumbnailObjectKey || fallbackItem?.thumbnailObjectKey || "",
+      previewUrl: serverItem.previewUrl || fallbackItem?.previewUrl || "",
+      originalUrl: serverItem.originalUrl || fallbackItem?.originalUrl || "",
       people: Array.isArray(serverItem.people) ? serverItem.people : [],
       households: Array.isArray(serverItem.households) ? serverItem.households : [],
     };
@@ -1224,9 +1247,22 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </div>
                   ) : (
                     <img
-                      src={getPhotoPreviewProxyPath(item.fileId, item.mediaMetadata, tenantKey)}
+                      src={getMediaTilePreviewSrc(item)}
                       alt={item.name || item.fileId}
                       style={{ width: "100%", maxHeight: "160px", objectFit: "cover", objectPosition: "top center", borderRadius: "8px" }}
+                      onError={() => {
+                        if (!item.previewUrl) {
+                          return;
+                        }
+                        setFailedDirectPreviewFileIds((current) => {
+                          if (current.has(item.fileId)) {
+                            return current;
+                          }
+                          const next = new Set(current);
+                          next.add(item.fileId);
+                          return next;
+                        });
+                      }}
                     />
                   )}
                 </button>
@@ -1291,7 +1327,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
                       <strong>{selectedPhotoDetail.name || "Document"}</strong>
                       <a
-                        href={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                        href={selectedPhotoOriginalSrc}
                         target="_blank"
                         rel="noreferrer"
                         className="button secondary tap-button"
@@ -1302,9 +1338,22 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     </div>
                   ) : (
                     <img
-                      src={getPhotoProxyPath(selectedPhotoDetail.fileId, tenantKey)}
+                      src={selectedPhotoOriginalSrc}
                       alt={selectedPhotoDetail.name || "photo"}
                       className="person-photo-detail-preview"
+                      onError={() => {
+                        if (!selectedPhotoDetail.originalUrl) {
+                          return;
+                        }
+                        setFailedDirectOriginalFileIds((current) => {
+                          if (current.has(selectedPhotoDetail.fileId)) {
+                            return current;
+                          }
+                          const next = new Set(current);
+                          next.add(selectedPhotoDetail.fileId);
+                          return next;
+                        });
+                      }}
                     />
                   )}
                 </div>
@@ -1704,6 +1753,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                           { label: "File ID", value: selectedPhotoDetail.fileId },
                           { label: "Media Kind", value: readMediaKind(selectedPhotoDetail) },
                           { label: "Source Provider", value: selectedPhotoDetail.sourceProvider || "" },
+                          { label: "Original Key", value: selectedPhotoDetail.originalObjectKey || "" },
                           { label: "Thumbnail Key", value: selectedPhotoDetail.thumbnailObjectKey || "" },
                           { label: "Added To Library", value: selectedPhotoDetail.createdAt || "" },
                           { label: "EXIF Extracted At", value: selectedPhotoDetail.exifExtractedAt || "" },
@@ -1809,7 +1859,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                     height: `${facePreviewHeightPx}px`,
                                     borderRadius: "8px",
                                     overflow: "hidden",
-                                    backgroundImage: `url(${getPhotoPreviewProxyPath(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata, tenantKey)})`,
+                                    backgroundImage: `url(${selectedPhotoPreviewSrc})`,
                                     backgroundRepeat: "no-repeat",
                                     backgroundSize: `${cropBackgroundWidthPx}px ${cropBackgroundHeightPx}px`,
                                     backgroundPosition: `${cropBackgroundXOffsetPx}px ${cropBackgroundYOffsetPx}px`,

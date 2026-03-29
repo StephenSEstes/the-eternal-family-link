@@ -13,6 +13,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (Direct OCI thumbnail URLs + preview backfill)
+
+- `Date`: 2026-03-29
+- `Change`: Added direct OCI object URL delivery for media search/detail payloads (`previewUrl`, `originalUrl`) with UI fallback to existing proxy paths, exposed thumbnail/original object key fields from search/detail, and added runtime thumbnail-key backfill for legacy image assets missing `thumbnail_object_key` when preview is requested.
+- `Type`: API | UI | Data
+- `Why`: Root cause of tile lag was per-image proxy/session checks and frequent fallback to large originals when thumbnail keys were missing.
+- `Files`: `src/lib/oci/object-storage.ts`, `src/app/api/t/[tenantKey]/photos/search/route.ts`, `src/app/api/t/[tenantKey]/photos/[fileId]/route.ts`, `src/components/MediaLibraryClient.tsx`, `src/lib/google/photo-resolver.ts`, `src/lib/oci/tables.ts`, `TODO.md`, `designchoices.md`
+- `Data Changes`: `MediaAssets.thumbnail_object_key` can now be backfilled during preview resolution for image assets that have original object keys but missing thumbnail keys.
+- `Design Decision`: Updated `designchoices.md` with the media thumbnail delivery decision (2026-03-29).
+- `Verify`: Media tiles should request direct preview URLs when present; failed direct loads should automatically fall back to `/viewer/photo/...` proxy. Metadata tab should show thumbnail key from list-prefill when present. Legacy missing-thumbnail rows should self-heal after preview access.
+- `Rollback Notes`: Revert this commit to restore proxy-only image loading and disable runtime thumbnail-key backfill.
+
 ## 2026-03-28 (AI tab render fix + lint noise suppression)
 
 - `Date`: 2026-03-28

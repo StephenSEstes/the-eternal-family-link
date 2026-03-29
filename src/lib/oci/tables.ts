@@ -1391,6 +1391,9 @@ export type OciMediaLinkRow = {
   sortOrder: number;
   mediaMetadata: string;
   createdAt: string;
+  sourceProvider: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
   mimeType: string;
   fileSizeBytes: string;
   checksumSha256: string;
@@ -1564,6 +1567,9 @@ function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
     sortOrder: Number.parseInt(fromDbValue(row.SORT_ORDER), 10) || 0,
     mediaMetadata: buildMediaKindMetadata(mediaKind),
     createdAt: fromDbValue(row.CREATED_AT),
+    sourceProvider: fromDbValue(row.SOURCE_PROVIDER),
+    originalObjectKey: fromDbValue(row.ORIGINAL_OBJECT_KEY),
+    thumbnailObjectKey: fromDbValue(row.THUMBNAIL_OBJECT_KEY),
     mimeType: fromDbValue(row.MIME_TYPE),
     fileSizeBytes: fromDbValue(row.FILE_SIZE_BYTES),
     checksumSha256: fromDbValue(row.CHECKSUM_SHA256),
@@ -1644,6 +1650,9 @@ async function queryOciMediaLinks(
            ELSE l.media_metadata
          END AS raw_media_metadata,
          COALESCE(NULLIF(TRIM(a.created_at), ''), l.created_at) AS created_at,
+         a.source_provider,
+         a.original_object_key,
+         a.thumbnail_object_key,
          a.mime_type,
          a.file_size_bytes,
          a.checksum_sha256,
@@ -3716,6 +3725,31 @@ export async function updateOciMediaMetadataForFile(input: {
       assetsUpdated: assetUpdate.rowsAffected ?? 0,
       linksUpdated: 0,
     };
+  });
+}
+
+export async function updateOciMediaAssetThumbnailObjectKey(input: {
+  fileId: string;
+  thumbnailObjectKey: string;
+}) {
+  const fileId = input.fileId.trim();
+  const thumbnailObjectKey = input.thumbnailObjectKey.trim();
+  if (!fileId || !thumbnailObjectKey) {
+    return 0;
+  }
+  return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, "media_assets");
+    const result = await connection.execute(
+      `UPDATE media_assets
+       SET thumbnail_object_key = :thumbnailObjectKey
+       WHERE TRIM(file_id) = :fileId`,
+      {
+        fileId,
+        thumbnailObjectKey,
+      },
+      { autoCommit: true },
+    );
+    return result.rowsAffected ?? 0;
   });
 }
 

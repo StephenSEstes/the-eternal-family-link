@@ -9,6 +9,7 @@ import {
   getOciMediaLinksForTenant,
   getOciPersonMediaAttributeRowsForTenant,
 } from "@/lib/oci/tables";
+import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 
 type SearchItem = {
   fileId: string;
@@ -18,6 +19,11 @@ type SearchItem = {
   createdAt?: string;
   mediaKind?: string;
   mediaMetadata?: string;
+  sourceProvider?: string;
+  originalObjectKey?: string;
+  thumbnailObjectKey?: string;
+  previewUrl?: string;
+  originalUrl?: string;
   mimeType?: string;
   fileSizeBytes?: string;
   checksumSha256?: string;
@@ -165,6 +171,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         createdAt: "",
         mediaKind: "",
         mediaMetadata: "",
+        sourceProvider: "",
+        originalObjectKey: "",
+        thumbnailObjectKey: "",
+        previewUrl: "",
+        originalUrl: "",
         mimeType: "",
         fileSizeBytes: "",
         checksumSha256: "",
@@ -217,6 +228,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     if (!item.createdAt) item.createdAt = row.createdAt.trim();
     if (!item.mediaKind) item.mediaKind = row.mediaKind.trim();
     if (!item.mediaMetadata) item.mediaMetadata = row.mediaMetadata.trim();
+    if (!item.sourceProvider) item.sourceProvider = row.sourceProvider.trim();
+    if (!item.originalObjectKey) item.originalObjectKey = row.originalObjectKey.trim();
+    if (!item.thumbnailObjectKey) item.thumbnailObjectKey = row.thumbnailObjectKey.trim();
     if (!item.mimeType) item.mimeType = row.mimeType.trim();
     if (!item.fileSizeBytes) item.fileSizeBytes = row.fileSizeBytes.trim();
     if (!item.checksumSha256) item.checksumSha256 = row.checksumSha256.trim();
@@ -343,12 +357,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     })
     .slice(0, limit);
 
+  const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
+  const matchesWithUrls = matches.map((item) => {
+    const previewUrl =
+      directObjectUrlFactory && item.thumbnailObjectKey
+        ? directObjectUrlFactory(item.thumbnailObjectKey)
+        : "";
+    const originalUrl =
+      directObjectUrlFactory && item.originalObjectKey
+        ? directObjectUrlFactory(item.originalObjectKey)
+        : "";
+    return {
+      ...item,
+      previewUrl,
+      originalUrl,
+    };
+  });
+
   const payload = {
     tenantKey: resolved.tenant.tenantKey,
     query: q,
     limit,
-    count: matches.length,
-    items: matches,
+    count: matchesWithUrls.length,
+    items: matchesWithUrls,
   };
   if (!bypassCache) {
     writeCachedMediaSearch(cacheKey, payload);

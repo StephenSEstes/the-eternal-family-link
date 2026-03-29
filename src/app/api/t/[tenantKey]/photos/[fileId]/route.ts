@@ -13,6 +13,7 @@ import {
   getOciPersonMediaAttributeRowsForFile,
   updateOciMediaAssetDetailsForFile,
 } from "@/lib/oci/tables";
+import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; fileId: string }>;
@@ -29,7 +30,10 @@ type MediaDetailItem = {
   mediaMetadata?: string;
   exifExtractedAt?: string;
   sourceProvider?: string;
+  originalObjectKey?: string;
   thumbnailObjectKey?: string;
+  previewUrl?: string;
+  originalUrl?: string;
   people: Array<{ personId: string; displayName: string }>;
   households: Array<{ householdId: string; label: string }>;
 };
@@ -92,7 +96,10 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     mediaMetadata: "",
     exifExtractedAt: "",
     sourceProvider: "",
+    originalObjectKey: "",
     thumbnailObjectKey: "",
+    previewUrl: "",
+    originalUrl: "",
     people: [],
     households: [],
   };
@@ -106,6 +113,7 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     detail.mediaKind = mediaAsset.mediaKind.trim();
     detail.mediaMetadata = buildMediaKindMetadata(mediaAsset.mediaKind);
     detail.sourceProvider = mediaAsset.sourceProvider.trim();
+    detail.originalObjectKey = mediaAsset.originalObjectKey.trim();
     detail.thumbnailObjectKey = mediaAsset.thumbnailObjectKey.trim();
   }
 
@@ -116,6 +124,8 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
     if (!detail.createdAt) detail.createdAt = link.createdAt.trim();
     if (!detail.mediaKind) detail.mediaKind = link.mediaKind.trim();
     if (!detail.mediaMetadata) detail.mediaMetadata = link.mediaMetadata.trim();
+    if (!detail.originalObjectKey) detail.originalObjectKey = link.originalObjectKey.trim();
+    if (!detail.thumbnailObjectKey) detail.thumbnailObjectKey = link.thumbnailObjectKey.trim();
 
     if (link.entityType.trim().toLowerCase() === "person") {
       const personId = link.entityId.trim();
@@ -172,6 +182,11 @@ async function buildMediaDetail(tenantKey: string, fileId: string) {
 
   detail.people.sort((a, b) => a.displayName.localeCompare(b.displayName));
   detail.households.sort((a, b) => a.label.localeCompare(b.label));
+  const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
+  if (directObjectUrlFactory) {
+    detail.previewUrl = detail.thumbnailObjectKey ? directObjectUrlFactory(detail.thumbnailObjectKey) : "";
+    detail.originalUrl = detail.originalObjectKey ? directObjectUrlFactory(detail.originalObjectKey) : "";
+  }
 
   return {
     item: detail,

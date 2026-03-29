@@ -4,6 +4,45 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Direct thumbnail delivery (authorized list + OCI direct URLs + thumbnail backfill)
+  Priority: High
+  Status: In progress 2026-03-29
+  Est date: 2026-03-29
+  Desc: Remove per-image auth/proxy bottlenecks on media tiles by authorizing once on media search, returning OCI-direct thumbnail URLs in the search/detail payload, and backfilling missing thumbnail object keys so preview requests do not keep falling back to large originals.
+  Scope:
+  - Keep tenant authorization at `/api/t/[tenantKey]/photos/search` as the primary access gate for tile eligibility.
+  - Add direct OCI URL fields to media search/detail payloads (`previewUrl`, `originalUrl`) when object keys are available.
+  - Move media tile image loading to direct preview URLs with safe fallback to existing proxy routes on load failure.
+  - Support modal image/document direct loading from signed/direct object URLs with fallback to existing proxy paths.
+  - Add missing `thumbnailObjectKey` to list payloads so modal metadata no longer waits on detail fetch just to display that field.
+  - Add safe thumbnail backfill behavior for image assets missing `thumbnail_object_key` so preview paths can self-heal legacy rows.
+  - Preserve existing behavior for non-image assets and for rows without OCI object keys.
+  Phases:
+  - Phase 1: URL delivery plumbing
+    - Add OCI direct URL generation helper in object storage layer with safe fallback behavior when signing/direct URL generation is unavailable.
+    - Extend search/detail routes to include `previewUrl`/`originalUrl` and key fields from canonical `MediaAssets`.
+  - Phase 2: UI cutover with fallback
+    - Update media tiles and modal preview to use direct URLs first.
+    - Keep robust per-item fallback to existing `/viewer/photo/...` proxy paths on image load error.
+  - Phase 3: Thumbnail-key healing
+    - Add runtime-safe thumbnail generation/backfill path for image assets that have original object keys but missing thumbnail keys.
+    - Persist generated thumbnail keys on `MediaAssets` to eliminate repeated fallback work.
+  - Phase 4: Validation
+    - Confirm tile network behavior uses OCI-direct URLs for items with thumbnail keys.
+    - Confirm unauthorized media still does not appear from search results.
+    - Confirm modal metadata shows `thumbnailObjectKey` immediately when present in list payload.
+    - Confirm legacy rows with missing thumbnail keys are healed and then serve previews without original-size fallback.
+  API/UI/data changes:
+  - API: `/photos/search` and `/photos/[fileId]` include direct URL fields and thumbnail/original object key-backed fields.
+  - UI: media tile/modal preview use direct URLs first with proxy fallback.
+  - Data: `MediaAssets.thumbnail_object_key` can be backfilled for legacy image assets when missing.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Deployed media tiles load via direct preview URLs for keyed assets and remain functional via fallback for edge cases.
+  Completion criteria:
+  - Media tile loading is no longer bottlenecked by per-image session-checked proxy requests for keyed OCI assets.
+  - Missing thumbnail keys are reduced through backfill and no longer routinely force large-original preview fallbacks.
 - [ ] Correct media recency to use database add timestamp
   Priority: High
   Status: In progress 2026-03-25

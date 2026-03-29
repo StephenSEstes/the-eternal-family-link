@@ -319,3 +319,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Combine canonical field migration and identity simplification in the same release.
 - `Impact`: Current runtime keeps both identifiers for now.
 - `Follow-up`: Revisit only after the new canonical asset model is stable.
+
+## 2026-03-29
+
+- `Area`: Media thumbnail delivery performance
+- `Decision`: Authorize media visibility at list/search time and deliver OCI-direct thumbnail/original URLs in media API payloads, while keeping proxy fallback for reliability.
+- `Reason`: Per-image auth-proxy checks were a major tile-load bottleneck and degraded adoption-critical perceived performance.
+- `Alternatives Considered`: Keep session-checked proxy on every image request, or make all media objects globally public.
+- `Impact`: Media tile/modal surfaces prefer direct object URLs for keyed assets; proxy routes remain fallback paths.
+- `Follow-up`: Continue reducing missing `thumbnail_object_key` rows so preview never falls back to full originals.
