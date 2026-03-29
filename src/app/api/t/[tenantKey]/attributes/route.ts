@@ -52,14 +52,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     const attributes = await getAttributesForEntity(effectiveTenantKey, entityType, entityId);
     const canonicalPrimaryPhotoFileId = entityType === "person" ? person?.photoFileId.trim() ?? "" : "";
     const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
-    const withMedia = await Promise.all(
-      attributes.map(async (item) => ({
+    const withMedia: Array<(typeof attributes)[number] & { media: Awaited<ReturnType<typeof getAttributeMediaLinks>> }> = [];
+    for (const item of attributes) {
+      const mediaLinks = await getAttributeMediaLinks(
+        effectiveTenantKey,
+        item.attributeId,
+        entityType === "person" ? { allFamilies: true } : undefined,
+      );
+      withMedia.push({
         ...item,
-        media: (await getAttributeMediaLinks(
-          effectiveTenantKey,
-          item.attributeId,
-          entityType === "person" ? { allFamilies: true } : undefined,
-        )).map((media) => ({
+        media: mediaLinks.map((media) => ({
           ...media,
           previewUrl:
             directObjectUrlFactory && media.thumbnailObjectKey
@@ -71,8 +73,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
               : "",
           isPrimary: Boolean(canonicalPrimaryPhotoFileId) && media.fileId.trim() === canonicalPrimaryPhotoFileId,
         })),
-      })),
-    );
+      });
+    }
 
     return NextResponse.json({
       tenantKey: effectiveTenantKey,

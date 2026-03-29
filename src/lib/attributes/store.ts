@@ -9,11 +9,12 @@ import {
 import {
   createTableRecord,
   deleteTableRecordById,
-  getTableRecords,
   updateTableRecordById,
 } from "@/lib/data/runtime";
 import {
   deleteOciMediaLink,
+  getOciAttributeRowById,
+  getOciAttributeRowsForEntity,
   ensureOciAttributesTable,
   getOciMediaLinksForEntity,
   getOciMediaLinksForEntityAllFamilies,
@@ -128,10 +129,12 @@ function toAttributeRecord(row: Record<string, string>): AttributeRecord {
 
 export async function getAttributesForEntity(tenantKey: string, entityType: AttributeEntityType, entityId: string) {
   await ensureAttributesStorage(tenantKey);
-  const rows = await getTableRecords(ATTRIBUTES_TABLE, tenantKey).catch(() => []);
+  const rows = await getOciAttributeRowsForEntity({
+    entityType,
+    entityId,
+  }).catch(() => []);
   return rows
     .map((row) => toAttributeRecord(row.data))
-    .filter((row) => normalize(row.entityType) === normalize(entityType) && row.entityId === entityId)
     .sort((a, b) => {
       if (a.typeKey !== b.typeKey) return a.typeKey.localeCompare(b.typeKey);
       return (b.dateStart || "").localeCompare(a.dateStart || "") || a.attributeId.localeCompare(b.attributeId);
@@ -150,8 +153,7 @@ export async function getAttributesForEntityWithMedia(tenantKey: string, entityT
 
 export async function getAttributeById(tenantKey: string, attributeId: string) {
   await ensureAttributesStorage(tenantKey);
-  const rows = await getTableRecords(ATTRIBUTES_TABLE, tenantKey).catch(() => []);
-  const row = rows.find((item) => readCell(item.data, "attribute_id") === attributeId);
+  const row = await getOciAttributeRowById(attributeId).catch(() => null);
   return row ? toAttributeRecord(row.data) : null;
 }
 

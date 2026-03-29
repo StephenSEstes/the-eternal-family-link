@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (attributes SQL filter + fan-out reduction for NJS-040 timeouts)
+
+- `Date`: 2026-03-29
+- `Change`: Replaced full-table `Attributes` reads with SQL-filtered `entity_type + entity_id` queries, added explicit attributes index compatibility creation, and changed `/api/t/[tenantKey]/attributes` media enrichment from parallel fan-out to sequential loading to avoid OCI pool queue saturation.
+- `Type`: API | Infra | Performance
+- `Why`: Root cause of repeated `attribute_load_failed` with `NJS-040` was connection pool starvation from full-table attribute scans plus parallel per-attribute media-link DB calls in the same request path.
+- `Files`: `src/lib/oci/tables.ts`, `src/lib/attributes/store.ts`, `src/app/api/t/[tenantKey]/attributes/route.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Attribute reads now use SQL filtering by `entity_type`/`entity_id` instead of loading all rows first.
+  - Attributes route no longer issues parallel per-attribute media-link DB calls.
+- `Rollback Notes`: Revert this commit to restore prior full-scan + parallel fan-out behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (reduce OCI pool hold time during media-assets DDL contention)
 
 - `Date`: 2026-03-29

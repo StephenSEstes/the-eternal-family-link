@@ -34,6 +34,7 @@ let poolPromise: Promise<OciPool> | null = null;
 const OCI_RECOVERABLE_CONNECTION_ERROR_CODES = new Set(["NJS-500", "NJS-521"]);
 const OCI_RECOVERABLE_CONNECTION_RETRY_DELAY_MS = 120;
 const OCI_RECOVERABLE_CONNECTION_MAX_ATTEMPTS = 2;
+let attributesTableCompatEnsured = false;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
@@ -378,84 +379,103 @@ export function listOciTables() {
   return Object.keys(TABLES);
 }
 
-export async function ensureOciAttributesTable() {
-  return withConnection(async (connection) => {
+async function ensureAttributesTableCompatibility(connection: OciConnection) {
+  if (attributesTableCompatEnsured) {
+    return;
+  }
+  try {
+    await connection.execute(
+      `CREATE TABLE attributes (
+         attribute_id VARCHAR2(128) PRIMARY KEY,
+         entity_type VARCHAR2(32) NOT NULL,
+         entity_id VARCHAR2(128) NOT NULL,
+         attribute_kind VARCHAR2(32),
+         attribute_type VARCHAR2(80) NOT NULL,
+         attribute_type_category VARCHAR2(120),
+         attribute_date VARCHAR2(32),
+         date_is_estimated VARCHAR2(8),
+         estimated_to VARCHAR2(16),
+         attribute_detail CLOB,
+         attribute_notes CLOB,
+         end_date VARCHAR2(32),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64)
+       )`,
+    );
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const attributeIndexStatements = [
+    `CREATE INDEX idx_attributes_entity ON attributes(entity_type, entity_id, attribute_type)`,
+  ];
+  for (const sql of attributeIndexStatements) {
     try {
-      await connection.execute(
-        `CREATE TABLE attributes (
-           attribute_id VARCHAR2(128) PRIMARY KEY,
-           entity_type VARCHAR2(32) NOT NULL,
-           entity_id VARCHAR2(128) NOT NULL,
-           attribute_kind VARCHAR2(32),
-           attribute_type VARCHAR2(80) NOT NULL,
-           attribute_type_category VARCHAR2(120),
-           attribute_date VARCHAR2(32),
-           date_is_estimated VARCHAR2(8),
-           estimated_to VARCHAR2(16),
-           attribute_detail CLOB,
-           attribute_notes CLOB,
-           end_date VARCHAR2(32),
-           created_at VARCHAR2(64),
-           updated_at VARCHAR2(64)
-         )`,
-      );
-      await connection.execute(
-        `CREATE INDEX idx_attributes_entity ON attributes(entity_type, entity_id, attribute_type)`,
-      );
-      await connection.commit();
+      await connection.execute(sql);
     } catch (error) {
       const message = (error as Error).message ?? "";
-      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      if (!/ORA-00955|ORA-01408|name is already used by an existing object|such column list already indexed/i.test(message)) {
         throw error;
       }
     }
+  }
 
-    const additiveColumns = [
-      "attribute_kind VARCHAR2(32)",
-      "attribute_type VARCHAR2(80)",
-      "attribute_type_category VARCHAR2(120)",
-      "attribute_date VARCHAR2(32)",
-      "date_is_estimated VARCHAR2(8)",
-      "estimated_to VARCHAR2(16)",
-      "attribute_detail CLOB",
-      "attribute_notes CLOB",
-      "end_date VARCHAR2(32)",
-      "updated_at VARCHAR2(64)",
-    ];
-    for (const columnSql of additiveColumns) {
-      try {
-        await connection.execute(`ALTER TABLE attributes ADD (${columnSql})`);
-      } catch (error) {
-        const message = (error as Error).message ?? "";
-        if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
-          throw error;
-        }
+  const additiveColumns = [
+    "attribute_kind VARCHAR2(32)",
+    "attribute_type VARCHAR2(80)",
+    "attribute_type_category VARCHAR2(120)",
+    "attribute_date VARCHAR2(32)",
+    "date_is_estimated VARCHAR2(8)",
+    "estimated_to VARCHAR2(16)",
+    "attribute_detail CLOB",
+    "attribute_notes CLOB",
+    "end_date VARCHAR2(32)",
+    "updated_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE attributes ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-01430|ORA-01442|ORA-00904/i.test(message)) {
+        throw error;
       }
     }
-    await connection.execute(`
-      UPDATE attributes
-         SET attribute_kind =
-               CASE
-                 WHEN NVL(TRIM(attribute_kind), '') <> '' THEN attribute_kind
-                 WHEN LOWER(TRIM(attribute_type)) = 'other' AND NVL(TRIM(attribute_date), '') <> '' THEN 'event'
-                 WHEN LOWER(TRIM(attribute_type)) IN (
-                   'birth',
-                   'education',
-                   'religious',
-                   'accomplishment',
-                   'injury_health',
-                   'life_event',
-                   'moved',
-                   'employment',
-                   'family_relationship',
-                   'pet',
-                   'travel'
-                 ) THEN 'event'
-                 ELSE 'descriptor'
-               END
-       WHERE NVL(TRIM(attribute_kind), '') = ''
-    `);
-    await connection.commit();
+  }
+  await connection.execute(`
+    UPDATE attributes
+       SET attribute_kind =
+             CASE
+               WHEN NVL(TRIM(attribute_kind), '') <> '' THEN attribute_kind
+               WHEN LOWER(TRIM(attribute_type)) = 'other' AND NVL(TRIM(attribute_date), '') <> '' THEN 'event'
+               WHEN LOWER(TRIM(attribute_type)) IN (
+                 'birth',
+                 'education',
+                 'religious',
+                 'accomplishment',
+                 'injury_health',
+                 'life_event',
+                 'moved',
+                 'employment',
+                 'family_relationship',
+                 'pet',
+                 'travel'
+               ) THEN 'event'
+               ELSE 'descriptor'
+             END
+     WHERE NVL(TRIM(attribute_kind), '') = ''
+  `);
+  await connection.commit();
+  attributesTableCompatEnsured = true;
+}
+
+export async function ensureOciAttributesTable() {
+  return withConnection(async (connection) => {
+    await ensureAttributesTableCompatibility(connection);
   });
 }
 
@@ -1193,6 +1213,10 @@ async function ensurePersonFaceProfilesTableCompatibility(connection: OciConnect
 }
 
 async function ensureTableCompatibility(connection: OciConnection, tableName: string) {
+  if (tableName === "attributes") {
+    await ensureAttributesTableCompatibility(connection);
+    return;
+  }
   if (tableName === "people") {
     await ensurePeopleTableCompatibility(connection);
     return;
@@ -1281,6 +1305,89 @@ export async function getOciTableRecordById(
     );
     const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
     if (!row) return null;
+    const data: Record<string, string> = {};
+    for (const header of config.headers) {
+      data[header] = fromDbValue((row as Record<string, unknown>)[header.toUpperCase()]);
+    }
+    return { rowNumber: 0, data };
+  });
+}
+
+export async function getOciAttributeRowsForEntity(input: {
+  entityType: "person" | "household";
+  entityId: string;
+}): Promise<TableRecord[]> {
+  const entityType = input.entityType.trim().toLowerCase();
+  const entityId = input.entityId.trim();
+  if (!entityType || !entityId) {
+    return [];
+  }
+  const config = TABLES.Attributes;
+  const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
+  return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, config.tableName);
+    const result = await connection.execute(
+      `SELECT ${selectCols}
+       FROM attributes
+       WHERE entity_type = :entityType
+         AND entity_id = :entityId
+       ORDER BY attribute_type, attribute_date DESC, attribute_id`,
+      { entityType, entityId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    if (rows.length > 0) {
+      return rows.map((row, idx) => {
+        const data: Record<string, string> = {};
+        for (const header of config.headers) {
+          data[header] = fromDbValue((row as Record<string, unknown>)[header.toUpperCase()]);
+        }
+        return { rowNumber: idx + 2, data };
+      });
+    }
+
+    // Legacy fallback for rows with inconsistent whitespace/casing in existing OCI data.
+    const fallback = await connection.execute(
+      `SELECT ${selectCols}
+       FROM attributes
+       WHERE LOWER(TRIM(entity_type)) = :entityType
+         AND TRIM(entity_id) = :entityId
+       ORDER BY attribute_type, attribute_date DESC, attribute_id`,
+      { entityType, entityId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const fallbackRows = (fallback.rows ?? []) as Record<string, unknown>[];
+    return fallbackRows.map((row, idx) => {
+      const data: Record<string, string> = {};
+      for (const header of config.headers) {
+        data[header] = fromDbValue((row as Record<string, unknown>)[header.toUpperCase()]);
+      }
+      return { rowNumber: idx + 2, data };
+    });
+  });
+}
+
+export async function getOciAttributeRowById(attributeId: string): Promise<TableRecord | null> {
+  const normalizedAttributeId = attributeId.trim();
+  if (!normalizedAttributeId) {
+    return null;
+  }
+  const config = TABLES.Attributes;
+  const selectCols = config.headers.map((h) => (h === "date" ? "date_value AS date" : h)).join(", ");
+  return withConnection(async (connection) => {
+    await ensureTableCompatibility(connection, config.tableName);
+    const result = await connection.execute(
+      `SELECT ${selectCols}
+       FROM attributes
+       WHERE attribute_id = :attributeId
+       FETCH FIRST 1 ROWS ONLY`,
+      { attributeId: normalizedAttributeId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    if (!row) {
+      return null;
+    }
     const data: Record<string, string> = {};
     for (const header of config.headers) {
       data[header] = fromDbValue((row as Record<string, unknown>)[header.toUpperCase()]);
