@@ -219,6 +219,15 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Impact`: Uploads attempt best-effort thumbnail generation and preview delivery prefers thumbnail object variants.
 - `Follow-up`: Keep storage behavior variant-aware.
 
+## 2026-03-29
+
+- `Area`: Person media access scope
+- `Decision`: For the person modal media load path (`/api/t/[tenantKey]/attributes?entity_type=person`), temporarily bypass tenant-family membership gating and load media links across all family groups for the signed-in session.
+- `Reason`: Requested to prioritize complete person-linked media visibility over tenant-scoped filtering in this phase.
+- `Alternatives Considered`: Keep tenant-scoped access list gating; add a new opt-in global media mode.
+- `Impact`: Person media tab can surface all images linked to the person even when links exist outside the active tenant scope.
+- `Follow-up`: Revisit and formalize long-term cross-family access policy after reliability/performance stabilization.
+
 ## 2026-03-22
 
 - `Area`: Face-recognition review workflow

@@ -6398,3 +6398,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (person media tab shows all linked images across family groups)
+
+- `Change`: Updated tenant attributes person-media load path to query attribute media links across all families (no tenant-family gate for this person-media query path), while still requiring an authenticated session.
+- `Type`: Access scope behavior, Media visibility
+- `Why`: Requested to display every image linked to the person, regardless of active family group scope.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/oci/tables.ts`
+  - `designchoices.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Updated `designchoices.md` (2026-03-29 Person media access scope).

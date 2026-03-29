@@ -2845,6 +2845,28 @@ export async function getOciMediaLinksForEntityAcrossFamilies(input: {
   );
 }
 
+export async function getOciMediaLinksForEntityAllFamilies(input: {
+  entityType: "person" | "household" | "attribute";
+  entityId: string;
+  usageType?: string;
+}): Promise<OciMediaLinkRow[]> {
+  const entityType = input.entityType;
+  const entityId = input.entityId.trim();
+  const usageType = (input.usageType ?? "").trim().toLowerCase();
+  if (!entityId) {
+    return [];
+  }
+  const usageClause = usageType ? "AND LOWER(TRIM(NVL(l.usage_type, ''))) = :usageType" : "";
+  return queryOciMediaLinks(
+    `WHERE LOWER(TRIM(l.entity_type)) = :entityType
+       AND TRIM(l.entity_id) = :entityId
+       ${usageClause}`,
+    usageType
+      ? { entityType, entityId, usageType }
+      : { entityType, entityId },
+  );
+}
+
 export async function getOciMediaLinksForTenant(familyGroupKey: string): Promise<OciMediaLinkRow[]> {
   const normalizedFamilyGroupKey = familyGroupKey.trim().toLowerCase();
   if (!normalizedFamilyGroupKey) {

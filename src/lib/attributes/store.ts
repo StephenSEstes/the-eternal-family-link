@@ -16,6 +16,7 @@ import {
   deleteOciMediaLink,
   ensureOciAttributesTable,
   getOciMediaLinksForEntity,
+  getOciMediaLinksForEntityAllFamilies,
   getOciMediaLinksForEntityAcrossFamilies,
 } from "@/lib/oci/tables";
 import type { AttributeEntityType, AttributeMediaLink, AttributeRecord } from "@/lib/attributes/types";
@@ -258,13 +259,20 @@ export async function getAttributeMediaLinks(
   attributeId: string,
   options?: {
     familyGroupKeys?: string[];
+    allFamilies?: boolean;
   },
 ): Promise<AttributeMediaLink[]> {
+  const allFamilies = options?.allFamilies === true;
   const familyGroupKeys = Array.isArray(options?.familyGroupKeys)
     ? options?.familyGroupKeys.map((value) => value.trim().toLowerCase()).filter(Boolean)
     : [];
   const links =
-    familyGroupKeys.length > 0
+    allFamilies
+      ? await getOciMediaLinksForEntityAllFamilies({
+        entityType: "attribute",
+        entityId: attributeId,
+      })
+      : familyGroupKeys.length > 0
       ? await getOciMediaLinksForEntityAcrossFamilies({
         familyGroupKeys,
         entityType: "attribute",

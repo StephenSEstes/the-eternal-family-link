@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/options";
 import { getAttributesForEntity, getAttributeMediaLinks } from "@/lib/attributes/store";
 import { getPersonById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
-import { getTenantAccesses } from "@/lib/tenant/context";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
@@ -12,10 +13,6 @@ function normalize(value: string | undefined) {
 export async function GET(request: Request, { params }: { params: Promise<{ tenantKey: string }> }) {
   try {
     const { tenantKey } = await params;
-    const resolved = await requireTenantAccess(tenantKey);
-    if ("error" in resolved) {
-      return resolved.error;
-    }
 
     const searchParams = new URL(request.url).searchParams;
     const entityType = normalize(searchParams.get("entity_type") ?? "") as "person" | "household";
@@ -27,36 +24,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
       );
     }
 
-    const tenantScopeKeys = Array.from(
-      new Set([
-        resolved.tenant.tenantKey,
-        ...getTenantAccesses(resolved.session).map((entry) => normalize(entry.tenantKey)),
-      ].filter(Boolean)),
-    );
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    let effectiveTenantKey = normalize(tenantKey);
+    if (!effectiveTenantKey) {
+      effectiveTenantKey = "default";
+    }
+    if (entityType !== "person") {
+      const resolved = await requireTenantAccess(tenantKey);
+      if ("error" in resolved) {
+        return resolved.error;
+      }
+      effectiveTenantKey = resolved.tenant.tenantKey;
+    }
 
     let person = null as Awaited<ReturnType<typeof getPersonById>>;
     if (entityType === "person") {
-      for (const scopeTenantKey of tenantScopeKeys) {
-        person = await getPersonById(entityId, scopeTenantKey);
-        if (person) {
-          break;
-        }
-      }
+      person = await getPersonById(entityId);
       if (!person) {
         return NextResponse.json({ error: "not_found", message: "person not found" }, { status: 404 });
       }
     }
 
-    const attributes = await getAttributesForEntity(resolved.tenant.tenantKey, entityType, entityId);
+    const attributes = await getAttributesForEntity(effectiveTenantKey, entityType, entityId);
     const canonicalPrimaryPhotoFileId = entityType === "person" ? person?.photoFileId.trim() ?? "" : "";
     const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
     const withMedia = await Promise.all(
       attributes.map(async (item) => ({
         ...item,
         media: (await getAttributeMediaLinks(
-          resolved.tenant.tenantKey,
+          effectiveTenantKey,
           item.attributeId,
-          entityType === "person" ? { familyGroupKeys: tenantScopeKeys } : undefined,
+          entityType === "person" ? { allFamilies: true } : undefined,
         )).map((media) => ({
           ...media,
           previewUrl:
@@ -73,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
     );
 
     return NextResponse.json({
-      tenantKey: resolved.tenant.tenantKey,
+      tenantKey: effectiveTenantKey,
       entityType,
       entityId,
       attributes: withMedia,
