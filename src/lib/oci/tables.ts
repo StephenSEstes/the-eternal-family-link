@@ -649,11 +649,28 @@ async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
     "exif_fingerprint VARCHAR2(128)",
   ];
   for (const columnSql of additiveColumns) {
-    try {
-      await connection.execute(`ALTER TABLE media_assets ADD (${columnSql})`);
-    } catch (error) {
-      const message = (error as Error).message ?? "";
-      if (!isColumnAlreadyCompatibleError(message)) {
+    let applied = false;
+    let attempts = 0;
+    while (!applied && attempts < 3) {
+      try {
+        await connection.execute(`ALTER TABLE media_assets ADD (${columnSql})`);
+        applied = true;
+      } catch (error) {
+        const message = (error as Error).message ?? "";
+        if (isColumnAlreadyCompatibleError(message)) {
+          applied = true;
+          continue;
+        }
+        if (isTransientDdlConcurrencyError(message) && attempts < 2) {
+          attempts += 1;
+          await waitMs(180);
+          continue;
+        }
+        // Avoid failing read paths when another worker is concurrently running compatibility DDL.
+        if (isTransientDdlConcurrencyError(message)) {
+          applied = true;
+          break;
+        }
         throw error;
       }
     }

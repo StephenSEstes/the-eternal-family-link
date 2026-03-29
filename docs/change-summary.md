@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (fix ORA-14411 contention in media-assets compatibility DDL)
+
+- `Date`: 2026-03-29
+- `Change`: Hardened `ensureMediaAssetsTableCompatibility()` to tolerate concurrent DDL contention (`ORA-14411` / `ORA-00054`) by retrying briefly and then skipping that additive column for the current request instead of throwing a route-level 500.
+- `Type`: Infra | API Reliability
+- `Why`: Root cause of `attribute_load_failed` 500 was concurrent `ALTER TABLE media_assets ADD (...)` operations in the tenant attributes read path. One worker running compatibility DDL could cause another worker to fail with `ORA-14411`, bubbling to `[tenant-attributes] failed`.
+- `Files`: `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - During concurrent cold starts, media-assets compatibility DDL contention no longer hard-fails the request path.
+- `Rollback Notes`: Revert this commit to restore previous strict DDL behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (OCI recoverable connection retry for tenant attributes 500s)
 
 - `Date`: 2026-03-29

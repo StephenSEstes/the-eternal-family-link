@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-29: Fixed `attribute_load_failed` 500s caused by concurrent `media_assets` compatibility DDL (`ORA-14411`) by adding transient DDL contention handling in the media-assets compatibility path. See `docs/change-summary.md`.
 - 2026-03-29: Added bounded retry for recoverable OCI Oracle transport drops (`NJS-500`/`NJS-521`) at the shared DB connection boundary to reduce transient `/api/t/[tenantKey]/attributes` 500s. See `docs/change-summary.md`.
 
 - 2026-03-27: Added feature-flagged multi-tenant session guard refresh so family switches don’t require re-auth; see `docs/change-summary.md`.
