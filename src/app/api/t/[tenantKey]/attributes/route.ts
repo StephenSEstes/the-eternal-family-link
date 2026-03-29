@@ -5,6 +5,7 @@ import { getAttributesForEntity, getAttributeMediaLinks } from "@/lib/attributes
 import { getPersonById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
+import { getOciMediaLinksForEntityAllFamilies } from "@/lib/oci/tables";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
@@ -75,12 +76,43 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
         })),
       });
     }
+    const directMediaLinks: Awaited<ReturnType<typeof getAttributeMediaLinks>> = [];
+    if (entityType === "person") {
+      const fileIdsInAttributeLinks = new Set(
+        withMedia.flatMap((item) => item.media.map((media) => media.fileId.trim()).filter(Boolean)),
+      );
+      const directPersonLinks = await getOciMediaLinksForEntityAllFamilies({
+        entityType: "person",
+        entityId,
+      }).catch(() => []);
+      const seenDirectFileIds = new Set<string>();
+      for (const media of directPersonLinks) {
+        const fileId = media.fileId.trim();
+        if (!fileId || fileIdsInAttributeLinks.has(fileId) || seenDirectFileIds.has(fileId)) {
+          continue;
+        }
+        seenDirectFileIds.add(fileId);
+        directMediaLinks.push({
+          ...media,
+          previewUrl:
+            directObjectUrlFactory && media.thumbnailObjectKey
+              ? directObjectUrlFactory(media.thumbnailObjectKey)
+              : "",
+          originalUrl:
+            directObjectUrlFactory && media.originalObjectKey
+              ? directObjectUrlFactory(media.originalObjectKey)
+              : "",
+          isPrimary: Boolean(canonicalPrimaryPhotoFileId) && media.fileId.trim() === canonicalPrimaryPhotoFileId,
+        });
+      }
+    }
 
     return NextResponse.json({
       tenantKey: effectiveTenantKey,
       entityType,
       entityId,
       attributes: withMedia,
+      directMediaLinks,
     });
   } catch (error) {
     console.error("[tenant-attributes] failed", error);

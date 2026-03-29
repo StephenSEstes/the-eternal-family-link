@@ -1167,7 +1167,50 @@ export function PersonEditModal({
     }
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
-    setAttributes(toPersonMediaAttributes(canonicalAttributes, person?.photoFileId ?? ""));
+    const canonicalPrimaryPhotoFileId = person?.photoFileId ?? "";
+    const attributeMedia = toPersonMediaAttributes(canonicalAttributes, canonicalPrimaryPhotoFileId);
+    const existingFileIds = new Set(attributeMedia.map((item) => item.valueText.trim()).filter(Boolean));
+    const directMediaLinks = Array.isArray(body?.directMediaLinks)
+      ? (body.directMediaLinks as Array<Record<string, unknown>>)
+      : [];
+    const directPersonMedia: PersonAttribute[] = [];
+    for (const rawLink of directMediaLinks) {
+      const fileId = String(rawLink.fileId ?? "").trim();
+      if (!fileId || existingFileIds.has(fileId)) {
+        continue;
+      }
+      existingFileIds.add(fileId);
+      directPersonMedia.push({
+        attributeId: String(rawLink.linkId ?? `direct-link:${fileId}`),
+        attributeType: "media",
+        valueText: fileId,
+        valueJson: String(rawLink.mediaMetadata ?? "").trim(),
+        mediaMetadata: String(rawLink.mediaMetadata ?? "").trim(),
+        label: String(rawLink.label ?? "").trim(),
+        isPrimary: Boolean(canonicalPrimaryPhotoFileId) && fileId === canonicalPrimaryPhotoFileId.trim(),
+        sortOrder: Number(rawLink.sortOrder ?? 0) || 0,
+        startDate: String(rawLink.photoDate ?? "").trim(),
+        notes: String(rawLink.description ?? "").trim(),
+        sourceProvider: String(rawLink.sourceProvider ?? "").trim(),
+        originalObjectKey: String(rawLink.originalObjectKey ?? "").trim(),
+        thumbnailObjectKey: String(rawLink.thumbnailObjectKey ?? "").trim(),
+        previewUrl: String(rawLink.previewUrl ?? "").trim(),
+        originalUrl: String(rawLink.originalUrl ?? "").trim(),
+      });
+    }
+    const mergedMedia = [...attributeMedia, ...directPersonMedia].sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) {
+        return Number(b.isPrimary) - Number(a.isPrimary);
+      }
+      if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder;
+      }
+      if (a.startDate !== b.startDate) {
+        return (b.startDate || "").localeCompare(a.startDate || "");
+      }
+      return a.valueText.localeCompare(b.valueText);
+    });
+    setAttributes(mergedMedia);
     setFailedDirectPreviewFileIds(new Set());
     setFailedDirectOriginalFileIds(new Set());
   };

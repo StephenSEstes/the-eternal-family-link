@@ -270,5 +270,6 @@ This file is a quick release-log entry point.
 - 2026-03-29: Updated person modal media load to show all images linked to the person across family groups (temporarily bypassing tenant-family gating for this query path, while keeping authenticated session requirement). See `docs/change-summary.md`.
 - 2026-03-29: Hardened NextAuth JWT refresh to preserve cached session on transient DB lookup failures, reducing broad `401` auth drops across API routes. See `docs/change-summary.md`.
 - 2026-03-29: Fixed media modal AI face-associate flow so successful person association immediately refreshes Details-tab Linked-to chips (no modal reopen needed). See `docs/change-summary.md`.
+- 2026-03-29: Fixed person modal Media tab parity to include direct person-linked media (not just attribute-linked media), deduped by file ID. See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.

@@ -6504,3 +6504,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Manual flow: Media modal -> AI tab -> associate face to person -> Details tab shows new linked-person chip without closing/reopening modal.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (person modal media now includes direct person links, not only attribute links)
+
+- `Change`: Extended person-attributes API payload to include `directMediaLinks` for person-level media associations that are not attached to an attribute, and updated Person modal media-state loading to merge those links with attribute-linked media, deduped by `fileId`.
+- `Type`: Bug fix, Data-path parity
+- `Why`: Root cause was a query/path mismatch: Media Library person filter counted direct `media_links` where `entity_type='person'`, while Person modal only rendered media from `/attributes` (attribute-backed links). This caused lower counts in Person modal.
+- `Files`:
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None (code-path read merge only).
+- `Verify`:
+  - `npm run lint` passes.
+  - Person modal `Media` tab now includes files linked directly to the person (for example via AI face-associate) even when no attribute row exists.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
