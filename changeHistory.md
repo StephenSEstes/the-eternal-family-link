@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-29: Person modal media detail `Linked To` now supports attribute link/unlink (scoped to active person attributes) in addition to people and households. See `docs/change-summary.md`.
 - 2026-03-29: Reworked attributes load path to query by `entity_type/entity_id` in SQL (no full-table read), ensured attributes index compatibility, and removed parallel per-attribute media-link fan-out in `/api/t/[tenantKey]/attributes` to reduce `NJS-040` queue timeouts. See `docs/change-summary.md`.
 - 2026-03-29: Reduced media-assets compatibility DDL contention hold time by removing retry-sleep loops on `ORA-14411`/`ORA-00054`, addressing `NJS-040` queue timeout pressure on tenant-attributes reads. See `docs/change-summary.md`.
 - 2026-03-29: Fixed `attribute_load_failed` 500s caused by concurrent `media_assets` compatibility DDL (`ORA-14411`) by adding transient DDL contention handling in the media-assets compatibility path. See `docs/change-summary.md`.

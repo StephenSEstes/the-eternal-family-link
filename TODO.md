@@ -4,6 +4,41 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Add attribute linking in Person modal Media detail ("Linked To")
+  Priority: High
+  Status: In progress 2026-03-29
+  Est date: 2026-03-29
+  Desc: Extend the Person modal Media detail link picker so users can link selected media to existing attributes of the active person, in addition to people and households.
+  Scope:
+  - Add `attribute` as a supported link target in the Person modal `Linked To` search picker.
+  - Limit attribute search candidates to attributes owned by the active person in the open modal.
+  - Show linked attribute chips in the same `Linked To` list and support removing those links.
+  - Keep existing person/household link behavior unchanged.
+  Phases:
+  - Phase 1: API route support
+    - Add tenant-scoped route to add/remove a media link for an existing person attribute.
+    - Validate person and attribute ownership before link mutation.
+  - Phase 2: Person modal UI wiring
+    - Extend search result types and chips to include attributes.
+    - Add attribute link/unlink handlers and pending-operation state.
+  - Phase 3: Association refresh model
+    - Include active-person attribute associations in selected-photo association refresh.
+    - Preserve people/household refresh behavior from existing `/photos/search` path.
+  - Phase 4: Validation
+    - Confirm attribute options are limited to active person attributes.
+    - Confirm add/remove link updates chips and persists after modal reopen.
+  API/UI/data changes:
+  - API: add person-attribute media link mutation route under tenant/person/attribute path.
+  - UI: `PersonEditModal` `Linked To` list includes `attribute` chips and search options.
+  - Data: `media_links` adds/removes `entity_type='attribute'` rows for selected attribute IDs.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - In deployed UI, selected media can be linked/unlinked to active-person attributes from the same linking control.
+  Completion criteria:
+  - `Linked To` supports people, households, and attributes.
+  - Attribute search candidates are restricted to the active person's attributes.
+  - Link changes persist and reload correctly.
 - [ ] Extend direct media delivery model to Person modal Media tab
   Priority: High
   Status: In progress 2026-03-29

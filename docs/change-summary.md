@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (person modal media linking now supports active-person attributes)
+
+- `Date`: 2026-03-29
+- `Change`: Added attribute link/unlink support to the Person modal Media detail `Linked To` control, including an attribute-only candidate list scoped to the active person.
+- `Type`: UI | API
+- `Why`: Root cause was capability gap in the linking flow: the modal only allowed linking selected media to people/households, even though attribute-level media links are part of the data model.
+- `Files`: `src/components/PersonEditModal.tsx`, `src/app/api/t/[tenantKey]/people/[personId]/attributes/[attributeId]/media-link/route.ts`, `TODO.md`
+- `Data Changes`: No schema migration. Runtime now creates/removes `media_links` rows for `entity_type='attribute'` via the new route.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - In Person modal Media detail, searching `Linked To` now returns active-person attributes and supports add/remove attribute links.
+  - Linked attribute chips refresh after link/unlink and persist after reopening the modal.
+- `Rollback Notes`: Revert this commit to restore people/household-only linking in Person modal media detail.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (attributes SQL filter + fan-out reduction for NJS-040 timeouts)
 
 - `Date`: 2026-03-29

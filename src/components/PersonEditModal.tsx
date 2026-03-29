@@ -68,6 +68,14 @@ type HouseholdLink = {
 
 type PersonAttribute = PersonMediaAttributeRecord;
 
+type AboutAttributeMediaLink = {
+  linkId?: string;
+  fileId?: string;
+  label?: string;
+  description?: string;
+  photoDate?: string;
+};
+
 type AboutAttribute = {
   attributeId: string;
   category?: "descriptor" | "event";
@@ -83,6 +91,14 @@ type AboutAttribute = {
   shareFamilyGroupKey?: string;
   createdAt?: string;
   updatedAt?: string;
+  media?: AboutAttributeMediaLink[];
+};
+
+type SelectedPhotoAttributeAssociation = {
+  attributeId: string;
+  label: string;
+  attributeType: string;
+  linkId: string;
 };
 
 type PhotoLibraryItem = {
@@ -162,7 +178,8 @@ type DraftMeta = {
 
 type LinkedSearchResult =
   | { kind: "person"; key: string; displayName: string; personId: string; gender: "male" | "female" | "unspecified" }
-  | { kind: "household"; key: string; displayName: string; householdId: string };
+  | { kind: "household"; key: string; displayName: string; householdId: string }
+  | { kind: "attribute"; key: string; displayName: string; attributeId: string; attributeType: string };
 
 function toMonthDay(value: string) {
   const raw = value.trim();
@@ -293,6 +310,35 @@ function isAudioMediaByMetadata(fileId: string, raw?: string) {
 
 function isDocumentMediaByMetadata(fileId: string, raw?: string) {
   return inferPersonMediaKind(fileId, raw) === "document";
+}
+
+function buildAttributeAssociationLabel(attribute: AboutAttribute) {
+  const typeLabel = String(attribute.attributeTypeCategory || attribute.attributeType || attribute.typeKey || "").trim();
+  const detailLabel = String(attribute.label || attribute.attributeDetail || attribute.valueText || "").trim();
+  if (typeLabel && detailLabel) {
+    return `${typeLabel}: ${detailLabel}`;
+  }
+  return detailLabel || typeLabel || attribute.attributeId;
+}
+
+function collectLinkedAttributesForFile(fileId: string, sourceAttributes: AboutAttribute[]): SelectedPhotoAttributeAssociation[] {
+  const normalizedFileId = fileId.trim();
+  if (!normalizedFileId) return [];
+  const matches = new Map<string, SelectedPhotoAttributeAssociation>();
+  for (const attribute of sourceAttributes) {
+    const attributeId = String(attribute.attributeId ?? "").trim();
+    if (!attributeId || matches.has(attributeId)) continue;
+    const media = Array.isArray(attribute.media) ? attribute.media : [];
+    const linkedMedia = media.find((entry) => String(entry.fileId ?? "").trim() === normalizedFileId);
+    if (!linkedMedia) continue;
+    matches.set(attributeId, {
+      attributeId,
+      label: buildAttributeAssociationLabel(attribute),
+      attributeType: String(attribute.attributeType || attribute.typeKey || "attribute").trim().toLowerCase() || "attribute",
+      linkId: String(linkedMedia.linkId ?? "").trim(),
+    });
+  }
+  return Array.from(matches.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function normalizeAttributeKey(value?: string) {
@@ -606,6 +652,7 @@ function StickySaveBar({
 function PeopleTagger({
   taggedPeople,
   taggedHouseholds,
+  taggedAttributes,
   searchQuery,
   onSearchQueryChange,
   results,
@@ -614,12 +661,14 @@ function PeopleTagger({
   onAddLink,
   onRemovePerson,
   onRemoveHousehold,
+  onRemoveAttribute,
   getGenderForPerson,
   busy,
   statusText,
 }: {
   taggedPeople: Array<{ personId: string; displayName: string }>;
   taggedHouseholds: Array<{ householdId: string; label: string }>;
+  taggedAttributes: SelectedPhotoAttributeAssociation[];
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   results: LinkedSearchResult[];
@@ -628,6 +677,7 @@ function PeopleTagger({
   onAddLink: (result: LinkedSearchResult) => void;
   onRemovePerson: (personId: string) => void;
   onRemoveHousehold: (householdId: string) => void;
+  onRemoveAttribute: (attributeId: string, linkId: string) => void;
   getGenderForPerson: (personId: string) => "male" | "female" | "unspecified";
   busy: boolean;
   statusText: string;
@@ -682,7 +732,28 @@ function PeopleTagger({
             ) : null}
           </div>
         ))}
-        {taggedPeople.length === 0 && taggedHouseholds.length === 0 ? (
+        {taggedAttributes.map((attribute) => (
+          <div key={`attribute-linked-${attribute.attributeId}`} className="person-linked-row">
+            <div className="person-linked-main">
+              <span className="person-linked-icon" aria-hidden="true">
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, lineHeight: 1 }}>A</span>
+              </span>
+              <span>{attribute.label || attribute.attributeId}</span>
+            </div>
+            {canManage ? (
+              <button
+                type="button"
+                className="person-chip-remove"
+                disabled={busy || pendingOps.has(`a-${attribute.attributeId}`)}
+                onClick={() => onRemoveAttribute(attribute.attributeId, attribute.linkId)}
+                aria-label={`Remove ${attribute.label || attribute.attributeId} from photo`}
+              >
+                {pendingOps.has(`a-${attribute.attributeId}`) ? "..." : "x"}
+              </button>
+            ) : null}
+          </div>
+        ))}
+        {taggedPeople.length === 0 && taggedHouseholds.length === 0 && taggedAttributes.length === 0 ? (
           <span className="status-chip status-chip--neutral">None</span>
         ) : null}
       </div>
@@ -693,31 +764,41 @@ function PeopleTagger({
             className="input"
             value={searchQuery}
             onChange={(e) => onSearchQueryChange(e.target.value)}
-            placeholder="Search people, households"
+            placeholder="Search people, households, attributes"
           />
           {searchQuery.trim() ? (
             <div className="person-typeahead-list">
               {results.length > 0 ? (
-                results.map((entry) => (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    className="person-typeahead-item"
-                    onClick={() => onAddLink(entry)}
-                    disabled={busy || pendingOps.has(entry.kind === "person" ? entry.personId : `h-${entry.householdId}`)}
-                  >
-                    <span className="person-linked-main">
-                      <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
-                        {entry.kind === "person" ? (
-                          <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
-                        ) : (
-                          <HouseholdIcon />
-                        )}
+                results.map((entry) => {
+                  const pendingKey =
+                    entry.kind === "person"
+                      ? entry.personId
+                      : entry.kind === "household"
+                        ? `h-${entry.householdId}`
+                        : `a-${entry.attributeId}`;
+                  return (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      className="person-typeahead-item"
+                      onClick={() => onAddLink(entry)}
+                      disabled={busy || pendingOps.has(pendingKey)}
+                    >
+                      <span className="person-linked-main">
+                        <span className={`person-linked-icon${entry.kind === "household" ? " person-linked-icon--household" : ""}`} aria-hidden="true">
+                          {entry.kind === "person" ? (
+                            <img src={getGenderAvatarSrc(entry.gender)} alt="" className="person-linked-avatar" />
+                          ) : entry.kind === "household" ? (
+                            <HouseholdIcon />
+                          ) : (
+                            <span style={{ fontSize: "0.72rem", fontWeight: 700, lineHeight: 1 }}>A</span>
+                          )}
+                        </span>
+                        <span>{entry.displayName}</span>
                       </span>
-                      <span>{entry.displayName}</span>
-                    </span>
-                  </button>
-                ))
+                    </button>
+                  );
+                })
               ) : (
                 <p className="page-subtitle" style={{ margin: 0 }}>No matching results.</p>
               )}
@@ -812,7 +893,8 @@ export function PersonEditModal({
   const [selectedPhotoAssociations, setSelectedPhotoAssociations] = useState<{
     people: Array<{ personId: string; displayName: string }>;
     households: Array<{ householdId: string; label: string }>;
-  }>({ people: [], households: [] });
+    attributes: SelectedPhotoAttributeAssociation[];
+  }>({ people: [], households: [], attributes: [] });
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
@@ -1155,7 +1237,10 @@ export function PersonEditModal({
   const largePhotoOriginalSrc = largePhotoSelectedItem
     ? getPersonMediaOriginalSrc(largePhotoSelectedItem)
     : getPhotoProxyPath(largePhotoFileId, activeTenantKey);
-  const loadPersonAttributeState = async (personId: string, scopedTenantKey = activeTenantKey) => {
+  const loadPersonAttributeState = async (
+    personId: string,
+    scopedTenantKey = activeTenantKey,
+  ): Promise<AboutAttribute[] | null> => {
     const res = await fetch(
       `/api/t/${encodeURIComponent(scopedTenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
       { cache: "no-store" },
@@ -1163,7 +1248,7 @@ export function PersonEditModal({
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       setStatus(`Attribute load failed: ${res.status}`);
-      return;
+      return null;
     }
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
@@ -1213,6 +1298,7 @@ export function PersonEditModal({
     setAttributes(mergedMedia);
     setFailedDirectPreviewFileIds(new Set());
     setFailedDirectOriginalFileIds(new Set());
+    return canonicalAttributes as AboutAttribute[];
   };
 
   const clearStoryImportQueue = () => {
@@ -2007,6 +2093,33 @@ export function PersonEditModal({
     });
     return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [contextHouseholds]);
+  const linkableAttributes = useMemo(() => {
+    const map = new Map<string, { attributeId: string; displayName: string; attributeType: string; searchText: string }>();
+    for (const item of aboutAttributes) {
+      const attributeId = String(item.attributeId ?? "").trim();
+      if (!attributeId || map.has(attributeId)) continue;
+      const attributeType = String(item.attributeType || item.typeKey || "attribute").trim().toLowerCase() || "attribute";
+      const displayName = buildAttributeAssociationLabel(item);
+      const searchText = [
+        displayName,
+        attributeType,
+        String(item.attributeTypeCategory ?? "").trim(),
+        String(item.attributeDetail ?? "").trim(),
+        String(item.label ?? "").trim(),
+        String(item.valueText ?? "").trim(),
+        String(item.attributeDate ?? "").trim(),
+      ]
+        .join(" ")
+        .toLowerCase();
+      map.set(attributeId, {
+        attributeId,
+        displayName,
+        attributeType,
+        searchText,
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [aboutAttributes]);
   const linkedPersonIdsForSelectedPhoto = useMemo(
     () => new Set(taggedPeople.map((entry) => entry.personId)),
     [taggedPeople],
@@ -2014,6 +2127,10 @@ export function PersonEditModal({
   const linkedHouseholdIdsForSelectedPhoto = useMemo(
     () => new Set(selectedPhotoAssociations.households.map((entry) => entry.householdId)),
     [selectedPhotoAssociations.households],
+  );
+  const linkedAttributeIdsForSelectedPhoto = useMemo(
+    () => new Set(selectedPhotoAssociations.attributes.map((entry) => entry.attributeId)),
+    [selectedPhotoAssociations.attributes],
   );
   const tagSearchResults = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
@@ -2035,8 +2152,25 @@ export function PersonEditModal({
         displayName: item.label,
         householdId: item.householdId,
       }));
-    return [...personMatches, ...householdMatches].slice(0, 10);
-  }, [availableHouseholdLinks, linkablePeople, linkedHouseholdIdsForSelectedPhoto, linkedPersonIdsForSelectedPhoto, tagQuery]);
+    const attributeMatches: LinkedSearchResult[] = linkableAttributes
+      .filter((item) => item.searchText.includes(q) && !linkedAttributeIdsForSelectedPhoto.has(item.attributeId))
+      .map((item) => ({
+        kind: "attribute",
+        key: `attribute-${item.attributeId}`,
+        displayName: item.displayName,
+        attributeId: item.attributeId,
+        attributeType: item.attributeType,
+      }));
+    return [...personMatches, ...householdMatches, ...attributeMatches].slice(0, 12);
+  }, [
+    availableHouseholdLinks,
+    linkableAttributes,
+    linkablePeople,
+    linkedAttributeIdsForSelectedPhoto,
+    linkedHouseholdIdsForSelectedPhoto,
+    linkedPersonIdsForSelectedPhoto,
+    tagQuery,
+  ]);
   useEffect(() => {
     if (!selectedPhoto) {
       return;
@@ -2055,7 +2189,8 @@ export function PersonEditModal({
     setTaggedPeople(selectedPhotoAssociations.people);
   }, [selectedPhotoAssociations.people]);
 
-  const refreshSelectedPhotoAssociations = async (fileId: string) => {
+  const refreshSelectedPhotoAssociations = async (fileId: string, sourceAttributes?: AboutAttribute[]) => {
+    const linkedAttributes = collectLinkedAttributesForFile(fileId, sourceAttributes ?? aboutAttributes);
     setSelectedPhotoAssociationsBusy(true);
     const res = await fetch(
       `/api/t/${encodeURIComponent(activeTenantKey)}/photos/search?q=${encodeURIComponent(fileId)}`,
@@ -2063,7 +2198,7 @@ export function PersonEditModal({
     );
     const body = await res.json().catch(() => null);
     if (!res.ok) {
-      setSelectedPhotoAssociations({ people: [], households: [] });
+      setSelectedPhotoAssociations({ people: [], households: [], attributes: linkedAttributes });
       setSelectedPhotoAssociationsBusy(false);
       return;
     }
@@ -2076,17 +2211,18 @@ export function PersonEditModal({
         displayName: peopleNameById.get(entry.personId.trim()) || entry.displayName || entry.personId,
       })),
       households: item?.households ?? [],
+      attributes: linkedAttributes,
     });
     setSelectedPhotoAssociationsBusy(false);
   };
 
   useEffect(() => {
     if (!selectedPhoto || !showPhotoDetail) {
-      setSelectedPhotoAssociations({ people: [], households: [] });
+      setSelectedPhotoAssociations({ people: [], households: [], attributes: [] });
       return;
     }
     void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
-  }, [peopleNameById, selectedPhoto, showPhotoDetail, tenantKey]);
+  }, [aboutAttributes, peopleNameById, selectedPhoto, showPhotoDetail, tenantKey]);
 
   const openPhotoDetail = (fileId: string) => {
     setSelectedPhotoFileId(fileId);
@@ -2193,6 +2329,38 @@ export function PersonEditModal({
     return true;
   };
 
+  const linkSelectedPhotoToAttribute = async (targetAttributeId: string) => {
+    if (!selectedPhoto || !targetAttributeId || !person) return false;
+    setPhotoAssociationStatus("Saving association...");
+    setStatus("Linking photo to selected attribute...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(targetAttributeId)}/media-link`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: selectedPhoto.valueText,
+          label: draftMeta.label || selectedPhoto.label || "media",
+          description: draftMeta.description || selectedPhoto.notes || "",
+          photoDate: draftMeta.date || selectedPhoto.startDate || "",
+          mediaMetadata: selectedPhoto.mediaMetadata || selectedPhoto.valueJson || "",
+        }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Link photo failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoAssociationStatus("Association save failed.");
+      return false;
+    }
+    const refreshedAttributes = await loadPersonAttributeState(person.personId);
+    setStatus("Photo linked to selected attribute.");
+    await refreshSelectedPhotoAssociations(selectedPhoto.valueText, refreshedAttributes ?? undefined);
+    setPhotoAssociationStatus("Association saved.");
+    return true;
+  };
+
   const removePhotoAssociationFromPerson = async (targetPersonId: string, fileId: string) => {
     if (!person) return false;
     setPhotoBusy(true);
@@ -2245,6 +2413,33 @@ export function PersonEditModal({
     return true;
   };
 
+  const removePhotoAssociationFromAttribute = async (attributeIdToUnlink: string, fileId: string, linkId: string) => {
+    if (!person || !attributeIdToUnlink || !linkId) return false;
+    setPhotoBusy(true);
+    setPhotoAssociationStatus("Removing association...");
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/${encodeURIComponent(attributeIdToUnlink)}/media-link`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkId }),
+      },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setStatus(`Remove association failed: ${res.status} ${String(message).slice(0, 160)}`);
+      setPhotoAssociationStatus("Association remove failed.");
+      setPhotoBusy(false);
+      return false;
+    }
+    const refreshedAttributes = await loadPersonAttributeState(person.personId);
+    await refreshSelectedPhotoAssociations(fileId, refreshedAttributes ?? undefined);
+    setPhotoAssociationStatus("Association removed.");
+    setPhotoBusy(false);
+    return true;
+  };
+
   const addTagByTypeahead = async (candidate: LinkedSearchResult) => {
     if (!selectedPhoto) {
       return;
@@ -2257,17 +2452,28 @@ export function PersonEditModal({
       setPhotoAssociationStatus("Already linked.");
       return;
     }
+    if (candidate.kind === "attribute" && linkedAttributeIdsForSelectedPhoto.has(candidate.attributeId)) {
+      setPhotoAssociationStatus("Already linked.");
+      return;
+    }
     setTagQuery("");
     if (candidate.kind === "person") {
       setTaggedPeople((current) => [...current, { personId: candidate.personId, displayName: candidate.displayName }]);
     }
-    const key = candidate.kind === "person" ? candidate.personId : `h-${candidate.householdId}`;
+    const key =
+      candidate.kind === "person"
+        ? candidate.personId
+        : candidate.kind === "household"
+          ? `h-${candidate.householdId}`
+          : `a-${candidate.attributeId}`;
     setPendingOps((current) => new Set(current).add(key));
     try {
       const ok =
         candidate.kind === "person"
           ? await linkSelectedPhotoToPerson(candidate.personId)
-          : await linkSelectedPhotoToHousehold(candidate.householdId);
+          : candidate.kind === "household"
+            ? await linkSelectedPhotoToHousehold(candidate.householdId)
+            : await linkSelectedPhotoToAttribute(candidate.attributeId);
       if (!ok) {
         if (candidate.kind === "person") {
           setTaggedPeople((current) => current.filter((item) => item.personId !== candidate.personId));
@@ -2307,6 +2513,21 @@ export function PersonEditModal({
     setPendingOps((current) => new Set(current).add(key));
     try {
       await removePhotoAssociationFromHousehold(householdIdToRemove, selectedPhoto.valueText);
+    } finally {
+      setPendingOps((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const removeAttributeByChip = async (attributeIdToRemove: string, linkId: string) => {
+    if (!selectedPhoto || !attributeIdToRemove || !linkId) return;
+    const key = `a-${attributeIdToRemove}`;
+    setPendingOps((current) => new Set(current).add(key));
+    try {
+      await removePhotoAssociationFromAttribute(attributeIdToRemove, selectedPhoto.valueText, linkId);
     } finally {
       setPendingOps((current) => {
         const next = new Set(current);
@@ -3556,6 +3777,7 @@ export function PersonEditModal({
                   <PeopleTagger
                     taggedPeople={taggedPeople}
                     taggedHouseholds={selectedPhotoAssociations.households}
+                    taggedAttributes={selectedPhotoAssociations.attributes}
                     searchQuery={tagQuery}
                     onSearchQueryChange={setTagQuery}
                     results={tagSearchResults}
@@ -3569,6 +3791,9 @@ export function PersonEditModal({
                     }}
                     onRemoveHousehold={(householdIdToRemove) => {
                       void removeHouseholdByChip(householdIdToRemove);
+                    }}
+                    onRemoveAttribute={(attributeIdToRemove, linkId) => {
+                      void removeAttributeByChip(attributeIdToRemove, linkId);
                     }}
                     getGenderForPerson={(personId) => peopleByIdForLinks.get(personId)?.gender ?? "unspecified"}
                     busy={photoBusy || selectedPhotoAssociationsBusy}
