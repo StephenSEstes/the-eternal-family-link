@@ -328,3 +328,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep session-checked proxy on every image request, or make all media objects globally public.
 - `Impact`: Media tile/modal surfaces prefer direct object URLs for keyed assets; proxy routes remain fallback paths.
 - `Follow-up`: Continue reducing missing `thumbnail_object_key` rows so preview never falls back to full originals.
+
+- `Area`: Person modal media scope
+- `Decision`: Person modal media (`Profile > Media`) should aggregate person-linked media across all family groups the signed-in user can access, not only the currently active family group.
+- `Reason`: Active-family-only scoping hid valid person-linked media and caused inconsistent user trust when switching families.
+- `Alternatives Considered`: Keep active-family-only scoping in person modal media.
+- `Impact`: Tenant-scoped attribute reads now load person media links across accessible family groups for person entities.
+- `Follow-up`: Keep non-person entity views scoped to active family unless explicitly changed.

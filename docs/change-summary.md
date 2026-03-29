@@ -572,7 +572,7 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `Load EXIF` is available only when EXIF has not been collected for an image and persists EXIF plus refreshed status on demand.
   - The `Upload` and `Thumbnail` tiles show filenames, and the `Face Coordinates` tile continues to show the detected-face count.
 - `Rollback Notes`: Revert commit.
-- `Design Decision Change`: No design decision change.
+- `Design Decision Change`: Updated `designchoices.md` with a new person-modal media scope decision (cross-accessible-family aggregation).
 ## 2026-03-25 (fix media recency to use database add time)
 
 - `Change`: Corrected media upload recency so `MediaAssets.created_at` now represents the immutable database add/upload timestamp instead of the browser file's old `lastModified` value, while `photo_date` remains the media-date field.
@@ -6345,5 +6345,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
   - `npm run build` passes.
   - Opening a photo and selecting `Generate Suggestions` no longer fails immediately with plain `unauthorized` before Vision debug can populate.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (person modal media load fix across family groups)
+
+- `Change`: Fixed person-modal media loading failures by hardening OCI media-link sort ordering against non-numeric `sort_order` values and loading person attribute media links across all accessible family groups (not just the active one). Also renamed the person modal tab label from `Pictures` to `Media` and updated related empty/search text.
+- `Type`: Bug fix, Access scope, UI copy
+- `Why`: Root cause was the attribute media query path failing in OCI when `media_links.sort_order` contained non-numeric values (`TO_NUMBER(...)` conversion failure), plus person media links being scoped to only the active family group.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None required for this release (query hardening prevents bad `sort_order` values from crashing reads).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.

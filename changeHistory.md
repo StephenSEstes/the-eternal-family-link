@@ -259,5 +259,6 @@ This file is a quick release-log entry point.
 - 2026-03-28: Fixed multi-face detect insert failures (`ORA-00001`) by switching face ID generation to SHA-256 hash-based IDs. See `docs/change-summary.md`.
 - 2026-03-28: Reduced per-request auth DB refresh in JWT callback by caching tenant access in token for 5 minutes to improve media proxy load performance. See `docs/change-summary.md`.
 - 2026-03-29: Switched media list/detail to OCI direct preview/original URL delivery with proxy fallback, and added runtime thumbnail-key backfill for legacy image assets missing thumbnails. See `docs/change-summary.md`.
+- 2026-03-29: Fixed person modal media-tab loading by hardening OCI `sort_order` parsing and loading person-linked media across all accessible family groups (active family no longer limits media visibility there). See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.

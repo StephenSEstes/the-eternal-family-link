@@ -12,7 +12,12 @@ import {
   getTableRecords,
   updateTableRecordById,
 } from "@/lib/data/runtime";
-import { deleteOciMediaLink, ensureOciAttributesTable, getOciMediaLinksForEntity } from "@/lib/oci/tables";
+import {
+  deleteOciMediaLink,
+  ensureOciAttributesTable,
+  getOciMediaLinksForEntity,
+  getOciMediaLinksForEntityAcrossFamilies,
+} from "@/lib/oci/tables";
 import type { AttributeEntityType, AttributeMediaLink, AttributeRecord } from "@/lib/attributes/types";
 
 export const ATTRIBUTES_TABLE = "Attributes";
@@ -248,12 +253,28 @@ export async function deleteAttribute(tenantKey: string, attributeId: string) {
   return true;
 }
 
-export async function getAttributeMediaLinks(tenantKey: string, attributeId: string): Promise<AttributeMediaLink[]> {
-  const links = await getOciMediaLinksForEntity({
-    familyGroupKey: tenantKey,
-    entityType: "attribute",
-    entityId: attributeId,
-  });
+export async function getAttributeMediaLinks(
+  tenantKey: string,
+  attributeId: string,
+  options?: {
+    familyGroupKeys?: string[];
+  },
+): Promise<AttributeMediaLink[]> {
+  const familyGroupKeys = Array.isArray(options?.familyGroupKeys)
+    ? options?.familyGroupKeys.map((value) => value.trim().toLowerCase()).filter(Boolean)
+    : [];
+  const links =
+    familyGroupKeys.length > 0
+      ? await getOciMediaLinksForEntityAcrossFamilies({
+        familyGroupKeys,
+        entityType: "attribute",
+        entityId: attributeId,
+      })
+      : await getOciMediaLinksForEntity({
+        familyGroupKey: tenantKey,
+        entityType: "attribute",
+        entityId: attributeId,
+      });
   return links.map((item) => ({
     linkId: item.linkId,
     fileId: item.fileId,

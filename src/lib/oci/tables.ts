@@ -1666,7 +1666,11 @@ async function queryOciMediaLinks(
         ORDER BY
           a.file_id,
           CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
-          TO_NUMBER(NVL(NULLIF(TRIM(l.sort_order), ''), '0')),
+          CASE
+            WHEN REGEXP_LIKE(TRIM(NVL(l.sort_order, '')), '^[+-]?[0-9]+([.][0-9]+)?$')
+              THEN TO_NUMBER(TRIM(l.sort_order))
+            ELSE 0
+          END,
           COALESCE(NULLIF(TRIM(a.created_at), ''), l.created_at),
           l.link_id`,
       binds,
@@ -2807,6 +2811,37 @@ export async function getOciMediaLinksForEntity(input: {
     usageType
       ? { familyGroupKey, entityType, entityId, usageType }
       : { familyGroupKey, entityType, entityId },
+  );
+}
+
+export async function getOciMediaLinksForEntityAcrossFamilies(input: {
+  familyGroupKeys: string[];
+  entityType: "person" | "household" | "attribute";
+  entityId: string;
+  usageType?: string;
+}): Promise<OciMediaLinkRow[]> {
+  const familyGroupKeys = Array.from(
+    new Set(input.familyGroupKeys.map((value) => value.trim().toLowerCase()).filter(Boolean)),
+  );
+  const entityType = input.entityType;
+  const entityId = input.entityId.trim();
+  const usageType = (input.usageType ?? "").trim().toLowerCase();
+  if (familyGroupKeys.length === 0 || !entityId) {
+    return [];
+  }
+  const scopePredicate = buildScopePredicate("l.family_group_key", familyGroupKeys, "familyGroup");
+  const usageClause = usageType ? "AND LOWER(TRIM(NVL(l.usage_type, ''))) = :usageType" : "";
+  return queryOciMediaLinks(
+    `WHERE ${scopePredicate.clause}
+       AND LOWER(TRIM(l.entity_type)) = :entityType
+       AND TRIM(l.entity_id) = :entityId
+       ${usageClause}`,
+    {
+      ...scopePredicate.binds,
+      entityType,
+      entityId,
+      ...(usageType ? { usageType } : {}),
+    },
   );
 }
 

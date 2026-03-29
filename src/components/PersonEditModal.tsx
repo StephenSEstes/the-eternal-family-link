@@ -2435,7 +2435,7 @@ export function PersonEditModal({
         <div className="person-modal-tabs">
           <button type="button" className={`tab-pill ${activeTab === "contact" ? "active" : ""}`} onClick={() => handleSelectTab("contact")}>Profile</button>
           <button type="button" className={`tab-pill ${activeTab === "attributes" ? "active" : ""}`} onClick={() => handleSelectTab("attributes")}>{aboutLabel}</button>
-          <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => handleSelectTab("photos")}>Pictures</button>
+          <button type="button" className={`tab-pill ${activeTab === "photos" ? "active" : ""}`} onClick={() => handleSelectTab("photos")}>Media</button>
         </div>
         <div className="person-modal-content">
 
@@ -3337,7 +3337,7 @@ export function PersonEditModal({
                   ) : null}
                 </div>
               </div>
-              <label className="label">Search this person&apos;s photos</label>
+              <label className="label">Search this person&apos;s media</label>
               <input
                 className="input"
                 value={personPhotoQuery}
@@ -3385,7 +3385,7 @@ export function PersonEditModal({
                 </div>
               ) : (
                 <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-                  No photos recorded.
+                  No media recorded.
                 </p>
               )}
             </div>
