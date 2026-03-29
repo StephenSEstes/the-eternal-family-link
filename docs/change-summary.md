@@ -6415,3 +6415,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Updated `designchoices.md` (2026-03-29 Person media access scope).
+
+## 2026-03-29 (auth session resilience to transient DB failures)
+
+- `Change`: Hardened NextAuth JWT callback refresh logic to avoid throwing on transient OCI access errors; now falls back to cached token state instead of collapsing session to global `401`.
+- `Type`: Reliability, Auth/session
+- `Why`: Root cause for broad `401 unauthorized` spikes is session token refresh failures when DB lookups fail mid-session.
+- `Files`:
+  - `src/lib/auth/options.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

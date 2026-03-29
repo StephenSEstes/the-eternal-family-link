@@ -263,5 +263,6 @@ This file is a quick release-log entry point.
 - 2026-03-29: Switched person modal media tiles/detail to direct OCI preview/original URL loading with per-file proxy fallback (matching media-tab delivery principles). See `docs/change-summary.md`.
 - 2026-03-29: Fixed person modal missing/duplicate media tiles by expanding all attribute media links, deduping by `file_id`, and keying selection by `file_id` with direct preview->direct original->proxy fallback order. See `docs/change-summary.md`.
 - 2026-03-29: Updated person modal media load to show all images linked to the person across family groups (temporarily bypassing tenant-family gating for this query path, while keeping authenticated session requirement). See `docs/change-summary.md`.
+- 2026-03-29: Hardened NextAuth JWT refresh to preserve cached session on transient DB lookup failures, reducing broad `401` auth drops across API routes. See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.

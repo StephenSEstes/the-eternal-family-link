@@ -241,41 +241,99 @@ export const authOptions: NextAuthOptions = {
       return ok;
     },
     async jwt({ token, user, account }) {
-      if (account?.provider === "credentials" && user) {
-        const local = user as {
-          role?: "ADMIN" | "USER";
-          person_id?: string;
-          tenantKey?: string;
-          tenantName?: string;
-          tenantAccesses?: {
-            tenantKey: string;
-            tenantName: string;
-            role: "ADMIN" | "USER";
-            personId: string;
-          }[];
-        };
-        const localPersonId = typeof local.person_id === "string" ? local.person_id.trim() : "";
-        const localAccesses = localPersonId ? await getEnabledUserAccessListByPersonId(localPersonId).catch(() => []) : [];
-        const primaryLocalAccess = localAccesses[0];
+      try {
+        if (account?.provider === "credentials" && user) {
+          const local = user as {
+            role?: "ADMIN" | "USER";
+            person_id?: string;
+            tenantKey?: string;
+            tenantName?: string;
+            tenantAccesses?: {
+              tenantKey: string;
+              tenantName: string;
+              role: "ADMIN" | "USER";
+              personId: string;
+            }[];
+          };
+          const localPersonId = typeof local.person_id === "string" ? local.person_id.trim() : "";
+          const localAccesses = localPersonId ? await getEnabledUserAccessListByPersonId(localPersonId).catch(() => []) : [];
+          const primaryLocalAccess = localAccesses[0];
 
-        token.role = primaryLocalAccess?.role ?? local.role;
-        token.person_id = primaryLocalAccess?.personId ?? local.person_id;
-        token.tenantKey = primaryLocalAccess?.tenantKey ?? local.tenantKey;
-        token.tenantName = primaryLocalAccess?.tenantName ?? local.tenantName;
-        token.tenantAccesses = localAccesses.length > 0 ? localAccesses : local.tenantAccesses ?? [];
-        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
-        return token;
-      }
+          token.role = primaryLocalAccess?.role ?? local.role;
+          token.person_id = primaryLocalAccess?.personId ?? local.person_id;
+          token.tenantKey = primaryLocalAccess?.tenantKey ?? local.tenantKey;
+          token.tenantName = primaryLocalAccess?.tenantName ?? local.tenantName;
+          token.tenantAccesses = localAccesses.length > 0 ? localAccesses : local.tenantAccesses ?? [];
+          (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+          return token;
+        }
 
-      const currentEmail = (typeof user?.email === "string" ? user.email : token.email) ?? "";
-      if (hasSteveAccess(currentEmail)) {
-        const normalizedEmail = currentEmail.trim().toLowerCase();
-        const emailAccesses = normalizedEmail ? await getEnabledUserAccessList(normalizedEmail) : [];
-        const resolvedPersonId =
-          emailAccesses[0]?.personId ||
-          (typeof token.person_id === "string" ? token.person_id : "") ||
-          STEVE_PERSON_ID;
-        const personId = resolvedPersonId.trim();
+        const currentEmail = (typeof user?.email === "string" ? user.email : token.email) ?? "";
+        if (hasSteveAccess(currentEmail)) {
+          const normalizedEmail = currentEmail.trim().toLowerCase();
+          const emailAccesses = normalizedEmail ? await getEnabledUserAccessList(normalizedEmail).catch(() => []) : [];
+          const resolvedPersonId =
+            emailAccesses[0]?.personId ||
+            (typeof token.person_id === "string" ? token.person_id : "") ||
+            STEVE_PERSON_ID;
+          const personId = resolvedPersonId.trim();
+          const cachedAccesses =
+            Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
+              ? (token.tenantAccesses as {
+                  tenantKey: string;
+                  tenantName: string;
+                  role: "ADMIN" | "USER";
+                  personId: string;
+                }[])
+              : [];
+          let allAccesses = cachedAccesses;
+          // Refresh only on initial sign-in or when cache is empty.
+          if (user?.email || allAccesses.length === 0 || emailAccesses.length > 0) {
+            try {
+              allAccesses = await getAllFamilyGroupAccesses(personId);
+            } catch {
+              allAccesses = [
+                {
+                  tenantKey: DEFAULT_TENANT_KEY,
+                  tenantName: DEFAULT_TENANT_NAME,
+                  role: "ADMIN",
+                  personId,
+                },
+              ];
+            }
+          }
+          const primary = allAccesses[0] ?? {
+            tenantKey: DEFAULT_TENANT_KEY,
+            tenantName: DEFAULT_TENANT_NAME,
+            role: "ADMIN" as const,
+            personId,
+          };
+          token.role = "ADMIN";
+          token.person_id = personId;
+          token.tenantKey = primary.tenantKey;
+          token.tenantName = primary.tenantName;
+          token.tenantAccesses = allAccesses;
+          token.steveAccess = true;
+          (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+          return token;
+        }
+
+        if (user?.email) {
+          const accesses = await getEnabledUserAccessList(user.email).catch(() => []);
+          if (accesses.length === 0) {
+            return token;
+          }
+          const primary = accesses[0];
+
+          token.role = primary.role;
+          token.person_id = primary.personId;
+          token.tenantKey = primary.tenantKey;
+          token.tenantName = primary.tenantName;
+          token.tenantAccesses = accesses;
+          (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+        }
+
+        const tokenPersonId = typeof token.person_id === "string" ? token.person_id.trim() : "";
         const cachedAccesses =
           Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
             ? (token.tenantAccesses as {
@@ -285,100 +343,47 @@ export const authOptions: NextAuthOptions = {
                 personId: string;
               }[])
             : [];
-        let allAccesses = cachedAccesses;
-        // Refresh only on initial sign-in or when cache is empty.
-        if (user?.email || allAccesses.length === 0 || emailAccesses.length > 0) {
-          try {
-            allAccesses = await getAllFamilyGroupAccesses(personId);
-          } catch {
-            allAccesses = [
-              {
-                tenantKey: DEFAULT_TENANT_KEY,
-                tenantName: DEFAULT_TENANT_NAME,
-                role: "ADMIN",
-                personId,
-              },
-            ];
-          }
-        }
-        const primary = allAccesses[0] ?? {
-          tenantKey: DEFAULT_TENANT_KEY,
-          tenantName: DEFAULT_TENANT_NAME,
-          role: "ADMIN" as const,
-          personId,
-        };
-        token.role = "ADMIN";
-        token.person_id = personId;
-        token.tenantKey = primary.tenantKey;
-        token.tenantName = primary.tenantName;
-        token.tenantAccesses = allAccesses;
-        token.steveAccess = true;
-        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
-        return token;
-      }
-
-      if (user?.email) {
-        const accesses = await getEnabledUserAccessList(user.email);
-        if (accesses.length === 0) {
-          return token;
-        }
-        const primary = accesses[0];
-
-        token.role = primary.role;
-        token.person_id = primary.personId;
-        token.tenantKey = primary.tenantKey;
-        token.tenantName = primary.tenantName;
-        token.tenantAccesses = accesses;
-        (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
-      }
-
-      const tokenPersonId = typeof token.person_id === "string" ? token.person_id.trim() : "";
-      const cachedAccesses =
-        Array.isArray(token.tenantAccesses) && token.tenantAccesses.length > 0
-          ? (token.tenantAccesses as {
-              tenantKey: string;
-              tenantName: string;
-              role: "ADMIN" | "USER";
-              personId: string;
-            }[])
-          : [];
-      const lastSyncedAt = Number((token as Record<string, unknown>).tenantAccessesSyncedAt ?? 0);
-      const shouldRefreshAccesses =
-        cachedAccesses.length === 0 ||
-        !Number.isFinite(lastSyncedAt) ||
-        Date.now() - lastSyncedAt > TENANT_ACCESS_REFRESH_INTERVAL_MS;
-      if (tokenPersonId) {
-        if (shouldRefreshAccesses) {
-          const accesses = await getEnabledUserAccessListByPersonId(tokenPersonId);
-          if (accesses.length > 0) {
-            const primary = accesses[0];
+        const lastSyncedAt = Number((token as Record<string, unknown>).tenantAccessesSyncedAt ?? 0);
+        const shouldRefreshAccesses =
+          cachedAccesses.length === 0 ||
+          !Number.isFinite(lastSyncedAt) ||
+          Date.now() - lastSyncedAt > TENANT_ACCESS_REFRESH_INTERVAL_MS;
+        if (tokenPersonId) {
+          if (shouldRefreshAccesses) {
+            const accesses = await getEnabledUserAccessListByPersonId(tokenPersonId).catch(() => cachedAccesses);
+            if (accesses.length > 0) {
+              const primary = accesses[0];
+              token.role = primary.role;
+              token.person_id = primary.personId;
+              token.tenantKey = primary.tenantKey;
+              token.tenantName = primary.tenantName;
+              token.tenantAccesses = accesses;
+              (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+            } else {
+              token.tenantAccesses = [];
+              token.tenantKey = DEFAULT_TENANT_KEY;
+              token.tenantName = DEFAULT_TENANT_NAME;
+              (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+            }
+          } else if (cachedAccesses.length > 0) {
+            const primary = cachedAccesses[0];
             token.role = primary.role;
             token.person_id = primary.personId;
             token.tenantKey = primary.tenantKey;
             token.tenantName = primary.tenantName;
-            token.tenantAccesses = accesses;
-            (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
+            token.tenantAccesses = cachedAccesses;
           } else {
             token.tenantAccesses = [];
             token.tenantKey = DEFAULT_TENANT_KEY;
             token.tenantName = DEFAULT_TENANT_NAME;
-            (token as Record<string, unknown>).tenantAccessesSyncedAt = Date.now();
           }
-        } else if (cachedAccesses.length > 0) {
-          const primary = cachedAccesses[0];
-          token.role = primary.role;
-          token.person_id = primary.personId;
-          token.tenantKey = primary.tenantKey;
-          token.tenantName = primary.tenantName;
-          token.tenantAccesses = cachedAccesses;
-        } else {
-          token.tenantAccesses = [];
-          token.tenantKey = DEFAULT_TENANT_KEY;
-          token.tenantName = DEFAULT_TENANT_NAME;
         }
-      }
 
-      return token;
+        return token;
+      } catch (error) {
+        console.error("[auth][jwt] refresh failed, preserving cached token", error);
+        return token;
+      }
     },
     async session({ session, token }) {
       if (session.user) {
