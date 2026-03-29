@@ -31,6 +31,9 @@ type OciPool = {
 
 let cachedWalletDir: string | null = null;
 let poolPromise: Promise<OciPool> | null = null;
+const OCI_RECOVERABLE_CONNECTION_ERROR_CODES = new Set(["NJS-500", "NJS-521"]);
+const OCI_RECOVERABLE_CONNECTION_RETRY_DELAY_MS = 120;
+const OCI_RECOVERABLE_CONNECTION_MAX_ATTEMPTS = 2;
 let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
@@ -491,14 +494,54 @@ function isLocalAliasEmail(value: string) {
   return value.trim().toLowerCase().endsWith("@local");
 }
 
-async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
-  const pool = await getPool();
-  const connection = (await pool.getConnection()) as OciConnection;
-  try {
-    return await run(connection);
-  } finally {
-    await connection.close();
+function getErrorCode(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code.trim().toUpperCase() : "";
+}
+
+function isRecoverableOciConnectionError(error: unknown) {
+  const code = getErrorCode(error);
+  if (OCI_RECOVERABLE_CONNECTION_ERROR_CODES.has(code)) {
+    return true;
   }
+  const message = String((error as Error | undefined)?.message ?? "").toUpperCase();
+  if (!message) {
+    return false;
+  }
+  if (message.includes("NJS-500") || message.includes("NJS-521")) {
+    return true;
+  }
+  if (message.includes("END-OF-FILE ON COMMUNICATION CHANNEL")) {
+    return true;
+  }
+  return false;
+}
+
+async function withConnection<T>(run: (connection: OciConnection) => Promise<T>) {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= OCI_RECOVERABLE_CONNECTION_MAX_ATTEMPTS; attempt += 1) {
+    let connection: OciConnection | null = null;
+    try {
+      const pool = await getPool();
+      connection = (await pool.getConnection()) as OciConnection;
+      return await run(connection);
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        attempt < OCI_RECOVERABLE_CONNECTION_MAX_ATTEMPTS && isRecoverableOciConnectionError(error);
+      if (!retryable) {
+        throw error;
+      }
+      // Reset cached pool on recoverable transport failures and retry once.
+      poolPromise = null;
+      await waitMs(OCI_RECOVERABLE_CONNECTION_RETRY_DELAY_MS);
+    } finally {
+      if (connection) {
+        await connection.close().catch(() => undefined);
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("OCI connection failed");
 }
 
 async function getPool(): Promise<OciPool> {

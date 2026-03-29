@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-29: Added bounded retry for recoverable OCI Oracle transport drops (`NJS-500`/`NJS-521`) at the shared DB connection boundary to reduce transient `/api/t/[tenantKey]/attributes` 500s. See `docs/change-summary.md`.
+
 - 2026-03-27: Added feature-flagged multi-tenant session guard refresh so family switches don’t require re-auth; see `docs/change-summary.md`.
 - 2026-03-27: Fixed partial media-modal person-link failures by correcting the `MediaAssets` numeric bind typing, cleaning up failed link attempts, and repairing the broken Brent media links for `media-bedfb9c3`. See `docs/change-summary.md`.
 - 2026-03-26: Added an empty `AI` tab to the media modal so the tab strip now reserves a separate AI surface without changing current modal behavior. See `docs/change-summary.md`.

@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (OCI recoverable connection retry for tenant attributes 500s)
+
+- `Date`: 2026-03-29
+- `Change`: Added bounded retry handling at the shared OCI connection boundary so recoverable Oracle transport disconnects (`NJS-500` / `NJS-521`, EOF channel) retry once after resetting the cached pool.
+- `Type`: Infra | API Reliability
+- `Why`: Root cause was recoverable Oracle transport failure during `/api/t/[tenantKey]/attributes?entity_type=person...` reads. The request path reached OCI queries, raised `NJS-500/NJS-521`, and the route returned `attribute_load_failed` 500. A single targeted retry at `withConnection(...)` addresses this recoverable failure mode without changing data/schema behavior.
+- `Files`: `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - For transient OCI channel drops, first failure is retried once instead of immediately returning route 500.
+- `Rollback Notes`: Revert this commit to restore previous no-retry connection behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (Direct OCI thumbnail URLs + preview backfill)
 
 - `Date`: 2026-03-29
