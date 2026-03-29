@@ -799,6 +799,8 @@ export function PersonEditModal({
   const [tagQuery, setTagQuery] = useState("");
   const [taggedPeople, setTaggedPeople] = useState<Array<{ personId: string; displayName: string }>>([]);
   const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
+  const [failedDirectPreviewFileIds, setFailedDirectPreviewFileIds] = useState<Set<string>>(new Set());
+  const [failedDirectOriginalFileIds, setFailedDirectOriginalFileIds] = useState<Set<string>>(new Set());
   const [largePhotoFileId, setLargePhotoFileId] = useState("");
   const [largePhotoIsVideo, setLargePhotoIsVideo] = useState(false);
   const [largePhotoIsDocument, setLargePhotoIsDocument] = useState(false);
@@ -1127,6 +1129,30 @@ export function PersonEditModal({
     const type = item.attributeType.toLowerCase();
     return type === "photo" || type === "media" || type === "audio" || type === "video";
   });
+  const mediaByFileId = useMemo(() => {
+    const map = new Map<string, PersonAttribute>();
+    for (const item of allMediaAttributes) {
+      const fileId = item.valueText.trim();
+      if (!fileId || map.has(fileId)) continue;
+      map.set(fileId, item);
+    }
+    return map;
+  }, [allMediaAttributes]);
+  const getPersonMediaPreviewSrc = (item: PersonAttribute) =>
+    item.previewUrl && !failedDirectPreviewFileIds.has(item.valueText)
+      ? item.previewUrl
+      : getPhotoPreviewProxyPath(item.valueText, item.mediaMetadata || item.valueJson, activeTenantKey);
+  const getPersonMediaOriginalSrc = (item: PersonAttribute) =>
+    item.originalUrl && !failedDirectOriginalFileIds.has(item.valueText)
+      ? item.originalUrl
+      : getPhotoProxyPath(item.valueText, activeTenantKey);
+  const largePhotoSelectedItem = useMemo(
+    () => (largePhotoFileId ? mediaByFileId.get(largePhotoFileId) ?? null : null),
+    [largePhotoFileId, mediaByFileId],
+  );
+  const largePhotoOriginalSrc = largePhotoSelectedItem
+    ? getPersonMediaOriginalSrc(largePhotoSelectedItem)
+    : getPhotoProxyPath(largePhotoFileId, activeTenantKey);
   const loadPersonAttributeState = async (personId: string, scopedTenantKey = activeTenantKey) => {
     const res = await fetch(
       `/api/t/${encodeURIComponent(scopedTenantKey)}/attributes?entity_type=person&entity_id=${encodeURIComponent(personId)}`,
@@ -1140,6 +1166,8 @@ export function PersonEditModal({
     const canonicalAttributes = Array.isArray(body?.attributes) ? (body.attributes as AttributeWithMedia[]) : [];
     setAboutAttributes(canonicalAttributes as AboutAttribute[]);
     setAttributes(toPersonMediaAttributes(canonicalAttributes, person?.photoFileId ?? ""));
+    setFailedDirectPreviewFileIds(new Set());
+    setFailedDirectOriginalFileIds(new Set());
   };
 
   const clearStoryImportQueue = () => {
@@ -3355,14 +3383,14 @@ export function PersonEditModal({
                     >
                       {isVideoMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <video
-                          src={getPhotoProxyPath(item.valueText, activeTenantKey)}
+                          src={getPersonMediaOriginalSrc(item)}
                           className="person-photo-tile-image"
                           muted
                           playsInline
                         />
                       ) : isAudioMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", padding: "0.75rem" }}>
-                          <audio src={getPhotoProxyPath(item.valueText, activeTenantKey)} controls style={{ width: "100%" }} />
+                          <audio src={getPersonMediaOriginalSrc(item)} controls style={{ width: "100%" }} />
                         </div>
                       ) : isDocumentMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <div className="person-photo-tile-image" style={{ display: "grid", placeItems: "center", gap: "0.35rem", padding: "0.75rem", textAlign: "center", color: "#0f4c81" }}>
@@ -3371,9 +3399,22 @@ export function PersonEditModal({
                         </div>
                       ) : (
                         <img
-                          src={getPhotoPreviewProxyPath(item.valueText, item.mediaMetadata || item.valueJson, activeTenantKey)}
+                          src={getPersonMediaPreviewSrc(item)}
                           alt={item.label || "photo"}
                           className="person-photo-tile-image"
+                          onError={() => {
+                            if (!item.previewUrl) {
+                              return;
+                            }
+                            setFailedDirectPreviewFileIds((current) => {
+                              if (current.has(item.valueText)) {
+                                return current;
+                              }
+                              const next = new Set(current);
+                              next.add(item.valueText);
+                              return next;
+                            });
+                          }}
                         />
                       )}
                       <div className="person-photo-tile-meta">
@@ -3406,14 +3447,14 @@ export function PersonEditModal({
                   <div className="card">
                     {isVideoMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <video
-                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
+                        src={getPersonMediaOriginalSrc(selectedPhoto)}
                         className="person-photo-detail-preview"
                         controls
                         playsInline
                       />
                     ) : isAudioMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? (
                       <audio
-                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
+                        src={getPersonMediaOriginalSrc(selectedPhoto)}
                         className="person-photo-detail-preview"
                         controls
                       />
@@ -3422,7 +3463,7 @@ export function PersonEditModal({
                         <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
                         <strong>{selectedPhoto.label || "Document"}</strong>
                         <a
-                          href={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
+                          href={getPersonMediaOriginalSrc(selectedPhoto)}
                           target="_blank"
                           rel="noreferrer"
                           className="button secondary tap-button"
@@ -3433,9 +3474,22 @@ export function PersonEditModal({
                       </div>
                     ) : (
                       <img
-                        src={getPhotoProxyPath(selectedPhoto.valueText, activeTenantKey)}
+                        src={getPersonMediaOriginalSrc(selectedPhoto)}
                         alt={selectedPhoto.label || "photo"}
                         className="person-photo-detail-preview"
+                        onError={() => {
+                          if (!selectedPhoto.originalUrl) {
+                            return;
+                          }
+                          setFailedDirectOriginalFileIds((current) => {
+                            if (current.has(selectedPhoto.valueText)) {
+                              return current;
+                            }
+                            const next = new Set(current);
+                            next.add(selectedPhoto.valueText);
+                            return next;
+                          });
+                        }}
                       />
                     )}
                   </div>
@@ -3518,14 +3572,14 @@ export function PersonEditModal({
               >
                 {largePhotoIsVideo ? (
                   <video
-                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
+                    src={largePhotoOriginalSrc}
                     controls
                     playsInline
                     style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
                 ) : largePhotoIsAudio ? (
                   <audio
-                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
+                    src={largePhotoOriginalSrc}
                     controls
                     style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
                   />
@@ -3534,7 +3588,7 @@ export function PersonEditModal({
                     <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
                     <strong>Document</strong>
                     <a
-                      href={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
+                      href={largePhotoOriginalSrc}
                       target="_blank"
                       rel="noreferrer"
                       className="button secondary tap-button"
@@ -3545,9 +3599,22 @@ export function PersonEditModal({
                   </div>
                 ) : (
                   <img
-                    src={getPhotoProxyPath(largePhotoFileId, activeTenantKey)}
+                    src={largePhotoOriginalSrc}
                     alt="Large preview"
                     style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                    onError={() => {
+                      if (!largePhotoSelectedItem?.originalUrl || !largePhotoFileId) {
+                        return;
+                      }
+                      setFailedDirectOriginalFileIds((current) => {
+                        if (current.has(largePhotoFileId)) {
+                          return current;
+                        }
+                        const next = new Set(current);
+                        next.add(largePhotoFileId);
+                        return next;
+                      });
+                    }}
                   />
                 )}
               </div>

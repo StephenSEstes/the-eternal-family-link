@@ -15,6 +15,11 @@ export type PersonMediaAttributeRecord = {
   sortOrder: number;
   startDate: string;
   notes: string;
+  sourceProvider: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl: string;
+  originalUrl: string;
 };
 
 function normalize(value: string | undefined) {
@@ -74,6 +79,11 @@ export function toPersonMediaAttribute(input: AttributeWithMedia, canonicalPrima
     sortOrder: media?.sortOrder ?? 0,
     startDate: (media?.photoDate || input.attributeDate || input.dateStart || "").trim(),
     notes: (media?.description || input.attributeNotes || input.notes || "").trim(),
+    sourceProvider: media?.sourceProvider || "",
+    originalObjectKey: media?.originalObjectKey || "",
+    thumbnailObjectKey: media?.thumbnailObjectKey || "",
+    previewUrl: media?.previewUrl || "",
+    originalUrl: media?.originalUrl || "",
   };
 }
 

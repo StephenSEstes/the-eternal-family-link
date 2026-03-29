@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAttributesForEntity, getAttributeMediaLinks } from "@/lib/attributes/store";
 import { getPersonById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
+import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 import { getTenantAccesses } from "@/lib/tenant/context";
 
 function normalize(value: string | undefined) {
@@ -48,6 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
 
     const attributes = await getAttributesForEntity(resolved.tenant.tenantKey, entityType, entityId);
     const canonicalPrimaryPhotoFileId = entityType === "person" ? person?.photoFileId.trim() ?? "" : "";
+    const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
     const withMedia = await Promise.all(
       attributes.map(async (item) => ({
         ...item,
@@ -57,6 +59,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ tena
           entityType === "person" ? { familyGroupKeys: tenantScopeKeys } : undefined,
         )).map((media) => ({
           ...media,
+          previewUrl:
+            directObjectUrlFactory && media.thumbnailObjectKey
+              ? directObjectUrlFactory(media.thumbnailObjectKey)
+              : "",
+          originalUrl:
+            directObjectUrlFactory && media.originalObjectKey
+              ? directObjectUrlFactory(media.originalObjectKey)
+              : "",
           isPrimary: Boolean(canonicalPrimaryPhotoFileId) && media.fileId.trim() === canonicalPrimaryPhotoFileId,
         })),
       })),

@@ -285,6 +285,9 @@ export async function getAttributeMediaLinks(
     sortOrder: item.sortOrder,
     mediaMetadata: item.mediaMetadata,
     createdAt: item.createdAt,
+    sourceProvider: item.sourceProvider,
+    originalObjectKey: item.originalObjectKey,
+    thumbnailObjectKey: item.thumbnailObjectKey,
   }));
 }
 

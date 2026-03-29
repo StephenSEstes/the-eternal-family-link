@@ -49,4 +49,9 @@ export type AttributeMediaLink = {
   sortOrder: number;
   mediaMetadata: string;
   createdAt: string;
+  sourceProvider: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl?: string;
+  originalUrl?: string;
 };

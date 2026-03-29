@@ -4,6 +4,43 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Extend direct media delivery model to Person modal Media tab
+  Priority: High
+  Status: In progress 2026-03-29
+  Est date: 2026-03-29
+  Desc: Apply the media-library direct-loading model to the Person modal `Media` tab so tiles stop depending on per-image proxy auth checks and load reliably/speed-first.
+  Scope:
+  - Authorize once on `/api/t/[tenantKey]/attributes` for the person entity.
+  - Return direct OCI media URLs in that attributes response for linked media (`previewUrl` and `originalUrl`) when object keys exist.
+  - Load image tiles directly from OCI preview URLs with per-file fallback to existing `/viewer/photo/...` proxy paths on load error.
+  - Load modal originals from direct OCI original URLs where available, with safe fallback for failures.
+  - Keep runtime thumbnail backfill behavior active for rows missing `thumbnail_object_key` so preview fallback self-heals legacy assets.
+  - Ensure person-linked media visibility is not constrained to only the active family group for users with access to multiple groups.
+  Phases:
+  - Phase 1: API payload extension
+    - Extend person-attributes media link payload shape to include object keys and direct URL fields.
+    - Generate direct URLs once per request via OCI direct URL factory.
+  - Phase 2: Person modal UI cutover
+    - Update tile/detail image sources to prefer direct URLs.
+    - Add per-file fallback tracking for preview and original URL failures.
+  - Phase 3: Legacy thumbnail resilience
+    - Preserve preview fallback path so missing thumbnail keys continue to self-heal via existing backfill behavior.
+    - Verify fallback no longer leaves persistent blank tiles.
+  - Phase 4: Validation
+    - Confirm person modal tiles render directly from OCI for keyed assets.
+    - Confirm no regression for audio/video/document media paths.
+    - Confirm person modal still shows linked media across accessible family groups.
+  API/UI/data changes:
+  - API: `/api/t/[tenantKey]/attributes` includes direct URL fields for media links.
+  - UI: `PersonEditModal` media tile/detail image loads prefer direct URLs with fallback.
+  - Data: No schema change required; existing thumbnail backfill remains the healing mechanism.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Deployed person modal media images load reliably and faster than proxy-only behavior.
+  Completion criteria:
+  - Person modal image tiles no longer rely primarily on per-image proxy endpoints.
+  - Missing thumbnails no longer produce persistent blank tiles in normal usage.
 - [ ] Direct thumbnail delivery (authorized list + OCI direct URLs + thumbnail backfill)
   Priority: High
   Status: In progress 2026-03-29

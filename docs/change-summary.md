@@ -6364,3 +6364,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (person modal media direct URL loading)
+
+- `Change`: Extended tenant-attributes media payloads with direct OCI `previewUrl`/`originalUrl` values and updated Person modal `Media` tiles/detail/large preview to prefer direct URLs with per-file proxy fallback.
+- `Type`: Performance, Reliability, Media UX
+- `Why`: Root cause was Person modal media still loading primarily through per-image proxy routes, causing avoidable failures/latency compared with the media-library direct-loading model.
+- `Files`:
+  - `TODO.md`
+  - `src/lib/attributes/types.ts`
+  - `src/lib/attributes/store.ts`
+  - `src/lib/attributes/media-response.ts`
+  - `src/app/api/t/[tenantKey]/attributes/route.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
