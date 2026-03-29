@@ -4,6 +4,45 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Person attribute import with in-modal format guide + file upload
+  Priority: High
+  Status: In progress 2026-03-29
+  Est date: 2026-03-29
+  Desc: Add a person-scoped attribute import workflow directly in the Person modal Attributes tab, including a format/guide button with sample data and a second button to upload an import file.
+  Scope:
+  - Add `Format & Guide` action in Person modal Attributes tab.
+  - Add `Upload Import File` action in Person modal Attributes tab.
+  - Limit imported rows to the active person in the open modal (no cross-person imports).
+  - Provide import guidance with:
+    - expected CSV headers
+    - field type/size guidance
+    - allowed attribute type/category options from active tenant definitions
+    - sample CSV rows
+  Phases:
+  - Phase 1: Person import API
+    - Add person-scoped import route to return guide metadata and accept CSV import payloads.
+    - Validate rows against canonical attribute constraints and report row-level failures.
+  - Phase 2: Person modal UI
+    - Add two buttons in the Attributes tab for guide display and file upload.
+    - Add guide modal/panel showing format details and sample rows.
+  - Phase 3: Import execution + refresh
+    - Read selected file client-side and post CSV to route.
+    - Refresh person attributes/media state after successful import.
+  - Phase 4: Validation
+    - Confirm imports create attributes for active person only.
+    - Confirm guide shows current attribute type/category options and sample CSV.
+  API/UI/data changes:
+  - API: new person-scoped attributes import route (guide + upload import).
+  - UI: Person modal Attributes tab gets guide and upload controls.
+  - Data: creates person attributes via canonical `Attributes` write path; no schema change.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Uploading valid CSV in person modal creates attributes and refreshes the view.
+  Completion criteria:
+  - Two-button import UX exists in person modal Attributes tab.
+  - Guide includes field sizing/types, allowed types/categories, and sample data.
+  - Import is constrained to the active person.
 - [ ] Add attribute linking in Person modal Media detail ("Linked To")
   Priority: High
   Status: In progress 2026-03-29

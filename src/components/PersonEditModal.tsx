@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoAvatarProxyPath, getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import {
   AsyncActionButton,
@@ -132,6 +132,28 @@ type StoryImportHints = {
   attributeType: string;
   attributeTypeCategory: string;
 };
+
+type PersonAttributeImportGuide = {
+  headers: string[];
+  fields: Array<{
+    field: string;
+    required: boolean | string;
+    dataType: string;
+    maxLength: number | string;
+    description: string;
+  }>;
+  typeOptions: Array<{
+    typeKey: string;
+    typeLabel: string;
+    kind: "descriptor" | "event";
+    categoryKey: string;
+    categoryLabel: string;
+    dateMode: "none" | "single" | "range";
+    detailLabel: string;
+  }>;
+  sampleCsv: string;
+};
+
 type StoryWorkspaceStep = 1 | 2;
 type StoryWorkspaceDraft = AiStoryImportProposal & {
   localId: string;
@@ -875,6 +897,10 @@ export function PersonEditModal({
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
   const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
+  const [attributeImportBusy, setAttributeImportBusy] = useState(false);
+  const [attributeImportStatus, setAttributeImportStatus] = useState("");
+  const [showAttributeImportGuide, setShowAttributeImportGuide] = useState(false);
+  const [attributeImportGuide, setAttributeImportGuide] = useState<PersonAttributeImportGuide | null>(null);
   const [selectedPhotoFileId, setSelectedPhotoFileId] = useState("");
   const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
   const [tagQuery, setTagQuery] = useState("");
@@ -920,6 +946,7 @@ export function PersonEditModal({
   const [newSpouseBirthDate, setNewSpouseBirthDate] = useState("");
   const [newSpouseGender, setNewSpouseGender] = useState<"male" | "female" | "unspecified">("unspecified");
   const [creatingSpouse, setCreatingSpouse] = useState(false);
+  const attributeImportFileRef = useRef<HTMLInputElement | null>(null);
   const pendingCreatedSpouseIdRef = useRef("");
   const initialFamilyRef = useRef<{ parent1Id: string; parent2Id: string; spouseId: string }>({
     parent1Id: "",
@@ -1165,6 +1192,9 @@ export function PersonEditModal({
     if (clearStatus) {
       setStatus("");
     }
+    setAttributeImportStatus("");
+    setShowAttributeImportGuide(false);
+    setAttributeImportGuide(null);
     setPersonEnabledFamilyGroupKeys([normalizeFamilyGroupKey(tenantKey)]);
     setStoredFamilyGroupRelationshipType(
       normalizeFamilyGroupRelationshipType(
@@ -1299,6 +1329,95 @@ export function PersonEditModal({
     setFailedDirectPreviewFileIds(new Set());
     setFailedDirectOriginalFileIds(new Set());
     return canonicalAttributes as AboutAttribute[];
+  };
+
+  const loadAttributeImportGuide = async () => {
+    if (!person) return null;
+    const res = await fetch(
+      `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/import`,
+      { cache: "no-store" },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message || body?.error || "";
+      setAttributeImportStatus(`Guide load failed: ${res.status} ${String(message).slice(0, 180)}`);
+      return null;
+    }
+    const guide = body?.guide as PersonAttributeImportGuide | undefined;
+    if (!guide || !Array.isArray(guide.headers) || !Array.isArray(guide.fields) || !Array.isArray(guide.typeOptions)) {
+      setAttributeImportStatus("Guide load failed: invalid guide payload.");
+      return null;
+    }
+    setAttributeImportGuide(guide);
+    return guide;
+  };
+
+  const openAttributeImportGuide = async () => {
+    setAttributeImportBusy(true);
+    setAttributeImportStatus("");
+    try {
+      const guide = attributeImportGuide ?? (await loadAttributeImportGuide());
+      if (guide) {
+        setShowAttributeImportGuide(true);
+      }
+    } finally {
+      setAttributeImportBusy(false);
+    }
+  };
+
+  const runAttributeImport = async (csv: string, sourceLabel: string) => {
+    if (!person) return;
+    const trimmed = csv.trim();
+    if (!trimmed) {
+      setAttributeImportStatus("Import file is empty.");
+      return;
+    }
+    setAttributeImportBusy(true);
+    setAttributeImportStatus(`Importing attributes from ${sourceLabel}...`);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/attributes/import`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ csv: trimmed }),
+        },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = body?.message || body?.error || "";
+        setAttributeImportStatus(`Import failed: ${res.status} ${String(message).slice(0, 180)}`);
+        return;
+      }
+      const created = Number(body?.created ?? 0);
+      const skipped = Number(body?.skipped ?? 0);
+      const failed = Number(body?.failed ?? 0);
+      const firstError =
+        Array.isArray(body?.errors) && body.errors.length > 0
+          ? String(body.errors[0]?.message ?? "").trim()
+          : "";
+      setAttributeImportStatus(
+        failed > 0
+          ? `Import completed with errors. created=${created}, skipped=${skipped}, failed=${failed}${firstError ? ` | first error: ${firstError}` : ""}`
+          : `Import complete. created=${created}, skipped=${skipped}, failed=0`,
+      );
+      await loadPersonAttributeState(person.personId);
+      onSaved();
+    } finally {
+      setAttributeImportBusy(false);
+    }
+  };
+
+  const triggerAttributeImportFilePicker = () => {
+    attributeImportFileRef.current?.click();
+  };
+
+  const handleAttributeImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const text = await file.text().catch(() => "");
+    await runAttributeImport(text, file.name || "selected file");
   };
 
   const clearStoryImportQueue = () => {
@@ -3328,6 +3447,49 @@ export function PersonEditModal({
         {activeTab === "attributes" ? (
           <>
             <div className="person-section-grid">
+              <div className="card field-span-2">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <div>
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Attribute Import</h4>
+                    <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
+                      Import attribute rows for this person only.
+                    </p>
+                  </div>
+                  <div className="settings-chip-list" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={attributeImportBusy}
+                      onClick={() => {
+                        void openAttributeImportGuide();
+                      }}
+                    >
+                      Format &amp; Guide
+                    </button>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      disabled={attributeImportBusy}
+                      onClick={triggerAttributeImportFilePicker}
+                    >
+                      Upload Import File
+                    </button>
+                    <input
+                      ref={attributeImportFileRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        void handleAttributeImportFileChange(event);
+                      }}
+                    />
+                  </div>
+                </div>
+                {attributeImportStatus ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.6rem", marginBottom: 0 }}>{attributeImportStatus}</p>
+                ) : null}
+              </div>
+
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
@@ -3976,6 +4138,111 @@ export function PersonEditModal({
                 >
                   Cancel
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showAttributeImportGuide && attributeImportGuide ? (
+          <div
+            className="person-modal-backdrop"
+            style={{ zIndex: 1250 }}
+            onClick={() => setShowAttributeImportGuide(false)}
+          >
+            <div
+              className="person-modal-panel"
+              style={{ maxWidth: "980px", maxHeight: "88vh" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="person-modal-sticky-head">
+                <div className="person-modal-header">
+                  <div>
+                    <h3 className="person-modal-title">Attribute Import Format &amp; Guide</h3>
+                    <p className="person-modal-meta">Imports into this person only.</p>
+                  </div>
+                  <ModalCloseButton onClick={() => setShowAttributeImportGuide(false)} />
+                </div>
+              </div>
+              <div className="person-modal-body" style={{ display: "grid", gap: "0.8rem" }}>
+                <div className="card">
+                  <h4 className="ui-section-title" style={{ marginTop: 0 }}>Expected CSV Headers</h4>
+                  <p className="page-subtitle" style={{ marginBottom: "0.35rem" }}>
+                    Header row should include these columns (at minimum `attribute_type`).
+                  </p>
+                  <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.82rem", whiteSpace: "pre-wrap" }}>
+                    {attributeImportGuide.headers.join(",")}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <h4 className="ui-section-title" style={{ marginTop: 0 }}>Field Rules</h4>
+                  <div style={{ overflow: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Field</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Required</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Type</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Max</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Guidance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attributeImportGuide.fields.map((field) => (
+                          <tr key={`import-field-${field.field}`}>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{field.field}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{String(field.required)}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{field.dataType}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{String(field.maxLength)}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{field.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <h4 className="ui-section-title" style={{ marginTop: 0 }}>Allowed Attribute Types</h4>
+                  <p className="page-subtitle" style={{ marginBottom: "0.35rem" }}>
+                    Use `typeKey` in the `attribute_type` column.
+                  </p>
+                  <div style={{ maxHeight: "220px", overflow: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>typeKey</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Type Label</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Kind</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Category</th>
+                          <th style={{ textAlign: "left", borderBottom: "1px solid #d7dce3", padding: "0.35rem" }}>Date Mode</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attributeImportGuide.typeOptions.map((item) => (
+                          <tr key={`import-type-${item.kind}-${item.typeKey}`}>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{item.typeKey}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{item.typeLabel}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{item.kind}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{item.categoryLabel}</td>
+                            <td style={{ borderBottom: "1px solid #edf1f6", padding: "0.35rem", verticalAlign: "top" }}>{item.dateMode}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <h4 className="ui-section-title" style={{ marginTop: 0 }}>Sample CSV</h4>
+                  <textarea
+                    className="textarea"
+                    readOnly
+                    value={attributeImportGuide.sampleCsv}
+                    rows={8}
+                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                  />
+                </div>
               </div>
             </div>
           </div>

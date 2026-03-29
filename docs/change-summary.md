@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (person attribute import guide + upload flow)
+
+- `Date`: 2026-03-29
+- `Change`: Added a person-scoped attribute import workflow with two controls in the Person modal Attributes tab: `Format & Guide` (shows CSV format/sample/type/category options/field limits) and `Upload Import File` (imports CSV rows into the active person).
+- `Type`: UI | API
+- `Why`: Root cause was a capability gap: there was no guided bulk-import path for person attributes, so users had no supported way to import rows with tenant-specific type/category constraints.
+- `Files`: `src/app/api/t/[tenantKey]/people/[personId]/attributes/import/route.ts`, `src/components/PersonEditModal.tsx`, `TODO.md`
+- `Data Changes`: No schema change. Import writes canonical `Attributes` rows for the active person via existing create path; duplicate rows are skipped by fingerprint.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - In Person modal `Attributes`, `Format & Guide` opens a guide with expected headers, field rules, allowed type/category options, and sample CSV.
+  - `Upload Import File` accepts CSV and returns created/skipped/failed status, then refreshes the person attribute state.
+- `Rollback Notes`: Revert this commit to remove the person attribute import route and UI controls.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (person modal media linking now supports active-person attributes)
 
 - `Date`: 2026-03-29
