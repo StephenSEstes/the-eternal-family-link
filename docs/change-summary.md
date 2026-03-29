@@ -6383,3 +6383,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (person modal media root-cause fix: missing/duplicate tiles)
+
+- `Change`: Person modal media list now expands all media links (not just the first link per attribute), deduplicates by `fileId`, and uses file-id selection for tile/detail state. Preview loading now falls back in this order: direct preview URL -> direct original URL -> proxy.
+- `Type`: Bug fix, Media reliability
+- `Why`: Root cause was `toPersonMediaAttributes` only returning the primary media link per attribute, which hid additional linked files, while UI selection keyed on `attributeId` and could collide when one attribute had multiple files. Proxy-only fallback also surfaced avoidable `403` failures.
+- `Files`:
+  - `src/lib/attributes/media-response.ts`
+  - `src/components/PersonEditModal.tsx`
+- `Data Changes`: None (code-path fix; no schema/data mutation).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

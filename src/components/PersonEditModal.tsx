@@ -794,7 +794,7 @@ export function PersonEditModal({
   const [localPeople, setLocalPeople] = useState<PersonItem[]>(people);
   const [attributes, setAttributes] = useState<PersonAttribute[]>([]);
   const [aboutAttributes, setAboutAttributes] = useState<AboutAttribute[]>([]);
-  const [selectedPhotoAttributeId, setSelectedPhotoAttributeId] = useState("");
+  const [selectedPhotoFileId, setSelectedPhotoFileId] = useState("");
   const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
   const [tagQuery, setTagQuery] = useState("");
   const [taggedPeople, setTaggedPeople] = useState<Array<{ personId: string; displayName: string }>>([]);
@@ -1141,7 +1141,9 @@ export function PersonEditModal({
   const getPersonMediaPreviewSrc = (item: PersonAttribute) =>
     item.previewUrl && !failedDirectPreviewFileIds.has(item.valueText)
       ? item.previewUrl
-      : getPhotoPreviewProxyPath(item.valueText, item.mediaMetadata || item.valueJson, activeTenantKey);
+      : item.originalUrl && !failedDirectOriginalFileIds.has(item.valueText)
+        ? item.originalUrl
+        : getPhotoPreviewProxyPath(item.valueText, item.mediaMetadata || item.valueJson, activeTenantKey);
   const getPersonMediaOriginalSrc = (item: PersonAttribute) =>
     item.originalUrl && !failedDirectOriginalFileIds.has(item.valueText)
       ? item.originalUrl
@@ -1444,7 +1446,7 @@ export function PersonEditModal({
     setStoryImportStatus("");
     clearStoryChatState();
     clearStoryImportQueue();
-    setSelectedPhotoAttributeId("");
+    setSelectedPhotoFileId("");
     setDraftMeta({ label: "", description: "", date: "", isPrimary: false });
     setTagQuery("");
     setTaggedPeople([]);
@@ -1458,7 +1460,7 @@ export function PersonEditModal({
     setPhotoAssociationStatus("");
     setShowPhotoDetail(false);
     setSelectedAboutAttributeId("");
-    void loadPersonAttributeState(person.personId);
+    void loadPersonAttributeState(person.personId, tenantKey);
   }, [open, peopleById, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
 
   useEffect(() => {
@@ -1908,8 +1910,8 @@ export function PersonEditModal({
     }
   }, [spouseId, spouseOptions]);
   const selectedPhoto = useMemo(
-    () => allMediaAttributes.find((item) => item.attributeId === selectedPhotoAttributeId) ?? null,
-    [allMediaAttributes, selectedPhotoAttributeId],
+    () => allMediaAttributes.find((item) => item.valueText.trim() === selectedPhotoFileId.trim()) ?? null,
+    [allMediaAttributes, selectedPhotoFileId],
   );
   const filteredPhotoAttributes = useMemo(() => {
     const query = personPhotoQuery.trim().toLowerCase();
@@ -2043,8 +2045,8 @@ export function PersonEditModal({
     void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
   }, [peopleNameById, selectedPhoto, showPhotoDetail, tenantKey]);
 
-  const openPhotoDetail = (attributeId: string) => {
-    setSelectedPhotoAttributeId(attributeId);
+  const openPhotoDetail = (fileId: string) => {
+    setSelectedPhotoFileId(fileId);
     setShowPhotoDetail(true);
   };
 
@@ -2077,7 +2079,7 @@ export function PersonEditModal({
     await loadPersonAttributeState(person.personId);
     await refreshSelectedPhotoAssociations(selectedPhoto.valueText);
     setShowPhotoDetail(false);
-    setSelectedPhotoAttributeId("");
+    setSelectedPhotoFileId("");
     onSaved();
   };
 
@@ -2172,7 +2174,7 @@ export function PersonEditModal({
     }
     await refreshSelectedPhotoAssociations(fileId);
     if (targetPersonId === person.personId) {
-      setSelectedPhotoAttributeId("");
+      setSelectedPhotoFileId("");
       setShowPhotoDetail(false);
       await loadPersonAttributeState(person.personId);
       onSaved();
@@ -3376,10 +3378,10 @@ export function PersonEditModal({
                 <div className="person-photo-grid">
                   {filteredPhotoAttributes.map((item) => (
                     <button
-                      key={item.attributeId}
+                      key={`${item.attributeId}:${item.valueText}`}
                       type="button"
                       className="person-photo-tile"
-                      onClick={() => openPhotoDetail(item.attributeId)}
+                      onClick={() => openPhotoDetail(item.valueText)}
                     >
                       {isVideoMediaByMetadata(item.valueText, item.mediaMetadata || item.valueJson) ? (
                         <video
@@ -3403,17 +3405,31 @@ export function PersonEditModal({
                           alt={item.label || "photo"}
                           className="person-photo-tile-image"
                           onError={() => {
-                            if (!item.previewUrl) {
+                            const fileId = item.valueText.trim();
+                            if (!fileId) {
                               return;
                             }
-                            setFailedDirectPreviewFileIds((current) => {
-                              if (current.has(item.valueText)) {
-                                return current;
-                              }
-                              const next = new Set(current);
-                              next.add(item.valueText);
-                              return next;
-                            });
+                            if (item.previewUrl && !failedDirectPreviewFileIds.has(fileId)) {
+                              setFailedDirectPreviewFileIds((current) => {
+                                if (current.has(fileId)) {
+                                  return current;
+                                }
+                                const next = new Set(current);
+                                next.add(fileId);
+                                return next;
+                              });
+                              return;
+                            }
+                            if (item.originalUrl && !failedDirectOriginalFileIds.has(fileId)) {
+                              setFailedDirectOriginalFileIds((current) => {
+                                if (current.has(fileId)) {
+                                  return current;
+                                }
+                                const next = new Set(current);
+                                next.add(fileId);
+                                return next;
+                              });
+                            }
                           }}
                         />
                       )}
