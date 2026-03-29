@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (reduce OCI pool hold time during media-assets DDL contention)
+
+- `Date`: 2026-03-29
+- `Change`: Removed retry-sleep loops for `media_assets` compatibility DDL contention handling so `ORA-14411`/`ORA-00054` exits immediately instead of holding pooled request connections through repeated waits.
+- `Type`: Infra | API Reliability
+- `Why`: Root cause of `NJS-040` (`connection request timeout`, queue timeout 60000) was pooled connections being occupied too long in the read path during compatibility DDL contention loops. Immediate contention exit reduces queue pressure.
+- `Files`: `src/lib/oci/tables.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Under DDL contention, read path no longer waits through multi-attempt sleep loops per column.
+- `Rollback Notes`: Revert this commit to restore retry-wait behavior for media-assets compatibility DDL.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (fix ORA-14411 contention in media-assets compatibility DDL)
 
 - `Date`: 2026-03-29

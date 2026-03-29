@@ -650,8 +650,7 @@ async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
   ];
   for (const columnSql of additiveColumns) {
     let applied = false;
-    let attempts = 0;
-    while (!applied && attempts < 3) {
+    while (!applied) {
       try {
         await connection.execute(`ALTER TABLE media_assets ADD (${columnSql})`);
         applied = true;
@@ -661,13 +660,8 @@ async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
           applied = true;
           continue;
         }
-        if (isTransientDdlConcurrencyError(message) && attempts < 2) {
-          attempts += 1;
-          await waitMs(180);
-          continue;
-        }
-        // Avoid failing read paths when another worker is concurrently running compatibility DDL.
         if (isTransientDdlConcurrencyError(message)) {
+          // Avoid holding pooled read-path connections on DDL contention.
           applied = true;
           break;
         }
