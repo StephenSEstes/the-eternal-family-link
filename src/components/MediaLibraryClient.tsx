@@ -1777,7 +1777,19 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         <div style={{ display: "grid", gap: "0.65rem" }}>
                           {faces.map((face, index) => {
                             const saving = faceSaving.has(face.faceId);
-                            const bbox = face.bbox;
+                            const rawBbox = face.bbox;
+                            const bbox = {
+                              x: Number.isFinite(rawBbox.x) ? Math.max(0, Math.min(1, rawBbox.x)) : 0,
+                              y: Number.isFinite(rawBbox.y) ? Math.max(0, Math.min(1, rawBbox.y)) : 0,
+                              width: Number.isFinite(rawBbox.width) ? Math.max(0.0001, Math.min(1, rawBbox.width)) : 1,
+                              height: Number.isFinite(rawBbox.height) ? Math.max(0.0001, Math.min(1, rawBbox.height)) : 1,
+                            };
+                            const facePreviewWidthPx = 140;
+                            const facePreviewHeightPx = facePreviewWidthPx * (bbox.height / bbox.width);
+                            const cropBackgroundWidthPx = facePreviewWidthPx / bbox.width;
+                            const cropBackgroundHeightPx = facePreviewHeightPx / bbox.height;
+                            const cropBackgroundXOffsetPx = -(bbox.x / bbox.width) * facePreviewWidthPx;
+                            const cropBackgroundYOffsetPx = -(bbox.y / bbox.height) * facePreviewHeightPx;
                             return (
                               <div
                                 key={face.faceId}
@@ -1793,18 +1805,17 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                                 <div
                                   aria-label={`Face ${index + 1} crop`}
                                   style={{
-                                    width: "140px",
+                                    width: `${facePreviewWidthPx}px`,
+                                    height: `${facePreviewHeightPx}px`,
                                     borderRadius: "8px",
                                     overflow: "hidden",
                                     backgroundImage: `url(${getPhotoPreviewProxyPath(selectedPhotoDetail.fileId, selectedPhotoDetail.mediaMetadata, tenantKey)})`,
                                     backgroundRepeat: "no-repeat",
-                                    backgroundSize: `${bbox.width > 0 ? (1 / bbox.width) * 100 : 100}% ${bbox.height > 0 ? (1 / bbox.height) * 100 : 100}%`,
-                                    backgroundPosition: `${bbox.width > 0 ? (-bbox.x / bbox.width) * 100 : 0}% ${bbox.height > 0 ? (-bbox.y / bbox.height) * 100 : 0}%`,
+                                    backgroundSize: `${cropBackgroundWidthPx}px ${cropBackgroundHeightPx}px`,
+                                    backgroundPosition: `${cropBackgroundXOffsetPx}px ${cropBackgroundYOffsetPx}px`,
                                     position: "relative",
                                   }}
-                                >
-                                  <div style={{ paddingBottom: bbox.width > 0 ? `${(bbox.height / bbox.width) * 100}%` : "100%" }} />
-                                </div>
+                                />
                                 <div style={{ display: "grid", gap: "0.3rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                                   <div>
                                     <label className="label">Person</label>

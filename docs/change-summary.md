@@ -35,6 +35,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`: On the AI tab, no full-image panel is shown; each card shows the isolated face crop under `Face X`, and `Link person` / `Mark not family` / `Save label only` render as narrow one-row buttons.
 - `Rollback Notes`: Revert this commit.
 
+## 2026-03-28 (Face crop coordinate mapping fix)
+
+- `Date`: 2026-03-28
+- `Change`: Replaced percentage-based face crop positioning/sizing with pixel-based crop math derived from OCI normalized bbox coordinates, with bbox clamping for safety.
+- `Type`: UI
+- `Why`: Face crops were showing repeated/wrong regions because CSS `background-position` percentage semantics do not map linearly to normalized bbox coordinates.
+- `Files`: `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Design Decision`: No design decision change.
+- `Verify`: On AI tab detect results, each `Face X` crop should show a distinct isolated face region aligned to OCI bbox coordinates instead of repeated non-face tiles.
+- `Rollback Notes`: Revert this commit.
+
 ## 2026-03-28 (Disable viewer PIN gate for photos)
 
 - `Date`: 2026-03-28

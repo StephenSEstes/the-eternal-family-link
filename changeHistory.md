@@ -254,6 +254,7 @@ This file is a quick release-log entry point.
 - 2026-03-28: Stopped auto-loading faces on AI tab; detection/loading happens only on button click with improved empty state. See `docs/change-summary.md`.
 - 2026-03-28: Fixed AI tab duplicate-photo render, surfaced Vision error details in face detect API, and excluded backups from type-check; relaxed ESLint to silence build-only warnings. See `docs/change-summary.md`.
 - 2026-03-28: Removed AI-tab full-image panel, showed isolated face crops under each face heading, kept actions on one narrow row, and cleared face/detect state when switching photos. See `docs/change-summary.md`.
+- 2026-03-28: Fixed AI face-crop mapping to use pixel-based bbox math so detected face crops no longer repeat wrong image regions. See `docs/change-summary.md`.
 - 2026-03-28: Disabled viewer PIN gate on photo proxy routes; signed-in users with tenant access can fetch photos without the unlock cookie. See `docs/change-summary.md`.
 - 2026-03-28: Fixed multi-face detect insert failures (`ORA-00001`) by switching face ID generation to SHA-256 hash-based IDs. See `docs/change-summary.md`.
 - 2026-03-28: Reduced per-request auth DB refresh in JWT callback by caching tenant access in token for 5 minutes to improve media proxy load performance. See `docs/change-summary.md`.
