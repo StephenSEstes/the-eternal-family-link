@@ -6490,3 +6490,17 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from consistent `C:\\Users\\...` path on Windows).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-03-29 (media modal AI link now refreshes Details chips immediately)
+
+- `Change`: Updated media modal AI face association flow to reload selected media detail after successful person association so the Details tab `Linked to` chips reflect the new link immediately. Also switched face-saving state updates to functional `setState` to avoid stale-state races.
+- `Type`: Bug fix, UI state synchronization
+- `Why`: Root cause was the AI associate path refreshing only face state (`loadFaces`) while the Details chip list is sourced from `selectedPhotoAssociations`, which is populated by media-detail load.
+- `Files`:
+  - `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None (code-path fix only).
+- `Verify`:
+  - `npm run lint` passes.
+  - Manual flow: Media modal -> AI tab -> associate face to person -> Details tab shows new linked-person chip without closing/reopening modal.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

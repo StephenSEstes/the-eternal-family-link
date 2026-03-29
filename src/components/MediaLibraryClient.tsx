@@ -740,6 +740,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
 
   const associateFace = async (face: FaceRecord, intent: "link" | "not_family" | "label_only") => {
     if (!selectedPhotoDetail) return;
+    const targetFileId = selectedPhotoDetail.fileId;
     const personId = intent === "link" ? (facePersonInput[face.faceId] ?? "").trim() : "";
     if (intent === "link" && !personId) {
       setFacesDebug({ error: "person_required" });
@@ -748,12 +749,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     const label = (faceLabelInput[face.faceId] ?? "").trim();
     const note = intent === "label_only" ? label : (face.link?.note ?? "");
     const status = intent === "not_family" ? "not_family" : intent === "label_only" ? "unknown" : "linked";
-    const next = new Set(faceSaving);
-    next.add(face.faceId);
-    setFaceSaving(next);
+    setFaceSaving((current) => {
+      const next = new Set(current);
+      next.add(face.faceId);
+      return next;
+    });
     try {
       const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/faces/${encodeURIComponent(face.faceId)}/associate`,
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(targetFileId)}/faces/${encodeURIComponent(face.faceId)}/associate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -770,11 +773,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
         setFacesDebug({ error: body?.error ?? `status_${res.status}` });
       } else {
         await loadFaces();
+        if (intent === "link" && personId) {
+          await loadSelectedPhotoDetail(targetFileId, { noStore: true });
+        }
       }
     } finally {
-      const cleared = new Set(faceSaving);
-      cleared.delete(face.faceId);
-      setFaceSaving(cleared);
+      setFaceSaving((current) => {
+        const next = new Set(current);
+        next.delete(face.faceId);
+        return next;
+      });
     }
   };
 
