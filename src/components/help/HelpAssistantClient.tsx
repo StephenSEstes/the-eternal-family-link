@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AI_HELP_SUGGESTIONS } from "@/lib/ai/help-guide";
 
@@ -11,10 +12,24 @@ type HelpAssistantClientProps = {
 type HelpMessage = {
   role: "user" | "assistant";
   content: string;
+  actions?: HelpAction[];
+};
+
+type HelpAction = {
+  label: string;
+  href: string;
+  kind: "link";
+  description?: string;
+  requiresRole?: "ADMIN" | "USER";
 };
 
 const INITIAL_MESSAGE =
   "Ask how to use the app. I can help with navigation, invites, media, attributes, installation, and admin tools.";
+
+function isInternalHref(value: string) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("/") && !trimmed.startsWith("//");
+}
 
 export function HelpAssistantClient({ tenantKey, tenantName }: HelpAssistantClientProps) {
   const [messages, setMessages] = useState<HelpMessage[]>([]);
@@ -32,7 +47,10 @@ export function HelpAssistantClient({ tenantKey, tenantName }: HelpAssistantClie
     }
 
     const nextMessages = [...messages, { role: "user" as const, content: trimmed }];
-    const requestMessages = nextMessages.slice(-12);
+    const requestMessages = nextMessages.slice(-12).map((item) => ({
+      role: item.role,
+      content: item.content,
+    }));
     setMessages(nextMessages);
     setDraft("");
     setIsSending(true);
@@ -50,7 +68,10 @@ export function HelpAssistantClient({ tenantKey, tenantName }: HelpAssistantClie
         return;
       }
 
-      setMessages((current) => [...current, { role: "assistant", content: String(body.answer) }]);
+      const parsedActions = Array.isArray(body?.actions)
+        ? (body.actions as HelpAction[]).filter((item) => item && typeof item.label === "string" && typeof item.href === "string")
+        : [];
+      setMessages((current) => [...current, { role: "assistant", content: String(body.answer), actions: parsedActions }]);
       setStatus("");
     } catch {
       setStatus("Help request failed before the server returned a response.");
@@ -128,6 +149,32 @@ export function HelpAssistantClient({ tenantKey, tenantName }: HelpAssistantClie
               >
                 <strong>{message.role === "assistant" ? "Help Assistant" : "You"}</strong>
                 <p>{message.content}</p>
+                {message.role === "assistant" && Array.isArray(message.actions) && message.actions.length > 0 ? (
+                  <div className="help-bubble-actions">
+                    {message.actions.map((action) => (
+                      isInternalHref(action.href) ? (
+                        <Link
+                          key={`${index}-${action.label}-${action.href}`}
+                          href={action.href}
+                          prefetch={false}
+                          className="button secondary tap-button"
+                        >
+                          {action.label}
+                        </Link>
+                      ) : (
+                        <a
+                          key={`${index}-${action.label}-${action.href}`}
+                          href={action.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="button secondary tap-button"
+                        >
+                          {action.label}
+                        </a>
+                      )
+                    ))}
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

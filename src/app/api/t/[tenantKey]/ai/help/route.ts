@@ -46,8 +46,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
 
   try {
     const result = await answerHelpQuestion({
+      tenantKey: resolved.tenant.tenantKey,
       tenantName: resolved.tenant.tenantName,
       role: resolved.tenant.role,
+      personId: resolved.tenant.personId || resolved.session.user?.person_id || "",
       messages,
     });
 
@@ -64,6 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ten
       ok: true,
       tenantKey: resolved.tenant.tenantKey,
       answer: result.answer,
+      actions: Array.isArray(result.actions) ? result.actions : [],
       model: result.model,
       suggestions: AI_HELP_SUGGESTIONS,
     });

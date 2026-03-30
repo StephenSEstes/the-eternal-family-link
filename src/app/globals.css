@@ -3119,6 +3119,13 @@ main,
   line-height: 1.55;
 }
 
+.help-bubble-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
 .help-bubble-assistant {
   background: color-mix(in oklab, #ffffff 84%, #eef6ff 16%);
 }

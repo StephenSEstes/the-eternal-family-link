@@ -49,12 +49,31 @@ type Props = {
   peopleHref: string;
 };
 
+type LaunchTab = "contact" | "attributes" | "photos";
+type LaunchAction = "add-media" | "add-attribute";
+
 function resolveReturnHref(rawValue: string | null, fallbackHref: string) {
   const candidate = (rawValue ?? "").trim();
   if (!candidate.startsWith("/") || candidate.startsWith("//")) {
     return fallbackHref;
   }
   return candidate;
+}
+
+function parseLaunchTab(rawValue: string | null): LaunchTab | null {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (normalized === "contact" || normalized === "attributes" || normalized === "photos") {
+    return normalized;
+  }
+  return null;
+}
+
+function parseLaunchAction(rawValue: string | null): LaunchAction | null {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (normalized === "add-media" || normalized === "add-attribute") {
+    return normalized;
+  }
+  return null;
 }
 
 export function PersonProfileRouteClient({
@@ -71,6 +90,8 @@ export function PersonProfileRouteClient({
   const searchParams = useSearchParams();
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const returnHref = resolveReturnHref(searchParams.get("returnTo"), peopleHref);
+  const launchTab = parseLaunchTab(searchParams.get("tab"));
+  const launchAction = parseLaunchAction(searchParams.get("action"));
   const buildPersonHref = (personId: string) => {
     const encodedPersonId = encodeURIComponent(personId);
     const encodedReturnTo = encodeURIComponent(returnHref);
@@ -88,6 +109,8 @@ export function PersonProfileRouteClient({
         people={people}
         edges={edges}
         households={households}
+        launchTab={launchTab}
+        launchAction={launchAction}
         onClose={() => router.push(returnHref)}
         onSaved={() => router.refresh()}
         onEditHousehold={(householdId) => setSelectedHouseholdId(householdId)}

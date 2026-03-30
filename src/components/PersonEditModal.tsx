@@ -237,6 +237,8 @@ type Props = {
   people: PersonItem[];
   edges: GraphEdge[];
   households: HouseholdLink[];
+  launchTab?: TabKey | null;
+  launchAction?: LaunchAction | null;
   onClose: () => void;
   onSaved: () => void;
   onEditHousehold: (householdId: string) => void;
@@ -253,6 +255,7 @@ function normalizeFamilyGroupKey(value?: string) {
 }
 
 type TabKey = "contact" | "attributes" | "photos";
+type LaunchAction = "add-media" | "add-attribute";
 type ProfileSectionKey = "identity" | "name" | "contact" | "family" | "notes";
 type AttributeLaunchSource = "main_events" | "things" | "stories" | "timeline";
 const ADD_NEW_SPOUSE_OPTION = "__add_new_spouse__";
@@ -932,6 +935,8 @@ export function PersonEditModal({
   people,
   edges,
   households,
+  launchTab = null,
+  launchAction = null,
   onClose,
   onSaved,
   onEditHousehold,
@@ -1045,6 +1050,7 @@ export function PersonEditModal({
   const [creatingSpouse, setCreatingSpouse] = useState(false);
   const attributeImportFileRef = useRef<HTMLInputElement | null>(null);
   const pendingCreatedSpouseIdRef = useRef("");
+  const handledLaunchDeepLinkRef = useRef("");
   const initialFamilyRef = useRef<{ parent1Id: string; parent2Id: string; spouseId: string }>({
     parent1Id: "",
     parent2Id: "",
@@ -1789,6 +1795,7 @@ export function PersonEditModal({
     if (!open || !person) {
       setShowAttributeAddModal(false);
       wasOpenRef.current = false;
+      handledLaunchDeepLinkRef.current = "";
       return;
     }
     const shouldResetTab = !wasOpenRef.current || previousPersonIdRef.current !== person.personId;
@@ -1825,6 +1832,38 @@ export function PersonEditModal({
     setSelectedAboutAttributeId("");
     void loadPersonAttributeState(person.personId, tenantKey);
   }, [open, peopleById, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
+
+  useEffect(() => {
+    if (!open || !person) {
+      return;
+    }
+    if (!launchTab && !launchAction) {
+      return;
+    }
+
+    const signature = `${person.personId}|${launchTab ?? ""}|${launchAction ?? ""}`;
+    if (handledLaunchDeepLinkRef.current === signature) {
+      return;
+    }
+
+    if (launchTab) {
+      setActiveTab(launchTab);
+    }
+
+    if (canManage) {
+      if (launchAction === "add-media") {
+        setActiveTab("photos");
+        setShowPhotoDetail(false);
+        setSelectedPhotoFileId("");
+        setShowMediaAttachWizard(true);
+      } else if (launchAction === "add-attribute") {
+        setActiveTab("attributes");
+        setShowAttributeAddModal(true);
+      }
+    }
+
+    handledLaunchDeepLinkRef.current = signature;
+  }, [canManage, launchAction, launchTab, open, person]);
 
   useEffect(() => {
     if (!open) return;

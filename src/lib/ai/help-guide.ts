@@ -1,11 +1,13 @@
 export const AI_HELP_SUGGESTIONS = [
   "How do I invite a family member to use the app?",
+  "How do I add a photo to my profile?",
+  "What is an attribute?",
+  "How do I add a story or life event?",
   "How do I add or edit a person profile?",
   "How do I add photos, videos, audio, or documents?",
-  "How do I add a story or life event?",
   "How do I install the app on my phone?",
   "How do I reset my password?",
-  "How do I use the audit log?",
+  "How do I use the audit log (admin)?",
 ];
 
 export const AI_HELP_GUIDE = `
@@ -114,4 +116,9 @@ When guiding the user
 - If the user asks how to do something, give the shortest correct path through the app.
 - If the task depends on admin rights, say that directly.
 - If a non-admin asks about an admin-only task like invites or audit, tell them to ask their family-group admin.
+- For core workflows, prefer deterministic steps over generic advice:
+  - add person: People -> Add Person
+  - add media to own profile: open own profile -> Media -> Add Media
+  - add attribute/event/story: open own profile -> Attributes -> Add Attribute
+  - invite/access tasks: Admin -> Users & Access
 `.trim();

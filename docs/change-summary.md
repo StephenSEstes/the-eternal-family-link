@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-30 (Help AI deterministic playbooks + dynamic action links)
+
+- `Date`: 2026-03-30
+- `Change`: Added deterministic Help playbooks with dynamic action links, extended Help API responses to include structured `actions`, rendered those action links in the Help UI, and added person-profile deep-link handling so Help actions can open profile context (`tab=photos`, `action=add-media`) directly.
+- `Type`: UI | API
+- `Why`: Root cause was a capability gap in Help behavior: it depended on free-text AI responses with no reliable task playbooks, no actionable link payloads, and no deep-link execution path for direct workflow launch.
+- `Files`: `src/lib/ai/help.ts`, `src/lib/ai/help-guide.ts`, `src/app/api/t/[tenantKey]/ai/help/route.ts`, `src/components/help/HelpAssistantClient.tsx`, `src/components/PersonProfileRouteClient.tsx`, `src/components/PersonEditModal.tsx`, `src/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Asking Help "How do I add a photo to my profile?" returns deterministic guidance plus action buttons.
+  - Clicking `Add Media To My Profile` opens the current user profile in `Photos` context and launches add-media flow.
+  - Non-playbook questions still return AI fallback answers.
+- `Rollback Notes`: Revert this commit to restore prior free-text-only Help behavior without structured action links/deep-link launch.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (home birthdays range filter corrected to true range bounds)
 
 - `Date`: 2026-03-29
