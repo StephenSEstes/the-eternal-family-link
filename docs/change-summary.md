@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-30 (mobile media tab shows unlimited rows)
+
+- `Date`: 2026-03-30
+- `Change`: Updated media library paging so mobile viewports (`max-width: 720px`) no longer cap visible media to a fixed row/page count; mobile now shows all filtered results in a single scroll list while desktop keeps paged rows.
+- `Type`: UI
+- `Why`: Root cause was a code-side pagination cap (`columns * 3`) applied to all screen sizes, which limited mobile browsing to a small fixed slice per page.
+- `Files`: `src/components/MediaLibraryClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - On mobile width, media tab renders all filtered items without `Prev`/`Next` paging.
+  - On desktop width, existing page behavior remains.
+- `Rollback Notes`: Revert this commit to restore fixed page-size behavior on mobile.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-30 (Header Help opens in separate window)
 
 - `Date`: 2026-03-30

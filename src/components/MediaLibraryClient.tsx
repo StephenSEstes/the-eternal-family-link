@@ -203,6 +203,7 @@ const MEDIA_LIBRARY_FETCH_LIMIT = 5000;
 const MEDIA_LIBRARY_GRID_MIN_WIDTH = 220;
 const MEDIA_LIBRARY_GRID_GAP_PX = 12;
 const MEDIA_LIBRARY_PAGE_ROWS = 3;
+const MEDIA_LIBRARY_MOBILE_MEDIA_QUERY = "(max-width: 720px)";
 const MEDIA_TYPE_FILTER_OPTIONS: Array<{ value: MediaTypeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "image", label: "Images" },
@@ -309,11 +310,12 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
   const [pageOffset, setPageOffset] = useState(0);
   const [mediaGridColumns, setMediaGridColumns] = useState(4);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const linkedFilterPeopleKey = linkedFilterPersonIds.join("|");
   const linkedFilterHouseholdsKey = linkedFilterHouseholdIds.join("|");
   const normalizedSearchInput = searchInput.trim();
   const mediaGridRef = useRef<HTMLDivElement | null>(null);
-  const mediaPageSize = Math.max(1, mediaGridColumns * MEDIA_LIBRARY_PAGE_ROWS);
+  const mediaPageSize = isMobileViewport ? Number.MAX_SAFE_INTEGER : Math.max(1, mediaGridColumns * MEDIA_LIBRARY_PAGE_ROWS);
 
   const loadLibrary = async (query = "", options?: { noCache?: boolean }) => {
     const normalizedQuery = query.trim();
@@ -404,6 +406,23 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     });
     observer.observe(node);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mediaQuery = window.matchMedia(MEDIA_LIBRARY_MOBILE_MEDIA_QUERY);
+    const apply = () => {
+      setIsMobileViewport(mediaQuery.matches);
+    };
+    apply();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", apply);
+      return () => mediaQuery.removeEventListener("change", apply);
+    }
+    mediaQuery.addListener(apply);
+    return () => mediaQuery.removeListener(apply);
   }, []);
 
   const peopleById = useMemo(() => new Map(peopleOptions.map((item) => [item.personId, item])), [peopleOptions]);
