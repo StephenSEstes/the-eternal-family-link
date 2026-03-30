@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (home birthdays range filter corrected to true range bounds)
+
+- `Date`: 2026-03-29
+- `Change`: Updated Home birthdays filtering so `Today`, `This week`, and `This Month` use real range bounds and include birthdays anywhere in that selected range (not only future birthdays).
+- `Type`: UI
+- `Why`: Root cause was a code issue in `BirthdaysSection`: it computed only the next future birthday occurrence and then compared it to range end, which excluded birthdays earlier in the current week/month.
+- `Files`: `src/components/home/BirthdaysSection.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - On Home birthdays card, `This week` includes birthdays from the full current week window and `This Month` includes birthdays from the full current month window.
+- `Rollback Notes`: Revert this commit to restore prior upcoming-only behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (person photo editor AI face detection + save actions)
 
 - `Date`: 2026-03-29

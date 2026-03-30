@@ -61,29 +61,42 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-function getRangeEnd(today: Date, range: BirthdayRange) {
+function getRangeBounds(today: Date, range: BirthdayRange) {
   if (range === "today") {
-    return today;
+    return { start: today, end: today };
   }
   if (range === "week") {
-    return addDays(today, 6);
+    const start = addDays(today, -today.getDay());
+    return { start, end: addDays(start, 6) };
   }
-  return new Date(today.getFullYear(), today.getMonth() + 1, 0, 12, 0, 0, 0);
+  return {
+    start: new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0, 0),
+    end: new Date(today.getFullYear(), today.getMonth() + 1, 0, 12, 0, 0, 0),
+  };
 }
 
-function getNextBirthday(today: Date, birthDate: string) {
+function getBirthdayOccurrenceInRange(rangeStart: Date, rangeEnd: Date, birthDate: string) {
   const parsed = parseIsoDate(birthDate);
   if (!parsed) {
     return null;
   }
-  let occurrence = buildLocalDate(today.getFullYear(), parsed.month, parsed.day);
-  if (occurrence.getTime() < today.getTime()) {
-    occurrence = buildLocalDate(today.getFullYear() + 1, parsed.month, parsed.day);
+
+  const candidateYears = Array.from(
+    new Set([rangeStart.getFullYear(), rangeEnd.getFullYear()]),
+  ).sort((left, right) => left - right);
+
+  for (const year of candidateYears) {
+    const occurrence = buildLocalDate(year, parsed.month, parsed.day);
+    const occurrenceTime = occurrence.getTime();
+    if (occurrenceTime >= rangeStart.getTime() && occurrenceTime <= rangeEnd.getTime()) {
+      return {
+        occurrence,
+        turningAge: occurrence.getFullYear() - parsed.year,
+      };
+    }
   }
-  return {
-    occurrence,
-    turningAge: occurrence.getFullYear() - parsed.year,
-  };
+
+  return null;
 }
 
 function formatBirthDate(value: string) {
@@ -124,14 +137,11 @@ export function BirthdaysSection({ tenantKey, basePath, returnToPath, todayIso, 
   }, [todayIso]);
 
   const matches = useMemo(() => {
-    const rangeEnd = getRangeEnd(today, range).getTime();
+    const { start: rangeStart, end: rangeEnd } = getRangeBounds(today, range);
     return people
       .map((person) => {
-        const nextBirthday = getNextBirthday(today, person.birthDate);
+        const nextBirthday = getBirthdayOccurrenceInRange(rangeStart, rangeEnd, person.birthDate);
         if (!nextBirthday) {
-          return null;
-        }
-        if (nextBirthday.occurrence.getTime() > rangeEnd) {
           return null;
         }
         return {
