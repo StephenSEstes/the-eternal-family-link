@@ -4,6 +4,250 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Media comments with threaded family conversations
+  Priority: High
+  Status: In progress 2026-03-30
+  Est date: 2026-03-31
+  Desc: Add robust media comments so family members can hold conversational threads on each media item, including replies, edit/delete controls, and audit-safe write behavior.
+  Scope:
+  - Add media-comment persistence table as a child model of media (`file_id`) scoped by family group.
+  - Support threaded replies via `parent_comment_id`.
+  - Support top-level comments and nested replies from media modal.
+  - Store author identity context (`person_id`, display fallback, email), status, and timestamps.
+  - Support comment edit and soft-delete while preserving thread continuity.
+  - Enforce author/admin permissions for edit/delete.
+  - Render comments in media modal with clear chronological thread ordering.
+  - Keep current media metadata/linking/AI behavior unchanged.
+  Phases:
+  - Phase 1: Data model + OCI compatibility
+    - Add `MediaComments` table contract in runtime table map.
+    - Add compatibility bootstrap for create/alter/index in OCI path.
+    - Add read/write helpers for list/create/update/soft-delete by tenant/file.
+  - Phase 2: API routes
+    - Add `GET/POST` comments route under media file path.
+    - Add `PATCH/DELETE` comment-id route.
+    - Validate payloads, parent-child linkage, and permission checks.
+  - Phase 3: Media modal UI
+    - Add `Comments` tab in media modal.
+    - Add top-level comment composer and per-comment reply/edit/delete actions.
+    - Render threaded view with status/error feedback.
+  - Phase 4: Verification + docs
+    - Run lint/build checks.
+    - Update schema/design/change docs in same commit cycle.
+  API/UI/data changes:
+  - API: new media comments routes (`/api/t/[tenantKey]/photos/[fileId]/comments` and comment-id mutations).
+  - UI: media modal gains threaded comments tab and actions.
+  - Data: new `media_comments` table with indexes for (`family_group_key`, `file_id`, `created_at`) and (`parent_comment_id`).
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Family member can add top-level comment and replies on a media file.
+  - Author/admin can edit/delete; non-author non-admin cannot mutate others' comments.
+  - Deleted comment keeps thread structure and reply visibility.
+  Completion criteria:
+  - Media modal supports stable conversational threads per media item.
+  - Thread writes/reads are permission-safe and auditable.
+  - No regressions in existing media detail, linking, and AI tabs.
+- [ ] Weekly birthday newsletter emails by family-group membership
+  Priority: High
+  Status: Planned 2026-03-29
+  Est date: 2026-04-03
+  Desc: Send weekly emails to users with upcoming birthdays for people in family groups they can access, including profile highlights (attributes/hobbies/facts) with safe privacy-aware content.
+  Scope:
+  - Build weekly digest job for upcoming birthdays (default next 7 days; configurable window).
+  - Resolve user recipients by active family-group memberships.
+  - Group digest content by family group and birthday date.
+  - Include concise person highlights where available:
+    - hobbies
+    - selected attributes/facts/events
+    - optional profile/photo snippet
+  - Add per-user newsletter preferences:
+    - opt-in/out
+    - frequency (weekly initial; extensible)
+    - delivery day/time window
+  - Add dedupe logic so multi-group users receive one consolidated send per schedule window.
+  - Add delivery/audit tracking for sent, skipped, failed, and retried messages.
+  - Keep role/access constraints aligned to family-group visibility rules.
+  Phases:
+  - Phase 1: Recipient + birthday query model
+    - Define deterministic query for upcoming birthdays per family group and per user access.
+    - Define exclusion rules (disabled users, missing email, opt-out).
+  - Phase 2: Content assembly
+    - Build digest template model (subject, grouped sections, highlights).
+    - Add safe fallback content when highlights are sparse.
+  - Phase 3: Preferences + controls
+    - Add user preference fields and UI controls for newsletter opt-in/schedule.
+    - Add admin visibility where needed for support/debug.
+  - Phase 4: Scheduled send pipeline
+    - Implement scheduled runner (cron/job) to compose and send digests.
+    - Add idempotency keys + dedupe window to prevent duplicate sends.
+  - Phase 5: Monitoring + retry + hardening
+    - Add send audit and error tracking.
+    - Add bounded retry logic and failure reporting.
+    - Validate timezone handling and send windows.
+  API/UI/data changes:
+  - API/Jobs: scheduled digest generator/sender and support endpoints.
+  - UI: user preference controls for birthday newsletter delivery.
+  - Data: newsletter preference + send-log persistence (table(s) or equivalent store) for idempotency and audit.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Eligible users receive one correct weekly digest grouped by accessible family groups.
+  - Content includes correct upcoming birthdays and selected highlights.
+  - Opt-out users do not receive newsletter sends.
+  - Multi-group users are deduped to one scheduled send per cycle.
+  Completion criteria:
+  - Weekly digest pipeline runs reliably with auditability.
+  - Users can control subscription preferences.
+  - Birthday content is accurate, access-scoped, and delivered on schedule.
+- [ ] Family relationship games (child selection + sibling age order) with optional AI quiz generation
+  Priority: High
+  Status: Planned 2026-03-29
+  Est date: 2026-04-02
+  Desc: Build engaging family-learning quizzes in Games using deterministic family data for correctness, with optional AI assistance for prompt variety and round generation.
+  Scope:
+  - Add quiz mode 1: `Which children belong to these parents?`
+    - Show parent(s) and a candidate list (ex: 8 names) with mixed distractors.
+    - User selects all correct children.
+  - Add quiz mode 2: `Order siblings by age`
+    - Show sibling set and require oldest-to-youngest ordering.
+  - Add scoring model based on accuracy + completion time.
+  - Add round progression across multiple families/households in one session.
+  - Keep answer correctness deterministic from canonical relationship and birth-date data.
+  - Add optional AI-assisted content generation for:
+    - wording/theme variants
+    - hint text
+    - difficulty tuning
+  - Validate all AI-generated rounds against deterministic data rules before display.
+  Phases:
+  - Phase 1: Quiz data selectors + deterministic validators
+    - Build household/sibling candidate selectors from canonical graph data.
+    - Build strict validators for child-membership and age-order answers.
+  - Phase 2: Core game engine
+    - Implement round loop, timer, scoring, and result summary.
+    - Implement difficulty settings (candidate size, distractor similarity, sibling count).
+  - Phase 3: Game UI in `Games`
+    - Build quiz cards, answer controls (checkbox + ordering UI), and progress display.
+    - Build result/review view with correct-answer explanations.
+  - Phase 4: Optional AI assist layer
+    - Add AI generation path for prompt phrasing and round flavor text only.
+    - Add deterministic post-generation validation and fallback to non-AI round generation.
+  - Phase 5: Validation and balancing
+    - Validate scoring fairness and timing behavior.
+    - Validate edge-case handling (unknown birthdates, twins, incomplete households).
+  API/UI/data changes:
+  - API: game-round endpoints and scoring session endpoint (or server actions) for deterministic round generation and scoring.
+  - UI: new Games flows for child-selection and sibling-order quizzes with timer/progress/score.
+  - Data: optional game-session persistence for score history/leaderboards; no required schema change for core quiz correctness.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Child-selection quiz answers are always checked against deterministic parent-child links.
+  - Sibling-order quiz answers are always checked against deterministic birth-date ordering rules.
+  - AI-generated round text never overrides deterministic correctness.
+  Completion criteria:
+  - Two quiz modes are playable end-to-end with scoring and timing.
+  - Correctness is deterministic and auditable.
+  - Optional AI assistance improves variety without reducing accuracy.
+- [ ] Person profile external private survey link -> attribute ingestion
+  Priority: High
+  Status: Planned 2026-03-29
+  Est date: 2026-03-31
+  Desc: Add a person-profile action that creates a private temporary survey link for a specific person, and map completed survey responses into canonical `Attributes` rows for that person.
+  Scope:
+  - Add `Create Survey Link` action on person profile/modal for authorized users.
+  - Create tokenized survey links tied to:
+    - `tenantKey`
+    - `personId`
+    - expiration timestamp
+    - optional one-time or multi-submit policy
+  - Provide a private external survey page reachable by token URL only.
+  - On save/submit, map survey answers to canonical attribute writes for the linked person.
+  - Support configurable survey field mapping (question -> attribute type/category/detail/date/notes).
+  - Track audit metadata for survey-origin writes.
+  - Support link revoke/disable before expiration.
+  - Preserve current auth/session behavior for in-app users; survey token route uses token auth only.
+  Phases:
+  - Phase 1: Survey link data model + token lifecycle
+    - Define storage for survey links/tokens, status, expiry, and target person.
+    - Add token create/revoke/validate logic.
+  - Phase 2: Survey page + submission API
+    - Build token-gated survey page.
+    - Build submission route that validates token and payload.
+  - Phase 3: Attribute mapping engine
+    - Implement deterministic mapping from survey answers to `Attributes` payloads.
+    - Write attributes on explicit save/submit (not per keystroke).
+  - Phase 4: Person profile action + admin controls
+    - Add `Create Survey Link` button on person profile/modal.
+    - Add copy link + revoke controls and status display.
+  - Phase 5: Validation and hardening
+    - Verify link expiry/revoke behavior.
+    - Verify mapped attributes appear under target person.
+    - Verify audit rows include survey-source context.
+  API/UI/data changes:
+  - API: survey-link create/revoke endpoints; token validate/submit endpoint.
+  - UI: person profile survey-link controls; token survey form page.
+  - Data: new survey-link/survey-response persistence layer (table(s) or equivalent store), plus canonical `Attributes` writes.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Created survey link opens only while valid and unrevoked.
+  - Submit creates expected attribute rows for linked person and tenant.
+  - Expired/revoked tokens cannot submit.
+  Completion criteria:
+  - Authorized user can generate and manage private person-specific survey links.
+  - External responses reliably create canonical attributes for the target person.
+  - Token security and auditability are in place.
+- [x] Harden Help with deterministic task playbooks + dynamic deep links
+  Priority: High
+  Status: Completed 2026-03-30
+  Est date: 2026-03-30
+  Desc: Make Help reliable for common "how do I..." tasks by combining deterministic guidance for core workflows with dynamic, session-aware action links (including "Add photo to my profile"), while keeping AI fallback for unmatched questions.
+  Scope:
+  - Add a curated help intent/playbook set for top tasks:
+    - add person
+    - add photo/media to my profile
+    - what is an attribute
+    - add attribute/event/story
+    - invite/access basics
+  - Extend Help API response to support structured actions (`label`, `href`, `kind`, `requiresRole`, optional `description`) in addition to text answer.
+  - Generate action links dynamically from current session context (`tenantKey`, `role`, `session.user.person_id`) so links target the current user and active tenant.
+  - Add Help UI action rendering (button/link cards under the answer) instead of relying only on free-text instructions.
+  - Add deep-link handling in person-profile flow so Help links can open specific context (`tab=photos`, `action=add-media`) for the active person route.
+  - Preserve guardrails and role-aware responses (admin-only vs user-safe guidance).
+  - Preserve AI text fallback for questions outside deterministic playbooks.
+  Phases:
+  - Phase 1: Intent and response contract
+    - Define top-priority playbooks and matching logic.
+    - Extend `/api/t/[tenantKey]/ai/help` response shape with structured action list.
+  - Phase 2: Dynamic action builders
+    - Add session-aware link builder utilities for tenant/person scoped routes.
+    - Implement "Add photo to my profile" dynamic link generation.
+  - Phase 3: Help UI actions
+    - Render structured actions in Help panel with clear labels and safe navigation.
+    - Keep answer text plus actions together for clarity.
+  - Phase 4: Deep-link execution path
+    - Add query-param handling in person-profile client/modal to switch to Media tab and trigger add-media action.
+    - Ensure return path back to Help remains intact.
+  - Phase 5: Validation and rollout
+    - Validate deterministic responses and links for target intents.
+    - Validate fallback AI behavior for unmatched questions.
+  API/UI/data changes:
+  - API: `/api/t/[tenantKey]/ai/help` adds structured action payloads for supported intents.
+  - UI: Help assistant renders answer actions as clickable buttons/links.
+  - UI routing: person profile/modal reads optional deep-link query params for tab/action targeting.
+  - Data: No schema/data migration.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Asking "How do I add a photo to my profile?" returns a working action link for the signed-in person.
+  - Clicking that action opens person profile in Media context and can launch add-media flow.
+  - Asking "What is an attribute?" returns deterministic definition + relevant action links.
+  - Non-playbook questions still get grounded AI responses.
+  Completion criteria:
+  - Core help intents return deterministic guidance with actionable links.
+  - Links are user/tenant-aware and route correctly.
+  - Help remains stable for unmatched questions via AI fallback.
 - [ ] Person attribute import with in-modal format guide + file upload
   Priority: High
   Status: In progress 2026-03-29
@@ -694,8 +938,9 @@ I will update this list as we add, complete, or remove work.
   Priority: Med
   Est date: 2026-04-12
   Desc: Make story/event attributes first-class for people and households, including attaching photos, video, and audio to a story/memory without turning media assets into standalone attribute-owning entities.
-- [ ] Expand AI Help guide coverage and permission accuracy
+- [x] Expand AI Help guide coverage and permission accuracy
   Priority: Med
+  Status: Completed 2026-03-30
   Est date: 2026-04-14
   Desc: Broaden `src/lib/ai/help-guide.ts` with more screen-specific workflows, role-aware permission details, and sharper guidance for edge cases so Help answers match the current app behavior more exactly.
 

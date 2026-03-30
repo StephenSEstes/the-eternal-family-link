@@ -66,7 +66,27 @@ type LinkedSearchResult =
 type PersonSearchResult = Extract<LinkedSearchResult, { kind: "person" }>;
 type HouseholdSearchResult = Extract<LinkedSearchResult, { kind: "household" }>;
 
-type MediaEditorTab = "details" | "metadata" | "ai";
+type MediaEditorTab = "details" | "metadata" | "ai" | "comments";
+
+type MediaComment = {
+  commentId: string;
+  fileId: string;
+  parentCommentId: string;
+  author: {
+    personId: string;
+    displayName: string;
+    email: string;
+  };
+  text: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string;
+  canEdit: boolean;
+  canDelete: boolean;
+};
+
+type ThreadedMediaComment = MediaComment & { children: ThreadedMediaComment[] };
 
 type FaceRecord = {
   faceId: string;
@@ -260,6 +280,14 @@ function formatStoredMetadataLabel(key: string) {
     .replace(/^\w/, (char) => char.toUpperCase());
 }
 
+function formatCommentTimestamp(value: string) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "";
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) return trimmed;
+  return new Date(parsed).toLocaleString();
+}
+
 function formatStoredMetadataValue(value: unknown) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
@@ -303,6 +331,15 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [faceLabelInput, setFaceLabelInput] = useState<Record<string, string>>({});
   const [facePersonInput, setFacePersonInput] = useState<Record<string, string>>({});
   const [faceSaving, setFaceSaving] = useState<Set<string>>(new Set());
+  const [mediaComments, setMediaComments] = useState<MediaComment[]>([]);
+  const [mediaCommentsLoading, setMediaCommentsLoading] = useState(false);
+  const [mediaCommentsStatus, setMediaCommentsStatus] = useState("");
+  const [newCommentDraft, setNewCommentDraft] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyOpenCommentId, setReplyOpenCommentId] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
+  const [pendingCommentOps, setPendingCommentOps] = useState<Set<string>>(new Set());
   const [failedDirectPreviewFileIds, setFailedDirectPreviewFileIds] = useState<Set<string>>(new Set());
   const [failedDirectOriginalFileIds, setFailedDirectOriginalFileIds] = useState<Set<string>>(new Set());
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
@@ -573,6 +610,36 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     () => (selectedPhotoStoredMetadata ? Object.entries(selectedPhotoStoredMetadata) : []),
     [selectedPhotoStoredMetadata],
   );
+  const threadedMediaComments = useMemo(() => {
+    const nodeById = new Map<string, ThreadedMediaComment>();
+    for (const comment of mediaComments) {
+      nodeById.set(comment.commentId, {
+        ...comment,
+        children: [],
+      });
+    }
+    const roots: ThreadedMediaComment[] = [];
+    for (const node of nodeById.values()) {
+      const parentId = node.parentCommentId.trim();
+      if (!parentId || !nodeById.has(parentId) || parentId === node.commentId) {
+        roots.push(node);
+        continue;
+      }
+      nodeById.get(parentId)?.children.push(node);
+    }
+    const sortNodes = (nodes: ThreadedMediaComment[]) => {
+      nodes.sort((a, b) => {
+        const byCreated = parseSortableTimestamp(a.createdAt) - parseSortableTimestamp(b.createdAt);
+        if (byCreated !== 0) return byCreated;
+        return a.commentId.localeCompare(b.commentId);
+      });
+      for (const node of nodes) {
+        sortNodes(node.children);
+      }
+    };
+    sortNodes(roots);
+    return roots;
+  }, [mediaComments]);
   const getMediaTilePreviewSrc = (item: MediaItem) =>
     item.previewUrl && !failedDirectPreviewFileIds.has(item.fileId)
       ? item.previewUrl
@@ -658,6 +725,14 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     setFacesDebug(null);
     setFaceLabelInput({});
     setFacePersonInput({});
+    setMediaComments([]);
+    setMediaCommentsStatus("");
+    setNewCommentDraft("");
+    setReplyDrafts({});
+    setReplyOpenCommentId("");
+    setEditingCommentId("");
+    setEditingCommentDraft("");
+    setPendingCommentOps(new Set());
     const prefill = mediaItems.find((item) => item.fileId === fileId) ?? null;
     if (prefill) {
       applySelectedPhotoDetail(prefill, {
@@ -800,6 +875,146 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
       setFaceSaving((current) => {
         const next = new Set(current);
         next.delete(face.faceId);
+        return next;
+      });
+    }
+  };
+
+  const loadMediaComments = async (options?: { silent?: boolean }) => {
+    if (!selectedPhotoDetail) return;
+    if (!options?.silent) {
+      setMediaCommentsLoading(true);
+    }
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/comments`,
+        { cache: "no-store" },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMediaCommentsStatus(body?.message || body?.error || `Failed to load comments (${res.status})`);
+        return;
+      }
+      const comments = Array.isArray(body?.comments) ? (body.comments as MediaComment[]) : [];
+      setMediaComments(comments);
+      setMediaCommentsStatus("");
+    } catch (error) {
+      setMediaCommentsStatus(error instanceof Error ? error.message : "Failed to load comments");
+    } finally {
+      if (!options?.silent) {
+        setMediaCommentsLoading(false);
+      }
+    }
+  };
+
+  const createMediaComment = async (input: { parentCommentId?: string; body: string }) => {
+    if (!selectedPhotoDetail) return;
+    const body = input.body.trim();
+    if (!body) return;
+    const operationKey = `create-${input.parentCommentId || "root"}`;
+    setPendingCommentOps((current) => new Set(current).add(operationKey));
+    setMediaCommentsStatus(input.parentCommentId ? "Posting reply..." : "Posting comment...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            body,
+            parentCommentId: input.parentCommentId || "",
+          }),
+        },
+      );
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMediaCommentsStatus(payload?.message || payload?.error || "Failed to post comment");
+        return;
+      }
+      if (input.parentCommentId) {
+        setReplyDrafts((current) => ({ ...current, [input.parentCommentId || ""]: "" }));
+        setReplyOpenCommentId("");
+      } else {
+        setNewCommentDraft("");
+      }
+      await loadMediaComments({ silent: true });
+      setMediaCommentsStatus("");
+    } catch (error) {
+      setMediaCommentsStatus(error instanceof Error ? error.message : "Failed to post comment");
+    } finally {
+      setPendingCommentOps((current) => {
+        const next = new Set(current);
+        next.delete(operationKey);
+        return next;
+      });
+    }
+  };
+
+  const saveEditedMediaComment = async (commentId: string) => {
+    if (!selectedPhotoDetail) return;
+    const nextBody = editingCommentDraft.trim();
+    if (!nextBody) return;
+    const operationKey = `edit-${commentId}`;
+    setPendingCommentOps((current) => new Set(current).add(operationKey));
+    setMediaCommentsStatus("Saving comment...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/comments/${encodeURIComponent(commentId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: nextBody }),
+        },
+      );
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMediaCommentsStatus(payload?.message || payload?.error || "Failed to save comment");
+        return;
+      }
+      setEditingCommentId("");
+      setEditingCommentDraft("");
+      await loadMediaComments({ silent: true });
+      setMediaCommentsStatus("");
+    } catch (error) {
+      setMediaCommentsStatus(error instanceof Error ? error.message : "Failed to save comment");
+    } finally {
+      setPendingCommentOps((current) => {
+        const next = new Set(current);
+        next.delete(operationKey);
+        return next;
+      });
+    }
+  };
+
+  const deleteMediaComment = async (commentId: string) => {
+    if (!selectedPhotoDetail) return;
+    const confirmed = window.confirm("Delete this comment? Replies will remain in the thread.");
+    if (!confirmed) return;
+    const operationKey = `delete-${commentId}`;
+    setPendingCommentOps((current) => new Set(current).add(operationKey));
+    setMediaCommentsStatus("Deleting comment...");
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/photos/${encodeURIComponent(selectedPhotoDetail.fileId)}/comments/${encodeURIComponent(commentId)}`,
+        { method: "DELETE" },
+      );
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMediaCommentsStatus(payload?.message || payload?.error || "Failed to delete comment");
+        return;
+      }
+      if (editingCommentId === commentId) {
+        setEditingCommentId("");
+        setEditingCommentDraft("");
+      }
+      await loadMediaComments({ silent: true });
+      setMediaCommentsStatus("");
+    } catch (error) {
+      setMediaCommentsStatus(error instanceof Error ? error.message : "Failed to delete comment");
+    } finally {
+      setPendingCommentOps((current) => {
+        const next = new Set(current);
+        next.delete(operationKey);
         return next;
       });
     }
@@ -988,6 +1203,149 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     setStatus(formatMediaAttachUserSummary(summary));
     setPageOffset(0);
     await loadLibrary(search.trim(), { noCache: true });
+  };
+
+  const renderMediaCommentNode = (comment: ThreadedMediaComment, depth = 0) => {
+    const isDeleted = comment.status.trim().toLowerCase() === "deleted";
+    const isEditing = editingCommentId === comment.commentId;
+    const replyDraft = replyDrafts[comment.commentId] ?? "";
+    const isReplyOpen = replyOpenCommentId === comment.commentId;
+    const editBusy = pendingCommentOps.has(`edit-${comment.commentId}`);
+    const deleteBusy = pendingCommentOps.has(`delete-${comment.commentId}`);
+    const createBusy = pendingCommentOps.has(`create-${comment.commentId}`);
+    const canReply = !isEditing;
+    const timestamp = formatCommentTimestamp(comment.createdAt);
+    const edited = !isDeleted && comment.updatedAt && comment.updatedAt !== comment.createdAt;
+    return (
+      <div key={comment.commentId} style={{ display: "grid", gap: "0.45rem", marginLeft: `${Math.min(depth, 4) * 1.1}rem` }}>
+        <div className="card" style={{ margin: 0, padding: "0.6rem 0.7rem", display: "grid", gap: "0.4rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700 }}>
+              {comment.author.displayName || comment.author.email || "Unknown"}
+            </span>
+            <span className="page-subtitle" style={{ margin: 0 }}>
+              {timestamp || comment.createdAt || "Unknown time"}{edited ? " (edited)" : ""}
+            </span>
+          </div>
+          {isEditing ? (
+            <div style={{ display: "grid", gap: "0.4rem" }}>
+              <textarea
+                className="input"
+                rows={3}
+                value={editingCommentDraft}
+                onChange={(event) => setEditingCommentDraft(event.target.value)}
+                disabled={editBusy}
+                style={{ resize: "vertical" }}
+              />
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={() => void saveEditedMediaComment(comment.commentId)}
+                  disabled={editBusy || !editingCommentDraft.trim()}
+                >
+                  {editBusy ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    setEditingCommentId("");
+                    setEditingCommentDraft("");
+                  }}
+                  disabled={editBusy}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p style={{ margin: 0, whiteSpace: "pre-wrap", color: isDeleted ? "var(--text-muted)" : "inherit" }}>
+              {isDeleted ? "Comment deleted." : comment.text}
+            </p>
+          )}
+          {!isEditing ? (
+            <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+              {canReply ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setReplyOpenCommentId((current) => current === comment.commentId ? "" : comment.commentId)}
+                  disabled={createBusy}
+                  style={{ padding: "0.3rem 0.55rem", fontSize: "0.82rem" }}
+                >
+                  Reply
+                </button>
+              ) : null}
+              {comment.canEdit ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => {
+                    setEditingCommentId(comment.commentId);
+                    setEditingCommentDraft(comment.text);
+                    setReplyOpenCommentId("");
+                  }}
+                  disabled={editBusy || deleteBusy}
+                  style={{ padding: "0.3rem 0.55rem", fontSize: "0.82rem" }}
+                >
+                  Edit
+                </button>
+              ) : null}
+              {comment.canDelete ? (
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => void deleteMediaComment(comment.commentId)}
+                  disabled={deleteBusy}
+                  style={{ padding: "0.3rem 0.55rem", fontSize: "0.82rem" }}
+                >
+                  {deleteBusy ? "Deleting..." : "Delete"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {isReplyOpen ? (
+            <div style={{ display: "grid", gap: "0.4rem" }}>
+              <textarea
+                className="input"
+                rows={2}
+                value={replyDraft}
+                onChange={(event) =>
+                  setReplyDrafts((current) => ({ ...current, [comment.commentId]: event.target.value }))
+                }
+                placeholder="Write a reply..."
+                disabled={createBusy}
+                style={{ resize: "vertical" }}
+              />
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={() => void createMediaComment({ parentCommentId: comment.commentId, body: replyDraft })}
+                  disabled={createBusy || !replyDraft.trim()}
+                >
+                  {createBusy ? "Posting..." : "Post reply"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setReplyOpenCommentId("")}
+                  disabled={createBusy}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        {comment.children.length > 0 ? (
+          <div style={{ display: "grid", gap: "0.45rem" }}>
+            {comment.children.map((child) => renderMediaCommentNode(child, depth + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   return (
@@ -1409,6 +1767,16 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                   >
                     AI
                   </button>
+                  <button
+                    type="button"
+                    className={`button secondary tap-button ${selectedPhotoTab === "comments" ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedPhotoTab("comments");
+                      void loadMediaComments();
+                    }}
+                  >
+                    Comments
+                  </button>
                 </div>
                 {selectedPhotoTab === "details" ? (
                   <>
@@ -1814,6 +2182,58 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                         </p>
                       )}
                     </div>
+                  </div>
+                ) : selectedPhotoTab === "comments" ? (
+                  <div className="card" style={{ marginTop: 0, display: "grid", gap: "0.75rem" }}>
+                    <h5 style={{ margin: "0 0 0.2rem" }}>Conversation</h5>
+                    <div style={{ display: "grid", gap: "0.45rem" }}>
+                      <label className="label">Add Comment</label>
+                      <textarea
+                        className="input"
+                        rows={3}
+                        value={newCommentDraft}
+                        onChange={(event) => setNewCommentDraft(event.target.value)}
+                        placeholder="Share context, ask a question, or add a story..."
+                        disabled={pendingCommentOps.has("create-root")}
+                        style={{ resize: "vertical" }}
+                      />
+                      <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="button tap-button"
+                          onClick={() => void createMediaComment({ body: newCommentDraft })}
+                          disabled={pendingCommentOps.has("create-root") || !newCommentDraft.trim()}
+                        >
+                          {pendingCommentOps.has("create-root") ? "Posting..." : "Post Comment"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => void loadMediaComments()}
+                          disabled={mediaCommentsLoading}
+                        >
+                          {mediaCommentsLoading ? "Refreshing..." : "Refresh"}
+                        </button>
+                      </div>
+                    </div>
+                    {mediaCommentsStatus ? (
+                      <p className="page-subtitle" style={{ margin: 0, color: mediaCommentsStatus.toLowerCase().includes("failed") ? "#991b1b" : "inherit" }}>
+                        {mediaCommentsStatus}
+                      </p>
+                    ) : null}
+                    {mediaCommentsLoading ? (
+                      <p className="page-subtitle" style={{ margin: 0 }}>Loading comments...</p>
+                    ) : null}
+                    {!mediaCommentsLoading && threadedMediaComments.length === 0 ? (
+                      <p className="page-subtitle" style={{ margin: 0 }}>
+                        No comments yet. Start the first thread for this media.
+                      </p>
+                    ) : null}
+                    {threadedMediaComments.length > 0 ? (
+                      <div style={{ display: "grid", gap: "0.6rem" }}>
+                        {threadedMediaComments.map((comment) => renderMediaCommentNode(comment))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : selectedPhotoTab === "ai" ? (
                   <div className="card" style={{ marginTop: 0, display: "grid", gap: "0.85rem" }}>

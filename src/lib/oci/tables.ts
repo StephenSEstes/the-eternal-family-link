@@ -39,6 +39,7 @@ let peopleTableCompatEnsured = false;
 let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
 let mediaAssetsTableCompatEnsured = false;
+let mediaCommentsTableCompatEnsured = false;
 let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
@@ -218,6 +219,23 @@ const TABLES: Record<string, TableConfig> = {
       "sort_order",
       "media_metadata",
       "created_at",
+    ],
+  },
+  MediaComments: {
+    tableName: "media_comments",
+    headers: [
+      "family_group_key",
+      "comment_id",
+      "file_id",
+      "parent_comment_id",
+      "author_person_id",
+      "author_display_name",
+      "author_email",
+      "comment_text",
+      "comment_status",
+      "created_at",
+      "updated_at",
+      "deleted_at",
     ],
   },
   FaceInstances: {
@@ -499,7 +517,7 @@ function resolveIdColumn(headers: string[], idColumn?: string): string {
     const match = headers.find((h) => normalizeHeader(h) === normalizeHeader(idColumn));
     if (match) return match;
   }
-  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "invite_id", "reset_id", "face_id", "match_id", "profile_id"]) {
+  for (const fallback of ["id", "person_id", "record_id", "user_email", "rel_id", "household_id", "attribute_id", "photo_id", "media_id", "link_id", "comment_id", "invite_id", "reset_id", "face_id", "match_id", "profile_id"]) {
     const match = headers.find((h) => normalizeHeader(h) === fallback);
     if (match) return match;
   }
@@ -691,6 +709,83 @@ async function ensureMediaAssetsTableCompatibility(connection: OciConnection) {
   }
   await connection.commit();
   mediaAssetsTableCompatEnsured = true;
+}
+
+async function ensureMediaCommentsTableCompatibility(connection: OciConnection) {
+  if (mediaCommentsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE media_comments (
+         comment_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         file_id VARCHAR2(512) NOT NULL,
+         parent_comment_id VARCHAR2(128),
+         author_person_id VARCHAR2(128),
+         author_display_name VARCHAR2(512),
+         author_email VARCHAR2(320),
+         comment_text CLOB,
+         comment_status VARCHAR2(32),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64),
+         deleted_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_media_comments_file ON media_comments(family_group_key, file_id, created_at)`);
+    await connection.execute(`CREATE INDEX ix_media_comments_parent ON media_comments(family_group_key, parent_comment_id, created_at)`);
+    await connection.execute(`CREATE INDEX ix_media_comments_author ON media_comments(author_person_id, created_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "file_id VARCHAR2(512)",
+    "parent_comment_id VARCHAR2(128)",
+    "author_person_id VARCHAR2(128)",
+    "author_display_name VARCHAR2(512)",
+    "author_email VARCHAR2(320)",
+    "comment_text CLOB",
+    "comment_status VARCHAR2(32)",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+    "deleted_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE media_comments ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_media_comments_file ON media_comments(family_group_key, file_id, created_at)",
+    "CREATE INDEX ix_media_comments_parent ON media_comments(family_group_key, parent_comment_id, created_at)",
+    "CREATE INDEX ix_media_comments_author ON media_comments(author_person_id, created_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  mediaCommentsTableCompatEnsured = true;
 }
 
 async function ensurePersonFamilyGroupsTableCompatibility(connection: OciConnection) {
@@ -1233,6 +1328,10 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
     await ensureMediaAssetsTableCompatibility(connection);
     return;
   }
+  if (tableName === "media_comments") {
+    await ensureMediaCommentsTableCompatibility(connection);
+    return;
+  }
   if (tableName === "households") {
     await ensureHouseholdsTableCompatibility(connection);
     return;
@@ -1596,6 +1695,21 @@ export type OciMediaAssetLookup = {
   exifFingerprint: string;
 };
 
+export type OciMediaCommentRow = {
+  familyGroupKey: string;
+  commentId: string;
+  fileId: string;
+  parentCommentId: string;
+  authorPersonId: string;
+  authorDisplayName: string;
+  authorEmail: string;
+  commentText: string;
+  commentStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string;
+};
+
 export type OciPersonMediaAttributeRow = {
   attributeId: string;
   entityType: string;
@@ -1737,6 +1851,23 @@ function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
     mediaWidth: parseStoredNumber(row.MEDIA_WIDTH),
     mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT),
     mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC),
+  };
+}
+
+function mapOciMediaCommentRow(row: Record<string, unknown>): OciMediaCommentRow {
+  return {
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    commentId: fromDbValue(row.COMMENT_ID),
+    fileId: fromDbValue(row.FILE_ID),
+    parentCommentId: fromDbValue(row.PARENT_COMMENT_ID),
+    authorPersonId: fromDbValue(row.AUTHOR_PERSON_ID),
+    authorDisplayName: fromDbValue(row.AUTHOR_DISPLAY_NAME),
+    authorEmail: fromDbValue(row.AUTHOR_EMAIL),
+    commentText: fromDbValue(row.COMMENT_TEXT),
+    commentStatus: fromDbValue(row.COMMENT_STATUS),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+    deletedAt: fromDbValue(row.DELETED_AT),
   };
 }
 
@@ -3053,6 +3184,208 @@ export async function getOciMediaLinksForFile(input: {
        AND TRIM(a.file_id) = :fileId`,
     { familyGroupKey, fileId },
   );
+}
+
+export async function getOciMediaCommentsForFile(input: {
+  familyGroupKey: string;
+  fileId: string;
+}): Promise<OciMediaCommentRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !fileId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureMediaCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         comment_id,
+         file_id,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       FROM media_comments
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(file_id) = :fileId
+       ORDER BY created_at, comment_id`,
+      { familyGroupKey, fileId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map(mapOciMediaCommentRow);
+  });
+}
+
+export async function getOciMediaCommentById(input: {
+  familyGroupKey: string;
+  commentId: string;
+}): Promise<OciMediaCommentRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const commentId = input.commentId.trim();
+  if (!familyGroupKey || !commentId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureMediaCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         family_group_key,
+         comment_id,
+         file_id,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       FROM media_comments
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(comment_id) = :commentId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, commentId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciMediaCommentRow(row) : null;
+  });
+}
+
+export async function createOciMediaComment(input: {
+  familyGroupKey: string;
+  commentId: string;
+  fileId: string;
+  parentCommentId?: string;
+  authorPersonId?: string;
+  authorDisplayName?: string;
+  authorEmail?: string;
+  commentText: string;
+  commentStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}): Promise<OciMediaCommentRow> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const commentId = input.commentId.trim();
+  const fileId = input.fileId.trim();
+  if (!familyGroupKey || !commentId || !fileId) {
+    throw new Error("family_group_key, comment_id, and file_id are required");
+  }
+  return withConnection(async (connection) => {
+    await ensureMediaCommentsTableCompatibility(connection);
+    await connection.execute(
+      `INSERT INTO media_comments (
+         family_group_key,
+         comment_id,
+         file_id,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       ) VALUES (
+         :familyGroupKey,
+         :commentId,
+         :fileId,
+         :parentCommentId,
+         :authorPersonId,
+         :authorDisplayName,
+         :authorEmail,
+         :commentText,
+         :commentStatus,
+         :createdAt,
+         :updatedAt,
+         :deletedAt
+       )`,
+      {
+        familyGroupKey,
+        commentId,
+        fileId,
+        parentCommentId: String(input.parentCommentId ?? "").trim() || null,
+        authorPersonId: String(input.authorPersonId ?? "").trim() || null,
+        authorDisplayName: String(input.authorDisplayName ?? "").trim() || null,
+        authorEmail: String(input.authorEmail ?? "").trim().toLowerCase() || null,
+        commentText: input.commentText,
+        commentStatus: String(input.commentStatus ?? "active").trim().toLowerCase() || "active",
+        createdAt: input.createdAt.trim(),
+        updatedAt: input.updatedAt.trim(),
+        deletedAt: String(input.deletedAt ?? "").trim() || null,
+      },
+      { autoCommit: true },
+    );
+    const created = await getOciMediaCommentById({ familyGroupKey, commentId });
+    if (!created) {
+      throw new Error("Failed to load created comment");
+    }
+    return created;
+  });
+}
+
+export async function updateOciMediaCommentById(input: {
+  familyGroupKey: string;
+  commentId: string;
+  commentText?: string;
+  commentStatus?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}): Promise<OciMediaCommentRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const commentId = input.commentId.trim();
+  if (!familyGroupKey || !commentId) {
+    return null;
+  }
+  const setClauses: string[] = [];
+  const binds: Record<string, unknown> = {
+    familyGroupKey,
+    commentId,
+  };
+  if (input.commentText !== undefined) {
+    setClauses.push("comment_text = :commentText");
+    binds.commentText = input.commentText;
+  }
+  if (input.commentStatus !== undefined) {
+    setClauses.push("comment_status = :commentStatus");
+    binds.commentStatus = input.commentStatus.trim().toLowerCase() || "active";
+  }
+  if (input.updatedAt !== undefined) {
+    setClauses.push("updated_at = :updatedAt");
+    binds.updatedAt = input.updatedAt.trim();
+  }
+  if (input.deletedAt !== undefined) {
+    setClauses.push("deleted_at = :deletedAt");
+    binds.deletedAt = input.deletedAt.trim() || null;
+  }
+  if (setClauses.length === 0) {
+    return getOciMediaCommentById({ familyGroupKey, commentId });
+  }
+  return withConnection(async (connection) => {
+    await ensureMediaCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE media_comments
+       SET ${setClauses.join(", ")}
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(comment_id) = :commentId`,
+      binds,
+      { autoCommit: true },
+    );
+    if (!(result.rowsAffected ?? 0)) {
+      return null;
+    }
+    return getOciMediaCommentById({ familyGroupKey, commentId });
+  });
 }
 
 export async function getOciMediaAssetByFileId(

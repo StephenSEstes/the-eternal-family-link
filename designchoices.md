@@ -344,3 +344,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep active-family-only scoping in person modal media.
 - `Impact`: Tenant-scoped attribute reads now load person media links across accessible family groups for person entities.
 - `Follow-up`: Keep non-person entity views scoped to active family unless explicitly changed.
+
+## 2026-03-30
+
+- `Area`: Media conversation threads
+- `Decision`: Persist media comments in a dedicated `MediaComments` table keyed by `comment_id`, scoped by `family_group_key`, linked to media by `file_id`, and threaded by `parent_comment_id` with soft-delete (`comment_status=deleted`) to preserve thread continuity.
+- `Reason`: Robust family conversations on media need explicit threaded storage, author metadata, and edit/delete lifecycle behavior that should not be mixed into media metadata JSON or link rows.
+- `Alternatives Considered`: Store comments in media metadata JSON, keep flat non-threaded comments only, or hard-delete comment rows.
+- `Impact`: Media modal can render conversational threads with replies, author/admin mutation rules, and stable history on deleted comments.
+- `Follow-up`: Add notifications/mentions and unread state after baseline thread behavior is stable.

@@ -295,6 +295,32 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE media_comments (
+      comment_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      file_id VARCHAR2(512 CHAR) NOT NULL,
+      parent_comment_id VARCHAR2(128 CHAR),
+      author_person_id VARCHAR2(128 CHAR),
+      author_display_name VARCHAR2(512 CHAR),
+      author_email VARCHAR2(320 CHAR),
+      comment_text CLOB,
+      comment_status VARCHAR2(32 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      deleted_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_media_comments PRIMARY KEY (comment_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE important_dates (
       id VARCHAR2(128 CHAR) NOT NULL,
       date_value VARCHAR2(32 CHAR),
@@ -410,6 +436,36 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_media_links_primary ON media_links (entity_type, entity_id, usage_type, is_primary)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_comments_file ON media_comments (family_group_key, file_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_comments_parent ON media_comments (family_group_key, parent_comment_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_media_comments_author ON media_comments (author_person_id, created_at)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

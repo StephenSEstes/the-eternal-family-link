@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-30 (threaded media comments in media modal)
+
+- `Date`: 2026-03-30
+- `Change`: Added robust media comments with conversational threads (top-level comments + replies), author/admin edit-delete controls, and a new `Comments` tab in the media modal.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a capability gap: media had no structured conversation model, so family discussion had no durable thread storage, reply hierarchy, or mutation permissions.
+- `Files`: `src/components/MediaLibraryClient.tsx`, `src/app/api/t/[tenantKey]/photos/[fileId]/comments/route.ts`, `src/app/api/t/[tenantKey]/photos/[fileId]/comments/[commentId]/route.ts`, `src/lib/oci/tables.ts`, `oci-schema.sql`, `docs/data-schema.md`, `designchoices.md`, `TODO.md`
+- `Data Changes`: New `media_comments` table contract with threaded `parent_comment_id`, author fields, status lifecycle, and lookup indexes (`file`, `parent`, `author`).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` compiles/type-checks, but local build still fails at existing `/404` prerender path-casing issue (`C:\\Users` vs `C:\\users`) unrelated to this feature.
+  - Media modal `Comments` tab supports add/reply/edit/delete thread actions.
+  - Delete is soft-delete and preserves reply/thread continuity.
+- `Rollback Notes`: Revert this commit to remove media comments routes/UI and media-comments schema compatibility/bootstrap paths.
+- `Design Decision Change`: Yes. Added `Media conversation threads` decision in `designchoices.md`.
+
 ## 2026-03-30 (mobile media tab shows unlimited rows)
 
 - `Date`: 2026-03-30

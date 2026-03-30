@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-30: Added robust threaded media comments in the Media modal (`Comments` tab) with top-level/reply threads, author/admin edit-delete controls, and OCI-backed `media_comments` persistence. See `docs/change-summary.md`.
 - 2026-03-30: Media tab now allows unlimited rows on mobile (single-scroll list with desktop paging unchanged). See `docs/change-summary.md`.
 - 2026-03-30: Header `Help` now opens in a separate window (with safe fallback to new tab/current route if popups are blocked), including the mobile nav-select path. See `docs/change-summary.md`.
 - 2026-03-30: Added deterministic Help playbooks, dynamic Help action links, Help UI action buttons, and profile deep-link launch for add-media/add-attribute flows. See `docs/change-summary.md`.

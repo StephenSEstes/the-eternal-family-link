@@ -45,6 +45,13 @@ This section is a quick reference for the three data areas that drive profile/me
   - Association semantics: `usage_type`, `is_primary`, `sort_order`, family/entity visibility
   - Legacy compatibility columns such as `label`, `description`, and `photo_date` may still exist physically, but active runtime should treat `MediaAssets` as canonical for those media-level values
   - Person-note: person primary-headshot authority does not live here; person links are non-authoritative associations, and `People.photo_file_id` is the canonical person headshot field
+- Conversation table: `MediaComments`
+  - One row per comment/reply thread node on a media file
+  - Scope: `family_group_key`
+  - Parent model: `file_id -> MediaAssets.file_id`
+  - Threading model: `parent_comment_id -> MediaComments.comment_id` (nullable for top-level comments)
+  - Author metadata: `author_person_id`, `author_display_name`, `author_email`
+  - Lifecycle: `comment_status` (`active` | `deleted`) with `deleted_at` soft-delete support to preserve thread continuity
 
 ### 4) Face Suggestions
 
@@ -379,6 +386,29 @@ This section is a quick reference for the three data areas that drive profile/me
 - Logical index/key:
   - Unique: `link_id`
   - Common lookup: (`family_group_key`, `entity_type`, `entity_id`, `usage_type`)
+
+## MediaComments
+
+- Columns:
+  - `comment_id`
+  - `family_group_key`
+  - `file_id`
+  - `parent_comment_id`
+  - `author_person_id`
+  - `author_display_name`
+  - `author_email`
+  - `comment_text`
+  - `comment_status` (`active` | `deleted`)
+  - `created_at`
+  - `updated_at`
+  - `deleted_at`
+- Purpose:
+  - Family-scoped conversational thread storage for media files, including replies and soft-delete behavior.
+  - Keeps comment history attached to the media file while preserving thread shape when a comment is deleted.
+- Logical index/key:
+  - Unique: `comment_id`
+  - Common lookup: (`family_group_key`, `file_id`, `created_at`)
+  - Thread lookup: (`family_group_key`, `parent_comment_id`, `created_at`)
 
 ## FaceInstances
 
