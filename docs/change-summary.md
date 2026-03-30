@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (attribute import guide copy-to-clipboard action)
+
+- `Date`: 2026-03-29
+- `Change`: Added a `Copy to Clipboard` button in the Person modal attribute import guide panel that copies headers, field rules, allowed attribute types/categories, and sample CSV in one paste-ready text block.
+- `Type`: UI
+- `Why`: Root cause was a usability gap in the new import guide flow: users could view format details but had no one-click way to copy the full guidance payload for spreadsheet prep.
+- `Files`: `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - In Person modal `Attributes` -> `Format & Guide`, clicking `Copy to Clipboard` copies headers, field rules, type options, and sample CSV.
+- `Rollback Notes`: Revert this commit to remove the copy action and status message from the import guide panel.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (person attribute import guide + upload flow)
 
 - `Date`: 2026-03-29

@@ -154,6 +154,72 @@ type PersonAttributeImportGuide = {
   sampleCsv: string;
 };
 
+function buildAttributeImportGuideClipboardText(guide: PersonAttributeImportGuide) {
+  const fieldHeader = "field|required|dataType|maxLength|description";
+  const fieldRows = guide.fields.map((field) =>
+    [
+      field.field,
+      String(field.required),
+      field.dataType,
+      String(field.maxLength),
+      field.description.replace(/\s+/g, " ").trim(),
+    ].join("|"),
+  );
+  const typeHeader = "typeKey|typeLabel|kind|categoryKey|categoryLabel|dateMode|detailLabel";
+  const typeRows = guide.typeOptions.map((item) =>
+    [
+      item.typeKey,
+      item.typeLabel,
+      item.kind,
+      item.categoryKey,
+      item.categoryLabel,
+      item.dateMode,
+      item.detailLabel,
+    ].join("|"),
+  );
+  return [
+    "ATTRIBUTE IMPORT GUIDE",
+    "",
+    "HEADERS",
+    guide.headers.join(","),
+    "",
+    "FIELD RULES",
+    fieldHeader,
+    ...fieldRows,
+    "",
+    "ATTRIBUTE TYPES",
+    typeHeader,
+    ...typeRows,
+    "",
+    "SAMPLE CSV",
+    guide.sampleCsv,
+  ].join("\n");
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  if (typeof document === "undefined") {
+    throw new Error("clipboard_unavailable");
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const ok = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!ok) {
+    throw new Error("clipboard_unavailable");
+  }
+}
+
 type StoryWorkspaceStep = 1 | 2;
 type StoryWorkspaceDraft = AiStoryImportProposal & {
   localId: string;
@@ -901,6 +967,7 @@ export function PersonEditModal({
   const [attributeImportStatus, setAttributeImportStatus] = useState("");
   const [showAttributeImportGuide, setShowAttributeImportGuide] = useState(false);
   const [attributeImportGuide, setAttributeImportGuide] = useState<PersonAttributeImportGuide | null>(null);
+  const [attributeImportGuideStatus, setAttributeImportGuideStatus] = useState("");
   const [selectedPhotoFileId, setSelectedPhotoFileId] = useState("");
   const [draftMeta, setDraftMeta] = useState<DraftMeta>({ label: "", description: "", date: "", isPrimary: false });
   const [tagQuery, setTagQuery] = useState("");
@@ -1195,6 +1262,7 @@ export function PersonEditModal({
     setAttributeImportStatus("");
     setShowAttributeImportGuide(false);
     setAttributeImportGuide(null);
+    setAttributeImportGuideStatus("");
     setPersonEnabledFamilyGroupKeys([normalizeFamilyGroupKey(tenantKey)]);
     setStoredFamilyGroupRelationshipType(
       normalizeFamilyGroupRelationshipType(
@@ -1355,6 +1423,7 @@ export function PersonEditModal({
   const openAttributeImportGuide = async () => {
     setAttributeImportBusy(true);
     setAttributeImportStatus("");
+    setAttributeImportGuideStatus("");
     try {
       const guide = attributeImportGuide ?? (await loadAttributeImportGuide());
       if (guide) {
@@ -1410,6 +1479,16 @@ export function PersonEditModal({
 
   const triggerAttributeImportFilePicker = () => {
     attributeImportFileRef.current?.click();
+  };
+
+  const copyAttributeImportGuideToClipboard = async () => {
+    if (!attributeImportGuide) return;
+    try {
+      await copyTextToClipboard(buildAttributeImportGuideClipboardText(attributeImportGuide));
+      setAttributeImportGuideStatus("Copied import headers, field rules, and type options to clipboard.");
+    } catch {
+      setAttributeImportGuideStatus("Copy failed. Clipboard permission is blocked in this browser.");
+    }
   };
 
   const handleAttributeImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -4160,10 +4239,24 @@ export function PersonEditModal({
                     <h3 className="person-modal-title">Attribute Import Format &amp; Guide</h3>
                     <p className="person-modal-meta">Imports into this person only.</p>
                   </div>
-                  <ModalCloseButton onClick={() => setShowAttributeImportGuide(false)} />
+                  <div className="settings-chip-list" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => {
+                        void copyAttributeImportGuideToClipboard();
+                      }}
+                    >
+                      Copy to Clipboard
+                    </button>
+                    <ModalCloseButton onClick={() => setShowAttributeImportGuide(false)} />
+                  </div>
                 </div>
               </div>
               <div className="person-modal-body" style={{ display: "grid", gap: "0.8rem" }}>
+                {attributeImportGuideStatus ? (
+                  <p className="page-subtitle" style={{ margin: 0 }}>{attributeImportGuideStatus}</p>
+                ) : null}
                 <div className="card">
                   <h4 className="ui-section-title" style={{ marginTop: 0 }}>Expected CSV Headers</h4>
                   <p className="page-subtitle" style={{ marginBottom: "0.35rem" }}>
