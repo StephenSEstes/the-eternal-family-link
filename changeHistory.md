@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-30: Header `Help` now opens in a separate window (with safe fallback to new tab/current route if popups are blocked), including the mobile nav-select path. See `docs/change-summary.md`.
 - 2026-03-30: Added deterministic Help playbooks, dynamic Help action links, Help UI action buttons, and profile deep-link launch for add-media/add-attribute flows. See `docs/change-summary.md`.
 - 2026-03-29: Fixed Home birthdays range filtering so `Today`, `This week`, and `This Month` include all birthdays in the selected range (not just upcoming). See `docs/change-summary.md`.
 - 2026-03-29: Added AI face detection and face-save actions to Person modal photo edit (Detect/Load, per-face crop, link/not-family/label-only, debug). See `docs/change-summary.md`.

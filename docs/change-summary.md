@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-30 (Header Help opens in separate window)
+
+- `Date`: 2026-03-30
+- `Change`: Updated header navigation Help behavior to open in a separate window (`efl_help`) with fallback to new tab/current route if popup opening is blocked, including the mobile nav-select Help option.
+- `Type`: UI
+- `Why`: Root cause was a workflow gap: Help could only open in the current route context, which made side-by-side use difficult while editing in other app screens.
+- `Files`: `src/components/HeaderNav.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Clicking `Help` in header opens Help in a separate window when allowed.
+  - If popup is blocked, Help still opens via fallback.
+- `Rollback Notes`: Revert this commit to restore prior in-tab header Help navigation behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-30 (Help AI deterministic playbooks + dynamic action links)
 
 - `Date`: 2026-03-30

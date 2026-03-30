@@ -14,6 +14,7 @@ type NavItem = {
   href: string;
   match: (pathname: string) => boolean;
   icon: ReactNode;
+  openInWindow?: boolean;
 };
 
 function HomeIcon() {
@@ -109,6 +110,31 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
   const router = useRouter();
   const pathname = usePathname() || "/";
 
+  const openHelpInWindow = (href: string) => {
+    if (typeof window === "undefined") {
+      router.push(href);
+      return;
+    }
+
+    const popup = window.open(
+      href,
+      "efl_help",
+      "popup=yes,width=1120,height=820,resizable=yes,scrollbars=yes",
+    );
+    if (popup) {
+      popup.focus();
+      return;
+    }
+
+    const tab = window.open(href, "_blank", "noopener,noreferrer");
+    if (tab) {
+      tab.focus();
+      return;
+    }
+
+    router.push(href);
+  };
+
   const sectionItems: NavItem[] = [
     {
       label: "Home",
@@ -151,6 +177,7 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       href: `${basePath}/help`,
       match: (path) => path.startsWith(`${basePath}/help`),
       icon: <HelpIcon />,
+      openInWindow: true,
     },
   ];
 
@@ -180,7 +207,15 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
           className="app-nav-mobile-select"
           aria-label="Select page"
           value={activeSection?.href ?? sectionItems[0]?.href}
-          onChange={(event) => router.push(event.target.value)}
+          onChange={(event) => {
+            const nextHref = event.target.value;
+            const selected = sectionItems.find((item) => item.href === nextHref);
+            if (selected?.openInWindow) {
+              openHelpInWindow(nextHref);
+              return;
+            }
+            router.push(nextHref);
+          }}
         >
           {sectionItems.map((item) => (
             <option key={`mobile-nav-${item.label}`} value={item.href}>
@@ -192,6 +227,19 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       <div className="app-nav">
         {items.map((item) => {
           const active = item.match(pathname);
+          if (item.openInWindow) {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={active ? "nav-pill nav-pill-active" : "nav-pill"}
+                onClick={() => openHelpInWindow(item.href)}
+              >
+                <span className="nav-pill-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            );
+          }
           return (
             <Link
               key={item.label}
