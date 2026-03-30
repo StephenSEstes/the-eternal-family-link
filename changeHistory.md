@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-03-29: Added AI face detection and face-save actions to Person modal photo edit (Detect/Load, per-face crop, link/not-family/label-only, debug). See `docs/change-summary.md`.
 - 2026-03-29: Added a `Copy to Clipboard` action in the Person modal attribute import guide to copy headers, field rules, allowed types/categories, and sample CSV in one block. See `docs/change-summary.md`.
 - 2026-03-29: Added person-attribute CSV import in Person modal Attributes (`Format & Guide` + `Upload Import File`) with tenant-aware type/category guidance and active-person-only import writes. See `docs/change-summary.md`.
 - 2026-03-29: Person modal media detail `Linked To` now supports attribute link/unlink (scoped to active person attributes) in addition to people and households. See `docs/change-summary.md`.

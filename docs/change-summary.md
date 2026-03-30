@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-03-29 (person photo editor AI face detection + save actions)
+
+- `Date`: 2026-03-29
+- `Change`: Added AI face detection and face-save actions to the photo edit form launched from the Person modal Media tab, including Detect/Load controls, per-face crop previews, person/label inputs, and link/not-family/label-only save actions with debug output.
+- `Type`: UI | API
+- `Why`: Root cause was a code integration gap: person photo edit used a separate detail form that never implemented the existing `/photos/{fileId}/faces` and `/faces/{faceId}/associate` workflow already present in the main Media modal.
+- `Files`: `src/components/PersonEditModal.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - In Person modal -> Media -> open photo detail, AI Face Detection section appears with `Detect faces (OCI Vision)` and `Load saved faces`.
+  - Face link actions persist and linked chips refresh after successful person association.
+- `Rollback Notes`: Revert this commit to remove AI face detection controls from the person photo editor.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-03-29 (attribute import guide copy-to-clipboard action)
 
 - `Date`: 2026-03-29

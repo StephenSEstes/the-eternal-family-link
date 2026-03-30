@@ -269,6 +269,25 @@ type LinkedSearchResult =
   | { kind: "household"; key: string; displayName: string; householdId: string }
   | { kind: "attribute"; key: string; displayName: string; attributeId: string; attributeType: string };
 
+type FaceRecord = {
+  faceId: string;
+  bbox: { x: number; y: number; width: number; height: number };
+  detectionConfidence: number;
+  qualityScore: number;
+  embeddingPresent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  link: {
+    personId: string;
+    status: string;
+    label: string;
+    note: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    confidenceScore?: number;
+  } | null;
+};
+
 function toMonthDay(value: string) {
   const raw = value.trim();
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -386,6 +405,11 @@ function isAtLeastAge(value: string | undefined, minYears = 19) {
 
 function inferPersonMediaKind(fileId: string, raw?: string) {
   return inferStoredMediaKind(fileId, raw);
+}
+
+function formatConfidencePercent(value: number) {
+  const pct = Math.max(0, Math.min(1, Number(value) || 0));
+  return `${(pct * 100).toFixed(1)}%`;
 }
 
 function isVideoMediaByMetadata(fileId: string, raw?: string) {
@@ -990,6 +1014,12 @@ export function PersonEditModal({
   }>({ people: [], households: [], attributes: [] });
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
+  const [faces, setFaces] = useState<FaceRecord[]>([]);
+  const [facesLoading, setFacesLoading] = useState(false);
+  const [facesDebug, setFacesDebug] = useState<Record<string, unknown> | null>(null);
+  const [faceLabelInput, setFaceLabelInput] = useState<Record<string, string>>({});
+  const [facePersonInput, setFacePersonInput] = useState<Record<string, string>>({});
+  const [faceSaving, setFaceSaving] = useState<Set<string>>(new Set());
   const [showMediaAttachWizard, setShowMediaAttachWizard] = useState(false);
   const [showAddSpouse, setShowAddSpouse] = useState(false);
   const [showAttributeAddModal, setShowAttributeAddModal] = useState(false);
@@ -1786,6 +1816,12 @@ export function PersonEditModal({
     setPersonPhotoQuery("");
     setPhotoAssociationStatus("");
     setShowPhotoDetail(false);
+    setFaces([]);
+    setFacesLoading(false);
+    setFacesDebug(null);
+    setFaceLabelInput({});
+    setFacePersonInput({});
+    setFaceSaving(new Set());
     setSelectedAboutAttributeId("");
     void loadPersonAttributeState(person.personId, tenantKey);
   }, [open, peopleById, person, contextHouseholds, parentSelection, spouseByRelationshipId, tenantKey]);
@@ -1830,6 +1866,24 @@ export function PersonEditModal({
   }, [activeTenantKey, open, person?.personId]);
 
   const personOptions = localPeople.filter((item) => item.personId !== person?.personId);
+  const facePeopleOptions = useMemo(() => {
+    const map = new Map<string, { personId: string; displayName: string }>();
+    for (const item of localPeople) {
+      const personId = item.personId.trim();
+      if (!personId || map.has(personId)) continue;
+      map.set(personId, {
+        personId,
+        displayName: item.displayName.trim() || personId,
+      });
+    }
+    if (person?.personId?.trim() && !map.has(person.personId.trim())) {
+      map.set(person.personId.trim(), {
+        personId: person.personId.trim(),
+        displayName: person.displayName.trim() || person.personId.trim(),
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [localPeople, person]);
   const childBirthDate = birthDate || person?.birthDate;
   const motherOptions = useMemo(() => {
     const base = personOptions.filter(
@@ -2240,6 +2294,11 @@ export function PersonEditModal({
     () => allMediaAttributes.find((item) => item.valueText.trim() === selectedPhotoFileId.trim()) ?? null,
     [allMediaAttributes, selectedPhotoFileId],
   );
+  const selectedPhotoFacePreviewSrc = selectedPhoto ? getPersonMediaPreviewSrc(selectedPhoto) : "";
+  const selectedPhotoSupportsFaceDetection = useMemo(() => {
+    if (!selectedPhoto) return false;
+    return inferPersonMediaKind(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) === "image";
+  }, [selectedPhoto]);
   const filteredPhotoAttributes = useMemo(() => {
     const query = personPhotoQuery.trim().toLowerCase();
     if (!query) return allMediaAttributes;
@@ -2421,6 +2480,111 @@ export function PersonEditModal({
     }
     void refreshSelectedPhotoAssociations(selectedPhoto.valueText);
   }, [aboutAttributes, peopleNameById, selectedPhoto, showPhotoDetail, tenantKey]);
+
+  useEffect(() => {
+    if (!showPhotoDetail || !selectedPhotoFileId) {
+      setFaces([]);
+      setFacesDebug(null);
+      setFaceLabelInput({});
+      setFacePersonInput({});
+      setFaceSaving(new Set());
+      setFacesLoading(false);
+      return;
+    }
+    setFaces([]);
+    setFacesDebug(null);
+    setFaceLabelInput({});
+    setFacePersonInput({});
+    setFaceSaving(new Set());
+    setFacesLoading(false);
+  }, [selectedPhotoFileId, showPhotoDetail]);
+
+  const loadFaces = async (options?: { detect?: boolean }) => {
+    if (!selectedPhoto) return;
+    if (!selectedPhotoSupportsFaceDetection) {
+      setFaces([]);
+      setFacesDebug({ error: "unsupported_media_kind", message: "Face detection currently supports image files only." });
+      return;
+    }
+    setFacesLoading(true);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(activeTenantKey)}/photos/${encodeURIComponent(selectedPhoto.valueText)}/faces`,
+        {
+          method: options?.detect ? "POST" : "GET",
+          headers: { "Content-Type": "application/json" },
+          body: options?.detect ? JSON.stringify({}) : undefined,
+          cache: "no-store",
+        },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const debugPayload =
+          body && typeof body === "object" && body.debug && typeof body.debug === "object" ? (body.debug as Record<string, unknown>) : null;
+        setFacesDebug({
+          ...(debugPayload ?? {}),
+          error: body?.error ?? `status_${res.status}`,
+          message: body?.message ?? "",
+        });
+        return;
+      }
+      const items: FaceRecord[] = Array.isArray(body?.faces) ? body.faces : [];
+      setFaces(items);
+      setFacesDebug(body?.debug ?? null);
+    } catch (error) {
+      setFacesDebug({ error: (error as Error)?.message ?? "face_load_failed" });
+    } finally {
+      setFacesLoading(false);
+    }
+  };
+
+  const associateFace = async (face: FaceRecord, intent: "link" | "not_family" | "label_only") => {
+    if (!selectedPhoto) return;
+    const targetFileId = selectedPhoto.valueText;
+    const personId = intent === "link" ? (facePersonInput[face.faceId] ?? "").trim() : "";
+    if (intent === "link" && !personId) {
+      setFacesDebug({ error: "person_required" });
+      return;
+    }
+    const label = (faceLabelInput[face.faceId] ?? "").trim();
+    const note = intent === "label_only" ? label : (face.link?.note ?? "");
+    const status = intent === "not_family" ? "not_family" : intent === "label_only" ? "unknown" : "linked";
+    setFaceSaving((current) => {
+      const next = new Set(current);
+      next.add(face.faceId);
+      return next;
+    });
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(activeTenantKey)}/photos/${encodeURIComponent(targetFileId)}/faces/${encodeURIComponent(face.faceId)}/associate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            personId,
+            label,
+            note,
+            status,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setFacesDebug({ error: body?.error ?? `status_${res.status}`, message: body?.message ?? "" });
+        return;
+      }
+      await loadFaces({ detect: false });
+      if (intent === "link" && personId) {
+        await refreshSelectedPhotoAssociations(targetFileId);
+      }
+    } finally {
+      setFaceSaving((current) => {
+        const next = new Set(current);
+        next.delete(face.faceId);
+        return next;
+      });
+    }
+  };
 
   const openPhotoDetail = (fileId: string) => {
     setSelectedPhotoFileId(fileId);
@@ -3526,49 +3690,6 @@ export function PersonEditModal({
         {activeTab === "attributes" ? (
           <>
             <div className="person-section-grid">
-              <div className="card field-span-2">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                  <div>
-                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Attribute Import</h4>
-                    <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
-                      Import attribute rows for this person only.
-                    </p>
-                  </div>
-                  <div className="settings-chip-list" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="button secondary tap-button"
-                      disabled={attributeImportBusy}
-                      onClick={() => {
-                        void openAttributeImportGuide();
-                      }}
-                    >
-                      Format &amp; Guide
-                    </button>
-                    <button
-                      type="button"
-                      className="button tap-button"
-                      disabled={attributeImportBusy}
-                      onClick={triggerAttributeImportFilePicker}
-                    >
-                      Upload Import File
-                    </button>
-                    <input
-                      ref={attributeImportFileRef}
-                      type="file"
-                      accept=".csv,text/csv"
-                      style={{ display: "none" }}
-                      onChange={(event) => {
-                        void handleAttributeImportFileChange(event);
-                      }}
-                    />
-                  </div>
-                </div>
-                {attributeImportStatus ? (
-                  <p className="page-subtitle" style={{ marginTop: "0.6rem", marginBottom: 0 }}>{attributeImportStatus}</p>
-                ) : null}
-              </div>
-
               <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: "230px" }}>
                 <h4 className="ui-section-title">Life Events</h4>
                 <div className="field-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
@@ -3784,6 +3905,49 @@ export function PersonEditModal({
                 <p className="page-subtitle" style={{ marginBottom: 0 }}>
                   This section will list missing details to collect.
                 </p>
+              </div>
+
+              <div className="card field-span-2">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <div>
+                    <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Attribute Import</h4>
+                    <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
+                      Import attribute rows for this person only.
+                    </p>
+                  </div>
+                  <div className="settings-chip-list" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      disabled={attributeImportBusy}
+                      onClick={() => {
+                        void openAttributeImportGuide();
+                      }}
+                    >
+                      Format &amp; Guide
+                    </button>
+                    <button
+                      type="button"
+                      className="button tap-button"
+                      disabled={attributeImportBusy}
+                      onClick={triggerAttributeImportFilePicker}
+                    >
+                      Upload Import File
+                    </button>
+                    <input
+                      ref={attributeImportFileRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        void handleAttributeImportFileChange(event);
+                      }}
+                    />
+                  </div>
+                </div>
+                {attributeImportStatus ? (
+                  <p className="page-subtitle" style={{ marginTop: "0.6rem", marginBottom: 0 }}>{attributeImportStatus}</p>
+                ) : null}
               </div>
             </div>
           </>
@@ -4040,6 +4204,191 @@ export function PersonEditModal({
                     busy={photoBusy || selectedPhotoAssociationsBusy}
                     statusText={photoAssociationStatus}
                   />
+                  <div className="card" style={{ marginTop: 0, display: "grid", gap: "0.85rem" }}>
+                    <h4 style={{ margin: 0 }}>AI Face Detection</h4>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="button tap-button"
+                        onClick={() => {
+                          void loadFaces({ detect: true });
+                        }}
+                        disabled={photoBusy || facesLoading || !selectedPhotoSupportsFaceDetection}
+                      >
+                        {facesLoading ? "Detecting..." : "Detect faces (OCI Vision)"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => {
+                          void loadFaces({ detect: false });
+                        }}
+                        disabled={photoBusy || facesLoading || !selectedPhotoSupportsFaceDetection}
+                      >
+                        {facesLoading ? "Loading..." : "Load saved faces"}
+                      </button>
+                      {facesDebug ? (
+                        <span className="page-subtitle" style={{ margin: 0, color: facesDebug.error ? "#b91c1c" : "inherit" }}>
+                          {facesDebug.error ? `Error: ${String(facesDebug.error)}` : null}
+                          {facesDebug.message ? ` · ${String(facesDebug.message)}` : null}
+                          {facesDebug.routeMs ? ` · Route ${String(facesDebug.routeMs)}ms` : null}
+                          {facesDebug.visionMs ? ` · Vision ${String(facesDebug.visionMs)}ms` : null}
+                          {facesDebug.faceCount !== undefined ? ` · Faces ${String(facesDebug.faceCount)}` : null}
+                        </span>
+                      ) : null}
+                    </div>
+                    {!selectedPhotoSupportsFaceDetection ? (
+                      <p className="page-subtitle" style={{ margin: 0 }}>
+                        Face detection currently supports image files only.
+                      </p>
+                    ) : null}
+                    {selectedPhotoSupportsFaceDetection ? (
+                      <div style={{ display: "grid", gap: "0.6rem" }}>
+                        {faces.length === 0 ? (
+                          <p className="page-subtitle" style={{ margin: 0 }}>
+                            {facesLoading ? "Detecting faces..." : "Faces not loaded yet. Use Detect faces to populate boxes."}
+                          </p>
+                        ) : null}
+                        {faces.length > 0 ? (
+                          <div style={{ display: "grid", gap: "0.65rem" }}>
+                            {faces.map((face, index) => {
+                              const saving = faceSaving.has(face.faceId);
+                              const rawBbox = face.bbox;
+                              const bbox = {
+                                x: Number.isFinite(rawBbox.x) ? Math.max(0, Math.min(1, rawBbox.x)) : 0,
+                                y: Number.isFinite(rawBbox.y) ? Math.max(0, Math.min(1, rawBbox.y)) : 0,
+                                width: Number.isFinite(rawBbox.width) ? Math.max(0.0001, Math.min(1, rawBbox.width)) : 1,
+                                height: Number.isFinite(rawBbox.height) ? Math.max(0.0001, Math.min(1, rawBbox.height)) : 1,
+                              };
+                              const facePreviewWidthPx = 140;
+                              const facePreviewHeightPx = facePreviewWidthPx * (bbox.height / bbox.width);
+                              const cropBackgroundWidthPx = facePreviewWidthPx / bbox.width;
+                              const cropBackgroundHeightPx = facePreviewHeightPx / bbox.height;
+                              const cropBackgroundXOffsetPx = -(bbox.x / bbox.width) * facePreviewWidthPx;
+                              const cropBackgroundYOffsetPx = -(bbox.y / bbox.height) * facePreviewHeightPx;
+                              return (
+                                <div
+                                  key={face.faceId}
+                                  className="card"
+                                  style={{ margin: 0, padding: "0.75rem", display: "grid", gap: "0.45rem" }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                                    <strong>Face {index + 1}</strong>
+                                    <span className="page-subtitle" style={{ margin: 0 }}>
+                                      det {formatConfidencePercent(face.detectionConfidence)} · quality {formatConfidencePercent(face.qualityScore)}
+                                    </span>
+                                  </div>
+                                  <div
+                                    aria-label={`Face ${index + 1} crop`}
+                                    style={{
+                                      width: `${facePreviewWidthPx}px`,
+                                      height: `${facePreviewHeightPx}px`,
+                                      borderRadius: "8px",
+                                      overflow: "hidden",
+                                      backgroundImage: selectedPhotoFacePreviewSrc ? `url(${selectedPhotoFacePreviewSrc})` : "none",
+                                      backgroundRepeat: "no-repeat",
+                                      backgroundSize: `${cropBackgroundWidthPx}px ${cropBackgroundHeightPx}px`,
+                                      backgroundPosition: `${cropBackgroundXOffsetPx}px ${cropBackgroundYOffsetPx}px`,
+                                      position: "relative",
+                                      backgroundColor: "#f3f4f6",
+                                      border: "1px solid var(--line)",
+                                    }}
+                                  />
+                                  <div style={{ display: "grid", gap: "0.3rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                                    <div>
+                                      <label className="label">Person</label>
+                                      <select
+                                        className="input"
+                                        value={facePersonInput[face.faceId] ?? face.link?.personId ?? ""}
+                                        onChange={(event) =>
+                                          setFacePersonInput((current) => ({ ...current, [face.faceId]: event.target.value }))
+                                        }
+                                        disabled={saving || photoBusy}
+                                      >
+                                        <option value="">Select person...</option>
+                                        {facePeopleOptions.map((item) => (
+                                          <option key={`person-face-link-${face.faceId}-${item.personId}`} value={item.personId}>
+                                            {item.displayName}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="label">Label / Name</label>
+                                      <input
+                                        className="input"
+                                        value={faceLabelInput[face.faceId] ?? face.link?.label ?? ""}
+                                        onChange={(event) =>
+                                          setFaceLabelInput((current) => ({ ...current, [face.faceId]: event.target.value }))
+                                        }
+                                        placeholder="Unknown / not family label"
+                                        disabled={saving || photoBusy}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="label">Status</label>
+                                      <input className="input" value={face.link?.status || "unlinked"} readOnly />
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "nowrap", overflowX: "auto", paddingBottom: "0.1rem" }}>
+                                    <button
+                                      type="button"
+                                      className="button tap-button"
+                                      disabled={saving || photoBusy || !(facePersonInput[face.faceId] ?? face.link?.personId ?? "")}
+                                      onClick={() => {
+                                        void associateFace(face, "link");
+                                      }}
+                                      style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
+                                    >
+                                      {saving ? "Saving..." : "Link person"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button secondary tap-button"
+                                      disabled={saving || photoBusy}
+                                      onClick={() => {
+                                        void associateFace(face, "not_family");
+                                      }}
+                                      style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
+                                    >
+                                      {saving ? "Saving..." : "Mark not family"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button secondary tap-button"
+                                      disabled={saving || photoBusy}
+                                      onClick={() => {
+                                        void associateFace(face, "label_only");
+                                      }}
+                                      style={{ whiteSpace: "nowrap", padding: "0.35rem 0.55rem", fontSize: "0.82rem", minWidth: 0 }}
+                                    >
+                                      {saving ? "Saving..." : "Save label only"}
+                                    </button>
+                                  </div>
+                                  {face.link?.reviewedAt ? (
+                                    <span className="page-subtitle" style={{ margin: 0 }}>
+                                      Last updated {face.link.reviewedAt} by {face.link.reviewedBy || "unknown"}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {facesDebug ? (
+                          <details>
+                            <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Debug</summary>
+                            <textarea
+                              className="textarea"
+                              readOnly
+                              value={JSON.stringify(facesDebug, null, 2)}
+                              style={{ minHeight: "140px" }}
+                            />
+                          </details>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                   <StickySaveBar
                     dirty={
                       draftMeta.label !== (selectedPhoto.label || "") ||
