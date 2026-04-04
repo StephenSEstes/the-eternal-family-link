@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Family Shares foundation: threads, posts, comments, push-ready outbox)
+
+- `Date`: 2026-04-04
+- `Change`: Added Family Shares foundation with audience-based thread APIs, post/media upload APIs, post-comment APIs, thread read-state API, push-subscription register/unregister API, notification-dispatch scaffold API, and a new `Shares` UI surface linked from Home and top navigation.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a capability gap: the app had media and comments but no persistent audience-thread model for WhatsApp-style sharing, no dedicated thread/post/comment API contract, and no asynchronous notification queue model to keep user writes fast.
+- `Files`: `src/lib/oci/tables.ts`, `oci-schema.sql`, `src/lib/shares/audience.ts`, `src/app/api/t/[tenantKey]/shares/audience/resolve/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/read/route.ts`, `src/app/api/t/[tenantKey]/shares/push-subscriptions/route.ts`, `src/app/api/t/[tenantKey]/shares/notifications/dispatch/route.ts`, `src/components/shares/SharesClient.tsx`, `src/app/shares/page.tsx`, `src/app/t/[tenantKey]/shares/page.tsx`, `src/components/HeaderNav.tsx`, `src/app/page.tsx`, `src/app/t/[tenantKey]/page.tsx`, `docs/data-schema.md`, `designchoices.md`, `TODO.md`
+- `Data Changes`: Added normalized share/notification tables (`share_threads`, `share_thread_members`, `share_posts`, `share_post_comments`, `push_subscriptions`, `notification_outbox`) with compatibility bootstrap and lookup indexes.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - User can open/create an audience thread, post text, upload media post, and add comments from `/shares`.
+  - New `Shares` destination appears in Home tiles and header nav in current UX style.
+- `Rollback Notes`: Revert this commit to remove Shares API/UI and new schema compatibility paths.
+- `Design Decision Change`: Yes. Added `Family Shares threads + notification pipeline` decision in `designchoices.md`.
+
 ## 2026-03-30 (threaded media comments in media modal)
 
 - `Date`: 2026-03-30

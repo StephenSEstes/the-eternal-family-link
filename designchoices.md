@@ -353,3 +353,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Store comments in media metadata JSON, keep flat non-threaded comments only, or hard-delete comment rows.
 - `Impact`: Media modal can render conversational threads with replies, author/admin mutation rules, and stable history on deleted comments.
 - `Follow-up`: Add notifications/mentions and unread state after baseline thread behavior is stable.
+
+## 2026-04-04
+
+- `Area`: Family Shares threads + notification pipeline
+- `Decision`: Add a dedicated family-sharing model using audience-scoped threads (`share_threads`, `share_thread_members`) with posts/comments (`share_posts`, `share_post_comments`) and asynchronous notification plumbing (`push_subscriptions`, `notification_outbox`). Writes must stay non-blocking for end users: post/comment creation enqueues outbox events instead of waiting for delivery.
+- `Reason`: Home-level WhatsApp-style family sharing requires persistent audience threads, media-aware posts, and conversational comments without overloading existing media-link tables or coupling user actions to push delivery latency.
+- `Alternatives Considered`: Reuse `MediaComments` only, store sharing threads in media metadata JSON, or send push synchronously in request paths.
+- `Impact`: New `/api/t/[tenantKey]/shares/...` endpoints become the canonical sharing API surface; Home/Nav can surface a `Shares` destination while existing Media/People flows remain unchanged.
+- `Follow-up`: Add production push dispatcher transport and retry/backoff tuning, then expand Shares UX with richer thread grouping and unread indicators.

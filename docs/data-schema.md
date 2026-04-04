@@ -53,7 +53,36 @@ This section is a quick reference for the three data areas that drive profile/me
   - Author metadata: `author_person_id`, `author_display_name`, `author_email`
   - Lifecycle: `comment_status` (`active` | `deleted`) with `deleted_at` soft-delete support to preserve thread continuity
 
-### 4) Face Suggestions
+### 4) Family Shares + Notifications
+
+- Share thread model:
+  - `ShareThreads`
+    - One audience thread per family group + audience tuple
+    - Key: `thread_id`
+    - Scope key: (`family_group_key`, `audience_type`, `audience_key`)
+  - `ShareThreadMembers`
+    - One member row per thread + person
+    - Key: `thread_member_id`
+    - Uniqueness: (`thread_id`, `person_id`)
+  - `SharePosts`
+    - One row per thread post (text-only or media-backed by `file_id`)
+    - Key: `post_id`
+    - Parent: `thread_id -> ShareThreads.thread_id`
+  - `SharePostComments`
+    - Threaded post comments using `parent_comment_id`
+    - Key: `comment_id`
+    - Parent: `post_id -> SharePosts.post_id`
+- Notification readiness model:
+  - `PushSubscriptions`
+    - Active web-push endpoints per person/device in a family group
+    - Key: `subscription_id`
+    - Endpoint uniqueness: `endpoint`
+  - `NotificationOutbox`
+    - Asynchronous delivery queue rows for share post/comment events
+    - Key: `notification_id`
+    - Delivery is non-blocking for user actions (`pending` -> `sent` lifecycle)
+
+### 5) Face Suggestions
 
 - Detected faces per analyzed image: `FaceInstances`
   - Key: `face_id`
@@ -69,13 +98,13 @@ This section is a quick reference for the three data areas that drive profile/me
   - One canonical profile per `person_id` for the current face-suggestion phase (`family_group_key="__global__"` for canonical rows)
   - Seeded from the person's current primary headshot when available
 
-### 5) How One Media File Can Appear In Multiple Families
+### 6) How One Media File Can Appear In Multiple Families
 
 - File is shared at asset level (`MediaAssets`).
 - Visibility is family-scoped at link level (`MediaLinks.family_group_key`).
 - Same file can appear in multiple family groups by having multiple `MediaLinks` rows (one per family scope/entity association).
 
-### 6) Practical Join Paths
+### 7) Practical Join Paths
 
 - Person profile photo:
   - `People.photo_file_id` -> `MediaAssets.file_id` (or direct Drive proxy by file ID)
@@ -92,8 +121,17 @@ This section is a quick reference for the three data areas that drive profile/me
   - `FaceInstances.file_id` -> `MediaAssets.file_id`
   - `FaceMatches.face_id` -> `FaceInstances.face_id`
   - `PersonFaceProfiles.person_id` -> `People.person_id`
+- Family shares:
+  - `ShareThreads.thread_id` -> `ShareThreadMembers.thread_id`
+  - `ShareThreads.thread_id` -> `SharePosts.thread_id`
+  - `SharePosts.post_id` -> `SharePostComments.post_id`
+  - `SharePosts.file_id` -> `MediaAssets.file_id` (optional media-backed post)
+- Notification pipeline:
+  - `NotificationOutbox.person_id` -> `People.person_id`
+  - `NotificationOutbox.entity_id` references share post/comment IDs by `entity_type`
+  - `PushSubscriptions.person_id` -> `People.person_id`
 
-### 7) Suggested Integrity Rules (Logical)
+### 8) Suggested Integrity Rules (Logical)
 
 - Asset uniqueness:
   - Unique `MediaAssets.file_id` (or strict dedupe by checksum + file_id policy)
@@ -102,6 +140,10 @@ This section is a quick reference for the three data areas that drive profile/me
   - (`family_group_key`, `entity_type`, `entity_id`, `media_id`, `usage_type`)
 - No orphan links:
   - Every `MediaLinks.media_id` must resolve to a `MediaAssets.media_id`
+- Share thread uniqueness:
+  - Unique (`family_group_key`, `audience_type`, `audience_key`) in `ShareThreads`
+- Share membership uniqueness:
+  - Unique (`thread_id`, `person_id`) in `ShareThreadMembers`
 
 ## Tables And Columns
 
@@ -409,6 +451,138 @@ This section is a quick reference for the three data areas that drive profile/me
   - Unique: `comment_id`
   - Common lookup: (`family_group_key`, `file_id`, `created_at`)
   - Thread lookup: (`family_group_key`, `parent_comment_id`, `created_at`)
+
+## ShareThreads
+
+- Columns:
+  - `thread_id`
+  - `family_group_key`
+  - `audience_type` (`siblings` | `household` | `entire_family` | `family_group`)
+  - `audience_key`
+  - `audience_label`
+  - `owner_person_id`
+  - `created_by_person_id`
+  - `created_by_email`
+  - `created_at`
+  - `updated_at`
+  - `last_post_at`
+  - `thread_status`
+- Purpose:
+  - Canonical thread container for Family Shares conversations, keyed by audience resolution.
+- Logical index/key:
+  - Unique: `thread_id`
+  - Unique scope: (`family_group_key`, `audience_type`, `audience_key`)
+  - Common lookup: (`family_group_key`, `last_post_at`)
+
+## ShareThreadMembers
+
+- Columns:
+  - `thread_member_id`
+  - `thread_id`
+  - `family_group_key`
+  - `person_id`
+  - `member_role` (`owner` | `member`)
+  - `joined_at`
+  - `last_read_at`
+  - `muted_until`
+  - `is_active`
+- Purpose:
+  - Membership/access table for share threads including read-state tracking.
+- Logical index/key:
+  - Unique: `thread_member_id`
+  - Unique composite: (`thread_id`, `person_id`)
+  - Common lookup: (`family_group_key`, `person_id`, `is_active`)
+
+## SharePosts
+
+- Columns:
+  - `post_id`
+  - `thread_id`
+  - `family_group_key`
+  - `file_id`
+  - `caption_text`
+  - `author_person_id`
+  - `author_display_name`
+  - `author_email`
+  - `created_at`
+  - `updated_at`
+  - `post_status`
+- Purpose:
+  - Post rows for Family Shares threads; supports text-only and media-backed entries.
+- Logical index/key:
+  - Unique: `post_id`
+  - Common lookup: (`thread_id`, `created_at`)
+  - Common lookup: (`family_group_key`, `created_at`)
+
+## SharePostComments
+
+- Columns:
+  - `comment_id`
+  - `post_id`
+  - `thread_id`
+  - `family_group_key`
+  - `parent_comment_id`
+  - `author_person_id`
+  - `author_display_name`
+  - `author_email`
+  - `comment_text`
+  - `comment_status`
+  - `created_at`
+  - `updated_at`
+  - `deleted_at`
+- Purpose:
+  - Threaded comments attached to share posts.
+- Logical index/key:
+  - Unique: `comment_id`
+  - Common lookup: (`post_id`, `created_at`)
+  - Thread lookup: (`thread_id`, `created_at`)
+
+## PushSubscriptions
+
+- Columns:
+  - `subscription_id`
+  - `family_group_key`
+  - `person_id`
+  - `user_email`
+  - `endpoint`
+  - `p256dh`
+  - `auth`
+  - `device_label`
+  - `user_agent`
+  - `last_seen_at`
+  - `created_at`
+  - `is_active`
+- Purpose:
+  - Registered browser/device push endpoints for future share notifications.
+- Logical index/key:
+  - Unique: `subscription_id`
+  - Unique: `endpoint`
+  - Common lookup: (`family_group_key`, `person_id`, `is_active`)
+
+## NotificationOutbox
+
+- Columns:
+  - `notification_id`
+  - `family_group_key`
+  - `person_id`
+  - `user_email`
+  - `channel`
+  - `event_type`
+  - `entity_type`
+  - `entity_id`
+  - `payload_json`
+  - `status`
+  - `attempt_count`
+  - `next_attempt_at`
+  - `last_error`
+  - `created_at`
+  - `sent_at`
+- Purpose:
+  - Asynchronous notification queue so post/comment writes are not blocked on delivery.
+- Logical index/key:
+  - Unique: `notification_id`
+  - Common lookup: (`status`, `next_attempt_at`, `created_at`)
+  - Recipient lookup: (`family_group_key`, `person_id`, `created_at`)
 
 ## FaceInstances
 

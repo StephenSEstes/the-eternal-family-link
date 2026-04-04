@@ -77,6 +77,16 @@ function MediaIcon() {
   );
 }
 
+function SharesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15H11l-4.3 4v-4H6.5A2.5 2.5 0 0 1 4 12.5z" />
+      <circle cx="9" cy="9.5" r="1.1" />
+      <path d="M8 13l2.2-2.2 1.4 1.4 1.4-1.6 2 2.4" />
+    </svg>
+  );
+}
+
 function HelpIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -171,6 +181,12 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       href: `${basePath}/media`,
       match: (path) => path.startsWith(`${basePath}/media`),
       icon: <MediaIcon />,
+    },
+    {
+      label: "Shares",
+      href: `${basePath}/shares`,
+      match: (path) => path.startsWith(`${basePath}/shares`),
+      icon: <SharesIcon />,
     },
     {
       label: "Help",

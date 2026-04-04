@@ -4,6 +4,77 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Family Shares feed (WhatsApp-style media sharing threads) with audience targeting and push-ready notifications
+  Priority: High (#1)
+  Status: In progress 2026-04-04
+  Progress 2026-04-04:
+  - Completed: Phase 1 schema/OCI compatibility foundation.
+  - Completed: Phase 2 API foundation (threads, posts, upload, comments, read-state, audience resolve, push subscription endpoints).
+  - Completed: Phase 3 initial UX surface (Home/Nav `Shares` entry + Shares page in current style).
+  - Completed: Phase 4 scaffold (notification outbox writes + admin dispatch scaffold route).
+  - Remaining: hardening, deeper UX polish, and production push transport.
+  Est date: 2026-04-12
+  Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.
+  Scope:
+  - Reuse current media storage pipeline (`MediaAssets` originals + thumbnails, direct preview URLs).
+  - Add thread model grouped by sharing audience and designed for continuous conversation.
+  - Keep media-link associations for tagged people/households so shared media remains connected to family profiles.
+  - Add Home-level feed surface and dedicated Shares screen using current app UX style (no new visual system).
+  - Add push-notification readiness:
+    - web-push subscription storage
+    - notification outbox events for new posts/comments
+    - dispatch hook/worker route for later rollout
+  - Preserve existing People/Households/Media functionality and avoid regressions in current upload/link flows.
+  Phases:
+  - Phase 1: Data model + OCI compatibility
+    - Add tables:
+      - `share_threads`
+      - `share_thread_members`
+      - `share_posts`
+      - `share_post_comments`
+      - `push_subscriptions`
+      - `notification_outbox`
+    - Add indexes for tenant/thread/post/member lookup and unread ordering.
+    - Add OCI helper functions for thread/post/comment CRUD and member resolution.
+  - Phase 2: API foundation
+    - Add APIs:
+      - list/create threads
+      - list/create posts (with media upload path)
+      - list/create comments on posts
+      - mark thread read
+      - resolve audience recipients (`siblings`, `household`, `entire family`, selected family group)
+      - register/unregister push subscriptions
+    - Add audit log entries for create/update operations.
+  - Phase 3: UX implementation (current style)
+    - Add `Family Shares` section on Home.
+    - Add Shares page with:
+      - thread list grouped by audience
+      - compose area with audience selector and media upload
+      - post stream with comments
+    - Keep controls consistent with existing People/Media design patterns.
+  - Phase 4: Notification pipeline
+    - Write notification outbox entries for new posts/comments.
+    - Add dispatcher route/job scaffold for push delivery with retries and failure state.
+    - Keep delivery idempotent and non-blocking for user actions.
+  - Phase 5: Hardening + validation
+    - Verify tenant access guards on all share endpoints.
+    - Verify thumbnail/original URL performance path and pagination/cursor behavior.
+    - Confirm no regressions in existing Media tab, person modal media, and comments.
+  API/UI/data changes:
+  - API: new `/api/t/[tenantKey]/shares/...` routes plus push subscription endpoints and dispatch hook.
+  - UI: Home feed card + Shares screen + compose/comments interactions.
+  - Data: new normalized share-thread and notification-support tables.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes (environment permitting).
+  - User can create a thread by audience, upload media, and see post in continuous thread.
+  - Thread comments persist and reload in order.
+  - Tagged people media links are created/updated correctly.
+  - Notification outbox entries are created for recipients.
+  Completion criteria:
+  - Family Shares is usable end-to-end with audience-based continuous threads.
+  - Existing app media functionality remains stable.
+  - Push infrastructure is wired and ready for production dispatch enablement.
 - [ ] Media comments with threaded family conversations
   Priority: High
   Status: In progress 2026-03-30

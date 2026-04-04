@@ -321,6 +321,162 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE share_threads (
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      audience_type VARCHAR2(64 CHAR) NOT NULL,
+      audience_key VARCHAR2(256 CHAR) NOT NULL,
+      audience_label VARCHAR2(512 CHAR),
+      owner_person_id VARCHAR2(128 CHAR),
+      created_by_person_id VARCHAR2(128 CHAR),
+      created_by_email VARCHAR2(320 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      last_post_at VARCHAR2(64 CHAR),
+      thread_status VARCHAR2(32 CHAR),
+      CONSTRAINT pk_share_threads PRIMARY KEY (thread_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE share_thread_members (
+      thread_member_id VARCHAR2(128 CHAR) NOT NULL,
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      member_role VARCHAR2(64 CHAR),
+      joined_at VARCHAR2(64 CHAR),
+      last_read_at VARCHAR2(64 CHAR),
+      muted_until VARCHAR2(64 CHAR),
+      is_active VARCHAR2(8 CHAR),
+      CONSTRAINT pk_share_thread_members PRIMARY KEY (thread_member_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE share_posts (
+      post_id VARCHAR2(128 CHAR) NOT NULL,
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      file_id VARCHAR2(512 CHAR),
+      caption_text CLOB,
+      author_person_id VARCHAR2(128 CHAR),
+      author_display_name VARCHAR2(512 CHAR),
+      author_email VARCHAR2(320 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      post_status VARCHAR2(32 CHAR),
+      CONSTRAINT pk_share_posts PRIMARY KEY (post_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE share_post_comments (
+      comment_id VARCHAR2(128 CHAR) NOT NULL,
+      post_id VARCHAR2(128 CHAR) NOT NULL,
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      parent_comment_id VARCHAR2(128 CHAR),
+      author_person_id VARCHAR2(128 CHAR),
+      author_display_name VARCHAR2(512 CHAR),
+      author_email VARCHAR2(320 CHAR),
+      comment_text CLOB,
+      comment_status VARCHAR2(32 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      deleted_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_share_post_comments PRIMARY KEY (comment_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE push_subscriptions (
+      subscription_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      user_email VARCHAR2(320 CHAR),
+      endpoint VARCHAR2(2000 CHAR) NOT NULL,
+      p256dh VARCHAR2(2000 CHAR),
+      auth VARCHAR2(1024 CHAR),
+      device_label VARCHAR2(256 CHAR),
+      user_agent VARCHAR2(2000 CHAR),
+      last_seen_at VARCHAR2(64 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      is_active VARCHAR2(8 CHAR),
+      CONSTRAINT pk_push_subscriptions PRIMARY KEY (subscription_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE notification_outbox (
+      notification_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      user_email VARCHAR2(320 CHAR),
+      channel VARCHAR2(32 CHAR),
+      event_type VARCHAR2(64 CHAR),
+      entity_type VARCHAR2(64 CHAR),
+      entity_id VARCHAR2(256 CHAR),
+      payload_json CLOB,
+      status VARCHAR2(32 CHAR),
+      attempt_count NUMBER,
+      next_attempt_at VARCHAR2(64 CHAR),
+      last_error VARCHAR2(2000 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      sent_at VARCHAR2(64 CHAR),
+      CONSTRAINT pk_notification_outbox PRIMARY KEY (notification_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE important_dates (
       id VARCHAR2(128 CHAR) NOT NULL,
       date_value VARCHAR2(32 CHAR),
@@ -466,6 +622,126 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_media_comments_author ON media_comments (author_person_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads (family_group_key, audience_type, audience_key)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_threads_last_post ON share_threads (family_group_key, last_post_at, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_thread_members_person ON share_thread_members (thread_id, person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_thread_members_lookup ON share_thread_members (family_group_key, person_id, is_active)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_posts_thread ON share_posts (thread_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_posts_family ON share_posts (family_group_key, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_post_comments_post ON share_post_comments (post_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_post_comments_thread ON share_post_comments (thread_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_push_subscriptions_endpoint ON push_subscriptions (endpoint)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_push_subscriptions_person ON push_subscriptions (family_group_key, person_id, is_active)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_notification_outbox_status ON notification_outbox (status, next_attempt_at, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_notification_outbox_person ON notification_outbox (family_group_key, person_id, created_at)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

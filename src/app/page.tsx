@@ -33,6 +33,7 @@ export default async function HomePage() {
     { href: `${basePath}/people`, title: "People", subtitle: "View and update profiles" },
     { href: `${basePath}/tree`, title: "Family Tree", subtitle: "Relationship map" },
     { href: `${basePath}/today`, title: "Calendar", subtitle: "Month view and upcoming plans" },
+    { href: `${basePath}/shares`, title: "Shares", subtitle: "Family sharing threads and comments" },
     { href: `${basePath}/games`, title: "Games", subtitle: "Memory activities" },
     { href: `${basePath}/media`, title: "Media", subtitle: "Shared family photo and video library" },
     { href: `${basePath}/help`, title: "Help", subtitle: "Ask how to use the app" },

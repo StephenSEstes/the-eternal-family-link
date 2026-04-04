@@ -40,6 +40,12 @@ let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
 let mediaAssetsTableCompatEnsured = false;
 let mediaCommentsTableCompatEnsured = false;
+let shareThreadsTableCompatEnsured = false;
+let shareThreadMembersTableCompatEnsured = false;
+let sharePostsTableCompatEnsured = false;
+let sharePostCommentsTableCompatEnsured = false;
+let pushSubscriptionsTableCompatEnsured = false;
+let notificationOutboxTableCompatEnsured = false;
 let userAccessTableCompatEnsured = false;
 let invitesTableCompatEnsured = false;
 let personFamilyGroupsTableCompatEnsured = false;
@@ -236,6 +242,108 @@ const TABLES: Record<string, TableConfig> = {
       "created_at",
       "updated_at",
       "deleted_at",
+    ],
+  },
+  ShareThreads: {
+    tableName: "share_threads",
+    headers: [
+      "thread_id",
+      "family_group_key",
+      "audience_type",
+      "audience_key",
+      "audience_label",
+      "owner_person_id",
+      "created_by_person_id",
+      "created_by_email",
+      "created_at",
+      "updated_at",
+      "last_post_at",
+      "thread_status",
+    ],
+  },
+  ShareThreadMembers: {
+    tableName: "share_thread_members",
+    headers: [
+      "thread_member_id",
+      "thread_id",
+      "family_group_key",
+      "person_id",
+      "member_role",
+      "joined_at",
+      "last_read_at",
+      "muted_until",
+      "is_active",
+    ],
+  },
+  SharePosts: {
+    tableName: "share_posts",
+    headers: [
+      "post_id",
+      "thread_id",
+      "family_group_key",
+      "file_id",
+      "caption_text",
+      "author_person_id",
+      "author_display_name",
+      "author_email",
+      "created_at",
+      "updated_at",
+      "post_status",
+    ],
+  },
+  SharePostComments: {
+    tableName: "share_post_comments",
+    headers: [
+      "comment_id",
+      "post_id",
+      "thread_id",
+      "family_group_key",
+      "parent_comment_id",
+      "author_person_id",
+      "author_display_name",
+      "author_email",
+      "comment_text",
+      "comment_status",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ],
+  },
+  PushSubscriptions: {
+    tableName: "push_subscriptions",
+    headers: [
+      "subscription_id",
+      "family_group_key",
+      "person_id",
+      "user_email",
+      "endpoint",
+      "p256dh",
+      "auth",
+      "device_label",
+      "user_agent",
+      "last_seen_at",
+      "created_at",
+      "is_active",
+    ],
+  },
+  NotificationOutbox: {
+    tableName: "notification_outbox",
+    headers: [
+      "notification_id",
+      "family_group_key",
+      "person_id",
+      "user_email",
+      "channel",
+      "event_type",
+      "entity_type",
+      "entity_id",
+      "payload_json",
+      "status",
+      "attempt_count",
+      "next_attempt_at",
+      "last_error",
+      "created_at",
+      "sent_at",
     ],
   },
   FaceInstances: {
@@ -788,6 +896,456 @@ async function ensureMediaCommentsTableCompatibility(connection: OciConnection) 
   mediaCommentsTableCompatEnsured = true;
 }
 
+async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
+  if (shareThreadsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_threads (
+         thread_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         audience_type VARCHAR2(64) NOT NULL,
+         audience_key VARCHAR2(256) NOT NULL,
+         audience_label VARCHAR2(512),
+         owner_person_id VARCHAR2(128),
+         created_by_person_id VARCHAR2(128),
+         created_by_email VARCHAR2(320),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64),
+         last_post_at VARCHAR2(64),
+         thread_status VARCHAR2(32)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads(family_group_key, audience_type, audience_key)`);
+    await connection.execute(`CREATE INDEX ix_share_threads_last_post ON share_threads(family_group_key, last_post_at, created_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "audience_type VARCHAR2(64)",
+    "audience_key VARCHAR2(256)",
+    "audience_label VARCHAR2(512)",
+    "owner_person_id VARCHAR2(128)",
+    "created_by_person_id VARCHAR2(128)",
+    "created_by_email VARCHAR2(320)",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+    "last_post_at VARCHAR2(64)",
+    "thread_status VARCHAR2(32)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_threads ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads(family_group_key, audience_type, audience_key)",
+    "CREATE INDEX ix_share_threads_last_post ON share_threads(family_group_key, last_post_at, created_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  shareThreadsTableCompatEnsured = true;
+}
+
+async function ensureShareThreadMembersTableCompatibility(connection: OciConnection) {
+  if (shareThreadMembersTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_thread_members (
+         thread_member_id VARCHAR2(128) PRIMARY KEY,
+         thread_id VARCHAR2(128) NOT NULL,
+         family_group_key VARCHAR2(128) NOT NULL,
+         person_id VARCHAR2(128) NOT NULL,
+         member_role VARCHAR2(64),
+         joined_at VARCHAR2(64),
+         last_read_at VARCHAR2(64),
+         muted_until VARCHAR2(64),
+         is_active VARCHAR2(8)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_share_thread_members_person ON share_thread_members(thread_id, person_id)`);
+    await connection.execute(`CREATE INDEX ix_share_thread_members_lookup ON share_thread_members(family_group_key, person_id, is_active)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "thread_id VARCHAR2(128)",
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "member_role VARCHAR2(64)",
+    "joined_at VARCHAR2(64)",
+    "last_read_at VARCHAR2(64)",
+    "muted_until VARCHAR2(64)",
+    "is_active VARCHAR2(8)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_thread_members ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_share_thread_members_person ON share_thread_members(thread_id, person_id)",
+    "CREATE INDEX ix_share_thread_members_lookup ON share_thread_members(family_group_key, person_id, is_active)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  shareThreadMembersTableCompatEnsured = true;
+}
+
+async function ensureSharePostsTableCompatibility(connection: OciConnection) {
+  if (sharePostsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_posts (
+         post_id VARCHAR2(128) PRIMARY KEY,
+         thread_id VARCHAR2(128) NOT NULL,
+         family_group_key VARCHAR2(128) NOT NULL,
+         file_id VARCHAR2(512),
+         caption_text CLOB,
+         author_person_id VARCHAR2(128),
+         author_display_name VARCHAR2(512),
+         author_email VARCHAR2(320),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64),
+         post_status VARCHAR2(32)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_share_posts_thread ON share_posts(thread_id, created_at)`);
+    await connection.execute(`CREATE INDEX ix_share_posts_family ON share_posts(family_group_key, created_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "thread_id VARCHAR2(128)",
+    "family_group_key VARCHAR2(128)",
+    "file_id VARCHAR2(512)",
+    "caption_text CLOB",
+    "author_person_id VARCHAR2(128)",
+    "author_display_name VARCHAR2(512)",
+    "author_email VARCHAR2(320)",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+    "post_status VARCHAR2(32)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_posts ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_share_posts_thread ON share_posts(thread_id, created_at)",
+    "CREATE INDEX ix_share_posts_family ON share_posts(family_group_key, created_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  sharePostsTableCompatEnsured = true;
+}
+
+async function ensureSharePostCommentsTableCompatibility(connection: OciConnection) {
+  if (sharePostCommentsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_post_comments (
+         comment_id VARCHAR2(128) PRIMARY KEY,
+         post_id VARCHAR2(128) NOT NULL,
+         thread_id VARCHAR2(128) NOT NULL,
+         family_group_key VARCHAR2(128) NOT NULL,
+         parent_comment_id VARCHAR2(128),
+         author_person_id VARCHAR2(128),
+         author_display_name VARCHAR2(512),
+         author_email VARCHAR2(320),
+         comment_text CLOB,
+         comment_status VARCHAR2(32),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64),
+         deleted_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_share_post_comments_post ON share_post_comments(post_id, created_at)`);
+    await connection.execute(`CREATE INDEX ix_share_post_comments_thread ON share_post_comments(thread_id, created_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "post_id VARCHAR2(128)",
+    "thread_id VARCHAR2(128)",
+    "family_group_key VARCHAR2(128)",
+    "parent_comment_id VARCHAR2(128)",
+    "author_person_id VARCHAR2(128)",
+    "author_display_name VARCHAR2(512)",
+    "author_email VARCHAR2(320)",
+    "comment_text CLOB",
+    "comment_status VARCHAR2(32)",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+    "deleted_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_post_comments ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_share_post_comments_post ON share_post_comments(post_id, created_at)",
+    "CREATE INDEX ix_share_post_comments_thread ON share_post_comments(thread_id, created_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  sharePostCommentsTableCompatEnsured = true;
+}
+
+async function ensurePushSubscriptionsTableCompatibility(connection: OciConnection) {
+  if (pushSubscriptionsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE push_subscriptions (
+         subscription_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         person_id VARCHAR2(128) NOT NULL,
+         user_email VARCHAR2(320),
+         endpoint VARCHAR2(2000) NOT NULL,
+         p256dh VARCHAR2(2000),
+         auth VARCHAR2(1024),
+         device_label VARCHAR2(256),
+         user_agent VARCHAR2(2000),
+         last_seen_at VARCHAR2(64),
+         created_at VARCHAR2(64),
+         is_active VARCHAR2(8)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_push_subscriptions_endpoint ON push_subscriptions(endpoint)`);
+    await connection.execute(`CREATE INDEX ix_push_subscriptions_person ON push_subscriptions(family_group_key, person_id, is_active)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "user_email VARCHAR2(320)",
+    "endpoint VARCHAR2(2000)",
+    "p256dh VARCHAR2(2000)",
+    "auth VARCHAR2(1024)",
+    "device_label VARCHAR2(256)",
+    "user_agent VARCHAR2(2000)",
+    "last_seen_at VARCHAR2(64)",
+    "created_at VARCHAR2(64)",
+    "is_active VARCHAR2(8)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE push_subscriptions ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_push_subscriptions_endpoint ON push_subscriptions(endpoint)",
+    "CREATE INDEX ix_push_subscriptions_person ON push_subscriptions(family_group_key, person_id, is_active)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  pushSubscriptionsTableCompatEnsured = true;
+}
+
+async function ensureNotificationOutboxTableCompatibility(connection: OciConnection) {
+  if (notificationOutboxTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE notification_outbox (
+         notification_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         person_id VARCHAR2(128) NOT NULL,
+         user_email VARCHAR2(320),
+         channel VARCHAR2(32),
+         event_type VARCHAR2(64),
+         entity_type VARCHAR2(64),
+         entity_id VARCHAR2(256),
+         payload_json CLOB,
+         status VARCHAR2(32),
+         attempt_count NUMBER,
+         next_attempt_at VARCHAR2(64),
+         last_error VARCHAR2(2000),
+         created_at VARCHAR2(64),
+         sent_at VARCHAR2(64)
+       )`,
+    );
+    await connection.execute(`CREATE INDEX ix_notification_outbox_status ON notification_outbox(status, next_attempt_at, created_at)`);
+    await connection.execute(`CREATE INDEX ix_notification_outbox_person ON notification_outbox(family_group_key, person_id, created_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "user_email VARCHAR2(320)",
+    "channel VARCHAR2(32)",
+    "event_type VARCHAR2(64)",
+    "entity_type VARCHAR2(64)",
+    "entity_id VARCHAR2(256)",
+    "payload_json CLOB",
+    "status VARCHAR2(32)",
+    "attempt_count NUMBER",
+    "next_attempt_at VARCHAR2(64)",
+    "last_error VARCHAR2(2000)",
+    "created_at VARCHAR2(64)",
+    "sent_at VARCHAR2(64)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE notification_outbox ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE INDEX ix_notification_outbox_status ON notification_outbox(status, next_attempt_at, created_at)",
+    "CREATE INDEX ix_notification_outbox_person ON notification_outbox(family_group_key, person_id, created_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  notificationOutboxTableCompatEnsured = true;
+}
+
 async function ensurePersonFamilyGroupsTableCompatibility(connection: OciConnection) {
   if (personFamilyGroupsTableCompatEnsured) {
     return;
@@ -1332,6 +1890,30 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
     await ensureMediaCommentsTableCompatibility(connection);
     return;
   }
+  if (tableName === "share_threads") {
+    await ensureShareThreadsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "share_thread_members") {
+    await ensureShareThreadMembersTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "share_posts") {
+    await ensureSharePostsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "share_post_comments") {
+    await ensureSharePostCommentsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "push_subscriptions") {
+    await ensurePushSubscriptionsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "notification_outbox") {
+    await ensureNotificationOutboxTableCompatibility(connection);
+    return;
+  }
   if (tableName === "households") {
     await ensureHouseholdsTableCompatibility(connection);
     return;
@@ -1710,6 +2292,111 @@ export type OciMediaCommentRow = {
   deletedAt: string;
 };
 
+export type OciShareThreadRow = {
+  threadId: string;
+  familyGroupKey: string;
+  audienceType: string;
+  audienceKey: string;
+  audienceLabel: string;
+  ownerPersonId: string;
+  createdByPersonId: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  lastPostAt: string;
+  threadStatus: string;
+  memberLastReadAt: string;
+  unreadCount: number;
+  latestPostId: string;
+  latestPostFileId: string;
+  latestPostCaption: string;
+  latestPostCreatedAt: string;
+  latestPostAuthorDisplayName: string;
+};
+
+export type OciShareThreadMemberRow = {
+  threadMemberId: string;
+  threadId: string;
+  familyGroupKey: string;
+  personId: string;
+  memberRole: string;
+  joinedAt: string;
+  lastReadAt: string;
+  mutedUntil: string;
+  isActive: boolean;
+};
+
+export type OciSharePostRow = {
+  postId: string;
+  threadId: string;
+  familyGroupKey: string;
+  fileId: string;
+  captionText: string;
+  authorPersonId: string;
+  authorDisplayName: string;
+  authorEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  postStatus: string;
+  mediaId: string;
+  mediaKind: string;
+  mediaLabel: string;
+  mediaDescription: string;
+  mediaPhotoDate: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  sourceProvider: string;
+};
+
+export type OciSharePostCommentRow = {
+  commentId: string;
+  postId: string;
+  threadId: string;
+  familyGroupKey: string;
+  parentCommentId: string;
+  authorPersonId: string;
+  authorDisplayName: string;
+  authorEmail: string;
+  commentText: string;
+  commentStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string;
+};
+
+export type OciPushSubscriptionRow = {
+  subscriptionId: string;
+  familyGroupKey: string;
+  personId: string;
+  userEmail: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  deviceLabel: string;
+  userAgent: string;
+  lastSeenAt: string;
+  createdAt: string;
+  isActive: boolean;
+};
+
+export type OciNotificationOutboxRow = {
+  notificationId: string;
+  familyGroupKey: string;
+  personId: string;
+  userEmail: string;
+  channel: string;
+  eventType: string;
+  entityType: string;
+  entityId: string;
+  payloadJson: string;
+  status: string;
+  attemptCount: number;
+  nextAttemptAt: string;
+  lastError: string;
+  createdAt: string;
+  sentAt: string;
+};
+
 export type OciPersonMediaAttributeRow = {
   attributeId: string;
   entityType: string;
@@ -1868,6 +2555,123 @@ function mapOciMediaCommentRow(row: Record<string, unknown>): OciMediaCommentRow
     createdAt: fromDbValue(row.CREATED_AT),
     updatedAt: fromDbValue(row.UPDATED_AT),
     deletedAt: fromDbValue(row.DELETED_AT),
+  };
+}
+
+function mapOciShareThreadRow(row: Record<string, unknown>): OciShareThreadRow {
+  return {
+    threadId: fromDbValue(row.THREAD_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    audienceType: fromDbValue(row.AUDIENCE_TYPE),
+    audienceKey: fromDbValue(row.AUDIENCE_KEY),
+    audienceLabel: fromDbValue(row.AUDIENCE_LABEL),
+    ownerPersonId: fromDbValue(row.OWNER_PERSON_ID),
+    createdByPersonId: fromDbValue(row.CREATED_BY_PERSON_ID),
+    createdByEmail: fromDbValue(row.CREATED_BY_EMAIL),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+    lastPostAt: fromDbValue(row.LAST_POST_AT),
+    threadStatus: fromDbValue(row.THREAD_STATUS),
+    memberLastReadAt: fromDbValue(row.MEMBER_LAST_READ_AT),
+    unreadCount: Number.parseInt(fromDbValue(row.UNREAD_COUNT), 10) || 0,
+    latestPostId: fromDbValue(row.LATEST_POST_ID),
+    latestPostFileId: fromDbValue(row.LATEST_POST_FILE_ID),
+    latestPostCaption: fromDbValue(row.LATEST_POST_CAPTION),
+    latestPostCreatedAt: fromDbValue(row.LATEST_POST_CREATED_AT),
+    latestPostAuthorDisplayName: fromDbValue(row.LATEST_POST_AUTHOR_DISPLAY_NAME),
+  };
+}
+
+function mapOciShareThreadMemberRow(row: Record<string, unknown>): OciShareThreadMemberRow {
+  return {
+    threadMemberId: fromDbValue(row.THREAD_MEMBER_ID),
+    threadId: fromDbValue(row.THREAD_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    personId: fromDbValue(row.PERSON_ID),
+    memberRole: fromDbValue(row.MEMBER_ROLE),
+    joinedAt: fromDbValue(row.JOINED_AT),
+    lastReadAt: fromDbValue(row.LAST_READ_AT),
+    mutedUntil: fromDbValue(row.MUTED_UNTIL),
+    isActive: fromDbValue(row.IS_ACTIVE).trim().toLowerCase() !== "false",
+  };
+}
+
+function mapOciSharePostRow(row: Record<string, unknown>): OciSharePostRow {
+  return {
+    postId: fromDbValue(row.POST_ID),
+    threadId: fromDbValue(row.THREAD_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    fileId: fromDbValue(row.FILE_ID),
+    captionText: fromDbValue(row.CAPTION_TEXT),
+    authorPersonId: fromDbValue(row.AUTHOR_PERSON_ID),
+    authorDisplayName: fromDbValue(row.AUTHOR_DISPLAY_NAME),
+    authorEmail: fromDbValue(row.AUTHOR_EMAIL),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+    postStatus: fromDbValue(row.POST_STATUS),
+    mediaId: fromDbValue(row.MEDIA_ID),
+    mediaKind: fromDbValue(row.MEDIA_KIND),
+    mediaLabel: fromDbValue(row.MEDIA_LABEL),
+    mediaDescription: fromDbValue(row.MEDIA_DESCRIPTION),
+    mediaPhotoDate: fromDbValue(row.MEDIA_PHOTO_DATE),
+    originalObjectKey: fromDbValue(row.ORIGINAL_OBJECT_KEY),
+    thumbnailObjectKey: fromDbValue(row.THUMBNAIL_OBJECT_KEY),
+    sourceProvider: fromDbValue(row.SOURCE_PROVIDER),
+  };
+}
+
+function mapOciSharePostCommentRow(row: Record<string, unknown>): OciSharePostCommentRow {
+  return {
+    commentId: fromDbValue(row.COMMENT_ID),
+    postId: fromDbValue(row.POST_ID),
+    threadId: fromDbValue(row.THREAD_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    parentCommentId: fromDbValue(row.PARENT_COMMENT_ID),
+    authorPersonId: fromDbValue(row.AUTHOR_PERSON_ID),
+    authorDisplayName: fromDbValue(row.AUTHOR_DISPLAY_NAME),
+    authorEmail: fromDbValue(row.AUTHOR_EMAIL),
+    commentText: fromDbValue(row.COMMENT_TEXT),
+    commentStatus: fromDbValue(row.COMMENT_STATUS),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+    deletedAt: fromDbValue(row.DELETED_AT),
+  };
+}
+
+function mapOciPushSubscriptionRow(row: Record<string, unknown>): OciPushSubscriptionRow {
+  return {
+    subscriptionId: fromDbValue(row.SUBSCRIPTION_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    personId: fromDbValue(row.PERSON_ID),
+    userEmail: fromDbValue(row.USER_EMAIL),
+    endpoint: fromDbValue(row.ENDPOINT),
+    p256dh: fromDbValue(row.P256DH),
+    auth: fromDbValue(row.AUTH),
+    deviceLabel: fromDbValue(row.DEVICE_LABEL),
+    userAgent: fromDbValue(row.USER_AGENT),
+    lastSeenAt: fromDbValue(row.LAST_SEEN_AT),
+    createdAt: fromDbValue(row.CREATED_AT),
+    isActive: fromDbValue(row.IS_ACTIVE).trim().toLowerCase() !== "false",
+  };
+}
+
+function mapOciNotificationOutboxRow(row: Record<string, unknown>): OciNotificationOutboxRow {
+  return {
+    notificationId: fromDbValue(row.NOTIFICATION_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    personId: fromDbValue(row.PERSON_ID),
+    userEmail: fromDbValue(row.USER_EMAIL),
+    channel: fromDbValue(row.CHANNEL),
+    eventType: fromDbValue(row.EVENT_TYPE),
+    entityType: fromDbValue(row.ENTITY_TYPE),
+    entityId: fromDbValue(row.ENTITY_ID),
+    payloadJson: fromDbValue(row.PAYLOAD_JSON),
+    status: fromDbValue(row.STATUS),
+    attemptCount: Number.parseInt(fromDbValue(row.ATTEMPT_COUNT), 10) || 0,
+    nextAttemptAt: fromDbValue(row.NEXT_ATTEMPT_AT),
+    lastError: fromDbValue(row.LAST_ERROR),
+    createdAt: fromDbValue(row.CREATED_AT),
+    sentAt: fromDbValue(row.SENT_AT),
   };
 }
 
@@ -3385,6 +4189,1167 @@ export async function updateOciMediaCommentById(input: {
       return null;
     }
     return getOciMediaCommentById({ familyGroupKey, commentId });
+  });
+}
+
+export async function getOciShareThreadByAudience(input: {
+  familyGroupKey: string;
+  audienceType: string;
+  audienceKey: string;
+}): Promise<OciShareThreadRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const audienceType = input.audienceType.trim().toLowerCase();
+  const audienceKey = input.audienceKey.trim().toLowerCase();
+  if (!familyGroupKey || !audienceType || !audienceKey) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         t.thread_id,
+         t.family_group_key,
+         t.audience_type,
+         t.audience_key,
+         t.audience_label,
+         t.owner_person_id,
+         t.created_by_person_id,
+         t.created_by_email,
+         t.created_at,
+         t.updated_at,
+         t.last_post_at,
+         t.thread_status,
+         '' AS member_last_read_at,
+         0 AS unread_count,
+         '' AS latest_post_id,
+         '' AS latest_post_file_id,
+         '' AS latest_post_caption,
+         '' AS latest_post_created_at,
+         '' AS latest_post_author_display_name
+       FROM share_threads t
+       WHERE LOWER(TRIM(t.family_group_key)) = :familyGroupKey
+         AND LOWER(TRIM(t.audience_type)) = :audienceType
+         AND LOWER(TRIM(t.audience_key)) = :audienceKey
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, audienceType, audienceKey },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareThreadRow(row) : null;
+  });
+}
+
+export async function getOciShareThreadById(input: {
+  familyGroupKey: string;
+  threadId: string;
+}): Promise<OciShareThreadRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  if (!familyGroupKey || !threadId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         t.thread_id,
+         t.family_group_key,
+         t.audience_type,
+         t.audience_key,
+         t.audience_label,
+         t.owner_person_id,
+         t.created_by_person_id,
+         t.created_by_email,
+         t.created_at,
+         t.updated_at,
+         t.last_post_at,
+         t.thread_status,
+         '' AS member_last_read_at,
+         0 AS unread_count,
+         '' AS latest_post_id,
+         '' AS latest_post_file_id,
+         '' AS latest_post_caption,
+         '' AS latest_post_created_at,
+         '' AS latest_post_author_display_name
+       FROM share_threads t
+       WHERE LOWER(TRIM(t.family_group_key)) = :familyGroupKey
+         AND TRIM(t.thread_id) = :threadId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, threadId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareThreadRow(row) : null;
+  });
+}
+
+export async function createOciShareThread(input: {
+  threadId: string;
+  familyGroupKey: string;
+  audienceType: string;
+  audienceKey: string;
+  audienceLabel?: string;
+  ownerPersonId?: string;
+  createdByPersonId?: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+  threadStatus?: string;
+}): Promise<OciShareThreadRow> {
+  const threadId = input.threadId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const audienceType = input.audienceType.trim().toLowerCase();
+  const audienceKey = input.audienceKey.trim().toLowerCase();
+  if (!threadId || !familyGroupKey || !audienceType || !audienceKey) {
+    throw new Error("thread_id, family_group_key, audience_type, and audience_key are required");
+  }
+
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    await connection.execute(
+      `INSERT INTO share_threads (
+         thread_id,
+         family_group_key,
+         audience_type,
+         audience_key,
+         audience_label,
+         owner_person_id,
+         created_by_person_id,
+         created_by_email,
+         created_at,
+         updated_at,
+         last_post_at,
+         thread_status
+       ) VALUES (
+         :threadId,
+         :familyGroupKey,
+         :audienceType,
+         :audienceKey,
+         :audienceLabel,
+         :ownerPersonId,
+         :createdByPersonId,
+         :createdByEmail,
+         :createdAt,
+         :updatedAt,
+         :lastPostAt,
+         :threadStatus
+       )`,
+      {
+        threadId,
+        familyGroupKey,
+        audienceType,
+        audienceKey,
+        audienceLabel: String(input.audienceLabel ?? "").trim() || null,
+        ownerPersonId: String(input.ownerPersonId ?? "").trim() || null,
+        createdByPersonId: String(input.createdByPersonId ?? "").trim() || null,
+        createdByEmail: String(input.createdByEmail ?? "").trim().toLowerCase() || null,
+        createdAt: input.createdAt.trim(),
+        updatedAt: input.updatedAt.trim(),
+        lastPostAt: "",
+        threadStatus: String(input.threadStatus ?? "active").trim().toLowerCase() || "active",
+      },
+      { autoCommit: true },
+    );
+    const created = await getOciShareThreadById({ familyGroupKey, threadId });
+    if (!created) {
+      throw new Error("Failed to load created share thread");
+    }
+    return created;
+  });
+}
+
+export async function updateOciShareThreadActivity(input: {
+  familyGroupKey: string;
+  threadId: string;
+  updatedAt: string;
+  lastPostAt?: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  if (!familyGroupKey || !threadId) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_threads
+       SET updated_at = :updatedAt,
+           last_post_at = COALESCE(NULLIF(TRIM(:lastPostAt), ''), last_post_at)
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId`,
+      {
+        updatedAt: input.updatedAt.trim(),
+        lastPostAt: String(input.lastPostAt ?? "").trim(),
+        familyGroupKey,
+        threadId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
+export async function getOciShareThreadMember(input: {
+  familyGroupKey: string;
+  threadId: string;
+  personId: string;
+}): Promise<OciShareThreadMemberRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const personId = input.personId.trim();
+  if (!familyGroupKey || !threadId || !personId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadMembersTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         thread_member_id,
+         thread_id,
+         family_group_key,
+         person_id,
+         member_role,
+         joined_at,
+         last_read_at,
+         muted_until,
+         is_active
+       FROM share_thread_members
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId
+         AND TRIM(person_id) = :personId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, threadId, personId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareThreadMemberRow(row) : null;
+  });
+}
+
+export async function upsertOciShareThreadMember(input: {
+  threadMemberId: string;
+  threadId: string;
+  familyGroupKey: string;
+  personId: string;
+  memberRole?: string;
+  joinedAt: string;
+  lastReadAt?: string;
+  mutedUntil?: string;
+  isActive?: boolean;
+}): Promise<OciShareThreadMemberRow> {
+  const threadMemberId = input.threadMemberId.trim();
+  const threadId = input.threadId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  if (!threadMemberId || !threadId || !familyGroupKey || !personId) {
+    throw new Error("thread_member_id, thread_id, family_group_key, and person_id are required");
+  }
+
+  return withConnection(async (connection) => {
+    await ensureShareThreadMembersTableCompatibility(connection);
+    await connection.execute(
+      `MERGE INTO share_thread_members t
+       USING (
+         SELECT :threadMemberId AS thread_member_id,
+                :threadId AS thread_id,
+                :familyGroupKey AS family_group_key,
+                :personId AS person_id,
+                :memberRole AS member_role,
+                :joinedAt AS joined_at,
+                :lastReadAt AS last_read_at,
+                :mutedUntil AS muted_until,
+                :isActive AS is_active
+         FROM dual
+       ) s
+       ON (TRIM(t.thread_id) = TRIM(s.thread_id) AND TRIM(t.person_id) = TRIM(s.person_id))
+       WHEN MATCHED THEN UPDATE SET
+         t.family_group_key = s.family_group_key,
+         t.member_role = COALESCE(NULLIF(TRIM(s.member_role), ''), t.member_role),
+         t.last_read_at = COALESCE(NULLIF(TRIM(s.last_read_at), ''), t.last_read_at),
+         t.muted_until = COALESCE(NULLIF(TRIM(s.muted_until), ''), t.muted_until),
+         t.is_active = COALESCE(NULLIF(TRIM(s.is_active), ''), t.is_active)
+       WHEN NOT MATCHED THEN INSERT (
+         thread_member_id,
+         thread_id,
+         family_group_key,
+         person_id,
+         member_role,
+         joined_at,
+         last_read_at,
+         muted_until,
+         is_active
+       ) VALUES (
+         s.thread_member_id,
+         s.thread_id,
+         s.family_group_key,
+         s.person_id,
+         s.member_role,
+         s.joined_at,
+         s.last_read_at,
+         s.muted_until,
+         s.is_active
+       )`,
+      {
+        threadMemberId,
+        threadId,
+        familyGroupKey,
+        personId,
+        memberRole: String(input.memberRole ?? "member").trim().toLowerCase(),
+        joinedAt: input.joinedAt.trim(),
+        lastReadAt: String(input.lastReadAt ?? "").trim(),
+        mutedUntil: String(input.mutedUntil ?? "").trim(),
+        isActive: input.isActive === false ? "FALSE" : "TRUE",
+      },
+      { autoCommit: true },
+    );
+
+    const member = await getOciShareThreadMember({
+      familyGroupKey,
+      threadId,
+      personId,
+    });
+    if (!member) {
+      throw new Error("Failed to load upserted share thread member");
+    }
+    return member;
+  });
+}
+
+export async function listOciShareThreadMembers(input: {
+  familyGroupKey: string;
+  threadId: string;
+}): Promise<OciShareThreadMemberRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  if (!familyGroupKey || !threadId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadMembersTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         thread_member_id,
+         thread_id,
+         family_group_key,
+         person_id,
+         member_role,
+         joined_at,
+         last_read_at,
+         muted_until,
+         is_active
+       FROM share_thread_members
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId
+         AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'
+       ORDER BY joined_at, person_id`,
+      { familyGroupKey, threadId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciShareThreadMemberRow);
+  });
+}
+
+export async function markOciShareThreadRead(input: {
+  familyGroupKey: string;
+  threadId: string;
+  personId: string;
+  lastReadAt: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const personId = input.personId.trim();
+  if (!familyGroupKey || !threadId || !personId) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadMembersTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_thread_members
+       SET last_read_at = :lastReadAt
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId
+         AND TRIM(person_id) = :personId`,
+      {
+        lastReadAt: input.lastReadAt.trim(),
+        familyGroupKey,
+        threadId,
+        personId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
+export async function listOciShareThreadsForPerson(input: {
+  familyGroupKey: string;
+  personId: string;
+  limit?: number;
+}): Promise<OciShareThreadRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  if (!familyGroupKey || !personId) {
+    return [];
+  }
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.trunc(input.limit ?? 50))) : 50;
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    await ensureShareThreadMembersTableCompatibility(connection);
+    await ensureSharePostsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT * FROM (
+         SELECT
+           t.thread_id,
+           t.family_group_key,
+           t.audience_type,
+           t.audience_key,
+           t.audience_label,
+           t.owner_person_id,
+           t.created_by_person_id,
+           t.created_by_email,
+           t.created_at,
+           t.updated_at,
+           t.last_post_at,
+           t.thread_status,
+           m.last_read_at AS member_last_read_at,
+           (
+             SELECT COUNT(*)
+             FROM share_posts up
+             WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
+               AND (
+                 NULLIF(TRIM(m.last_read_at), '') IS NULL
+                 OR TRIM(up.created_at) > TRIM(m.last_read_at)
+               )
+           ) AS unread_count,
+           (
+             SELECT p.post_id
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_id,
+           (
+             SELECT p.file_id
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_file_id,
+           (
+             SELECT p.caption_text
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_caption,
+           (
+             SELECT p.created_at
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_created_at,
+           (
+             SELECT p.author_display_name
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_author_display_name
+         FROM share_thread_members m
+         INNER JOIN share_threads t
+           ON TRIM(t.thread_id) = TRIM(m.thread_id)
+         WHERE LOWER(TRIM(m.family_group_key)) = :familyGroupKey
+           AND LOWER(TRIM(t.family_group_key)) = :familyGroupKey
+           AND TRIM(m.person_id) = :personId
+           AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
+           AND LOWER(TRIM(NVL(t.thread_status, 'active'))) <> 'archived'
+         ORDER BY
+           COALESCE(NULLIF(TRIM(t.last_post_at), ''), NULLIF(TRIM(t.updated_at), ''), TRIM(t.created_at)) DESC,
+           t.thread_id DESC
+       )
+       WHERE ROWNUM <= :limit`,
+      { familyGroupKey, personId, limit },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciShareThreadRow);
+  });
+}
+
+export async function getOciSharePostsForThread(input: {
+  familyGroupKey: string;
+  threadId: string;
+  limit?: number;
+}): Promise<OciSharePostRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  if (!familyGroupKey || !threadId) {
+    return [];
+  }
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.trunc(input.limit ?? 60))) : 60;
+  return withConnection(async (connection) => {
+    await ensureSharePostsTableCompatibility(connection);
+    await ensureTableCompatibility(connection, "media_assets");
+    const result = await connection.execute(
+      `SELECT * FROM (
+         SELECT
+           p.post_id,
+           p.thread_id,
+           p.family_group_key,
+           p.file_id,
+           p.caption_text,
+           p.author_person_id,
+           p.author_display_name,
+           p.author_email,
+           p.created_at,
+           p.updated_at,
+           p.post_status,
+           a.media_id,
+           a.media_kind,
+           a.label AS media_label,
+           a.description AS media_description,
+           a.photo_date AS media_photo_date,
+           a.original_object_key,
+           a.thumbnail_object_key,
+           a.source_provider
+         FROM share_posts p
+         LEFT JOIN media_assets a
+           ON TRIM(a.file_id) = TRIM(p.file_id)
+         WHERE LOWER(TRIM(p.family_group_key)) = :familyGroupKey
+           AND TRIM(p.thread_id) = :threadId
+           AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+         ORDER BY p.created_at DESC, p.post_id DESC
+       )
+       WHERE ROWNUM <= :limit`,
+      { familyGroupKey, threadId, limit },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciSharePostRow);
+  });
+}
+
+export async function getOciSharePostById(input: {
+  familyGroupKey: string;
+  postId: string;
+}): Promise<OciSharePostRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const postId = input.postId.trim();
+  if (!familyGroupKey || !postId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureSharePostsTableCompatibility(connection);
+    await ensureTableCompatibility(connection, "media_assets");
+    const result = await connection.execute(
+      `SELECT
+         p.post_id,
+         p.thread_id,
+         p.family_group_key,
+         p.file_id,
+         p.caption_text,
+         p.author_person_id,
+         p.author_display_name,
+         p.author_email,
+         p.created_at,
+         p.updated_at,
+         p.post_status,
+         a.media_id,
+         a.media_kind,
+         a.label AS media_label,
+         a.description AS media_description,
+         a.photo_date AS media_photo_date,
+         a.original_object_key,
+         a.thumbnail_object_key,
+         a.source_provider
+       FROM share_posts p
+       LEFT JOIN media_assets a
+         ON TRIM(a.file_id) = TRIM(p.file_id)
+       WHERE LOWER(TRIM(p.family_group_key)) = :familyGroupKey
+         AND TRIM(p.post_id) = :postId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, postId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciSharePostRow(row) : null;
+  });
+}
+
+export async function createOciSharePost(input: {
+  postId: string;
+  threadId: string;
+  familyGroupKey: string;
+  fileId?: string;
+  captionText?: string;
+  authorPersonId?: string;
+  authorDisplayName?: string;
+  authorEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+  postStatus?: string;
+}): Promise<OciSharePostRow> {
+  const postId = input.postId.trim();
+  const threadId = input.threadId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  if (!postId || !threadId || !familyGroupKey) {
+    throw new Error("post_id, thread_id, and family_group_key are required");
+  }
+
+  return withConnection(async (connection) => {
+    await ensureSharePostsTableCompatibility(connection);
+    await ensureShareThreadsTableCompatibility(connection);
+    await connection.execute(
+      `INSERT INTO share_posts (
+         post_id,
+         thread_id,
+         family_group_key,
+         file_id,
+         caption_text,
+         author_person_id,
+         author_display_name,
+         author_email,
+         created_at,
+         updated_at,
+         post_status
+       ) VALUES (
+         :postId,
+         :threadId,
+         :familyGroupKey,
+         :fileId,
+         :captionText,
+         :authorPersonId,
+         :authorDisplayName,
+         :authorEmail,
+         :createdAt,
+         :updatedAt,
+         :postStatus
+       )`,
+      {
+        postId,
+        threadId,
+        familyGroupKey,
+        fileId: String(input.fileId ?? "").trim() || null,
+        captionText: String(input.captionText ?? "").trim() || null,
+        authorPersonId: String(input.authorPersonId ?? "").trim() || null,
+        authorDisplayName: String(input.authorDisplayName ?? "").trim() || null,
+        authorEmail: String(input.authorEmail ?? "").trim().toLowerCase() || null,
+        createdAt: input.createdAt.trim(),
+        updatedAt: input.updatedAt.trim(),
+        postStatus: String(input.postStatus ?? "active").trim().toLowerCase() || "active",
+      },
+      { autoCommit: false },
+    );
+    await connection.execute(
+      `UPDATE share_threads
+       SET updated_at = :updatedAt,
+           last_post_at = :lastPostAt
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId`,
+      {
+        updatedAt: input.updatedAt.trim(),
+        lastPostAt: input.createdAt.trim(),
+        familyGroupKey,
+        threadId,
+      },
+      { autoCommit: false },
+    );
+    await connection.commit();
+    const created = await getOciSharePostById({ familyGroupKey, postId });
+    if (!created) {
+      throw new Error("Failed to load created share post");
+    }
+    return created;
+  });
+}
+
+export async function getOciSharePostCommentsForPost(input: {
+  familyGroupKey: string;
+  postId: string;
+}): Promise<OciSharePostCommentRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const postId = input.postId.trim();
+  if (!familyGroupKey || !postId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureSharePostCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         comment_id,
+         post_id,
+         thread_id,
+         family_group_key,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       FROM share_post_comments
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(post_id) = :postId
+         AND LOWER(TRIM(NVL(comment_status, 'active'))) <> 'deleted'
+       ORDER BY created_at, comment_id`,
+      { familyGroupKey, postId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciSharePostCommentRow);
+  });
+}
+
+export async function createOciSharePostComment(input: {
+  commentId: string;
+  postId: string;
+  threadId: string;
+  familyGroupKey: string;
+  parentCommentId?: string;
+  authorPersonId?: string;
+  authorDisplayName?: string;
+  authorEmail?: string;
+  commentText: string;
+  commentStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}): Promise<OciSharePostCommentRow> {
+  const commentId = input.commentId.trim();
+  const postId = input.postId.trim();
+  const threadId = input.threadId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  if (!commentId || !postId || !threadId || !familyGroupKey) {
+    throw new Error("comment_id, post_id, thread_id, and family_group_key are required");
+  }
+  return withConnection(async (connection) => {
+    await ensureSharePostCommentsTableCompatibility(connection);
+    await connection.execute(
+      `INSERT INTO share_post_comments (
+         comment_id,
+         post_id,
+         thread_id,
+         family_group_key,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       ) VALUES (
+         :commentId,
+         :postId,
+         :threadId,
+         :familyGroupKey,
+         :parentCommentId,
+         :authorPersonId,
+         :authorDisplayName,
+         :authorEmail,
+         :commentText,
+         :commentStatus,
+         :createdAt,
+         :updatedAt,
+         :deletedAt
+       )`,
+      {
+        commentId,
+        postId,
+        threadId,
+        familyGroupKey,
+        parentCommentId: String(input.parentCommentId ?? "").trim() || null,
+        authorPersonId: String(input.authorPersonId ?? "").trim() || null,
+        authorDisplayName: String(input.authorDisplayName ?? "").trim() || null,
+        authorEmail: String(input.authorEmail ?? "").trim().toLowerCase() || null,
+        commentText: input.commentText,
+        commentStatus: String(input.commentStatus ?? "active").trim().toLowerCase() || "active",
+        createdAt: input.createdAt.trim(),
+        updatedAt: input.updatedAt.trim(),
+        deletedAt: String(input.deletedAt ?? "").trim() || null,
+      },
+      { autoCommit: true },
+    );
+    const rows = await getOciSharePostCommentsForPost({ familyGroupKey, postId });
+    const created = rows.find((row) => row.commentId === commentId) ?? null;
+    if (!created) {
+      throw new Error("Failed to load created share post comment");
+    }
+    return created;
+  });
+}
+
+export async function getOciActivePushSubscriptionsForPerson(input: {
+  familyGroupKey: string;
+  personId: string;
+}): Promise<OciPushSubscriptionRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  if (!familyGroupKey || !personId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensurePushSubscriptionsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         subscription_id,
+         family_group_key,
+         person_id,
+         user_email,
+         endpoint,
+         p256dh,
+         auth,
+         device_label,
+         user_agent,
+         last_seen_at,
+         created_at,
+         is_active
+       FROM push_subscriptions
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(person_id) = :personId
+         AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'
+       ORDER BY created_at DESC`,
+      { familyGroupKey, personId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciPushSubscriptionRow);
+  });
+}
+
+export async function upsertOciPushSubscription(input: {
+  subscriptionId: string;
+  familyGroupKey: string;
+  personId: string;
+  userEmail?: string;
+  endpoint: string;
+  p256dh?: string;
+  auth?: string;
+  deviceLabel?: string;
+  userAgent?: string;
+  lastSeenAt: string;
+  createdAt: string;
+}): Promise<OciPushSubscriptionRow> {
+  const subscriptionId = input.subscriptionId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  const endpoint = input.endpoint.trim();
+  if (!subscriptionId || !familyGroupKey || !personId || !endpoint) {
+    throw new Error("subscription_id, family_group_key, person_id, and endpoint are required");
+  }
+
+  return withConnection(async (connection) => {
+    await ensurePushSubscriptionsTableCompatibility(connection);
+    await connection.execute(
+      `MERGE INTO push_subscriptions t
+       USING (
+         SELECT :subscriptionId AS subscription_id,
+                :familyGroupKey AS family_group_key,
+                :personId AS person_id,
+                :userEmail AS user_email,
+                :endpoint AS endpoint,
+                :p256dh AS p256dh,
+                :auth AS auth,
+                :deviceLabel AS device_label,
+                :userAgent AS user_agent,
+                :lastSeenAt AS last_seen_at,
+                :createdAt AS created_at,
+                :isActive AS is_active
+         FROM dual
+       ) s
+       ON (TRIM(t.endpoint) = TRIM(s.endpoint))
+       WHEN MATCHED THEN UPDATE SET
+         t.family_group_key = s.family_group_key,
+         t.person_id = s.person_id,
+         t.user_email = s.user_email,
+         t.p256dh = s.p256dh,
+         t.auth = s.auth,
+         t.device_label = s.device_label,
+         t.user_agent = s.user_agent,
+         t.last_seen_at = s.last_seen_at,
+         t.is_active = s.is_active
+       WHEN NOT MATCHED THEN INSERT (
+         subscription_id,
+         family_group_key,
+         person_id,
+         user_email,
+         endpoint,
+         p256dh,
+         auth,
+         device_label,
+         user_agent,
+         last_seen_at,
+         created_at,
+         is_active
+       ) VALUES (
+         s.subscription_id,
+         s.family_group_key,
+         s.person_id,
+         s.user_email,
+         s.endpoint,
+         s.p256dh,
+         s.auth,
+         s.device_label,
+         s.user_agent,
+         s.last_seen_at,
+         s.created_at,
+         s.is_active
+       )`,
+      {
+        subscriptionId,
+        familyGroupKey,
+        personId,
+        userEmail: String(input.userEmail ?? "").trim().toLowerCase() || null,
+        endpoint,
+        p256dh: String(input.p256dh ?? "").trim() || null,
+        auth: String(input.auth ?? "").trim() || null,
+        deviceLabel: String(input.deviceLabel ?? "").trim() || null,
+        userAgent: String(input.userAgent ?? "").trim() || null,
+        lastSeenAt: input.lastSeenAt.trim(),
+        createdAt: input.createdAt.trim(),
+        isActive: "TRUE",
+      },
+      { autoCommit: true },
+    );
+
+    const rows = await getOciActivePushSubscriptionsForPerson({ familyGroupKey, personId });
+    const row = rows.find((entry) => entry.endpoint === endpoint) ?? null;
+    if (!row) {
+      throw new Error("Failed to load upserted push subscription");
+    }
+    return row;
+  });
+}
+
+export async function deactivateOciPushSubscriptionByEndpoint(input: {
+  familyGroupKey: string;
+  personId: string;
+  endpoint: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  const endpoint = input.endpoint.trim();
+  if (!familyGroupKey || !personId || !endpoint) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensurePushSubscriptionsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE push_subscriptions
+       SET is_active = 'FALSE'
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(person_id) = :personId
+         AND TRIM(endpoint) = :endpoint`,
+      { familyGroupKey, personId, endpoint },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
+export async function createOciNotificationOutboxEntries(input: Array<{
+  notificationId: string;
+  familyGroupKey: string;
+  personId: string;
+  userEmail?: string;
+  channel: string;
+  eventType: string;
+  entityType: string;
+  entityId: string;
+  payloadJson?: string;
+  status?: string;
+  attemptCount?: number;
+  nextAttemptAt?: string;
+  lastError?: string;
+  createdAt: string;
+  sentAt?: string;
+}>) {
+  if (!Array.isArray(input) || input.length === 0) {
+    return 0;
+  }
+  return withConnection(async (connection) => {
+    await ensureNotificationOutboxTableCompatibility(connection);
+    let inserted = 0;
+    for (const item of input) {
+      const notificationId = item.notificationId.trim();
+      const familyGroupKey = item.familyGroupKey.trim().toLowerCase();
+      const personId = item.personId.trim();
+      if (!notificationId || !familyGroupKey || !personId) {
+        continue;
+      }
+      try {
+        await connection.execute(
+          `INSERT INTO notification_outbox (
+             notification_id,
+             family_group_key,
+             person_id,
+             user_email,
+             channel,
+             event_type,
+             entity_type,
+             entity_id,
+             payload_json,
+             status,
+             attempt_count,
+             next_attempt_at,
+             last_error,
+             created_at,
+             sent_at
+           ) VALUES (
+             :notificationId,
+             :familyGroupKey,
+             :personId,
+             :userEmail,
+             :channel,
+             :eventType,
+             :entityType,
+             :entityId,
+             :payloadJson,
+             :status,
+             :attemptCount,
+             :nextAttemptAt,
+             :lastError,
+             :createdAt,
+             :sentAt
+           )`,
+          {
+            notificationId,
+            familyGroupKey,
+            personId,
+            userEmail: String(item.userEmail ?? "").trim().toLowerCase() || null,
+            channel: String(item.channel ?? "").trim().toLowerCase() || "webpush",
+            eventType: String(item.eventType ?? "").trim().toLowerCase() || "share_update",
+            entityType: String(item.entityType ?? "").trim().toLowerCase() || "share_post",
+            entityId: String(item.entityId ?? "").trim() || "",
+            payloadJson: String(item.payloadJson ?? "").trim() || "{}",
+            status: String(item.status ?? "pending").trim().toLowerCase() || "pending",
+            attemptCount: Number.isFinite(item.attemptCount) ? item.attemptCount : 0,
+            nextAttemptAt: String(item.nextAttemptAt ?? "").trim() || null,
+            lastError: String(item.lastError ?? "").trim() || null,
+            createdAt: item.createdAt.trim(),
+            sentAt: String(item.sentAt ?? "").trim() || null,
+          },
+          { autoCommit: false },
+        );
+        inserted += 1;
+      } catch (error) {
+        const message = (error as Error).message ?? "";
+        if (!/ORA-00001/i.test(message)) {
+          throw error;
+        }
+      }
+    }
+    await connection.commit();
+    return inserted;
+  });
+}
+
+export async function getOciPendingNotificationOutbox(input: {
+  familyGroupKey?: string;
+  limit?: number;
+}): Promise<OciNotificationOutboxRow[]> {
+  const familyGroupKey = String(input.familyGroupKey ?? "").trim().toLowerCase();
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(500, Math.trunc(input.limit ?? 100))) : 100;
+  return withConnection(async (connection) => {
+    await ensureNotificationOutboxTableCompatibility(connection);
+    const whereFamilyGroup = familyGroupKey ? "AND LOWER(TRIM(family_group_key)) = :familyGroupKey" : "";
+    const result = await connection.execute(
+      `SELECT * FROM (
+         SELECT
+           notification_id,
+           family_group_key,
+           person_id,
+           user_email,
+           channel,
+           event_type,
+           entity_type,
+           entity_id,
+           payload_json,
+           status,
+           attempt_count,
+           next_attempt_at,
+           last_error,
+           created_at,
+           sent_at
+         FROM notification_outbox
+         WHERE LOWER(TRIM(NVL(status, 'pending'))) = 'pending'
+           AND (
+             NULLIF(TRIM(next_attempt_at), '') IS NULL
+             OR TRIM(next_attempt_at) <= :nowIso
+           )
+           ${whereFamilyGroup}
+         ORDER BY created_at, notification_id
+       )
+       WHERE ROWNUM <= :limit`,
+      {
+        nowIso: new Date().toISOString(),
+        familyGroupKey,
+        limit,
+      },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciNotificationOutboxRow);
+  });
+}
+
+export async function markOciNotificationOutboxSent(input: {
+  notificationId: string;
+  sentAt: string;
+}) {
+  const notificationId = input.notificationId.trim();
+  if (!notificationId) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureNotificationOutboxTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE notification_outbox
+       SET status = 'sent',
+           sent_at = :sentAt,
+           last_error = NULL
+       WHERE TRIM(notification_id) = :notificationId`,
+      {
+        sentAt: input.sentAt.trim(),
+        notificationId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
+export async function markOciNotificationOutboxFailed(input: {
+  notificationId: string;
+  errorMessage: string;
+  nextAttemptAt?: string;
+}) {
+  const notificationId = input.notificationId.trim();
+  if (!notificationId) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureNotificationOutboxTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE notification_outbox
+       SET status = 'pending',
+           attempt_count = NVL(attempt_count, 0) + 1,
+           next_attempt_at = :nextAttemptAt,
+           last_error = :lastError
+       WHERE TRIM(notification_id) = :notificationId`,
+      {
+        nextAttemptAt: String(input.nextAttemptAt ?? "").trim() || null,
+        lastError: input.errorMessage.trim().slice(0, 1800),
+        notificationId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
   });
 }
 
