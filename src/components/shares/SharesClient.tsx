@@ -14,7 +14,7 @@ type FamilyGroupOption = {
 type ShareThread = {
   threadId: string;
   familyGroupKey: string;
-  audienceType: "siblings" | "household" | "entire_family" | "family_group";
+  audienceType: "siblings" | "household" | "entire_family" | "family_group" | "custom_group";
   audienceKey: string;
   audienceLabel: string;
   createdAt: string;
@@ -78,7 +78,14 @@ type PersonOption = {
   displayName: string;
 };
 
-type AudienceType = "siblings" | "household" | "entire_family" | "family_group";
+type ThreadMember = {
+  personId: string;
+  displayName: string;
+  memberRole?: string;
+  joinedAt?: string;
+};
+
+type QuickAudienceType = "siblings" | "household" | "entire_family" | "family_group";
 
 function parseSortableTimestamp(value: string) {
   const parsed = Date.parse(String(value ?? "").trim());
@@ -142,14 +149,20 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [threadsStatus, setThreadsStatus] = useState("");
   const [threadsRefreshKey, setThreadsRefreshKey] = useState(0);
 
-  const [audienceType, setAudienceType] = useState<AudienceType>("siblings");
-  const [targetFamilyGroupKey, setTargetFamilyGroupKey] = useState("");
-  const [createThreadBusy, setCreateThreadBusy] = useState(false);
+  const [quickAudienceType, setQuickAudienceType] = useState<QuickAudienceType>("siblings");
+  const [quickFamilyGroupKey, setQuickFamilyGroupKey] = useState("");
+  const [quickOpenBusy, setQuickOpenBusy] = useState(false);
+  const [customFamilyGroupKey, setCustomFamilyGroupKey] = useState("");
+  const [customGroupLabel, setCustomGroupLabel] = useState("");
+  const [customMemberPersonIds, setCustomMemberPersonIds] = useState<string[]>([]);
+  const [createGroupBusy, setCreateGroupBusy] = useState(false);
+  const [createGroupStatus, setCreateGroupStatus] = useState("");
 
   const [posts, setPosts] = useState<SharePost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsStatus, setPostsStatus] = useState("");
   const [postsRefreshKey, setPostsRefreshKey] = useState(0);
+  const [threadMembers, setThreadMembers] = useState<ThreadMember[]>([]);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, ShareComment[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [commentBusyIds, setCommentBusyIds] = useState<Set<string>>(new Set());
@@ -180,8 +193,12 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         const familyGroups = Array.isArray(body.availableFamilyGroups) ? body.availableFamilyGroups : [];
         setThreads(incomingThreads);
         setAvailableFamilyGroups(familyGroups);
-        if (!targetFamilyGroupKey && familyGroups.length > 0) {
-          setTargetFamilyGroupKey(String(familyGroups[0]?.familyGroupKey ?? "").trim().toLowerCase());
+        const preferredGroupKey = String(familyGroups[0]?.familyGroupKey ?? "").trim().toLowerCase();
+        if (!quickFamilyGroupKey && preferredGroupKey) {
+          setQuickFamilyGroupKey(preferredGroupKey);
+        }
+        if (!customFamilyGroupKey && preferredGroupKey) {
+          setCustomFamilyGroupKey(preferredGroupKey);
         }
         setSelectedThreadId((current) => {
           if (!incomingThreads.some((entry) => entry.threadId === current)) {
@@ -203,7 +220,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [tenantKey, threadsRefreshKey]);
+  }, [tenantKey, threadsRefreshKey, quickFamilyGroupKey, customFamilyGroupKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +248,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     if (!selectedThreadId) {
       setPosts([]);
       setCommentsByPostId({});
+      setThreadMembers([]);
       return;
     }
     let cancelled = false;
@@ -243,10 +261,12 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           { cache: "no-store" },
         );
         await assertOkWithAuth(res, "Failed to load thread posts.");
-        const body = (await res.json()) as { posts?: SharePost[] };
+        const body = (await res.json()) as { posts?: SharePost[]; members?: ThreadMember[] };
         if (cancelled) return;
         const incomingPosts = Array.isArray(body.posts) ? body.posts : [];
+        const incomingMembers = Array.isArray(body.members) ? body.members : [];
         setPosts(incomingPosts);
+        setThreadMembers(incomingMembers);
         setFailedPreviewFileIds(new Set());
 
         const commentEntries = await Promise.all(
@@ -276,6 +296,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         setPostsStatus(message);
         setPosts([]);
         setCommentsByPostId({});
+        setThreadMembers([]);
       } finally {
         if (!cancelled) {
           setPostsLoading(false);
@@ -305,8 +326,8 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     [posts],
   );
 
-  const createOrOpenThread = async () => {
-    setCreateThreadBusy(true);
+  const openQuickAudienceThread = async (audienceType: QuickAudienceType, targetFamilyGroupKey: string) => {
+    setQuickOpenBusy(true);
     setThreadsStatus("");
     try {
       const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/threads`, {
@@ -318,13 +339,15 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         }),
       });
       await assertOkWithAuth(res, "Failed to open thread.");
-      const body = (await res.json()) as { thread?: ShareThread; recipientCount?: number };
+      const body = (await res.json()) as { thread?: ShareThread; recipientCount?: number; existingThread?: boolean };
       const nextThread = body.thread ?? null;
       if (nextThread?.threadId) {
         setSelectedThreadId(nextThread.threadId);
       }
       setThreadsStatus(
-        `Thread ready${typeof body.recipientCount === "number" ? ` (${body.recipientCount} recipients)` : ""}.`,
+        `${body.existingThread ? "Opened existing thread" : "Thread ready"}${
+          typeof body.recipientCount === "number" ? ` (${body.recipientCount} recipients)` : ""
+        }.`,
       );
       setThreadsRefreshKey((current) => current + 1);
       setPostsRefreshKey((current) => current + 1);
@@ -332,7 +355,45 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       const message = error instanceof Error ? error.message : "Failed to open thread.";
       setThreadsStatus(message);
     } finally {
-      setCreateThreadBusy(false);
+      setQuickOpenBusy(false);
+    }
+  };
+
+  const createCustomGroupThread = async () => {
+    setCreateGroupBusy(true);
+    setCreateGroupStatus("");
+    try {
+      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audienceType: "custom_group",
+          targetFamilyGroupKey: customFamilyGroupKey,
+          customLabel: customGroupLabel.trim(),
+          memberPersonIds: customMemberPersonIds,
+        }),
+      });
+      await assertOkWithAuth(res, "Failed to create group thread.");
+      const body = (await res.json()) as { thread?: ShareThread; recipientCount?: number; existingThread?: boolean };
+      const nextThread = body.thread ?? null;
+      if (nextThread?.threadId) {
+        setSelectedThreadId(nextThread.threadId);
+      }
+      setCreateGroupStatus(
+        body.existingThread
+          ? "Group with the same members already exists. Opened existing thread."
+          : `Created group thread${typeof body.recipientCount === "number" ? ` (${body.recipientCount} members)` : ""}.`,
+      );
+      setThreadsRefreshKey((current) => current + 1);
+      setPostsRefreshKey((current) => current + 1);
+      if (!body.existingThread) {
+        setCustomGroupLabel("");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create group thread.";
+      setCreateGroupStatus(message);
+    } finally {
+      setCreateGroupBusy(false);
     }
   };
 
@@ -442,14 +503,22 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
 
       <div className="help-layout" style={{ marginTop: "1rem" }}>
         <section className="card" style={{ display: "grid", gap: "0.75rem", alignContent: "start" }}>
-          <h2 style={{ margin: 0 }}>New Thread</h2>
+          <h2 style={{ margin: 0 }}>Quick Audience</h2>
           <div>
-            <label className="label">Audience</label>
+            <label className="label">Select Audience</label>
             <select
               className="input"
-              value={audienceType}
-              onChange={(event) => setAudienceType(event.target.value as AudienceType)}
-              disabled={createThreadBusy}
+              value={quickAudienceType}
+              onChange={(event) => {
+                const nextType = event.target.value as QuickAudienceType;
+                setQuickAudienceType(nextType);
+                if (nextType !== "family_group") {
+                  void openQuickAudienceThread(nextType, "");
+                } else if (quickFamilyGroupKey) {
+                  void openQuickAudienceThread("family_group", quickFamilyGroupKey);
+                }
+              }}
+              disabled={quickOpenBusy}
             >
               <option value="siblings">My Siblings</option>
               <option value="household">My Household</option>
@@ -457,26 +526,87 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
               <option value="family_group">Specific Family Group</option>
             </select>
           </div>
-          {audienceType === "family_group" ? (
+          {quickAudienceType === "family_group" ? (
             <div>
               <label className="label">Family Group</label>
               <select
                 className="input"
-                value={targetFamilyGroupKey}
-                onChange={(event) => setTargetFamilyGroupKey(event.target.value)}
-                disabled={createThreadBusy}
+                value={quickFamilyGroupKey}
+                onChange={(event) => {
+                  const nextGroup = event.target.value;
+                  setQuickFamilyGroupKey(nextGroup);
+                  if (nextGroup) {
+                    void openQuickAudienceThread("family_group", nextGroup);
+                  }
+                }}
+                disabled={quickOpenBusy}
               >
                 {availableFamilyGroups.map((item) => (
-                  <option key={`family-group-${item.familyGroupKey}`} value={item.familyGroupKey}>
+                  <option key={`quick-family-group-${item.familyGroupKey}`} value={item.familyGroupKey}>
                     {item.familyGroupName || item.familyGroupKey}
                   </option>
                 ))}
               </select>
             </div>
           ) : null}
-          <button type="button" className="button tap-button" onClick={() => void createOrOpenThread()} disabled={createThreadBusy}>
-            {createThreadBusy ? "Opening..." : "Open Thread"}
+
+          <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "0.25rem 0" }} />
+
+          <h2 style={{ margin: 0 }}>Create Group</h2>
+          <div>
+            <label className="label">Group Label</label>
+            <input
+              className="input"
+              value={customGroupLabel}
+              onChange={(event) => setCustomGroupLabel(event.target.value)}
+              placeholder="Family Group Chat"
+              disabled={createGroupBusy}
+            />
+          </div>
+          <div>
+            <label className="label">Family Group</label>
+            <select
+              className="input"
+              value={customFamilyGroupKey}
+              onChange={(event) => setCustomFamilyGroupKey(event.target.value)}
+              disabled={createGroupBusy}
+            >
+              {availableFamilyGroups.map((item) => (
+                <option key={`custom-family-group-${item.familyGroupKey}`} value={item.familyGroupKey}>
+                  {item.familyGroupName || item.familyGroupKey}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Members</label>
+            <select
+              className="input"
+              multiple
+              value={customMemberPersonIds}
+              onChange={(event) => {
+                const values = Array.from(event.target.selectedOptions).map((option) => option.value);
+                setCustomMemberPersonIds(values);
+              }}
+              disabled={createGroupBusy}
+              style={{ minHeight: "110px" }}
+            >
+              {peopleOptions.map((person) => (
+                <option key={`group-member-${person.personId}`} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            className="button tap-button"
+            onClick={() => void createCustomGroupThread()}
+            disabled={createGroupBusy || customMemberPersonIds.length < 1}
+          >
+            {createGroupBusy ? "Creating..." : "Create Group"}
           </button>
+          {createGroupStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{createGroupStatus}</p> : null}
           {threadsStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{threadsStatus}</p> : null}
 
           <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "0.25rem 0" }} />
@@ -484,7 +614,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           <h3 style={{ margin: 0 }}>Threads</h3>
           {threadsLoading ? <p className="page-subtitle" style={{ margin: 0 }}>Loading...</p> : null}
           {!threadsLoading && orderedThreads.length === 0 ? (
-            <p className="page-subtitle" style={{ margin: 0 }}>No threads yet. Open one above.</p>
+            <p className="page-subtitle" style={{ margin: 0 }}>No threads yet. Pick an audience or create a group.</p>
           ) : null}
           <div style={{ display: "grid", gap: "0.5rem", maxHeight: "55vh", overflow: "auto" }}>
             {orderedThreads.map((thread) => {
@@ -527,7 +657,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                   {selectedThread.familyGroupKey} · {selectedThread.audienceType}
                 </p>
               ) : (
-                <p className="page-subtitle" style={{ margin: "0.3rem 0 0" }}>Open or pick a thread to post.</p>
+                <p className="page-subtitle" style={{ margin: "0.3rem 0 0" }}>Pick a thread to post.</p>
               )}
             </div>
             {selectedThread ? (
@@ -542,6 +672,28 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
               </button>
             ) : null}
           </div>
+
+          {selectedThread && threadMembers.length > 0 ? (
+            <div className="card" style={{ margin: 0, display: "grid", gap: "0.5rem", padding: "0.75rem" }}>
+              <strong style={{ fontSize: "0.9rem" }}>Members</strong>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+                {threadMembers.map((member) => (
+                  <span
+                    key={`thread-member-${member.personId}`}
+                    style={{
+                      border: "1px solid var(--line)",
+                      borderRadius: "999px",
+                      padding: "0.2rem 0.55rem",
+                      fontSize: "0.82rem",
+                      background: "var(--surface-muted)",
+                    }}
+                  >
+                    {member.displayName}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {selectedThread ? (
             <div className="card" style={{ margin: 0, display: "grid", gap: "0.55rem" }}>

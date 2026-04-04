@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Family Shares custom groups + member header + selection-open UX)
+
+- `Date`: 2026-04-04
+- `Change`: Updated Shares so audience selection opens threads directly (no `Open Thread` button), selected thread view shows member chips at the top, and custom member-based groups can be created with duplicate-member-set prevention.
+- `Type`: UI | API
+- `Why`: Root cause was a workflow/design gap: opening threads required an extra button click, selected-thread membership wasn’t visible in-context, and users could create redundant groups with identical members.
+- `Files`: `src/components/shares/SharesClient.tsx`, `src/app/api/t/[tenantKey]/shares/threads/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`, `TODO.md`, `designchoices.md`
+- `Data Changes`: No schema or data migration changes.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Selecting quick audience/group opens or reuses the thread immediately.
+  - Creating a custom group with the same exact member set reuses the existing thread and returns duplicate notice.
+  - Selected thread shows current member chips at the top.
+- `Rollback Notes`: Revert this commit to restore prior open-button flow and remove custom-group dedupe/member header behavior.
+- `Design Decision Change`: Yes. Added `Family Shares group creation + thread-open UX` decision in `designchoices.md`.
+
 ## 2026-04-04 (Legacy media/share compatibility retirement + reset tooling)
 
 - `Date`: 2026-04-04

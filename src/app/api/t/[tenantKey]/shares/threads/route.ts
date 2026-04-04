@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
+import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
   createOciShareThread,
@@ -17,8 +18,10 @@ type RouteProps = {
 };
 
 const createSchema = z.object({
-  audienceType: z.enum(["siblings", "household", "entire_family", "family_group"]),
+  audienceType: z.enum(["siblings", "household", "entire_family", "family_group", "custom_group"]),
   targetFamilyGroupKey: z.string().trim().max(80).optional().default(""),
+  customLabel: z.string().trim().max(160).optional().default(""),
+  memberPersonIds: z.array(z.string().trim().max(128)).optional().default([]),
 });
 
 function normalize(value: string | undefined) {
@@ -37,6 +40,19 @@ function parseSortableTimestamp(value: string) {
 function buildThreadMemberId(threadId: string, personId: string) {
   const seed = `${threadId.trim().toLowerCase()}|${personId.trim().toLowerCase()}`;
   return `stm-${createHash("sha1").update(seed).digest("hex").slice(0, 24)}`;
+}
+
+function uniquePersonIds(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function buildCustomAudienceKey(personIds: string[]) {
+  const seed = personIds
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  return `custom_group:${createHash("sha1").update(seed).digest("hex").slice(0, 40)}`;
 }
 
 function toClientThread(thread: Awaited<ReturnType<typeof listOciShareThreadsForPerson>>[number]) {
@@ -135,13 +151,66 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const resolution = await resolveShareAudience({
-    tenantKey: resolved.tenant.tenantKey,
-    audienceType: parsed.data.audienceType as ShareAudienceType,
-    actorPersonId,
-    targetFamilyGroupKey: parsed.data.targetFamilyGroupKey,
-    allowedFamilyGroupKeys: resolved.tenant.tenants.map((entry) => normalize(entry.tenantKey)).filter(Boolean),
-  });
+  const allowedFamilyGroupKeys = resolved.tenant.tenants.map((entry) => normalize(entry.tenantKey)).filter(Boolean);
+  let resolution:
+    | Awaited<ReturnType<typeof resolveShareAudience>>
+    | {
+        familyGroupKey: string;
+        audienceType: "custom_group";
+        audienceKey: string;
+        audienceLabel: string;
+        recipients: Array<{ personId: string; displayName: string }>;
+      };
+
+  if (parsed.data.audienceType === "custom_group") {
+    const familyGroupKey = normalize(parsed.data.targetFamilyGroupKey) || resolved.tenant.tenantKey;
+    const allowed = new Set(allowedFamilyGroupKeys);
+    allowed.add(normalize(resolved.tenant.tenantKey));
+    if (!allowed.has(familyGroupKey)) {
+      return NextResponse.json({ error: "target_family_group_not_allowed" }, { status: 403 });
+    }
+
+    const people = await getPeople(familyGroupKey);
+    const peopleById = new Map(
+      people
+        .map((person) => [person.personId.trim(), person.displayName.trim() || person.personId.trim()] as const)
+        .filter(([personId]) => Boolean(personId)),
+    );
+    if (!peopleById.has(actorPersonId)) {
+      return NextResponse.json({ error: "actor_not_in_family_group" }, { status: 400 });
+    }
+
+    const memberIds = uniquePersonIds([...parsed.data.memberPersonIds, actorPersonId]).filter((personId) =>
+      peopleById.has(personId),
+    );
+    if (memberIds.length < 2) {
+      return NextResponse.json(
+        { error: "custom_group_requires_two_members", message: "Select at least one additional member." },
+        { status: 400 },
+      );
+    }
+
+    const recipients = memberIds
+      .map((personId) => ({ personId, displayName: peopleById.get(personId) ?? personId }))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+    const canonicalMemberIds = recipients.map((entry) => entry.personId).sort();
+    resolution = {
+      familyGroupKey,
+      audienceType: "custom_group",
+      audienceKey: buildCustomAudienceKey(canonicalMemberIds),
+      audienceLabel: parsed.data.customLabel || `Group (${recipients.length})`,
+      recipients,
+    };
+  } else {
+    resolution = await resolveShareAudience({
+      tenantKey: resolved.tenant.tenantKey,
+      audienceType: parsed.data.audienceType as ShareAudienceType,
+      actorPersonId,
+      targetFamilyGroupKey: parsed.data.targetFamilyGroupKey,
+      allowedFamilyGroupKeys,
+    });
+  }
   const nowIso = new Date().toISOString();
 
   let thread =
@@ -150,6 +219,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       audienceType: resolution.audienceType,
       audienceKey: resolution.audienceKey,
     })) ?? null;
+  const existingThread = Boolean(thread);
 
   if (!thread) {
     thread = await createOciShareThread({
@@ -190,6 +260,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    existingThread,
     thread: toClientThread({
       ...thread,
       memberLastReadAt: "",

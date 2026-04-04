@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSessionAuditLog } from "@/lib/audit/log";
+import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 import {
@@ -67,6 +68,16 @@ export async function GET(request: Request, { params }: RouteProps) {
     threadId: thread.threadId,
     limit,
   });
+  const members = await listOciShareThreadMembers({
+    familyGroupKey: thread.familyGroupKey,
+    threadId: thread.threadId,
+  });
+  const people = await getPeople(thread.familyGroupKey).catch(() => []);
+  const peopleById = new Map(
+    people
+      .map((person) => [person.personId.trim(), person.displayName.trim() || person.personId.trim()] as const)
+      .filter(([personId]) => Boolean(personId)),
+  );
   const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
 
   return NextResponse.json({
@@ -74,6 +85,12 @@ export async function GET(request: Request, { params }: RouteProps) {
     threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     count: posts.length,
+    members: members.map((entry) => ({
+      personId: entry.personId,
+      displayName: peopleById.get(entry.personId) ?? entry.personId,
+      memberRole: entry.memberRole,
+      joinedAt: entry.joinedAt,
+    })),
     posts: posts.map((post) => ({
       postId: post.postId,
       threadId: post.threadId,

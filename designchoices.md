@@ -363,6 +363,13 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Impact`: New `/api/t/[tenantKey]/shares/...` endpoints become the canonical sharing API surface; Home/Nav can surface a `Shares` destination while existing Media/People flows remain unchanged.
 - `Follow-up`: Add production push dispatcher transport and retry/backoff tuning, then expand Shares UX with richer thread grouping and unread indicators.
 
+- `Area`: Family Shares group creation + thread-open UX
+- `Decision`: Support custom member-based share groups (`audience_type=custom_group`) keyed by canonical member-set signature, prevent duplicate groups with the same exact members, show current thread members at the top of the thread view, and treat audience/group selection as the open action (no separate Open button for standard audiences).
+- `Reason`: Opening and understanding a thread should be immediate, and duplicate groups with identical membership create unnecessary clutter/confusion.
+- `Alternatives Considered`: Keep Open button workflow, allow duplicate custom groups, or hide thread members until a secondary details view.
+- `Impact`: Shares thread create path now accepts custom member sets and reuses existing group thread if membership signature already exists; posts payload includes thread-member display data for header rendering.
+- `Follow-up`: Add optional group rename/member-edit workflow if group management becomes a recurring user need.
+
 - `Area`: Legacy media/share support retirement (test-data environment)
 - `Decision`: Remove runtime compatibility fallbacks for legacy media-link/metadata behavior and allow full purge of legacy test-only media/share content.
 - `Reason`: The current environment contains only test data, so preserving old compatibility paths creates ambiguity and operational drag without product value.
