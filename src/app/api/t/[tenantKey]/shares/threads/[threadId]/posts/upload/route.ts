@@ -1,14 +1,22 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { appendSessionAuditLog } from "@/lib/audit/log";
+import {
+  removePersonMediaAssociations,
+  syncPersonMediaAssociations,
+  type PersonMediaAttributeType,
+} from "@/lib/attributes/person-media";
+import { createAttribute, deleteAttribute } from "@/lib/attributes/store";
+import { getPersonById } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import { collectPersistedExifData } from "@/lib/media/exif";
-import { buildMediaFileId, buildMediaId, buildMediaLinkId } from "@/lib/media/ids";
+import { buildMediaFileId, buildMediaId } from "@/lib/media/ids";
 import { createImageThumbnailVariant } from "@/lib/media/thumbnail.server";
 import {
   buildMediaKindMetadata,
   fallbackUploadExtension,
   sanitizeUploadFileName,
+  type SupportedMediaKind,
   validateUploadInput,
 } from "@/lib/media/upload";
 import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object-storage";
@@ -18,7 +26,6 @@ import {
   getOciShareThreadMember,
   listOciShareThreadMembers,
   upsertOciMediaAsset,
-  upsertOciMediaLink,
 } from "@/lib/oci/tables";
 import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
@@ -62,6 +69,13 @@ function parseTaggedPeople(raw: string): string[] {
   return [];
 }
 
+function mapMediaKindToPersonAttributeType(mediaKind: SupportedMediaKind): PersonMediaAttributeType {
+  if (mediaKind === "video") return "video";
+  if (mediaKind === "audio") return "audio";
+  if (mediaKind === "image") return "photo";
+  return "media";
+}
+
 export async function POST(request: Request, { params }: RouteProps) {
   try {
     const { tenantKey, threadId } = await params;
@@ -101,7 +115,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     const file = fileField as Blob & { name?: string; type?: string; lastModified?: number };
 
     const caption = String(formData?.get("caption") ?? "").trim();
-    const taggedPeople = Array.from(new Set(parseTaggedPeople(String(formData?.get("taggedPersonIds") ?? ""))));
+    const requestedTaggedPeople = Array.from(
+      new Set(
+        parseTaggedPeople(String(formData?.get("taggedPersonIds") ?? ""))
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    );
+    const taggedPeople = requestedTaggedPeople.length > 0 ? requestedTaggedPeople : [actorPersonId];
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const validated = validateUploadInput({ byteLength: bytes.length, mimeType: file.type, fileName: file.name });
@@ -153,6 +174,8 @@ export async function POST(request: Request, { params }: RouteProps) {
     const persistedExif = validated.mediaKind === "image" ? await collectPersistedExifData(bytes) : null;
     const checksumSha256 = createHash("sha256").update(bytes).digest("hex");
     const nowIso = new Date().toISOString();
+    const photoDate = nowIso.slice(0, 10);
+    const mediaMetadata = buildMediaKindMetadata(validated.mediaKind);
 
     await upsertOciMediaAsset({
       mediaId,
@@ -160,7 +183,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       mediaKind: validated.mediaKind,
       label: safeFileName,
       description: caption,
-      photoDate: nowIso.slice(0, 10),
+      photoDate,
       sourceProvider: "oci_object",
       sourceFileId: fileId,
       originalObjectKey,
@@ -183,22 +206,80 @@ export async function POST(request: Request, { params }: RouteProps) {
       exifFingerprint: persistedExif?.fingerprint,
     });
 
+    const attributeType = mapMediaKindToPersonAttributeType(validated.mediaKind);
+    const persistedTaggedPeople: string[] = [];
     for (const personId of taggedPeople) {
-      await upsertOciMediaLink({
-        familyGroupKey: thread.familyGroupKey,
-        linkId: buildMediaLinkId(thread.familyGroupKey, "person", personId, fileId, "share"),
-        mediaId,
+      const person = await getPersonById(personId, thread.familyGroupKey);
+      if (!person) {
+        continue;
+      }
+      const created = await createAttribute(thread.familyGroupKey, {
         entityType: "person",
         entityId: personId,
-        usageType: "share",
-        label: safeFileName,
-        description: caption,
-        photoDate: nowIso.slice(0, 10),
-        isPrimary: false,
-        sortOrder: 0,
-        mediaMetadata: buildMediaKindMetadata(validated.mediaKind),
-        createdAt: nowIso,
+        category: "descriptor",
+        attributeKind: "descriptor",
+        attributeType,
+        attributeTypeCategory: "",
+        attributeDate: photoDate,
+        dateIsEstimated: false,
+        estimatedTo: "",
+        attributeDetail: fileId,
+        attributeNotes: caption,
+        endDate: "",
+        typeKey: attributeType,
+        label: caption || safeFileName,
+        valueText: fileId,
+        dateStart: photoDate,
+        dateEnd: "",
+        location: "",
+        notes: caption,
       });
+      try {
+        await syncPersonMediaAssociations({
+          tenantKey: thread.familyGroupKey,
+          personId,
+          attributeId: created.attributeId,
+          attributeType,
+          fileId,
+          mediaKind: validated.mediaKind,
+          label: caption || safeFileName,
+          description: caption,
+          photoDate,
+          isPrimary: false,
+          sortOrder: 0,
+          mediaMetadata,
+          sourceProvider: "oci_object",
+          sourceFileId: fileId,
+          originalObjectKey,
+          thumbnailObjectKey,
+          checksumSha256,
+          mimeType: validated.mimeType,
+          fileName: safeFileName,
+          fileSizeBytes: String(bytes.length),
+          exifExtractedAt: persistedExif?.extractedAt,
+          exifSourceTag: persistedExif?.sourceTag,
+          exifCaptureDate: persistedExif?.captureDate,
+          exifCaptureTimestampRaw: persistedExif?.captureTimestampRaw,
+          exifMake: persistedExif?.make,
+          exifModel: persistedExif?.model,
+          exifSoftware: persistedExif?.software,
+          exifWidth: persistedExif?.width,
+          exifHeight: persistedExif?.height,
+          exifOrientation: persistedExif?.orientation,
+          exifFingerprint: persistedExif?.fingerprint,
+          createdAt: nowIso,
+        });
+      } catch (error) {
+        await removePersonMediaAssociations({
+          tenantKey: thread.familyGroupKey,
+          personId,
+          attributeId: created.attributeId,
+          fileIds: [fileId],
+        }).catch(() => undefined);
+        await deleteAttribute(thread.familyGroupKey, created.attributeId).catch(() => undefined);
+        throw error;
+      }
+      persistedTaggedPeople.push(personId);
     }
 
     const post = await createOciSharePost({
@@ -259,7 +340,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       postId: post.postId,
       fileId,
       mediaId,
-      taggedPersonIds: taggedPeople,
+      taggedPersonIds: persistedTaggedPeople,
       notificationOutboxCount: outboxRows.length,
     });
   } catch (error) {

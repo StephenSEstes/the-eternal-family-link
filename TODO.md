@@ -13,6 +13,7 @@ I will update this list as we add, complete, or remove work.
   - Completed: Phase 3 initial UX surface (Home/Nav `Shares` entry + Shares page in current style).
   - Completed: Phase 4 scaffold (notification outbox writes + admin dispatch scaffold route).
   - In progress: Phase 5 hardening (cross-family-group thread access resolution across all share endpoints and direct-media fallback behavior).
+  - In progress: Shares media upload cutover to canonical person-attribute/media association path (no migration/backfill required for current test-only data set).
   - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
   Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.

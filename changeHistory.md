@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-04: Shares media upload now uses canonical person attribute/media association writes for tagged people (no migration/backfill needed for current test-only data). See `docs/change-summary.md`.
 - 2026-04-04: Started Family Shares hardening (Phase 5): cross-family thread/post/comment/read resolution now checks all accessible family groups, and thread list aggregates across accessible groups. See `docs/change-summary.md`.
 - 2026-04-04: Added Family Shares foundation (`/shares`) with audience-based threads, media/text posts, threaded post comments, push-subscription endpoints, and notification outbox dispatch scaffold; Home and header nav now include Shares. See `docs/change-summary.md`.
 - 2026-03-30: Added robust threaded media comments in the Media modal (`Comments` tab) with top-level/reply threads, author/admin edit-delete controls, and OCI-backed `media_comments` persistence. See `docs/change-summary.md`.

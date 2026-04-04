@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Family Shares upload canonicalized to person history path; no migration)
+
+- `Date`: 2026-04-04
+- `Change`: Updated Shares media upload (`/shares/threads/[threadId]/posts/upload`) to write tagged-person associations through the canonical person attribute + media association path (`createAttribute` + `syncPersonMediaAssociations`) instead of bespoke `media_links` share-only writes.
+- `Type`: API | Data
+- `Why`: Root cause was split write behavior. Shares upload stored media assets and share posts, but person-history linkage used a parallel link-only path (`usage_type=share`) that bypassed canonical person attribute/media association logic. This caused integration drift versus the existing media/person history model.
+- `Files`: `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`, `TODO.md`
+- `Data Changes`: No schema change. No migration/backfill required for current environment (test-only data per product direction).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Share upload creates a share post and writes tagged-person media associations via canonical person attribute flow.
+  - Tagged media appears in person history surfaces driven by canonical media links/attributes.
+- `Rollback Notes`: Revert this commit to restore prior share-only person-link write path.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-04 (Family Shares hardening phase start: cross-family thread resolution)
 
 - `Date`: 2026-04-04
