@@ -4,6 +4,29 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Legacy media/share compatibility hard cutover + test-content reset
+  Priority: High
+  Status: In progress 2026-04-04
+  Est date: 2026-04-05
+  Desc: Remove compatibility support for pre-canonical media/share behaviors and purge existing test-only media/share content so only the canonical write/read model remains active.
+  Scope:
+  - Remove media-link read fallback that mixes `MediaLinks` descriptive fields and legacy metadata JSON when canonical `MediaAssets` fields are missing.
+  - Stop returning legacy `usage_type='share'` media-link rows in canonical media read paths.
+  - Remove `getOciMediaAssetByFileId` legacy metadata fallback behavior and use normalized asset columns only.
+  - Add a deterministic OCI reset script to clear test-only share/media/face/comment payloads and media-type attributes.
+  Phases:
+  - Phase 1: Remove compatibility reads in runtime paths.
+  - Phase 2: Add/reset script with dry-run and apply modes.
+  - Phase 3: Run lint/build and execute dry-run evidence capture.
+  - Phase 4: Apply reset in environment when approved.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Dry-run reset script reports current counts.
+  - Apply reset script leaves share/media/face/comment content tables empty and clears stale profile photo pointers.
+  Completion criteria:
+  - Old test media/share data no longer appears.
+  - Runtime no longer relies on previous media compatibility behavior.
 - [ ] Family Shares feed (WhatsApp-style media sharing threads) with audience targeting and push-ready notifications
   Priority: High (#1)
   Status: In progress 2026-04-04

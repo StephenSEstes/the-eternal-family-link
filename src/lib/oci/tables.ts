@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import oracledb from "oracledb";
 import type { TableRecord } from "@/lib/data/types";
-import { buildMediaKindMetadata, inferStoredMediaKind, parseMediaMetadata } from "@/lib/media/upload";
+import { buildMediaKindMetadata, inferStoredMediaKind } from "@/lib/media/upload";
 
 // Ensure CLOB columns are returned as text instead of Lob objects.
 oracledb.fetchAsString = [oracledb.CLOB];
@@ -2454,41 +2454,6 @@ function parseStoredNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function readLegacyMediaMetadataString(rawMetadata: string, key: string) {
-  const parsed = parseMediaMetadata(rawMetadata);
-  if (!parsed) {
-    return "";
-  }
-  const direct = String(parsed[key] ?? "").trim();
-  if (direct) {
-    return direct;
-  }
-  const objectStorage = parsed.objectStorage;
-  if (objectStorage && typeof objectStorage === "object") {
-    return String((objectStorage as Record<string, unknown>)[key] ?? "").trim();
-  }
-  return "";
-}
-
-function readLegacyMediaMetadataNumber(rawMetadata: string, key: string) {
-  const parsed = parseMediaMetadata(rawMetadata);
-  if (!parsed) {
-    return 0;
-  }
-  const direct = Number(parsed[key] ?? 0);
-  if (Number.isFinite(direct) && direct > 0) {
-    return direct;
-  }
-  const objectStorage = parsed.objectStorage;
-  if (objectStorage && typeof objectStorage === "object") {
-    const nested = Number((objectStorage as Record<string, unknown>)[key] ?? 0);
-    if (Number.isFinite(nested) && nested > 0) {
-      return nested;
-    }
-  }
-  return 0;
-}
-
 function resolveStoredMediaKindValue(input: {
   mediaKind?: string;
   fileId?: string;
@@ -2736,16 +2701,13 @@ async function queryOciMediaLinks(
          a.file_id,
          a.file_name,
          a.media_kind,
-         COALESCE(NULLIF(TRIM(a.label), ''), l.label) AS label,
-         COALESCE(NULLIF(TRIM(a.description), ''), l.description) AS description,
-         COALESCE(NULLIF(TRIM(a.photo_date), ''), l.photo_date) AS photo_date,
+         a.label AS label,
+         a.description AS description,
+         a.photo_date AS photo_date,
          l.is_primary,
          l.sort_order,
-         CASE
-           WHEN a.media_metadata IS NOT NULL AND DBMS_LOB.GETLENGTH(a.media_metadata) > 0 THEN a.media_metadata
-           ELSE l.media_metadata
-         END AS raw_media_metadata,
-         COALESCE(NULLIF(TRIM(a.created_at), ''), l.created_at) AS created_at,
+         a.media_metadata AS raw_media_metadata,
+         a.created_at AS created_at,
          a.source_provider,
          a.original_object_key,
          a.thumbnail_object_key,
@@ -2759,7 +2721,8 @@ async function queryOciMediaLinks(
        INNER JOIN media_assets a
          ON TRIM(a.media_id) = TRIM(l.media_id)
        ${whereClause}
-        ORDER BY
+         AND LOWER(TRIM(NVL(l.usage_type, 'media'))) <> 'share'
+         ORDER BY
           a.file_id,
           CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
           CASE
@@ -2767,7 +2730,7 @@ async function queryOciMediaLinks(
               THEN TO_NUMBER(TRIM(l.sort_order))
             ELSE 0
           END,
-          COALESCE(NULLIF(TRIM(a.created_at), ''), l.created_at),
+          a.created_at,
           l.link_id`,
       binds,
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
@@ -5353,10 +5316,7 @@ export async function markOciNotificationOutboxFailed(input: {
   });
 }
 
-export async function getOciMediaAssetByFileId(
-  fileId: string,
-  options?: { allowLegacyMetadataFallback?: boolean },
-): Promise<OciMediaAssetLookup | null> {
+export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMediaAssetLookup | null> {
   const normalizedFileId = fileId.trim();
   if (!normalizedFileId) {
     return null;
@@ -5411,7 +5371,6 @@ export async function getOciMediaAssetByFileId(
       return null;
     }
     const rawMetadata = fromDbValue(row.MEDIA_METADATA);
-    const allowLegacyMetadataFallback = options?.allowLegacyMetadataFallback !== false;
     const fileName = fromDbValue(row.FILE_NAME);
     const mediaKind = resolveStoredMediaKindValue({
       mediaKind: fromDbValue(row.MEDIA_KIND),
@@ -5426,33 +5385,17 @@ export async function getOciMediaAssetByFileId(
       label: fromDbValue(row.LABEL),
       description: fromDbValue(row.DESCRIPTION),
       photoDate: fromDbValue(row.PHOTO_DATE),
-      sourceProvider:
-        fromDbValue(row.SOURCE_PROVIDER) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "sourceProvider") : ""),
-      sourceFileId:
-        fromDbValue(row.SOURCE_FILE_ID) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "sourceFileId") : ""),
-      originalObjectKey:
-        fromDbValue(row.ORIGINAL_OBJECT_KEY) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "originalObjectKey") : ""),
-      thumbnailObjectKey:
-        fromDbValue(row.THUMBNAIL_OBJECT_KEY) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "thumbnailObjectKey") : ""),
-      checksumSha256:
-        fromDbValue(row.CHECKSUM_SHA256) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataString(rawMetadata, "checksumSha256") : ""),
+      sourceProvider: fromDbValue(row.SOURCE_PROVIDER),
+      sourceFileId: fromDbValue(row.SOURCE_FILE_ID),
+      originalObjectKey: fromDbValue(row.ORIGINAL_OBJECT_KEY),
+      thumbnailObjectKey: fromDbValue(row.THUMBNAIL_OBJECT_KEY),
+      checksumSha256: fromDbValue(row.CHECKSUM_SHA256),
       mimeType: fromDbValue(row.MIME_TYPE),
       fileName,
       fileSizeBytes: fromDbValue(row.FILE_SIZE_BYTES),
-      mediaWidth:
-        parseStoredNumber(row.MEDIA_WIDTH) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "width") : 0),
-      mediaHeight:
-        parseStoredNumber(row.MEDIA_HEIGHT) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "height") : 0),
-      mediaDurationSec:
-        parseStoredNumber(row.MEDIA_DURATION_SEC) ||
-        (allowLegacyMetadataFallback ? readLegacyMediaMetadataNumber(rawMetadata, "durationSec") : 0),
+      mediaWidth: parseStoredNumber(row.MEDIA_WIDTH),
+      mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT),
+      mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC),
       mediaMetadata: rawMetadata,
       createdAt: fromDbValue(row.CREATED_AT),
       exifExtractedAt: fromDbValue(row.EXIF_EXTRACTED_AT),

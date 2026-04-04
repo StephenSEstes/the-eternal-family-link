@@ -15,7 +15,9 @@
     "media:migrate:parity": "node scripts/oci-media-parity.cjs",
     "media:oci:migrate:dryrun": "node scripts/oci-object-media-migrate.cjs",
     "media:oci:migrate:apply": "node scripts/oci-object-media-migrate.cjs --apply",
-    "attributes:reset-schema": "node scripts/reset-attributes-schema.cjs"
+    "attributes:reset-schema": "node scripts/reset-attributes-schema.cjs",
+    "content:reset:hard-cutover": "node scripts/reset-content-hard-cutover.cjs",
+    "content:reset:hard-cutover:apply": "node scripts/reset-content-hard-cutover.cjs --apply"
   },
   "dependencies": {
     "exifr": "^7.1.3",

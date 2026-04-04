@@ -362,3 +362,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Reuse `MediaComments` only, store sharing threads in media metadata JSON, or send push synchronously in request paths.
 - `Impact`: New `/api/t/[tenantKey]/shares/...` endpoints become the canonical sharing API surface; Home/Nav can surface a `Shares` destination while existing Media/People flows remain unchanged.
 - `Follow-up`: Add production push dispatcher transport and retry/backoff tuning, then expand Shares UX with richer thread grouping and unread indicators.
+
+- `Area`: Legacy media/share support retirement (test-data environment)
+- `Decision`: Remove runtime compatibility fallbacks for legacy media-link/metadata behavior and allow full purge of legacy test-only media/share content.
+- `Reason`: The current environment contains only test data, so preserving old compatibility paths creates ambiguity and operational drag without product value.
+- `Alternatives Considered`: Keep dual read paths and slowly migrate data in place.
+- `Impact`: Media reads depend on canonical `MediaAssets` columns; `usage_type='share'` compatibility links are excluded from canonical media reads; reset tooling can clear share/media/face/comment test content safely.
+- `Follow-up`: If production historical data is introduced later, define explicit migration scripts before reintroducing any compatibility mode.

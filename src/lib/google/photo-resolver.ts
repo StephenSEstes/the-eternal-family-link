@@ -87,9 +87,7 @@ async function getObjectKeyByFileId(fileId: string) {
   if (cacheEntry && cacheEntry.expiresAt > now) {
     return cacheEntry.value;
   }
-  const asset = await getOciMediaAssetByFileId(normalizedFileId, {
-    allowLegacyMetadataFallback: false,
-  }).catch(() => null);
+  const asset = await getOciMediaAssetByFileId(normalizedFileId).catch(() => null);
   const resolvedValue =
     asset
       ? (() => {

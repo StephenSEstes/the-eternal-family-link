@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Legacy media/share compatibility retirement + reset tooling)
+
+- `Date`: 2026-04-04
+- `Change`: Removed legacy media compatibility fallbacks from core OCI media reads and added a hard-cutover reset script for test-only share/media content.
+- `Type`: API | Data | Tooling
+- `Why`: Root cause was mixed compatibility behavior: old test rows still appeared because read paths still accepted legacy fallback values (`MediaLinks` descriptions/metadata and `usage_type='share'` links). In a test-only dataset, this added ambiguity without value.
+- `Files`: `src/lib/oci/tables.ts`, `src/lib/google/photo-resolver.ts`, `scripts/reset-content-hard-cutover.cjs`, `package.json`, `TODO.md`, `designchoices.md`
+- `Data Changes`: No schema migration. Added reset utility (`content:reset:hard-cutover` dry run, `content:reset:hard-cutover:apply` apply) to delete share/media/face/comment test content and media-type attributes, then clear stale profile-photo pointers.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - `npm run content:reset:hard-cutover` reports before counts without mutation.
+  - `npm run content:reset:hard-cutover:apply` clears target tables/rows in approved environment.
+- `Rollback Notes`: Revert this commit to restore previous compatibility behavior; data reset operations are destructive and should be treated as non-rollbackable unless DB backup exists.
+- `Design Decision Change`: Yes. Added legacy-support retirement decision in `designchoices.md`.
+
 ## 2026-04-04 (Family Shares upload canonicalized to person history path; no migration)
 
 - `Date`: 2026-04-04
