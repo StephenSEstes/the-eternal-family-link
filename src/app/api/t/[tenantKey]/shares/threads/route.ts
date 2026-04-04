@@ -10,6 +10,7 @@ import {
   upsertOciShareThreadMember,
 } from "@/lib/oci/tables";
 import { resolveShareAudience, type ShareAudienceType } from "@/lib/shares/audience";
+import { getAccessibleFamilyGroupKeys } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string }>;
@@ -26,6 +27,11 @@ function normalize(value: string | undefined) {
 
 function buildThreadId() {
   return `shr-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
+}
+
+function parseSortableTimestamp(value: string) {
+  const parsed = Date.parse(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function buildThreadMemberId(threadId: string, personId: string) {
@@ -73,11 +79,31 @@ export async function GET(request: Request, { params }: RouteProps) {
   const rawLimit = Number(url.searchParams.get("limit") ?? "40");
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.trunc(rawLimit))) : 40;
 
-  const threads = await listOciShareThreadsForPerson({
-    familyGroupKey: resolved.tenant.tenantKey,
-    personId: actorPersonId,
-    limit,
-  });
+  const familyGroupKeys = getAccessibleFamilyGroupKeys(resolved.tenant);
+  const groupedThreads = await Promise.all(
+    familyGroupKeys.map((familyGroupKey) =>
+      listOciShareThreadsForPerson({
+        familyGroupKey,
+        personId: actorPersonId,
+        limit,
+      }).catch(() => []),
+    ),
+  );
+  const deduped = new Map<string, Awaited<ReturnType<typeof listOciShareThreadsForPerson>>[number]>();
+  for (const bucket of groupedThreads) {
+    for (const thread of bucket) {
+      if (!deduped.has(thread.threadId)) {
+        deduped.set(thread.threadId, thread);
+      }
+    }
+  }
+  const threads = Array.from(deduped.values())
+    .sort(
+      (left, right) =>
+        parseSortableTimestamp(right.lastPostAt || right.createdAt) -
+        parseSortableTimestamp(left.lastPostAt || left.createdAt),
+    )
+    .slice(0, limit);
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,

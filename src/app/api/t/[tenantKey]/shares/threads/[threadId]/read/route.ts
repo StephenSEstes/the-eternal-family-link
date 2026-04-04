@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireTenantAccess } from "@/lib/family-group/guard";
-import { getOciShareThreadById, getOciShareThreadMember, markOciShareThreadRead } from "@/lib/oci/tables";
+import { getOciShareThreadMember, markOciShareThreadRead } from "@/lib/oci/tables";
+import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; threadId: string }>;
@@ -27,16 +28,16 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const thread = await getOciShareThreadById({
-    familyGroupKey: resolved.tenant.tenantKey,
+  const thread = await resolveAccessibleShareThread({
     threadId: normalize(threadId),
+    tenant: resolved.tenant,
   });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
 
   const member = await getOciShareThreadMember({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
   });
@@ -52,7 +53,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   const nowIso = new Date().toISOString();
   const targetReadAt = normalize(parsed.data.lastReadAt) || nowIso;
   const updated = await markOciShareThreadRead({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
     lastReadAt: targetReadAt,
@@ -60,6 +61,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
     markedRead: updated,

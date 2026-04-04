@@ -15,12 +15,12 @@ import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object
 import {
   createOciNotificationOutboxEntries,
   createOciSharePost,
-  getOciShareThreadById,
   getOciShareThreadMember,
   listOciShareThreadMembers,
   upsertOciMediaAsset,
   upsertOciMediaLink,
 } from "@/lib/oci/tables";
+import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; threadId: string }>;
@@ -77,15 +77,15 @@ export async function POST(request: Request, { params }: RouteProps) {
       return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
     }
 
-    const thread = await getOciShareThreadById({
-      familyGroupKey: resolved.tenant.tenantKey,
+    const thread = await resolveAccessibleShareThread({
       threadId,
+      tenant: resolved.tenant,
     });
     if (!thread) {
       return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
     }
     const member = await getOciShareThreadMember({
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       threadId: thread.threadId,
       personId: actorPersonId,
     });
@@ -123,7 +123,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       file.name || "",
       `${actorPersonId}-${Date.now()}.${fallbackUploadExtension(validated.mediaKind, validated.mimeType, file.name)}`,
     );
-    const originalObjectKey = `${objectStorage.objectPrefix}/share/original/${sanitizeObjectNameSegment(resolved.tenant.tenantKey)}/${sanitizeObjectNameSegment(thread.threadId)}/${sanitizeObjectNameSegment(fileId)}/${safeFileName}`;
+    const originalObjectKey = `${objectStorage.objectPrefix}/share/original/${sanitizeObjectNameSegment(thread.familyGroupKey)}/${sanitizeObjectNameSegment(thread.threadId)}/${sanitizeObjectNameSegment(fileId)}/${safeFileName}`;
     await putOciObjectByKey({
       objectKey: originalObjectKey,
       data: bytes,
@@ -138,7 +138,7 @@ export async function POST(request: Request, { params }: RouteProps) {
           const thumbName = sanitizeObjectNameSegment(
             safeFileName.replace(/\.[^.]+$/, "") + `-thumb.${thumbVariant.extension}`,
           );
-          thumbnailObjectKey = `${objectStorage.objectPrefix}/share/thumb/${sanitizeObjectNameSegment(resolved.tenant.tenantKey)}/${sanitizeObjectNameSegment(thread.threadId)}/${sanitizeObjectNameSegment(fileId)}/${thumbName}`;
+          thumbnailObjectKey = `${objectStorage.objectPrefix}/share/thumb/${sanitizeObjectNameSegment(thread.familyGroupKey)}/${sanitizeObjectNameSegment(thread.threadId)}/${sanitizeObjectNameSegment(fileId)}/${thumbName}`;
           await putOciObjectByKey({
             objectKey: thumbnailObjectKey,
             mimeType: thumbVariant.mimeType,
@@ -185,8 +185,8 @@ export async function POST(request: Request, { params }: RouteProps) {
 
     for (const personId of taggedPeople) {
       await upsertOciMediaLink({
-        familyGroupKey: resolved.tenant.tenantKey,
-        linkId: buildMediaLinkId(resolved.tenant.tenantKey, "person", personId, fileId, "share"),
+        familyGroupKey: thread.familyGroupKey,
+        linkId: buildMediaLinkId(thread.familyGroupKey, "person", personId, fileId, "share"),
         mediaId,
         entityType: "person",
         entityId: personId,
@@ -204,7 +204,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     const post = await createOciSharePost({
       postId: buildPostId(),
       threadId: thread.threadId,
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       fileId,
       captionText: caption,
       authorPersonId: actorPersonId,
@@ -216,14 +216,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     });
 
     const members = await listOciShareThreadMembers({
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       threadId: thread.threadId,
     });
     const outboxRows = members
       .filter((entry) => entry.personId && entry.personId !== actorPersonId)
       .map((entry) => ({
         notificationId: buildNotificationId(),
-        familyGroupKey: resolved.tenant.tenantKey,
+        familyGroupKey: thread.familyGroupKey,
         personId: entry.personId,
         channel: "webpush",
         eventType: "share_post_created",
@@ -247,13 +247,14 @@ export async function POST(request: Request, { params }: RouteProps) {
       action: "UPLOAD",
       entityType: "SHARE_POST",
       entityId: post.postId,
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       status: "SUCCESS",
       details: `Uploaded share post for thread=${thread.threadId}, file=${fileId}.`,
     });
 
     return NextResponse.json({
       tenantKey: resolved.tenant.tenantKey,
+      threadFamilyGroupKey: thread.familyGroupKey,
       threadId: thread.threadId,
       postId: post.postId,
       fileId,

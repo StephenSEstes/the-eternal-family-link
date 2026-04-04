@@ -8,10 +8,10 @@ import {
   createOciSharePostComment,
   getOciSharePostById,
   getOciSharePostCommentsForPost,
-  getOciShareThreadById,
   getOciShareThreadMember,
   listOciShareThreadMembers,
 } from "@/lib/oci/tables";
+import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; threadId: string; postId: string }>;
@@ -99,16 +99,16 @@ export async function GET(_: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const thread = await getOciShareThreadById({
-    familyGroupKey: resolved.tenant.tenantKey,
+  const thread = await resolveAccessibleShareThread({
     threadId: normalize(threadId),
+    tenant: resolved.tenant,
   });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
 
   const member = await getOciShareThreadMember({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
   });
@@ -117,7 +117,7 @@ export async function GET(_: Request, { params }: RouteProps) {
   }
 
   const post = await getOciSharePostById({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     postId: normalize(postId),
   });
   if (!post || post.threadId !== thread.threadId) {
@@ -125,12 +125,13 @@ export async function GET(_: Request, { params }: RouteProps) {
   }
 
   const comments = await getOciSharePostCommentsForPost({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     postId: post.postId,
   });
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     postId: post.postId,
     comments: comments.map((comment) =>
@@ -158,16 +159,16 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const thread = await getOciShareThreadById({
-    familyGroupKey: resolved.tenant.tenantKey,
+  const thread = await resolveAccessibleShareThread({
     threadId: normalize(threadId),
+    tenant: resolved.tenant,
   });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
 
   const member = await getOciShareThreadMember({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
   });
@@ -176,7 +177,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   }
 
   const post = await getOciSharePostById({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     postId: normalize(postId),
   });
   if (!post || post.threadId !== thread.threadId) {
@@ -190,7 +191,7 @@ export async function POST(request: Request, { params }: RouteProps) {
 
   const parentCommentId = normalize(parsed.data.parentCommentId);
   const existingComments = await getOciSharePostCommentsForPost({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     postId: post.postId,
   });
   if (parentCommentId && !existingComments.some((entry) => entry.commentId === parentCommentId)) {
@@ -202,7 +203,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     commentId: buildCommentId(),
     postId: post.postId,
     threadId: thread.threadId,
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     parentCommentId,
     authorPersonId: actorPersonId,
     authorDisplayName: actorDisplayName,
@@ -214,14 +215,14 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
 
   const members = await listOciShareThreadMembers({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
   });
   const outboxRows = members
     .filter((entry) => entry.personId && entry.personId !== actorPersonId)
     .map((entry) => ({
       notificationId: buildNotificationId(),
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       personId: entry.personId,
       channel: "webpush",
       eventType: "share_comment_created",
@@ -244,13 +245,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     action: "CREATE",
     entityType: "SHARE_POST_COMMENT",
     entityId: createdComment.commentId,
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     status: "SUCCESS",
     details: `Created share post comment thread=${thread.threadId} post=${post.postId}.`,
   });
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     postId: post.postId,
     comment: toClientComment({

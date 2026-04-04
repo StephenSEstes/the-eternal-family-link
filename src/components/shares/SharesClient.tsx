@@ -617,9 +617,18 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           <div style={{ display: "grid", gap: "0.75rem" }}>
             {orderedPosts.map((post) => {
               const directPreviewUrl = String(post.media?.previewUrl ?? "").trim();
+              const directOriginalUrl = String(post.media?.originalUrl ?? "").trim();
               const fallbackPreviewUrl = viewerPreviewPath(tenantKey, post.fileId);
-              const previewSrc =
-                post.fileId && directPreviewUrl && !failedPreviewFileIds.has(post.fileId) ? directPreviewUrl : fallbackPreviewUrl;
+              const previewSrc = (() => {
+                if (!post.fileId) return "";
+                if (!failedPreviewFileIds.has(post.fileId) && directPreviewUrl) {
+                  return directPreviewUrl;
+                }
+                if (!failedPreviewFileIds.has(post.fileId) && directOriginalUrl) {
+                  return directOriginalUrl;
+                }
+                return fallbackPreviewUrl;
+              })();
               const comments = Array.isArray(commentsByPostId[post.postId]) ? commentsByPostId[post.postId] : [];
               const commentTree = buildCommentTree(comments);
 
@@ -657,7 +666,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                       alt={post.caption || post.media?.label || "Shared media"}
                       style={{ width: "100%", maxHeight: "380px", objectFit: "cover", borderRadius: "12px", border: "1px solid var(--line)" }}
                       onError={() => {
-                        if (directPreviewUrl && post.fileId && previewSrc === directPreviewUrl) {
+                        if ((directPreviewUrl || directOriginalUrl) && post.fileId) {
                           setFailedPreviewFileIds((current) => {
                             const next = new Set(current);
                             next.add(post.fileId);

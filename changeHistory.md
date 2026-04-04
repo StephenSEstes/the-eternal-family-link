@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-04: Started Family Shares hardening (Phase 5): cross-family thread/post/comment/read resolution now checks all accessible family groups, and thread list aggregates across accessible groups. See `docs/change-summary.md`.
 - 2026-04-04: Added Family Shares foundation (`/shares`) with audience-based threads, media/text posts, threaded post comments, push-subscription endpoints, and notification outbox dispatch scaffold; Home and header nav now include Shares. See `docs/change-summary.md`.
 - 2026-03-30: Added robust threaded media comments in the Media modal (`Comments` tab) with top-level/reply threads, author/admin edit-delete controls, and OCI-backed `media_comments` persistence. See `docs/change-summary.md`.
 - 2026-03-30: Media tab now allows unlimited rows on mobile (single-scroll list with desktop paging unchanged). See `docs/change-summary.md`.

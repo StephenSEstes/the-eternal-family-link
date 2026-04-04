@@ -12,7 +12,8 @@ I will update this list as we add, complete, or remove work.
   - Completed: Phase 2 API foundation (threads, posts, upload, comments, read-state, audience resolve, push subscription endpoints).
   - Completed: Phase 3 initial UX surface (Home/Nav `Shares` entry + Shares page in current style).
   - Completed: Phase 4 scaffold (notification outbox writes + admin dispatch scaffold route).
-  - Remaining: hardening, deeper UX polish, and production push transport.
+  - In progress: Phase 5 hardening (cross-family-group thread access resolution across all share endpoints and direct-media fallback behavior).
+  - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
   Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.
   Scope:
@@ -27,6 +28,7 @@ I will update this list as we add, complete, or remove work.
   - Preserve existing People/Households/Media functionality and avoid regressions in current upload/link flows.
   Phases:
   - Phase 1: Data model + OCI compatibility
+    - Status: Completed 2026-04-04
     - Add tables:
       - `share_threads`
       - `share_thread_members`
@@ -37,6 +39,7 @@ I will update this list as we add, complete, or remove work.
     - Add indexes for tenant/thread/post/member lookup and unread ordering.
     - Add OCI helper functions for thread/post/comment CRUD and member resolution.
   - Phase 2: API foundation
+    - Status: Completed 2026-04-04
     - Add APIs:
       - list/create threads
       - list/create posts (with media upload path)
@@ -46,6 +49,7 @@ I will update this list as we add, complete, or remove work.
       - register/unregister push subscriptions
     - Add audit log entries for create/update operations.
   - Phase 3: UX implementation (current style)
+    - Status: Completed 2026-04-04
     - Add `Family Shares` section on Home.
     - Add Shares page with:
       - thread list grouped by audience
@@ -53,10 +57,12 @@ I will update this list as we add, complete, or remove work.
       - post stream with comments
     - Keep controls consistent with existing People/Media design patterns.
   - Phase 4: Notification pipeline
+    - Status: Completed 2026-04-04 (scaffold)
     - Write notification outbox entries for new posts/comments.
     - Add dispatcher route/job scaffold for push delivery with retries and failure state.
     - Keep delivery idempotent and non-blocking for user actions.
   - Phase 5: Hardening + validation
+    - Status: In progress 2026-04-04
     - Verify tenant access guards on all share endpoints.
     - Verify thumbnail/original URL performance path and pagination/cursor behavior.
     - Confirm no regressions in existing Media tab, person modal media, and comments.

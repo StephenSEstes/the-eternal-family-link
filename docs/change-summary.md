@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Family Shares hardening phase start: cross-family thread resolution)
+
+- `Date`: 2026-04-04
+- `Change`: Hardened Family Shares thread/post/comment/read paths to resolve thread access across all family groups in the signed-in user’s access list (not only active family group), and updated Shares thread listing to aggregate threads across accessible family groups.
+- `Type`: API | UI
+- `Why`: Root cause was over-scoped route resolution: endpoints used the active `tenantKey` as the only `family_group_key`, which caused valid threads created for another accessible family group to disappear or return `thread_not_found/forbidden` after refresh.
+- `Files`: `src/lib/shares/thread-access.ts`, `src/app/api/t/[tenantKey]/shares/threads/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/read/route.ts`, `src/components/shares/SharesClient.tsx`, `TODO.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Threads created for another accessible family group remain loadable in Shares and can be read/posted/commented from the current session.
+- `Rollback Notes`: Revert this commit to restore active-family-only thread resolution behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-04 (Family Shares foundation: threads, posts, comments, push-ready outbox)
 
 - `Date`: 2026-04-04

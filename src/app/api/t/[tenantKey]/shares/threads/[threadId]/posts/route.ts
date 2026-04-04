@@ -7,11 +7,11 @@ import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 import {
   createOciNotificationOutboxEntries,
   createOciSharePost,
-  getOciShareThreadById,
   getOciShareThreadMember,
   getOciSharePostsForThread,
   listOciShareThreadMembers,
 } from "@/lib/oci/tables";
+import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string; threadId: string }>;
@@ -42,16 +42,16 @@ export async function GET(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const thread = await getOciShareThreadById({
-    familyGroupKey: resolved.tenant.tenantKey,
+  const thread = await resolveAccessibleShareThread({
     threadId,
+    tenant: resolved.tenant,
   });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
 
   const member = await getOciShareThreadMember({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
   });
@@ -63,7 +63,7 @@ export async function GET(request: Request, { params }: RouteProps) {
   const rawLimit = Number(url.searchParams.get("limit") ?? "60");
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.trunc(rawLimit))) : 60;
   const posts = await getOciSharePostsForThread({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     limit,
   });
@@ -71,6 +71,7 @@ export async function GET(request: Request, { params }: RouteProps) {
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     count: posts.length,
     posts: posts.map((post) => ({
@@ -121,16 +122,16 @@ export async function POST(request: Request, { params }: RouteProps) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
 
-  const thread = await getOciShareThreadById({
-    familyGroupKey: resolved.tenant.tenantKey,
+  const thread = await resolveAccessibleShareThread({
     threadId,
+    tenant: resolved.tenant,
   });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
 
   const member = await getOciShareThreadMember({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     personId: actorPersonId,
   });
@@ -150,7 +151,7 @@ export async function POST(request: Request, { params }: RouteProps) {
   const post = await createOciSharePost({
     postId: buildPostId(),
     threadId: thread.threadId,
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     fileId: parsed.data.fileId,
     captionText: parsed.data.caption,
     authorPersonId: actorPersonId,
@@ -162,14 +163,14 @@ export async function POST(request: Request, { params }: RouteProps) {
   });
 
   const members = await listOciShareThreadMembers({
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
   });
   const outboxRows = members
     .filter((entry) => entry.personId && entry.personId !== actorPersonId)
     .map((entry) => ({
       notificationId: buildNotificationId(),
-      familyGroupKey: resolved.tenant.tenantKey,
+      familyGroupKey: thread.familyGroupKey,
       personId: entry.personId,
       channel: "webpush",
       eventType: "share_post_created",
@@ -193,13 +194,14 @@ export async function POST(request: Request, { params }: RouteProps) {
     action: "CREATE",
     entityType: "SHARE_POST",
     entityId: post.postId,
-    familyGroupKey: resolved.tenant.tenantKey,
+    familyGroupKey: thread.familyGroupKey,
     status: "SUCCESS",
     details: `Created share post thread=${thread.threadId} file=${post.fileId || "none"}.`,
   });
 
   return NextResponse.json({
     tenantKey: resolved.tenant.tenantKey,
+    threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
     post: {
       postId: post.postId,
