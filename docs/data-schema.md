@@ -56,8 +56,16 @@ This section is a quick reference for the three data areas that drive profile/me
 ### 4) Family Shares + Notifications
 
 - Share thread model:
+  - `ShareGroups`
+    - First-class custom-group identity rows (normalized member-signature model)
+    - Key: `group_id`
+    - Unique signature scope: (`family_group_key`, `member_signature`)
+  - `ShareGroupMembers`
+    - One membership row per custom group + person
+    - Key: `group_member_id`
+    - Uniqueness: (`group_id`, `person_id`)
   - `ShareThreads`
-    - One audience thread per family group + audience tuple
+    - One audience thread per family group + audience tuple; optional `group_id` link for custom-group threads
     - Key: `thread_id`
     - Scope key: (`family_group_key`, `audience_type`, `audience_key`)
   - `ShareThreadMembers`
@@ -122,6 +130,8 @@ This section is a quick reference for the three data areas that drive profile/me
   - `FaceMatches.face_id` -> `FaceInstances.face_id`
   - `PersonFaceProfiles.person_id` -> `People.person_id`
 - Family shares:
+  - `ShareGroups.group_id` -> `ShareGroupMembers.group_id`
+  - `ShareGroups.group_id` -> `ShareThreads.group_id` (custom-group threads)
   - `ShareThreads.thread_id` -> `ShareThreadMembers.thread_id`
   - `ShareThreads.thread_id` -> `SharePosts.thread_id`
   - `SharePosts.post_id` -> `SharePostComments.post_id`
@@ -142,8 +152,11 @@ This section is a quick reference for the three data areas that drive profile/me
   - Every `MediaLinks.media_id` must resolve to a `MediaAssets.media_id`
 - Share thread uniqueness:
   - Unique (`family_group_key`, `audience_type`, `audience_key`) in `ShareThreads`
+- Share custom-group uniqueness:
+  - Unique (`family_group_key`, `member_signature`) in `ShareGroups`
 - Share membership uniqueness:
   - Unique (`thread_id`, `person_id`) in `ShareThreadMembers`
+  - Unique (`group_id`, `person_id`) in `ShareGroupMembers`
 
 ## Tables And Columns
 
@@ -457,7 +470,8 @@ This section is a quick reference for the three data areas that drive profile/me
 - Columns:
   - `thread_id`
   - `family_group_key`
-  - `audience_type` (`siblings` | `household` | `entire_family` | `family_group`)
+  - `group_id` (nullable FK-style pointer to `ShareGroups.group_id` for normalized custom groups)
+  - `audience_type` (`siblings` | `household` | `entire_family` | `family_group` | `custom_group`)
   - `audience_key`
   - `audience_label`
   - `owner_person_id`
@@ -469,10 +483,53 @@ This section is a quick reference for the three data areas that drive profile/me
   - `thread_status`
 - Purpose:
   - Canonical thread container for Family Shares conversations, keyed by audience resolution.
+  - For normalized custom groups, thread membership intent is sourced from `ShareGroups` / `ShareGroupMembers`, while active thread access remains enforced by `ShareThreadMembers`.
 - Logical index/key:
   - Unique: `thread_id`
   - Unique scope: (`family_group_key`, `audience_type`, `audience_key`)
+  - Group lookup: (`group_id`, `family_group_key`)
   - Common lookup: (`family_group_key`, `last_post_at`)
+
+## ShareGroups
+
+- Columns:
+  - `group_id`
+  - `family_group_key`
+  - `group_type` (`custom_group`)
+  - `member_signature` (canonical sorted member-set signature)
+  - `display_label`
+  - `owner_person_id`
+  - `created_by_person_id`
+  - `created_by_email`
+  - `created_at`
+  - `updated_at`
+  - `group_status`
+- Purpose:
+  - First-class normalized group identity for custom share groups.
+  - Prevent duplicate custom groups with identical exact membership sets.
+- Logical index/key:
+  - Unique: `group_id`
+  - Unique signature scope: (`family_group_key`, `member_signature`)
+  - Common lookup: (`family_group_key`, `owner_person_id`, `updated_at`)
+
+## ShareGroupMembers
+
+- Columns:
+  - `group_member_id`
+  - `group_id`
+  - `family_group_key`
+  - `person_id`
+  - `member_role` (`owner` | `member`)
+  - `joined_at`
+  - `left_at`
+  - `is_active`
+- Purpose:
+  - Membership table for normalized custom groups.
+  - Tracks active/inactive member lifecycle independently from thread read-state.
+- Logical index/key:
+  - Unique: `group_member_id`
+  - Unique composite: (`group_id`, `person_id`)
+  - Common lookup: (`family_group_key`, `person_id`, `is_active`)
 
 ## ShareThreadMembers
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPeople, getTableRecords } from "@/lib/data/runtime";
+import { getPeople, getTableRecords, getTenantUserAccessList } from "@/lib/data/runtime";
 import { getOciHouseholdsForTenant } from "@/lib/oci/tables";
 
 export type ShareAudienceType = "siblings" | "household" | "entire_family" | "family_group";
@@ -25,13 +25,6 @@ function readCell(row: Record<string, string>, ...keys: string[]) {
     }
   }
   return "";
-}
-
-function pushDistinct(set: Set<string>, value: string) {
-  const normalized = value.trim();
-  if (normalized) {
-    set.add(normalized);
-  }
 }
 
 export async function resolveShareAudience(input: {
@@ -114,29 +107,64 @@ export async function resolveShareAudience(input: {
 
   if (input.audienceType === "household") {
     const householdRows = await getOciHouseholdsForTenant(resolvedFamilyGroupKey).catch(() => []);
+    const spouseIds = new Set<string>();
     for (const row of householdRows) {
       const husbandId = readCell(row.data, "husband_person_id");
       const wifeId = readCell(row.data, "wife_person_id");
-      const members = new Set<string>();
-      pushDistinct(members, husbandId);
-      pushDistinct(members, wifeId);
-      const parentIds = [husbandId, wifeId].map((entry) => entry.trim()).filter(Boolean);
-      for (const parentId of parentIds) {
-        const children = parentToChildren.get(parentId) ?? new Set<string>();
-        for (const childId of children) {
-          members.add(childId);
+      if (actorPersonId === husbandId && wifeId && peopleById.has(wifeId)) {
+        spouseIds.add(wifeId);
+      }
+      if (actorPersonId === wifeId && husbandId && peopleById.has(husbandId)) {
+        spouseIds.add(husbandId);
+      }
+    }
+    for (const spouseId of spouseIds) {
+      recipientIds.add(spouseId);
+    }
+
+    const childCandidates = new Set<string>();
+    for (const childId of parentToChildren.get(actorPersonId) ?? []) {
+      if (peopleById.has(childId)) {
+        childCandidates.add(childId);
+      }
+    }
+    for (const spouseId of spouseIds) {
+      for (const childId of parentToChildren.get(spouseId) ?? []) {
+        if (peopleById.has(childId)) {
+          childCandidates.add(childId);
         }
       }
-      if (members.has(actorPersonId)) {
-        for (const personId of members) {
-          if (peopleById.has(personId)) {
-            recipientIds.add(personId);
+    }
+
+    const tenantUserAccessRows = await getTenantUserAccessList(resolvedFamilyGroupKey).catch(() => []);
+    const enabledUserPersonIds = new Set(
+      tenantUserAccessRows
+        .filter((entry) => entry.isEnabled)
+        .map((entry) => String(entry.personId ?? "").trim())
+        .filter(Boolean),
+    );
+    const userChildren = Array.from(childCandidates).filter((personId) => enabledUserPersonIds.has(personId));
+
+    if (userChildren.length > 0) {
+      for (const childId of userChildren) {
+        recipientIds.add(childId);
+      }
+    } else {
+      const parentIds = childToParents.get(actorPersonId) ?? new Set<string>();
+      for (const parentId of parentIds) {
+        if (peopleById.has(parentId)) {
+          recipientIds.add(parentId);
+        }
+        const siblings = parentToChildren.get(parentId) ?? new Set<string>();
+        for (const siblingId of siblings) {
+          if (peopleById.has(siblingId)) {
+            recipientIds.add(siblingId);
           }
         }
       }
     }
     audienceKey = `household:${actorPersonId}`;
-    audienceLabel = "My Household";
+    audienceLabel = "Immediate Family";
   }
 
   const recipients = Array.from(recipientIds)

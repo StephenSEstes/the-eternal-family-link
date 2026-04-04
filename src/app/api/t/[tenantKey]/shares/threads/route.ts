@@ -5,9 +5,14 @@ import { appendSessionAuditLog } from "@/lib/audit/log";
 import { getPeople } from "@/lib/data/runtime";
 import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
+  createOciShareGroup,
   createOciShareThread,
+  getOciShareGroupBySignature,
+  getOciShareThreadByGroupId,
   getOciShareThreadByAudience,
   listOciShareThreadsForPerson,
+  updateOciShareThreadGroup,
+  upsertOciShareGroupMember,
   upsertOciShareThreadMember,
 } from "@/lib/oci/tables";
 import { resolveShareAudience, type ShareAudienceType } from "@/lib/shares/audience";
@@ -32,9 +37,18 @@ function buildThreadId() {
   return `shr-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
 }
 
+function buildGroupId() {
+  return `sgrp-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
+}
+
 function parseSortableTimestamp(value: string) {
   const parsed = Date.parse(String(value ?? "").trim());
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildGroupMemberId(groupId: string, personId: string) {
+  const seed = `${groupId.trim().toLowerCase()}|${personId.trim().toLowerCase()}`;
+  return `sgm-${createHash("sha1").update(seed).digest("hex").slice(0, 24)}`;
 }
 
 function buildThreadMemberId(threadId: string, personId: string) {
@@ -59,6 +73,7 @@ function toClientThread(thread: Awaited<ReturnType<typeof listOciShareThreadsFor
   return {
     threadId: thread.threadId,
     familyGroupKey: thread.familyGroupKey,
+    groupId: thread.groupId,
     audienceType: thread.audienceType,
     audienceKey: thread.audienceKey,
     audienceLabel: thread.audienceLabel,
@@ -150,17 +165,17 @@ export async function POST(request: Request, { params }: RouteProps) {
   if (!actorPersonId) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
+  const nowIso = new Date().toISOString();
 
   const allowedFamilyGroupKeys = resolved.tenant.tenants.map((entry) => normalize(entry.tenantKey)).filter(Boolean);
-  let resolution:
-    | Awaited<ReturnType<typeof resolveShareAudience>>
-    | {
-        familyGroupKey: string;
-        audienceType: "custom_group";
-        audienceKey: string;
-        audienceLabel: string;
-        recipients: Array<{ personId: string; displayName: string }>;
-      };
+  let resolution: {
+    familyGroupKey: string;
+    audienceType: string;
+    audienceKey: string;
+    audienceLabel: string;
+    recipients: Array<{ personId: string; displayName: string }>;
+    groupId?: string;
+  };
 
   if (parsed.data.audienceType === "custom_group") {
     const familyGroupKey = normalize(parsed.data.targetFamilyGroupKey) || resolved.tenant.tenantKey;
@@ -195,36 +210,91 @@ export async function POST(request: Request, { params }: RouteProps) {
       .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
     const canonicalMemberIds = recipients.map((entry) => entry.personId).sort();
+    const memberSignature = buildCustomAudienceKey(canonicalMemberIds);
+    let group = await getOciShareGroupBySignature({
+      familyGroupKey,
+      memberSignature,
+    });
+    if (!group) {
+      group = await createOciShareGroup({
+        groupId: buildGroupId(),
+        familyGroupKey,
+        groupType: "custom_group",
+        memberSignature,
+        displayLabel: parsed.data.customLabel || `Group (${recipients.length})`,
+        ownerPersonId: actorPersonId,
+        createdByPersonId: actorPersonId,
+        createdByEmail: actorEmail,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        groupStatus: "active",
+      });
+    }
+    for (const recipient of recipients) {
+      await upsertOciShareGroupMember({
+        groupMemberId: buildGroupMemberId(group.groupId, recipient.personId),
+        groupId: group.groupId,
+        familyGroupKey,
+        personId: recipient.personId,
+        memberRole: recipient.personId === actorPersonId ? "owner" : "member",
+        joinedAt: nowIso,
+        isActive: true,
+      });
+    }
+
     resolution = {
       familyGroupKey,
       audienceType: "custom_group",
-      audienceKey: buildCustomAudienceKey(canonicalMemberIds),
-      audienceLabel: parsed.data.customLabel || `Group (${recipients.length})`,
+      audienceKey: memberSignature,
+      audienceLabel: parsed.data.customLabel || group.displayLabel || `Group (${recipients.length})`,
       recipients,
+      groupId: group.groupId,
     };
   } else {
-    resolution = await resolveShareAudience({
+    const baseResolution = await resolveShareAudience({
       tenantKey: resolved.tenant.tenantKey,
       audienceType: parsed.data.audienceType as ShareAudienceType,
       actorPersonId,
       targetFamilyGroupKey: parsed.data.targetFamilyGroupKey,
       allowedFamilyGroupKeys,
     });
+    resolution = {
+      ...baseResolution,
+      audienceType: baseResolution.audienceType,
+    };
   }
-  const nowIso = new Date().toISOString();
 
   let thread =
-    (await getOciShareThreadByAudience({
-      familyGroupKey: resolution.familyGroupKey,
-      audienceType: resolution.audienceType,
-      audienceKey: resolution.audienceKey,
-    })) ?? null;
+    resolution.groupId
+      ? await getOciShareThreadByGroupId({
+          familyGroupKey: resolution.familyGroupKey,
+          groupId: resolution.groupId,
+        })
+      : null;
+  if (!thread) {
+    thread =
+      (await getOciShareThreadByAudience({
+        familyGroupKey: resolution.familyGroupKey,
+        audienceType: resolution.audienceType,
+        audienceKey: resolution.audienceKey,
+      })) ?? null;
+  }
+  if (thread && resolution.groupId && !thread.groupId) {
+    await updateOciShareThreadGroup({
+      familyGroupKey: thread.familyGroupKey,
+      threadId: thread.threadId,
+      groupId: resolution.groupId,
+      updatedAt: nowIso,
+    });
+    thread = { ...thread, groupId: resolution.groupId };
+  }
   const existingThread = Boolean(thread);
 
   if (!thread) {
     thread = await createOciShareThread({
       threadId: buildThreadId(),
       familyGroupKey: resolution.familyGroupKey,
+      groupId: resolution.groupId,
       audienceType: resolution.audienceType,
       audienceKey: resolution.audienceKey,
       audienceLabel: resolution.audienceLabel,

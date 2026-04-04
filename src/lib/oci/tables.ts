@@ -40,6 +40,8 @@ let familyConfigCompatEnsured = false;
 let householdsTableCompatEnsured = false;
 let mediaAssetsTableCompatEnsured = false;
 let mediaCommentsTableCompatEnsured = false;
+let shareGroupsTableCompatEnsured = false;
+let shareGroupMembersTableCompatEnsured = false;
 let shareThreadsTableCompatEnsured = false;
 let shareThreadMembersTableCompatEnsured = false;
 let sharePostsTableCompatEnsured = false;
@@ -244,11 +246,41 @@ const TABLES: Record<string, TableConfig> = {
       "deleted_at",
     ],
   },
+  ShareGroups: {
+    tableName: "share_groups",
+    headers: [
+      "group_id",
+      "family_group_key",
+      "group_type",
+      "member_signature",
+      "display_label",
+      "owner_person_id",
+      "created_by_person_id",
+      "created_by_email",
+      "created_at",
+      "updated_at",
+      "group_status",
+    ],
+  },
+  ShareGroupMembers: {
+    tableName: "share_group_members",
+    headers: [
+      "group_member_id",
+      "group_id",
+      "family_group_key",
+      "person_id",
+      "member_role",
+      "joined_at",
+      "left_at",
+      "is_active",
+    ],
+  },
   ShareThreads: {
     tableName: "share_threads",
     headers: [
       "thread_id",
       "family_group_key",
+      "group_id",
       "audience_type",
       "audience_key",
       "audience_label",
@@ -896,6 +928,148 @@ async function ensureMediaCommentsTableCompatibility(connection: OciConnection) 
   mediaCommentsTableCompatEnsured = true;
 }
 
+async function ensureShareGroupsTableCompatibility(connection: OciConnection) {
+  if (shareGroupsTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_groups (
+         group_id VARCHAR2(128) PRIMARY KEY,
+         family_group_key VARCHAR2(128) NOT NULL,
+         group_type VARCHAR2(64) NOT NULL,
+         member_signature VARCHAR2(512) NOT NULL,
+         display_label VARCHAR2(512),
+         owner_person_id VARCHAR2(128),
+         created_by_person_id VARCHAR2(128),
+         created_by_email VARCHAR2(320),
+         created_at VARCHAR2(64),
+         updated_at VARCHAR2(64),
+         group_status VARCHAR2(32)
+       )`,
+    );
+    await connection.execute(
+      `CREATE UNIQUE INDEX ux_share_groups_signature ON share_groups(family_group_key, member_signature)`,
+    );
+    await connection.execute(`CREATE INDEX ix_share_groups_owner ON share_groups(family_group_key, owner_person_id, updated_at)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "family_group_key VARCHAR2(128)",
+    "group_type VARCHAR2(64)",
+    "member_signature VARCHAR2(512)",
+    "display_label VARCHAR2(512)",
+    "owner_person_id VARCHAR2(128)",
+    "created_by_person_id VARCHAR2(128)",
+    "created_by_email VARCHAR2(320)",
+    "created_at VARCHAR2(64)",
+    "updated_at VARCHAR2(64)",
+    "group_status VARCHAR2(32)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_groups ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_share_groups_signature ON share_groups(family_group_key, member_signature)",
+    "CREATE INDEX ix_share_groups_owner ON share_groups(family_group_key, owner_person_id, updated_at)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  shareGroupsTableCompatEnsured = true;
+}
+
+async function ensureShareGroupMembersTableCompatibility(connection: OciConnection) {
+  if (shareGroupMembersTableCompatEnsured) {
+    return;
+  }
+
+  try {
+    await connection.execute(
+      `CREATE TABLE share_group_members (
+         group_member_id VARCHAR2(128) PRIMARY KEY,
+         group_id VARCHAR2(128) NOT NULL,
+         family_group_key VARCHAR2(128) NOT NULL,
+         person_id VARCHAR2(128) NOT NULL,
+         member_role VARCHAR2(64),
+         joined_at VARCHAR2(64),
+         left_at VARCHAR2(64),
+         is_active VARCHAR2(8)
+       )`,
+    );
+    await connection.execute(`CREATE UNIQUE INDEX ux_share_group_members_person ON share_group_members(group_id, person_id)`);
+    await connection.execute(`CREATE INDEX ix_share_group_members_lookup ON share_group_members(family_group_key, person_id, is_active)`);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const additiveColumns = [
+    "group_id VARCHAR2(128)",
+    "family_group_key VARCHAR2(128)",
+    "person_id VARCHAR2(128)",
+    "member_role VARCHAR2(64)",
+    "joined_at VARCHAR2(64)",
+    "left_at VARCHAR2(64)",
+    "is_active VARCHAR2(8)",
+  ];
+  for (const columnSql of additiveColumns) {
+    try {
+      await connection.execute(`ALTER TABLE share_group_members ADD (${columnSql})`);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!isColumnAlreadyCompatibleError(message)) {
+        throw error;
+      }
+    }
+  }
+
+  const indexStatements = [
+    "CREATE UNIQUE INDEX ux_share_group_members_person ON share_group_members(group_id, person_id)",
+    "CREATE INDEX ix_share_group_members_lookup ON share_group_members(family_group_key, person_id, is_active)",
+  ];
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+  shareGroupMembersTableCompatEnsured = true;
+}
+
 async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
   if (shareThreadsTableCompatEnsured) {
     return;
@@ -906,6 +1080,7 @@ async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
       `CREATE TABLE share_threads (
          thread_id VARCHAR2(128) PRIMARY KEY,
          family_group_key VARCHAR2(128) NOT NULL,
+         group_id VARCHAR2(128),
          audience_type VARCHAR2(64) NOT NULL,
          audience_key VARCHAR2(256) NOT NULL,
          audience_label VARCHAR2(512),
@@ -920,6 +1095,7 @@ async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
     );
     await connection.execute(`CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads(family_group_key, audience_type, audience_key)`);
     await connection.execute(`CREATE INDEX ix_share_threads_last_post ON share_threads(family_group_key, last_post_at, created_at)`);
+    await connection.execute(`CREATE INDEX ix_share_threads_group ON share_threads(group_id, family_group_key)`);
     await connection.commit();
   } catch (error) {
     const message = (error as Error).message ?? "";
@@ -930,6 +1106,7 @@ async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
 
   const additiveColumns = [
     "family_group_key VARCHAR2(128)",
+    "group_id VARCHAR2(128)",
     "audience_type VARCHAR2(64)",
     "audience_key VARCHAR2(256)",
     "audience_label VARCHAR2(512)",
@@ -955,6 +1132,7 @@ async function ensureShareThreadsTableCompatibility(connection: OciConnection) {
   const indexStatements = [
     "CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads(family_group_key, audience_type, audience_key)",
     "CREATE INDEX ix_share_threads_last_post ON share_threads(family_group_key, last_post_at, created_at)",
+    "CREATE INDEX ix_share_threads_group ON share_threads(group_id, family_group_key)",
   ];
   for (const sql of indexStatements) {
     try {
@@ -1890,6 +2068,14 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
     await ensureMediaCommentsTableCompatibility(connection);
     return;
   }
+  if (tableName === "share_groups") {
+    await ensureShareGroupsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "share_group_members") {
+    await ensureShareGroupMembersTableCompatibility(connection);
+    return;
+  }
   if (tableName === "share_threads") {
     await ensureShareThreadsTableCompatibility(connection);
     return;
@@ -2295,6 +2481,7 @@ export type OciMediaCommentRow = {
 export type OciShareThreadRow = {
   threadId: string;
   familyGroupKey: string;
+  groupId: string;
   audienceType: string;
   audienceKey: string;
   audienceLabel: string;
@@ -2312,6 +2499,31 @@ export type OciShareThreadRow = {
   latestPostCaption: string;
   latestPostCreatedAt: string;
   latestPostAuthorDisplayName: string;
+};
+
+export type OciShareGroupRow = {
+  groupId: string;
+  familyGroupKey: string;
+  groupType: string;
+  memberSignature: string;
+  displayLabel: string;
+  ownerPersonId: string;
+  createdByPersonId: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  groupStatus: string;
+};
+
+export type OciShareGroupMemberRow = {
+  groupMemberId: string;
+  groupId: string;
+  familyGroupKey: string;
+  personId: string;
+  memberRole: string;
+  joinedAt: string;
+  leftAt: string;
+  isActive: boolean;
 };
 
 export type OciShareThreadMemberRow = {
@@ -2527,6 +2739,7 @@ function mapOciShareThreadRow(row: Record<string, unknown>): OciShareThreadRow {
   return {
     threadId: fromDbValue(row.THREAD_ID),
     familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    groupId: fromDbValue(row.GROUP_ID),
     audienceType: fromDbValue(row.AUDIENCE_TYPE),
     audienceKey: fromDbValue(row.AUDIENCE_KEY),
     audienceLabel: fromDbValue(row.AUDIENCE_LABEL),
@@ -2544,6 +2757,35 @@ function mapOciShareThreadRow(row: Record<string, unknown>): OciShareThreadRow {
     latestPostCaption: fromDbValue(row.LATEST_POST_CAPTION),
     latestPostCreatedAt: fromDbValue(row.LATEST_POST_CREATED_AT),
     latestPostAuthorDisplayName: fromDbValue(row.LATEST_POST_AUTHOR_DISPLAY_NAME),
+  };
+}
+
+function mapOciShareGroupRow(row: Record<string, unknown>): OciShareGroupRow {
+  return {
+    groupId: fromDbValue(row.GROUP_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    groupType: fromDbValue(row.GROUP_TYPE),
+    memberSignature: fromDbValue(row.MEMBER_SIGNATURE),
+    displayLabel: fromDbValue(row.DISPLAY_LABEL),
+    ownerPersonId: fromDbValue(row.OWNER_PERSON_ID),
+    createdByPersonId: fromDbValue(row.CREATED_BY_PERSON_ID),
+    createdByEmail: fromDbValue(row.CREATED_BY_EMAIL),
+    createdAt: fromDbValue(row.CREATED_AT),
+    updatedAt: fromDbValue(row.UPDATED_AT),
+    groupStatus: fromDbValue(row.GROUP_STATUS),
+  };
+}
+
+function mapOciShareGroupMemberRow(row: Record<string, unknown>): OciShareGroupMemberRow {
+  return {
+    groupMemberId: fromDbValue(row.GROUP_MEMBER_ID),
+    groupId: fromDbValue(row.GROUP_ID),
+    familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
+    personId: fromDbValue(row.PERSON_ID),
+    memberRole: fromDbValue(row.MEMBER_ROLE),
+    joinedAt: fromDbValue(row.JOINED_AT),
+    leftAt: fromDbValue(row.LEFT_AT),
+    isActive: fromDbValue(row.IS_ACTIVE).trim().toLowerCase() !== "false",
   };
 }
 
@@ -4155,6 +4397,307 @@ export async function updateOciMediaCommentById(input: {
   });
 }
 
+export async function getOciShareGroupBySignature(input: {
+  familyGroupKey: string;
+  memberSignature: string;
+}): Promise<OciShareGroupRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const memberSignature = input.memberSignature.trim().toLowerCase();
+  if (!familyGroupKey || !memberSignature) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareGroupsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         g.group_id,
+         g.family_group_key,
+         g.group_type,
+         g.member_signature,
+         g.display_label,
+         g.owner_person_id,
+         g.created_by_person_id,
+         g.created_by_email,
+         g.created_at,
+         g.updated_at,
+         g.group_status
+       FROM share_groups g
+       WHERE LOWER(TRIM(g.family_group_key)) = :familyGroupKey
+         AND LOWER(TRIM(g.member_signature)) = :memberSignature
+         AND LOWER(TRIM(NVL(g.group_status, 'active'))) <> 'archived'
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, memberSignature },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareGroupRow(row) : null;
+  });
+}
+
+export async function getOciShareGroupById(input: {
+  familyGroupKey: string;
+  groupId: string;
+}): Promise<OciShareGroupRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const groupId = input.groupId.trim();
+  if (!familyGroupKey || !groupId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareGroupsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         g.group_id,
+         g.family_group_key,
+         g.group_type,
+         g.member_signature,
+         g.display_label,
+         g.owner_person_id,
+         g.created_by_person_id,
+         g.created_by_email,
+         g.created_at,
+         g.updated_at,
+         g.group_status
+       FROM share_groups g
+       WHERE LOWER(TRIM(g.family_group_key)) = :familyGroupKey
+         AND TRIM(g.group_id) = :groupId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, groupId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareGroupRow(row) : null;
+  });
+}
+
+export async function createOciShareGroup(input: {
+  groupId: string;
+  familyGroupKey: string;
+  groupType?: string;
+  memberSignature: string;
+  displayLabel?: string;
+  ownerPersonId?: string;
+  createdByPersonId?: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+  groupStatus?: string;
+}): Promise<OciShareGroupRow> {
+  const groupId = input.groupId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const memberSignature = input.memberSignature.trim().toLowerCase();
+  if (!groupId || !familyGroupKey || !memberSignature) {
+    throw new Error("group_id, family_group_key, and member_signature are required");
+  }
+  return withConnection(async (connection) => {
+    await ensureShareGroupsTableCompatibility(connection);
+    await connection.execute(
+      `INSERT INTO share_groups (
+         group_id,
+         family_group_key,
+         group_type,
+         member_signature,
+         display_label,
+         owner_person_id,
+         created_by_person_id,
+         created_by_email,
+         created_at,
+         updated_at,
+         group_status
+       ) VALUES (
+         :groupId,
+         :familyGroupKey,
+         :groupType,
+         :memberSignature,
+         :displayLabel,
+         :ownerPersonId,
+         :createdByPersonId,
+         :createdByEmail,
+         :createdAt,
+         :updatedAt,
+         :groupStatus
+       )`,
+      {
+        groupId,
+        familyGroupKey,
+        groupType: String(input.groupType ?? "custom_group").trim().toLowerCase() || "custom_group",
+        memberSignature,
+        displayLabel: String(input.displayLabel ?? "").trim() || null,
+        ownerPersonId: String(input.ownerPersonId ?? "").trim() || null,
+        createdByPersonId: String(input.createdByPersonId ?? "").trim() || null,
+        createdByEmail: String(input.createdByEmail ?? "").trim().toLowerCase() || null,
+        createdAt: input.createdAt.trim(),
+        updatedAt: input.updatedAt.trim(),
+        groupStatus: String(input.groupStatus ?? "active").trim().toLowerCase() || "active",
+      },
+      { autoCommit: true },
+    );
+    const created = await getOciShareGroupById({ familyGroupKey, groupId });
+    if (!created) {
+      throw new Error("Failed to load created share group");
+    }
+    return created;
+  });
+}
+
+export async function upsertOciShareGroupMember(input: {
+  groupMemberId: string;
+  groupId: string;
+  familyGroupKey: string;
+  personId: string;
+  memberRole?: string;
+  joinedAt: string;
+  leftAt?: string;
+  isActive?: boolean;
+}): Promise<OciShareGroupMemberRow | null> {
+  const groupMemberId = input.groupMemberId.trim();
+  const groupId = input.groupId.trim();
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const personId = input.personId.trim();
+  if (!groupMemberId || !groupId || !familyGroupKey || !personId) {
+    throw new Error("group_member_id, group_id, family_group_key, and person_id are required");
+  }
+
+  return withConnection(async (connection) => {
+    await ensureShareGroupMembersTableCompatibility(connection);
+    await connection.execute(
+      `MERGE INTO share_group_members t
+       USING (
+         SELECT :groupMemberId AS group_member_id,
+                :groupId AS group_id,
+                :familyGroupKey AS family_group_key,
+                :personId AS person_id,
+                :memberRole AS member_role,
+                :joinedAt AS joined_at,
+                :leftAt AS left_at,
+                :isActive AS is_active
+         FROM dual
+       ) s
+       ON (TRIM(t.group_id) = TRIM(s.group_id) AND TRIM(t.person_id) = TRIM(s.person_id))
+       WHEN MATCHED THEN UPDATE SET
+         t.family_group_key = s.family_group_key,
+         t.member_role = COALESCE(NULLIF(TRIM(s.member_role), ''), t.member_role),
+         t.joined_at = COALESCE(NULLIF(TRIM(s.joined_at), ''), t.joined_at),
+         t.left_at = CASE
+           WHEN NULLIF(TRIM(s.left_at), '') IS NOT NULL THEN s.left_at
+           ELSE t.left_at
+         END,
+         t.is_active = COALESCE(NULLIF(TRIM(s.is_active), ''), t.is_active)
+       WHEN NOT MATCHED THEN INSERT (
+         group_member_id,
+         group_id,
+         family_group_key,
+         person_id,
+         member_role,
+         joined_at,
+         left_at,
+         is_active
+       ) VALUES (
+         s.group_member_id,
+         s.group_id,
+         s.family_group_key,
+         s.person_id,
+         s.member_role,
+         s.joined_at,
+         s.left_at,
+         s.is_active
+       )`,
+      {
+        groupMemberId,
+        groupId,
+        familyGroupKey,
+        personId,
+        memberRole: String(input.memberRole ?? "member").trim().toLowerCase(),
+        joinedAt: input.joinedAt.trim(),
+        leftAt: String(input.leftAt ?? "").trim(),
+        isActive: input.isActive === false ? "FALSE" : "TRUE",
+      },
+      { autoCommit: true },
+    );
+    const members = await listOciShareGroupMembers({ familyGroupKey, groupId });
+    return members.find((entry) => entry.personId === personId) ?? null;
+  });
+}
+
+export async function listOciShareGroupMembers(input: {
+  familyGroupKey: string;
+  groupId: string;
+}): Promise<OciShareGroupMemberRow[]> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const groupId = input.groupId.trim();
+  if (!familyGroupKey || !groupId) {
+    return [];
+  }
+  return withConnection(async (connection) => {
+    await ensureShareGroupMembersTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         group_member_id,
+         group_id,
+         family_group_key,
+         person_id,
+         member_role,
+         joined_at,
+         left_at,
+         is_active
+       FROM share_group_members
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(group_id) = :groupId
+         AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'
+       ORDER BY joined_at, person_id`,
+      { familyGroupKey, groupId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciShareGroupMemberRow);
+  });
+}
+
+export async function getOciShareThreadByGroupId(input: {
+  familyGroupKey: string;
+  groupId: string;
+}): Promise<OciShareThreadRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const groupId = input.groupId.trim();
+  if (!familyGroupKey || !groupId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         t.thread_id,
+         t.family_group_key,
+         t.group_id,
+         t.audience_type,
+         t.audience_key,
+         t.audience_label,
+         t.owner_person_id,
+         t.created_by_person_id,
+         t.created_by_email,
+         t.created_at,
+         t.updated_at,
+         t.last_post_at,
+         t.thread_status,
+         '' AS member_last_read_at,
+         0 AS unread_count,
+         '' AS latest_post_id,
+         '' AS latest_post_file_id,
+         '' AS latest_post_caption,
+         '' AS latest_post_created_at,
+         '' AS latest_post_author_display_name
+       FROM share_threads t
+       WHERE LOWER(TRIM(t.family_group_key)) = :familyGroupKey
+         AND TRIM(t.group_id) = :groupId
+         AND LOWER(TRIM(t.audience_type)) = 'custom_group'
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, groupId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareThreadRow(row) : null;
+  });
+}
+
 export async function getOciShareThreadByAudience(input: {
   familyGroupKey: string;
   audienceType: string;
@@ -4172,6 +4715,7 @@ export async function getOciShareThreadByAudience(input: {
       `SELECT
          t.thread_id,
          t.family_group_key,
+         t.group_id,
          t.audience_type,
          t.audience_key,
          t.audience_label,
@@ -4217,6 +4761,7 @@ export async function getOciShareThreadById(input: {
       `SELECT
          t.thread_id,
          t.family_group_key,
+         t.group_id,
          t.audience_type,
          t.audience_key,
          t.audience_label,
@@ -4249,6 +4794,7 @@ export async function getOciShareThreadById(input: {
 export async function createOciShareThread(input: {
   threadId: string;
   familyGroupKey: string;
+  groupId?: string;
   audienceType: string;
   audienceKey: string;
   audienceLabel?: string;
@@ -4273,6 +4819,7 @@ export async function createOciShareThread(input: {
       `INSERT INTO share_threads (
          thread_id,
          family_group_key,
+         group_id,
          audience_type,
          audience_key,
          audience_label,
@@ -4286,6 +4833,7 @@ export async function createOciShareThread(input: {
        ) VALUES (
          :threadId,
          :familyGroupKey,
+         :groupId,
          :audienceType,
          :audienceKey,
          :audienceLabel,
@@ -4300,6 +4848,7 @@ export async function createOciShareThread(input: {
       {
         threadId,
         familyGroupKey,
+        groupId: String(input.groupId ?? "").trim() || null,
         audienceType,
         audienceKey,
         audienceLabel: String(input.audienceLabel ?? "").trim() || null,
@@ -4343,6 +4892,38 @@ export async function updateOciShareThreadActivity(input: {
       {
         updatedAt: input.updatedAt.trim(),
         lastPostAt: String(input.lastPostAt ?? "").trim(),
+        familyGroupKey,
+        threadId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
+export async function updateOciShareThreadGroup(input: {
+  familyGroupKey: string;
+  threadId: string;
+  groupId: string;
+  updatedAt: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const groupId = input.groupId.trim();
+  if (!familyGroupKey || !threadId || !groupId) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_threads
+       SET group_id = :groupId,
+           updated_at = COALESCE(NULLIF(TRIM(:updatedAt), ''), updated_at)
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId`,
+      {
+        groupId,
+        updatedAt: input.updatedAt.trim(),
         familyGroupKey,
         threadId,
       },
@@ -4564,6 +5145,7 @@ export async function listOciShareThreadsForPerson(input: {
          SELECT
            t.thread_id,
            t.family_group_key,
+           t.group_id,
            t.audience_type,
            t.audience_key,
            t.audience_label,

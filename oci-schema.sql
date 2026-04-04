@@ -321,9 +321,57 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE share_groups (
+      group_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      group_type VARCHAR2(64 CHAR) NOT NULL,
+      member_signature VARCHAR2(512 CHAR) NOT NULL,
+      display_label VARCHAR2(512 CHAR),
+      owner_person_id VARCHAR2(128 CHAR),
+      created_by_person_id VARCHAR2(128 CHAR),
+      created_by_email VARCHAR2(320 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      group_status VARCHAR2(32 CHAR),
+      CONSTRAINT pk_share_groups PRIMARY KEY (group_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE share_group_members (
+      group_member_id VARCHAR2(128 CHAR) NOT NULL,
+      group_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      member_role VARCHAR2(64 CHAR),
+      joined_at VARCHAR2(64 CHAR),
+      left_at VARCHAR2(64 CHAR),
+      is_active VARCHAR2(8 CHAR),
+      CONSTRAINT pk_share_group_members PRIMARY KEY (group_member_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE share_threads (
       thread_id VARCHAR2(128 CHAR) NOT NULL,
       family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      group_id VARCHAR2(128 CHAR),
       audience_type VARCHAR2(64 CHAR) NOT NULL,
       audience_key VARCHAR2(256 CHAR) NOT NULL,
       audience_label VARCHAR2(512 CHAR),
@@ -631,6 +679,46 @@ END;
 /
 
 BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_groups_signature ON share_groups (family_group_key, member_signature)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_groups_owner ON share_groups (family_group_key, owner_person_id, updated_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_group_members_person ON share_group_members (group_id, person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_group_members_lookup ON share_group_members (family_group_key, person_id, is_active)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
   EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads (family_group_key, audience_type, audience_key)';
 EXCEPTION
   WHEN OTHERS THEN
@@ -642,6 +730,16 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_share_threads_last_post ON share_threads (family_group_key, last_post_at, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_threads_group ON share_threads (group_id, family_group_key)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

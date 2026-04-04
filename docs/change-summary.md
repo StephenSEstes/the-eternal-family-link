@@ -13,6 +13,26 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Shares normalized custom groups + Immediate Family audience rule)
+
+- `Date`: 2026-04-04
+- `Change`: Added normalized custom-group storage (`share_groups`, `share_group_members`) and linked custom share threads via `share_threads.group_id`; updated Shares audience label/logic from household wording to `Immediate Family` semantics while keeping API key compatibility (`household`).
+- `Type`: UI | API | Schema | Data
+- `Why`: Root cause was a model/design gap: custom groups were encoded only as thread audience signatures, which coupled group identity to thread rows and limited lifecycle flexibility; household audience behavior did not match requested immediate-family sharing behavior.
+- `Files`: `src/lib/oci/tables.ts`, `src/app/api/t/[tenantKey]/shares/threads/route.ts`, `src/lib/shares/audience.ts`, `src/components/shares/SharesClient.tsx`, `oci-schema.sql`, `docs/data-schema.md`, `designchoices.md`, `TODO.md`
+- `Data Changes`: New normalized tables (`share_groups`, `share_group_members`), new `share_threads.group_id` column/index, and compatibility bootstrap for all additions. No mandatory migration/backfill required for active behavior.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Creating custom group with the same exact member set reuses existing normalized group/thread.
+  - Custom-group threads now persist `group_id` link.
+  - Shares quick-audience selector shows `Immediate Family`.
+  - Immediate-family recipient resolution follows rule:
+    - actor + spouse + user-children when user-children exist;
+    - else actor + parents + siblings + spouse.
+- `Rollback Notes`: Revert this commit to restore signature-only custom-group thread behavior and previous household audience semantics.
+- `Design Decision Change`: Yes. Added decisions for normalized custom-group model and Immediate Family audience semantics in `designchoices.md`.
+
 ## 2026-04-04 (Family Shares custom groups + member header + selection-open UX)
 
 - `Date`: 2026-04-04

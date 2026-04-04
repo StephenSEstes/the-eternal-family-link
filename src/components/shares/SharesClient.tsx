@@ -14,6 +14,7 @@ type FamilyGroupOption = {
 type ShareThread = {
   threadId: string;
   familyGroupKey: string;
+  groupId?: string;
   audienceType: "siblings" | "household" | "entire_family" | "family_group" | "custom_group";
   audienceKey: string;
   audienceLabel: string;
@@ -521,7 +522,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
               disabled={quickOpenBusy}
             >
               <option value="siblings">My Siblings</option>
-              <option value="household">My Household</option>
+              <option value="household">Immediate Family</option>
               <option value="entire_family">Entire Family</option>
               <option value="family_group">Specific Family Group</option>
             </select>

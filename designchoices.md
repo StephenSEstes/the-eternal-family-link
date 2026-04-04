@@ -370,6 +370,20 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Impact`: Shares thread create path now accepts custom member sets and reuses existing group thread if membership signature already exists; posts payload includes thread-member display data for header rendering.
 - `Follow-up`: Add optional group rename/member-edit workflow if group management becomes a recurring user need.
 
+- `Area`: Family Shares normalized custom-group model
+- `Decision`: Promote custom groups to first-class normalized entities (`share_groups`, `share_group_members`) and link threads via `share_threads.group_id`, while retaining audience-key thread uniqueness for compatibility.
+- `Reason`: Signature-only custom groups tied directly to thread rows were not flexible enough for durable group lifecycle management and created coupling between membership identity and thread records.
+- `Alternatives Considered`: Keep signature-only thread model or store custom-group metadata in thread JSON.
+- `Impact`: Custom-group create/reuse path now resolves a normalized group row first, then resolves/creates its thread; duplicate-member-set prevention is enforced at normalized group signature scope.
+- `Follow-up`: Add explicit group-rename and member-edit APIs/UX on top of normalized group identity.
+
+- `Area`: Family Shares audience semantics (`household` => Immediate Family)
+- `Decision`: Keep internal audience key `household` for compatibility, but present it as `Immediate Family` and resolve recipients as: actor + spouse + user-children when user-children exist; otherwise actor + parents + siblings + spouse.
+- `Reason`: The previous household label/logic did not match the requested family-sharing intent and produced recipient sets that were too narrow or ambiguous.
+- `Alternatives Considered`: Rename API enum immediately (breaking change) or keep old household member expansion rules.
+- `Impact`: UI now shows `Immediate Family`; server audience resolver applies deterministic immediate-family recipient rules using relationships, household spouse linkage, and enabled-user detection.
+- `Follow-up`: Revisit enum naming migration (`household` -> `immediate_family`) only when all clients can migrate together.
+
 - `Area`: Legacy media/share support retirement (test-data environment)
 - `Decision`: Remove runtime compatibility fallbacks for legacy media-link/metadata behavior and allow full purge of legacy test-only media/share content.
 - `Reason`: The current environment contains only test data, so preserving old compatibility paths creates ambiguity and operational drag without product value.

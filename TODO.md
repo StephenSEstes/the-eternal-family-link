@@ -37,6 +37,7 @@ I will update this list as we add, complete, or remove work.
   - Completed: Phase 4 scaffold (notification outbox writes + admin dispatch scaffold route).
   - In progress: Phase 5 hardening (cross-family-group thread access resolution across all share endpoints and direct-media fallback behavior).
   - In progress: Thread-group UX update (show group members at top of selected thread, support custom member-based groups with duplicate-member-set prevention, and open audience threads by selection without a separate Open Thread button).
+  - In progress: Normalize custom share groups into first-class `share_groups` / `share_group_members` with `share_threads.group_id` linkage.
   - In progress: Shares media upload cutover to canonical person-attribute/media association path (no migration/backfill required for current test-only data set).
   - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
@@ -91,6 +92,40 @@ I will update this list as we add, complete, or remove work.
     - Verify tenant access guards on all share endpoints.
     - Verify thumbnail/original URL performance path and pagination/cursor behavior.
     - Confirm no regressions in existing Media tab, person modal media, and comments.
+  - Phase 6: Normalized custom-group model + immediate-family audience rule
+    - Status: In progress 2026-04-04
+    - Scope:
+      - Add `share_groups` (group identity) and `share_group_members` (membership history/current state).
+      - Add `group_id` column on `share_threads` and wire custom-thread creation to first resolve/create a group row.
+      - Keep duplicate-prevention deterministic by unique member signature (`family_group_key + member_signature`) at group level.
+      - Keep thread behavior unchanged for existing standard audiences (`siblings`, `household`, `entire_family`, `family_group`).
+      - Update `household` audience semantics to "Immediate Family":
+        - actor + spouse + user-children (if any user-children exist),
+        - else actor + parents + siblings + spouse.
+      - Rename UI label from `My Household` to `Immediate Family`.
+    - API/UI/data changes:
+      - API:
+        - `/api/t/[tenantKey]/shares/threads` custom-group POST path now resolves/creates `share_groups` and writes `group_id` on thread.
+        - Existing thread-list/read/post endpoints continue to work; thread payload includes optional `groupId`.
+      - UI:
+        - Shares audience selector label updated to `Immediate Family` (internal key remains `household` for compatibility).
+      - Data/schema:
+        - New tables: `share_groups`, `share_group_members`.
+        - New column: `share_threads.group_id`.
+        - Add indexes for group signature and member lookup.
+    - Validation:
+      - `npm run lint` passes.
+      - `npm run build` passes.
+      - Creating custom group with same exact members reuses existing group/thread.
+      - Creating custom group with different members creates new group/thread.
+      - Shares audience selector displays `Immediate Family`.
+      - Immediate-family resolution returns:
+        - spouse + user-children when user-children exist,
+        - otherwise parents + siblings + spouse.
+    - Completion criteria:
+      - Custom groups are first-class normalized entities linked from threads.
+      - Duplicate group prevention is enforced by normalized group signature.
+      - Immediate-family audience behavior matches the requested rule and UI naming.
   API/UI/data changes:
   - API: new `/api/t/[tenantKey]/shares/...` routes plus push subscription endpoints and dispatch hook.
   - UI: Home feed card + Shares screen + compose/comments interactions.
