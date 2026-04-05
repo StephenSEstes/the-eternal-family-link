@@ -29,7 +29,7 @@ I will update this list as we add, complete, or remove work.
   - Runtime no longer relies on previous media compatibility behavior.
 - [ ] Family Shares feed (WhatsApp-style media sharing threads) with audience targeting and push-ready notifications
   Priority: High (#1)
-  Status: In progress 2026-04-04
+  Status: In progress 2026-04-05
   Progress 2026-04-04:
   - Completed: Phase 1 schema/OCI compatibility foundation.
   - Completed: Phase 2 API foundation (threads, posts, upload, comments, read-state, audience resolve, push subscription endpoints).
@@ -41,6 +41,7 @@ I will update this list as we add, complete, or remove work.
   - In progress: Shares media upload cutover to canonical person-attribute/media association path (no migration/backfill required for current test-only data set).
   - In progress: Share thread UX pass (remove quick-audience selector, auto-ensure default audience threads, chip-based member editing in Create New Group, unread count badge on thread list, and right/left chat bubble alignment).
   - In progress: Phase 9 people-first conversation model kickoff (member-based thread access/listing independent of active family group; family group retained as audience-template metadata).
+  - Completed 2026-04-05: Shares conversation/comment mutation controls now include corner ellipsis actions with inline `Edit`/`Delete`; conversation edit/delete is creator-only end-to-end (UI + API), with conversation-title `PATCH` support on the conversation route.
   - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
   Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.
