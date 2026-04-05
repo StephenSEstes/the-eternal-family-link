@@ -123,6 +123,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [conversationsStatus, setConversationsStatus] = useState("");
   const [conversationsRefreshKey, setConversationsRefreshKey] = useState(0);
   const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [createConversationModalOpen, setCreateConversationModalOpen] = useState(false);
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [newConversationMessage, setNewConversationMessage] = useState("");
@@ -287,6 +288,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     setSelectedThreadId(requestedThread.threadId);
     setSelectedConversationId(requestedConversationId);
     setThreadModalOpen(true);
+    setConversationModalOpen(Boolean(requestedConversationId));
     setConversationsRefreshKey((current) => current + 1);
     setPostsRefreshKey((current) => current + 1);
   }, [requestedConversationId, requestedThreadId, routeSelectionApplied, threads, threadsLoading]);
@@ -296,6 +298,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       setConversations([]);
       setThreadMembers([]);
       setSelectedConversationId("");
+      setConversationModalOpen(false);
       setConversationsStatus("");
       setPosts([]);
       setCommentsByPostId({});
@@ -504,6 +507,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     setSelectedThreadId(threadId);
     setSelectedConversationId(conversationId.trim());
     setThreadModalOpen(true);
+    setConversationModalOpen(Boolean(conversationId.trim()));
     setConversationsStatus("");
     setPostsStatus("");
     setComposeStatus("");
@@ -525,6 +529,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     const normalized = conversationId.trim();
     if (!normalized) return;
     setSelectedConversationId(normalized);
+    setConversationModalOpen(true);
     setComposeStatus("");
     setPostsStatus("");
     setPostsRefreshKey((current) => current + 1);
@@ -675,6 +680,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       setNewConversationFileIds([]);
       setNewConversationAttachSummary("");
       setSelectedConversationId(conversationId);
+      setConversationModalOpen(true);
       setThreadModalOpen(true);
       setThreadsRefreshKey((current) => current + 1);
       setConversationsRefreshKey((current) => current + 1);
@@ -1269,8 +1275,65 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                     );
                   })}
                 </div>
+                <p className="page-subtitle" style={{ margin: 0 }}>
+                  Select a conversation to open it in its own window.
+                </p>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
+      {conversationModalOpen && threadModalOpen && selectedThread ? (
+        <div className="person-modal-backdrop" onClick={() => setConversationModalOpen(false)}>
+          <div
+            className="person-modal-panel"
+            style={{ width: "min(1120px, 98vw)", height: "min(96vh, 980px)" }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="person-modal-sticky-head">
+              <div className="person-modal-header" style={{ gridTemplateColumns: "minmax(0, 1fr) auto auto", paddingRight: 0 }}>
+                <div className="person-modal-header-copy">
+                  <h3 className="person-modal-title">
+                    {selectedConversation?.title || "Conversation"}
+                  </h3>
+                  <p className="person-modal-meta">
+                    {selectedThread.audienceLabel || selectedThread.audienceType}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setConversationModalOpen(false)}
+                  style={{ width: "auto" }}
+                >
+                  Back to Conversations
+                </button>
+                <ModalCloseButton className="modal-close-button--floating" onClick={() => setConversationModalOpen(false)} />
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginTop: "0.75rem" }}>
+                {threadMembers.map((member) => {
+                  const color = getMemberColor(member.personId);
+                  return (
+                    <span
+                      key={`conversation-member-chip-${member.personId}`}
+                      style={{
+                        border: `1px solid ${color.chipBorder}`,
+                        borderRadius: "999px",
+                        padding: "0.22rem 0.6rem",
+                        fontSize: "0.82rem",
+                        background: color.chipBg,
+                        color: color.chipText,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {member.displayName}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="person-modal-content">
               <div className="card" style={{ margin: 0, display: "grid", gap: "0.55rem" }}>
                 <label className="label">
                   {selectedConversation ? `Post in "${selectedConversation.title || "Conversation"}"` : "Post Message"}

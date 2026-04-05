@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (Shares uses separate modals for conversation list vs conversation content)
+
+- `Date`: 2026-04-05
+- `Change`: Finalized Shares modal flow so opening a share group shows only the conversation list modal, and selecting a conversation opens a separate conversation-content modal for posting and comments.
+- `Type`: UI
+- `Why`: Root cause was mixed responsibilities in one modal. Conversation-list and message-composer/post stream were rendered together, making the flow harder to scan and navigate.
+- `Files`: `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from `C:\Users\steph\the-eternal-family-link`.
+  - Opening a share group shows only the conversation list and member chips.
+  - Selecting a conversation opens the separate conversation modal with posts/comments/composer.
+  - Closing the conversation modal returns to the conversation list modal.
+- `Rollback Notes`: Revert this commit to restore single-modal thread rendering.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (Shares group open is conversation-list first)
 
 - `Date`: 2026-04-05
