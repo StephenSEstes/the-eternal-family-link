@@ -328,8 +328,10 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         if (cancelled) return;
         const incomingConversations = Array.isArray(conversationBody.conversations) ? conversationBody.conversations : [];
         const incomingMembers = Array.isArray(membersBody.members) ? membersBody.members : [];
-        const requestedId = requestedConversationId;
-        const defaultConversationId = String(conversationBody.defaultConversationId ?? "").trim();
+        const requestedId =
+          selectedThreadId === requestedThreadId
+            ? requestedConversationId
+            : "";
 
         setConversations(incomingConversations);
         setThreadMembers(incomingMembers);
@@ -344,8 +346,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           const choices = [
             current,
             requestedId,
-            defaultConversationId,
-            String(incomingConversations[0]?.conversationId ?? "").trim(),
           ].map((entry) => String(entry ?? "").trim()).filter(Boolean);
           const next = choices.find((candidate) =>
             incomingConversations.some((conversation) => conversation.conversationId === candidate),
@@ -366,7 +366,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [conversationsRefreshKey, requestedConversationId, selectedThreadId, tenantKey]);
+  }, [conversationsRefreshKey, requestedConversationId, requestedThreadId, selectedThreadId, tenantKey]);
 
   const selectedConversationKnown = conversations.some(
     (entry) => entry.conversationId === selectedConversationId,

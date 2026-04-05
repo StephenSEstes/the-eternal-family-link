@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-05: Opening a share group now shows conversation list only; conversation content loads only after explicit selection (no auto-open default conversation). See `docs/change-summary.md`.
 - 2026-04-05: Started people-first Shares Phase 9.1: thread inbox/listing and thread resolution now use membership-first lookup across family groups instead of active-family-group-first gating. See `docs/change-summary.md`.
 - 2026-04-05: Fixed header Help button icon rendering so it displays a visible question mark (not a dot). See `docs/change-summary.md`.
 - 2026-04-05: Fixed Shares comment posting so the UI stays in the active conversation (no jump back to whole-family/general after comment submit). See `docs/change-summary.md`.

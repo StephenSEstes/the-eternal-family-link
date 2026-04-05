@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (Shares group open is conversation-list first)
+
+- `Date`: 2026-04-05
+- `Change`: Updated Shares group-open behavior to stop auto-selecting a default/first conversation. Opening a share group now shows only the conversation list until a conversation is explicitly selected. Posts/comments/composer remain conversation-scoped and load only after selection.
+- `Type`: UI
+- `Why`: Root cause was auto-selection fallback in `SharesClient` conversation-load effect (`defaultConversationId`/first-row fallback), which opened content immediately and made the flow harder to understand.
+- `Files`: `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (existing unrelated TreeGraph warning remains).
+  - Opening a share group shows conversation list only.
+  - Conversation content loads only after selecting a conversation row.
+  - Deep-link open (`threadId + conversationId`) still opens the targeted conversation.
+- `Rollback Notes`: Revert this commit to restore auto-open default conversation behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (People-first Shares phase 9.1: membership-based thread access/listing)
 
 - `Date`: 2026-04-05
