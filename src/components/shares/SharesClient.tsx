@@ -43,6 +43,7 @@ type ShareComment = {
   commentText: string;
   createdAt: string;
   author: { personId: string; displayName: string };
+  canEdit?: boolean;
   canDelete?: boolean;
 };
 
@@ -155,6 +156,10 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, ShareComment[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [commentBusyIds, setCommentBusyIds] = useState<Set<string>>(new Set());
+  const [commentEditBusyIds, setCommentEditBusyIds] = useState<Set<string>>(new Set());
+  const [openCommentMenuId, setOpenCommentMenuId] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [commentEditDraftById, setCommentEditDraftById] = useState<Record<string, string>>({});
   const [commentDeleteBusyIds, setCommentDeleteBusyIds] = useState<Set<string>>(new Set());
   const [failedPreviewFileIds, setFailedPreviewFileIds] = useState<Set<string>>(new Set());
 
@@ -381,6 +386,12 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const selectedConversationKnown = conversations.some(
     (entry) => entry.conversationId === selectedConversationId,
   );
+
+  useEffect(() => {
+    setOpenCommentMenuId("");
+    setEditingCommentId("");
+    setCommentEditDraftById({});
+  }, [selectedThreadId, selectedConversationId]);
 
   useEffect(() => {
     if (!selectedThreadId || !selectedConversationId || !selectedConversationKnown) {
@@ -846,6 +857,66 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     }
   };
 
+  const beginCommentEdit = (comment: ShareComment) => {
+    setOpenCommentMenuId("");
+    setEditingCommentId(comment.commentId);
+    setCommentEditDraftById((current) => ({
+      ...current,
+      [comment.commentId]: String(comment.commentText ?? ""),
+    }));
+  };
+
+  const saveEditedComment = async (postId: string, comment: ShareComment) => {
+    if (!selectedThreadId || !postId || !comment.commentId) return;
+    const nextText = String(commentEditDraftById[comment.commentId] ?? "").trim();
+    if (!nextText) return;
+    setCommentEditBusyIds((current) => new Set(current).add(comment.commentId));
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(comment.commentId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ commentText: nextText }),
+        },
+      );
+      await assertOkWithAuth(res, "Failed to update comment.");
+      const body = (await res.json()) as { comment?: ShareComment };
+      const updatedComment = body.comment;
+      setCommentsByPostId((current) => {
+        const existing = Array.isArray(current[postId]) ? current[postId] : [];
+        return {
+          ...current,
+          [postId]: existing
+            .map((entry) =>
+              entry.commentId === comment.commentId
+                ? {
+                    ...entry,
+                    ...(updatedComment ?? { commentText: nextText }),
+                  }
+                : entry,
+            )
+            .sort((a, b) => ts(a.createdAt) - ts(b.createdAt)),
+        };
+      });
+      setEditingCommentId("");
+      setOpenCommentMenuId("");
+      setCommentEditDraftById((current) => {
+        const next = { ...current };
+        delete next[comment.commentId];
+        return next;
+      });
+    } catch (error) {
+      setPostsStatus(error instanceof Error ? error.message : "Failed to update comment.");
+    } finally {
+      setCommentEditBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(comment.commentId);
+        return next;
+      });
+    }
+  };
+
   const deleteComment = async (postId: string, commentId: string) => {
     if (!selectedThreadId || !postId || !commentId) return;
     const confirmed = window.confirm("Delete this comment?");
@@ -863,6 +934,13 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           ...current,
           [postId]: existing.filter((entry) => entry.commentId !== commentId),
         };
+      });
+      setOpenCommentMenuId((current) => (current === commentId ? "" : current));
+      setEditingCommentId((current) => (current === commentId ? "" : current));
+      setCommentEditDraftById((current) => {
+        const next = { ...current };
+        delete next[commentId];
+        return next;
       });
     } catch (error) {
       setPostsStatus(error instanceof Error ? error.message : "Failed to delete comment.");
@@ -1550,6 +1628,14 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                               {comments.map((comment) => {
                                 const commentColor = getMemberColor(comment.author.personId);
                                 const isMyComment = Boolean(actorPersonId) && comment.author.personId === actorPersonId;
+                                const canCommentEdit = Boolean(comment.canEdit);
+                                const canCommentDelete = Boolean(comment.canDelete);
+                                const canShowCommentMenu = canCommentEdit || canCommentDelete;
+                                const menuOpen = openCommentMenuId === comment.commentId;
+                                const commentEditBusy = commentEditBusyIds.has(comment.commentId);
+                                const commentDeleteBusy = commentDeleteBusyIds.has(comment.commentId);
+                                const isEditingComment = editingCommentId === comment.commentId;
+                                const commentEditDraft = String(commentEditDraftById[comment.commentId] ?? comment.commentText);
                                 return (
                                   <div
                                     key={`comment-${comment.commentId}`}
@@ -1564,11 +1650,129 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                                         padding: "0.45rem 0.55rem",
                                         display: "grid",
                                         gap: "0.2rem",
+                                        position: "relative",
                                       }}
                                     >
-                                      <strong style={{ fontSize: "0.85rem" }}>{isMyComment ? "You" : comment.author.displayName}</strong>
+                                      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "flex-start" }}>
+                                        <strong style={{ fontSize: "0.85rem" }}>{isMyComment ? "You" : comment.author.displayName}</strong>
+                                        {canShowCommentMenu ? (
+                                          <div style={{ position: "relative" }}>
+                                            <button
+                                              type="button"
+                                              className="button secondary tap-button"
+                                              onClick={() =>
+                                                setOpenCommentMenuId((current) =>
+                                                  current === comment.commentId ? "" : comment.commentId,
+                                                )
+                                              }
+                                              disabled={commentEditBusy || commentDeleteBusy}
+                                              style={{
+                                                width: "auto",
+                                                minWidth: "2rem",
+                                                height: "1.6rem",
+                                                padding: "0 0.35rem",
+                                                lineHeight: 1,
+                                                fontSize: "1rem",
+                                              }}
+                                              aria-label="Comment options"
+                                            >
+                                              ...
+                                            </button>
+                                            {menuOpen ? (
+                                              <div
+                                                style={{
+                                                  position: "absolute",
+                                                  top: "1.8rem",
+                                                  right: 0,
+                                                  minWidth: "7.2rem",
+                                                  border: "1px solid var(--line)",
+                                                  background: "#fff",
+                                                  borderRadius: "8px",
+                                                  padding: "0.3rem",
+                                                  display: "grid",
+                                                  gap: "0.25rem",
+                                                  zIndex: 6,
+                                                  boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+                                                }}
+                                              >
+                                                {canCommentEdit ? (
+                                                  <button
+                                                    type="button"
+                                                    className="button secondary tap-button"
+                                                    onClick={() => beginCommentEdit(comment)}
+                                                    disabled={commentEditBusy || commentDeleteBusy}
+                                                    style={{ width: "100%" }}
+                                                  >
+                                                    Edit
+                                                  </button>
+                                                ) : null}
+                                                {canCommentDelete ? (
+                                                  <button
+                                                    type="button"
+                                                    className="button secondary tap-button"
+                                                    onClick={() => {
+                                                      setOpenCommentMenuId("");
+                                                      void deleteComment(post.postId, comment.commentId);
+                                                    }}
+                                                    disabled={commentDeleteBusy || commentEditBusy}
+                                                    style={{ width: "100%" }}
+                                                  >
+                                                    {commentDeleteBusy ? "Deleting..." : "Delete"}
+                                                  </button>
+                                                ) : null}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ) : null}
+                                      </div>
                                       <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{dt(comment.createdAt)}</span>
-                                      <span style={{ fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>{comment.commentText}</span>
+                                      {isEditingComment ? (
+                                        <div style={{ display: "grid", gap: "0.4rem" }}>
+                                          <textarea
+                                            className="input"
+                                            rows={2}
+                                            value={commentEditDraft}
+                                            onChange={(event) =>
+                                              setCommentEditDraftById((current) => ({
+                                                ...current,
+                                                [comment.commentId]: event.target.value,
+                                              }))
+                                            }
+                                            disabled={commentEditBusy}
+                                            style={{ resize: "vertical" }}
+                                          />
+                                          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                            <button
+                                              type="button"
+                                              className="button tap-button"
+                                              onClick={() => void saveEditedComment(post.postId, comment)}
+                                              disabled={commentEditBusy || !commentEditDraft.trim()}
+                                              style={{ width: "auto" }}
+                                            >
+                                              {commentEditBusy ? "Saving..." : "Save"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="button secondary tap-button"
+                                              onClick={() => {
+                                                setEditingCommentId("");
+                                                setOpenCommentMenuId("");
+                                                setCommentEditDraftById((current) => {
+                                                  const next = { ...current };
+                                                  delete next[comment.commentId];
+                                                  return next;
+                                                });
+                                              }}
+                                              disabled={commentEditBusy}
+                                              style={{ width: "auto" }}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span style={{ fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>{comment.commentText}</span>
+                                      )}
                                     </div>
                                   </div>
                                 );

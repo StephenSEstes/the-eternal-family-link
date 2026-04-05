@@ -6949,3 +6949,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-05 (shares comment ellipsis actions: edit + delete)
+
+- `Change`: Added per-comment corner ellipsis (`...`) actions in Shares conversation view with `Edit` and `Delete` options for authorized users. Implemented inline comment edit UX (draft, save, cancel) and added `PATCH` support for share post comments on the comment-id API route.
+- `Type`: UX, Bug fix, Shares comment lifecycle
+- `Why`: Root cause was incomplete delete/edit feature wiring: comment mutation APIs existed only partially and the comment bubble UI provided no discoverable action surface, so users could not edit/delete from the conversation thread.
+- `Files`:
+  - `src/components/shares/SharesClient.tsx`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/[commentId]/route.ts`
+- `Data Changes`: None (code-path behavior only; no schema/data migration).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
