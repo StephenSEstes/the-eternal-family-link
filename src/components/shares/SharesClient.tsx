@@ -168,7 +168,11 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [composeBusy, setComposeBusy] = useState(false);
   const [composeStatus, setComposeStatus] = useState("");
   const [threadDeleteBusy, setThreadDeleteBusy] = useState(false);
-  const [conversationDeleteBusy, setConversationDeleteBusy] = useState(false);
+  const [openConversationMenuId, setOpenConversationMenuId] = useState("");
+  const [editingConversationId, setEditingConversationId] = useState("");
+  const [conversationEditDraftById, setConversationEditDraftById] = useState<Record<string, string>>({});
+  const [conversationEditBusyId, setConversationEditBusyId] = useState("");
+  const [conversationDeleteBusyId, setConversationDeleteBusyId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -388,6 +392,11 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   );
 
   useEffect(() => {
+    setOpenConversationMenuId("");
+    setEditingConversationId("");
+    setConversationEditDraftById({});
+    setConversationEditBusyId("");
+    setConversationDeleteBusyId("");
     setOpenCommentMenuId("");
     setEditingCommentId("");
     setCommentEditDraftById({});
@@ -495,12 +504,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     const creator = String(selectedThread.createdByPersonId ?? "").trim();
     return owner === actorPersonId || creator === actorPersonId;
   }, [selectedThread, actorPersonId]);
-  const canDeleteSelectedConversation = useMemo(() => {
-    if (!selectedConversation || !actorPersonId) return false;
-    const owner = String(selectedConversation.ownerPersonId ?? "").trim();
-    const creator = String(selectedConversation.createdByPersonId ?? "").trim();
-    return owner === actorPersonId || creator === actorPersonId;
-  }, [selectedConversation, actorPersonId]);
   const attachPreselectedPersonIds = useMemo(
     () =>
       Array.from(
@@ -559,10 +562,16 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     const normalized = conversationId.trim();
     if (!normalized) return;
     setSelectedConversationId(normalized);
+    setOpenConversationMenuId("");
     setConversationModalOpen(true);
     setComposeStatus("");
     setPostsStatus("");
     setPostsRefreshKey((current) => current + 1);
+  };
+
+  const canManageConversation = (conversation: ShareConversation) => {
+    if (!actorPersonId) return false;
+    return String(conversation.createdByPersonId ?? "").trim() === actorPersonId;
   };
 
   const addPersonToCustomGroup = (personId: string) => {
@@ -953,28 +962,87 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     }
   };
 
-  const deleteSelectedConversation = async () => {
-    if (!selectedThreadId || !selectedConversationId) return;
-    const confirmed = window.confirm("Delete this conversation?");
-    if (!confirmed) return;
-    setConversationDeleteBusy(true);
+  const beginConversationEdit = (conversation: ShareConversation) => {
+    setOpenConversationMenuId("");
+    setEditingConversationId(conversation.conversationId);
+    setConversationEditDraftById((current) => ({
+      ...current,
+      [conversation.conversationId]: String(conversation.title ?? ""),
+    }));
+  };
+
+  const saveConversationEdit = async (conversation: ShareConversation) => {
+    if (!selectedThreadId || !conversation.conversationId) return;
+    const nextTitle = String(conversationEditDraftById[conversation.conversationId] ?? "").trim();
+    if (!nextTitle) return;
+    setConversationEditBusyId(conversation.conversationId);
     try {
       const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations/${encodeURIComponent(selectedConversationId)}`,
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations/${encodeURIComponent(conversation.conversationId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: nextTitle }),
+        },
+      );
+      await assertOkWithAuth(res, "Failed to update conversation.");
+      const body = (await res.json()) as { conversation?: Partial<ShareConversation> };
+      setConversations((current) =>
+        current.map((entry) =>
+          entry.conversationId === conversation.conversationId
+            ? {
+                ...entry,
+                ...(body.conversation ?? {}),
+                title: String(body.conversation?.title ?? nextTitle).trim() || nextTitle,
+              }
+            : entry,
+        ),
+      );
+      setEditingConversationId("");
+      setOpenConversationMenuId("");
+      setConversationEditDraftById((current) => {
+        const next = { ...current };
+        delete next[conversation.conversationId];
+        return next;
+      });
+    } catch (error) {
+      setConversationsStatus(error instanceof Error ? error.message : "Failed to update conversation.");
+    } finally {
+      setConversationEditBusyId("");
+    }
+  };
+
+  const deleteConversation = async (conversationId: string) => {
+    if (!selectedThreadId || !conversationId) return;
+    const confirmed = window.confirm("Delete this conversation?");
+    if (!confirmed) return;
+    setConversationDeleteBusyId(conversationId);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations/${encodeURIComponent(conversationId)}`,
         { method: "DELETE" },
       );
       await assertOkWithAuth(res, "Failed to delete conversation.");
-      setConversations((current) => current.filter((entry) => entry.conversationId !== selectedConversationId));
-      setConversationModalOpen(false);
-      setSelectedConversationId("");
-      setPosts([]);
-      setCommentsByPostId({});
+      setConversations((current) => current.filter((entry) => entry.conversationId !== conversationId));
+      setOpenConversationMenuId((current) => (current === conversationId ? "" : current));
+      setEditingConversationId((current) => (current === conversationId ? "" : current));
+      setConversationEditDraftById((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+      if (selectedConversationId === conversationId) {
+        setConversationModalOpen(false);
+        setSelectedConversationId("");
+        setPosts([]);
+        setCommentsByPostId({});
+      }
       setConversationsRefreshKey((current) => current + 1);
       setThreadsRefreshKey((current) => current + 1);
     } catch (error) {
-      setPostsStatus(error instanceof Error ? error.message : "Failed to delete conversation.");
+      setConversationsStatus(error instanceof Error ? error.message : "Failed to delete conversation.");
     } finally {
-      setConversationDeleteBusy(false);
+      setConversationDeleteBusyId("");
     }
   };
 
@@ -1410,50 +1478,170 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                 <div style={{ display: "grid", gap: "0.45rem", maxHeight: "240px", overflow: "auto" }}>
                   {orderedConversations.map((conversation) => {
                     const active = conversation.conversationId === selectedConversationId;
+                    const canManage = canManageConversation(conversation);
+                    const conversationMenuOpen = openConversationMenuId === conversation.conversationId;
+                    const conversationEditBusy = conversationEditBusyId === conversation.conversationId;
+                    const conversationDeleteBusy = conversationDeleteBusyId === conversation.conversationId;
+                    const conversationBusy = conversationEditBusy || conversationDeleteBusy;
+                    const isEditingConversation = editingConversationId === conversation.conversationId;
+                    const conversationEditDraft = String(
+                      conversationEditDraftById[conversation.conversationId] ?? conversation.title ?? "",
+                    );
                     return (
-                      <button
-                        key={`conversation-${conversation.conversationId}`}
-                        type="button"
-                        className="button secondary tap-button"
-                        onClick={() => selectConversation(conversation.conversationId)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          display: "grid",
-                          gap: "0.28rem",
-                          background: active ? "var(--accent-soft)" : undefined,
-                          borderColor: active ? "var(--accent)" : undefined,
-                        }}
-                      >
-                        <span style={{ display: "flex", justifyContent: "space-between", gap: "0.45rem", alignItems: "center" }}>
-                          <strong>{conversation.title || "Conversation"}</strong>
-                          <span
-                            style={{
-                              minWidth: "1.7rem",
-                              height: "1.35rem",
-                              borderRadius: "999px",
-                              border: "1px solid var(--line)",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "0.74rem",
-                              fontWeight: 700,
-                              background: conversation.unreadCount > 0 ? "var(--accent-soft)" : "var(--surface-muted)",
-                              color: conversation.unreadCount > 0 ? "var(--accent-strong)" : "var(--text-muted)",
-                            }}
-                          >
-                            {conversation.unreadCount}
+                      <div key={`conversation-${conversation.conversationId}`} style={{ position: "relative", display: "grid", gap: "0.35rem" }}>
+                        <button
+                          type="button"
+                          className="button secondary tap-button"
+                          onClick={() => selectConversation(conversation.conversationId)}
+                          disabled={conversationBusy}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            display: "grid",
+                            gap: "0.28rem",
+                            background: active ? "var(--accent-soft)" : undefined,
+                            borderColor: active ? "var(--accent)" : undefined,
+                            paddingRight: canManage ? "2.7rem" : undefined,
+                          }}
+                        >
+                          <span style={{ display: "flex", justifyContent: "space-between", gap: "0.45rem", alignItems: "center" }}>
+                            <strong>{conversation.title || "Conversation"}</strong>
+                            <span
+                              style={{
+                                minWidth: "1.7rem",
+                                height: "1.35rem",
+                                borderRadius: "999px",
+                                border: "1px solid var(--line)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.74rem",
+                                fontWeight: 700,
+                                background: conversation.unreadCount > 0 ? "var(--accent-soft)" : "var(--surface-muted)",
+                                color: conversation.unreadCount > 0 ? "var(--accent-strong)" : "var(--text-muted)",
+                              }}
+                            >
+                              {conversation.unreadCount}
+                            </span>
                           </span>
-                        </span>
-                        <span className="page-subtitle" style={{ margin: 0, fontSize: "0.8rem" }}>
-                          {conversation.latestPost?.authorDisplayName
-                            ? `${conversation.latestPost.authorDisplayName}: ${conversation.latestPost.caption || "Media"}`
-                            : "No posts yet"}
-                        </span>
-                        <span className="page-subtitle" style={{ margin: 0, fontSize: "0.78rem" }}>
-                          {dt(conversation.lastActivityAt || conversation.createdAt)}
-                        </span>
-                      </button>
+                          <span className="page-subtitle" style={{ margin: 0, fontSize: "0.8rem" }}>
+                            {conversation.latestPost?.authorDisplayName
+                              ? `${conversation.latestPost.authorDisplayName}: ${conversation.latestPost.caption || "Media"}`
+                              : "No posts yet"}
+                          </span>
+                          <span className="page-subtitle" style={{ margin: 0, fontSize: "0.78rem" }}>
+                            {dt(conversation.lastActivityAt || conversation.createdAt)}
+                          </span>
+                        </button>
+                        {canManage ? (
+                          <div style={{ position: "absolute", top: "0.35rem", right: "0.35rem" }}>
+                            <button
+                              type="button"
+                              className="button secondary tap-button"
+                              onClick={() =>
+                                setOpenConversationMenuId((current) =>
+                                  current === conversation.conversationId ? "" : conversation.conversationId,
+                                )
+                              }
+                              disabled={conversationBusy}
+                              style={{
+                                width: "auto",
+                                minWidth: "2rem",
+                                height: "1.6rem",
+                                padding: "0 0.35rem",
+                                lineHeight: 1,
+                                fontSize: "1rem",
+                              }}
+                              aria-label="Conversation options"
+                            >
+                              ...
+                            </button>
+                            {conversationMenuOpen ? (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "1.8rem",
+                                  right: 0,
+                                  minWidth: "7.2rem",
+                                  border: "1px solid var(--line)",
+                                  background: "#fff",
+                                  borderRadius: "8px",
+                                  padding: "0.3rem",
+                                  display: "grid",
+                                  gap: "0.25rem",
+                                  zIndex: 6,
+                                  boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="button secondary tap-button"
+                                  onClick={() => beginConversationEdit(conversation)}
+                                  disabled={conversationBusy}
+                                  style={{ width: "100%" }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button secondary tap-button"
+                                  onClick={() => {
+                                    setOpenConversationMenuId("");
+                                    void deleteConversation(conversation.conversationId);
+                                  }}
+                                  disabled={conversationBusy}
+                                  style={{ width: "100%" }}
+                                >
+                                  {conversationDeleteBusy ? "Deleting..." : "Delete"}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {isEditingConversation ? (
+                          <div style={{ display: "grid", gap: "0.4rem", padding: "0 0.2rem" }}>
+                            <input
+                              className="input"
+                              value={conversationEditDraft}
+                              onChange={(event) =>
+                                setConversationEditDraftById((current) => ({
+                                  ...current,
+                                  [conversation.conversationId]: event.target.value,
+                                }))
+                              }
+                              disabled={conversationEditBusy}
+                            />
+                            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                className="button tap-button"
+                                onClick={() => void saveConversationEdit(conversation)}
+                                disabled={conversationEditBusy || !conversationEditDraft.trim()}
+                                style={{ width: "auto" }}
+                              >
+                                {conversationEditBusy ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="button secondary tap-button"
+                                onClick={() => {
+                                  setEditingConversationId("");
+                                  setOpenConversationMenuId("");
+                                  setConversationEditDraftById((current) => {
+                                    const next = { ...current };
+                                    delete next[conversation.conversationId];
+                                    return next;
+                                  });
+                                }}
+                                disabled={conversationEditBusy}
+                                style={{ width: "auto" }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>

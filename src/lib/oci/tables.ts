@@ -5713,6 +5713,49 @@ export async function updateOciShareConversationStatus(input: {
   });
 }
 
+export async function updateOciShareConversationTitle(input: {
+  familyGroupKey: string;
+  threadId: string;
+  conversationId: string;
+  title: string;
+  updatedAt: string;
+}): Promise<OciShareConversationRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const conversationId = input.conversationId.trim();
+  const title = input.title.trim();
+  if (!familyGroupKey || !threadId || !conversationId || !title) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareConversationsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_conversations
+       SET title = :title,
+           updated_at = :updatedAt
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId
+         AND TRIM(conversation_id) = :conversationId`,
+      {
+        title,
+        updatedAt: input.updatedAt.trim(),
+        familyGroupKey,
+        threadId,
+        conversationId,
+      },
+      { autoCommit: true },
+    );
+    if (!(result.rowsAffected ?? 0)) {
+      return null;
+    }
+    return getOciShareConversationById({
+      familyGroupKey,
+      threadId,
+      conversationId,
+    });
+  });
+}
+
 export async function getOciShareConversationMember(input: {
   familyGroupKey: string;
   conversationId: string;

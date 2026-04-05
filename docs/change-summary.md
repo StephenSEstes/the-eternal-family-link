@@ -6964,3 +6964,19 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-05 (shares conversation ellipsis actions: edit + delete, creator-only)
+
+- `Change`: Added per-conversation corner ellipsis (`...`) actions in Shares with inline `Edit` and `Delete` options, and implemented conversation-title edit support on the conversation-id API route.
+- `Type`: UX, Bug fix, Access control hardening
+- `Why`: Root cause was incomplete conversation lifecycle tooling after the thread/comment deletion work: conversations had no discoverable edit/delete surface, and creator-only enforcement for conversation mutations was not consistently implemented end-to-end.
+- `Files`:
+  - `src/components/shares/SharesClient.tsx`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/route.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: None (code-path behavior only; no schema/data migration).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
