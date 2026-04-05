@@ -43,10 +43,20 @@ type UserMenuProps = {
 
 function HelpIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="M9.5 9a2.5 2.5 0 1 1 4.4 1.6c-.9 1-1.9 1.6-1.9 3" />
-      <circle cx="12" cy="17.2" r="0.8" fill="currentColor" stroke="none" />
+      <path d="M12 17.2h.01" />
     </svg>
   );
 }

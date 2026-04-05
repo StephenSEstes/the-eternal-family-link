@@ -13,6 +13,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (Header Help icon rendered as question mark)
+
+- `Date`: 2026-04-05
+- `Change`: Fixed the header Help action icon so it renders as a visible question mark glyph instead of appearing as a dot.
+- `Type`: UI
+- `Why`: Root cause was icon rendering configuration in `HelpIcon`: the SVG lacked explicit sizing/stroke presentation, so it displayed as a small filled mark in the help button.
+- `Files`: `src/components/UserMenu.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - Header Help control shows a visible `?` icon next to user initials.
+- `Rollback Notes`: Revert this commit to restore prior Help icon rendering.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (Shares comment post now preserves active conversation context)
 
 - `Date`: 2026-04-05
