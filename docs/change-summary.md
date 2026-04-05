@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Share thread-first UX + seeded defaults + chat alignment)
+
+- `Date`: 2026-04-04
+- `Change`: Removed the quick-audience selector from Share, auto-seeded default audience threads (siblings/immediate-family/entire-family plus family-group scope), added unread-count badges on thread rows, upgraded Create New Group to chip-search member editing with audience seeding, and aligned conversation bubbles as chat-style (`You` on right, others on left) while keeping member color coding.
+- `Type`: UI
+- `Why`: Root cause was a workflow mismatch: default audience threads were hidden behind quick-open controls, group member editing used a low-clarity multi-select, and conversations rendered as full-width cards instead of left/right message flow.
+- `Files`: `src/components/shares/SharesClient.tsx`, `TODO.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Share page shows thread list directly (no quick-audience picker).
+  - Default audience threads appear in thread list without manual quick-open.
+  - Thread row shows unread count badge on the right.
+  - Create New Group supports search/add/remove member chips and optional audience-seed loading.
+  - In thread modal, signed-in user posts/comments render on the right; other members render on the left.
+- `Rollback Notes`: Revert this commit to restore quick-audience controls, multi-select member editor, and full-width non-chat bubble layout.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-04 (Share UI modal workflow + member color bubbles)
 
 - `Date`: 2026-04-04

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-04: Share is now thread-first: quick-audience picker removed, default audience threads auto-seeded into the list, unread badges shown on the right, Create New Group uses search chips with audience seeding, and chat bubbles align right for `You` and left for others. See `docs/change-summary.md`.
 - 2026-04-04: Share UX now uses modal thread viewing and modal `Create New Group`; nav/home label is `Share`, and thread message bubbles are color-coded by member. See `docs/change-summary.md`.
 - 2026-04-04: Shares now stores custom groups as normalized entities (`share_groups`, `share_group_members`) linked from threads by `group_id`, and `household` audience is now presented/resolved as `Immediate Family`. See `docs/change-summary.md`.
 - 2026-04-04: Shares thread UX now opens by selection (no `Open Thread` button), shows thread members at the top, and supports custom groups with duplicate-member-set prevention. See `docs/change-summary.md`.

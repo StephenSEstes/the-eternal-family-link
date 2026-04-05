@@ -39,6 +39,7 @@ I will update this list as we add, complete, or remove work.
   - In progress: Thread-group UX update (show group members at top of selected thread, support custom member-based groups with duplicate-member-set prevention, and open audience threads by selection without a separate Open Thread button).
   - In progress: Normalize custom share groups into first-class `share_groups` / `share_group_members` with `share_threads.group_id` linkage.
   - In progress: Shares media upload cutover to canonical person-attribute/media association path (no migration/backfill required for current test-only data set).
+  - In progress: Share thread UX pass (remove quick-audience selector, auto-ensure default audience threads, chip-based member editing in Create New Group, unread count badge on thread list, and right/left chat bubble alignment).
   - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
   Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.
@@ -126,6 +127,29 @@ I will update this list as we add, complete, or remove work.
       - Custom groups are first-class normalized entities linked from threads.
       - Duplicate group prevention is enforced by normalized group signature.
       - Immediate-family audience behavior matches the requested rule and UI naming.
+  - Phase 7: Share list and chat UX normalization
+    - Status: In progress 2026-04-04
+    - Scope:
+      - Remove inline quick-audience selector UI from the Share screen.
+      - Ensure default threads (siblings, immediate family, entire family, family-group scope) are present and visible in the thread list without manual quick-open actions.
+      - Keep thread list focused on all threads the signed-in member belongs to and show unread count badges on the right.
+      - Upgrade Create New Group member selection to chip-based add/remove with search, plus optional audience-seed loading for starter membership.
+      - Render thread messages in text-thread alignment: signed-in user messages on the right, others on the left, while preserving member color coding.
+    - API/UI/data changes:
+      - API: Reuse existing `/shares/threads` and `/shares/audience/resolve` contracts; no schema changes.
+      - UI: `SharesClient` thread list and modal compose/thread rendering updates.
+      - Data: No migration/backfill required.
+    - Validation:
+      - `npm run lint` passes.
+      - `npm run build` passes.
+      - Share screen loads with thread list only (no quick-audience selector block).
+      - Default audience threads appear in the list and are reusable.
+      - Create-group modal supports search chips add/remove and optional audience-seed member loading.
+      - Signed-in user posts render right-aligned; other members left-aligned.
+      - Thread rows show unread count badge on the right.
+    - Completion criteria:
+      - Thread-first Share UX is in place with no quick-audience dependency.
+      - Default audience conversations are visible and usable from the thread list.
   API/UI/data changes:
   - API: new `/api/t/[tenantKey]/shares/...` routes plus push subscription endpoints and dispatch hook.
   - UI: Home feed card + Shares screen + compose/comments interactions.
