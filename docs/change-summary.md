@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (New Conversation modal stacking fix)
+
+- `Date`: 2026-04-05
+- `Change`: Fixed Shares `New Conversation` modal layering so it opens above the thread modal instead of behind it.
+- `Type`: UI
+- `Why`: Root cause was modal stacking order. The `createConversationModalOpen` block rendered before the thread modal while both used the same backdrop z-index class (`person-modal-backdrop`), so the thread modal overlaid it. The fix sets an explicit higher z-index on the New Conversation backdrop.
+- `Files`: `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from `C:\Users\steph\the-eternal-family-link`.
+  - In Shares, clicking `New Conversation` from an open thread shows the modal on top and fully interactive.
+- `Rollback Notes`: Revert this commit to restore prior shared-z-index behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (Shares uses separate modals for conversation list vs conversation content)
 
 - `Date`: 2026-04-05

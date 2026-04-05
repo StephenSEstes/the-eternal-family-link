@@ -1070,7 +1070,11 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       ) : null}
 
       {createConversationModalOpen && selectedThread ? (
-        <div className="person-modal-backdrop" onClick={() => setCreateConversationModalOpen(false)}>
+        <div
+          className="person-modal-backdrop"
+          style={{ zIndex: 110 }}
+          onClick={() => setCreateConversationModalOpen(false)}
+        >
           <div
             className="person-modal-panel"
             style={{ maxWidth: "760px", width: "min(760px, 96vw)", height: "auto", maxHeight: "90vh" }}
