@@ -183,7 +183,7 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       icon: <MediaIcon />,
     },
     {
-      label: "Shares",
+      label: "Share",
       href: `${basePath}/shares`,
       match: (path) => path.startsWith(`${basePath}/shares`),
       icon: <SharesIcon />,

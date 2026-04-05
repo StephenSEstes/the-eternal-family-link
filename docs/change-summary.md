@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-04 (Share UI modal workflow + member color bubbles)
+
+- `Date`: 2026-04-04
+- `Change`: Renamed the left-nav/home label from `Shares` to `Share`, moved custom-group creation into a modal titled `Create New Group`, moved its trigger to the bottom of the left panel, and changed thread viewing to open in a modal with member-color-coded message/comment bubbles.
+- `Type`: UI
+- `Why`: Root cause was a workflow/UX mismatch in the Shares surface: group creation and thread content were always inline, which did not match requested modal interaction and made member identity context less clear inside conversations.
+- `Files`: `src/components/shares/SharesClient.tsx`, `src/components/HeaderNav.tsx`, `src/app/page.tsx`, `src/app/t/[tenantKey]/page.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from `C:\\Users\\steph\\the-eternal-family-link`).
+  - Header/Home label shows `Share`.
+  - `Create New Group` opens as a modal from the bottom button in the left panel.
+  - Clicking a thread opens thread content in a modal and message/comment bubbles are member-color-coded.
+- `Rollback Notes`: Revert this commit to restore inline thread panel and inline group creation flow.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-04 (Shares normalized custom groups + Immediate Family audience rule)
 
 - `Date`: 2026-04-04
