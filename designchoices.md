@@ -390,3 +390,17 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep dual read paths and slowly migrate data in place.
 - `Impact`: Media reads depend on canonical `MediaAssets` columns; `usage_type='share'` compatibility links are excluded from canonical media reads; reset tooling can clear share/media/face/comment test content safely.
 - `Follow-up`: If production historical data is introduced later, define explicit migration scripts before reintroducing any compatibility mode.
+
+- `Area`: Family Shares conversation topics + per-topic read-state
+- `Decision`: Model each share group (`share_threads`) as a continuous communication container with distinct titled conversation topics (`share_conversations`) and per-conversation membership/read-state (`share_conversation_members`). All new share posts must write a `conversation_id`.
+- `Reason`: A single post stream per share group did not support durable topic separation or accurate read/unread behavior for uploads and comments by topic.
+- `Alternatives Considered`: Keep one flat thread stream; infer topics from caption hashtags only; store topic state in JSON fields.
+- `Impact`: Shares UI opens a share group, then shows a conversation list ordered by activity. Unread badges are computed and cleared per conversation. New conversation creation requires a title and supports optional initial text/media.
+- `Follow-up`: Add conversation rename/archive/member-edit controls when needed.
+
+- `Area`: Header action placement
+- `Decision`: Move Help to a question-mark action beside user initials, move Admin into the user-initials popout, and remove duplicate top-nav Sign out.
+- `Reason`: Keep top navigation focused on destinations and move account/actions into one consistent user-menu surface.
+- `Alternatives Considered`: Keep Help/Admin/Sign out as top-level nav pills.
+- `Impact`: Header nav now contains only section destinations; Help/Admin/Sign out are available from the user-initials area.
+- `Follow-up`: Keep future account-scoped actions in the same user popout to avoid duplicate controls.

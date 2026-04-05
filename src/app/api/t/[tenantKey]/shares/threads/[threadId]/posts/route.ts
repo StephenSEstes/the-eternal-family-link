@@ -7,10 +7,13 @@ import { requireTenantAccess } from "@/lib/family-group/guard";
 import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 import {
   createOciNotificationOutboxEntries,
+  getOciShareConversationById,
+  getOciShareConversationMember,
   createOciSharePost,
   getOciShareThreadMember,
   getOciSharePostsForThread,
   listOciShareThreadMembers,
+  upsertOciShareConversationMember,
 } from "@/lib/oci/tables";
 import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
 
@@ -19,6 +22,7 @@ type RouteProps = {
 };
 
 const createPostSchema = z.object({
+  conversationId: z.string().trim().max(128).optional().default(""),
   caption: z.string().trim().max(4000).optional().default(""),
   fileId: z.string().trim().max(512).optional().default(""),
 });
@@ -29,6 +33,12 @@ function buildPostId() {
 
 function buildNotificationId() {
   return `nout-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
+}
+
+function buildConversationMemberId(conversationId: string, personId: string) {
+  const c = conversationId.trim().replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "conv";
+  const p = personId.trim().replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "person";
+  return `scm-${c}-${p}-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 6)}`;
 }
 
 export async function GET(request: Request, { params }: RouteProps) {
@@ -62,10 +72,30 @@ export async function GET(request: Request, { params }: RouteProps) {
 
   const url = new URL(request.url);
   const rawLimit = Number(url.searchParams.get("limit") ?? "60");
+  const requestedConversationId = String(url.searchParams.get("conversationId") ?? "").trim();
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.trunc(rawLimit))) : 60;
+  if (requestedConversationId) {
+    const conversation = await getOciShareConversationById({
+      familyGroupKey: thread.familyGroupKey,
+      threadId: thread.threadId,
+      conversationId: requestedConversationId,
+    });
+    if (!conversation) {
+      return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
+    }
+    const conversationMember = await getOciShareConversationMember({
+      familyGroupKey: thread.familyGroupKey,
+      conversationId: conversation.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversationMember || !conversationMember.isActive) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  }
   const posts = await getOciSharePostsForThread({
     familyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
+    conversationId: requestedConversationId,
     limit,
   });
   const members = await listOciShareThreadMembers({
@@ -84,6 +114,7 @@ export async function GET(request: Request, { params }: RouteProps) {
     tenantKey: resolved.tenant.tenantKey,
     threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
+    conversationId: requestedConversationId,
     count: posts.length,
     members: members.map((entry) => ({
       personId: entry.personId,
@@ -94,6 +125,7 @@ export async function GET(request: Request, { params }: RouteProps) {
     posts: posts.map((post) => ({
       postId: post.postId,
       threadId: post.threadId,
+      conversationId: post.conversationId,
       familyGroupKey: post.familyGroupKey,
       fileId: post.fileId,
       caption: post.captionText,
@@ -160,14 +192,43 @@ export async function POST(request: Request, { params }: RouteProps) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_payload", issues: parsed.error.flatten() }, { status: 400 });
   }
+  const conversationId = parsed.data.conversationId.trim();
+  if (!conversationId) {
+    return NextResponse.json({ error: "conversation_id_required" }, { status: 400 });
+  }
+  const conversation = await getOciShareConversationById({
+    familyGroupKey: thread.familyGroupKey,
+    threadId: thread.threadId,
+    conversationId,
+  });
+  if (!conversation) {
+    return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
+  }
+  const nowIso = new Date().toISOString();
+  const conversationMember = await getOciShareConversationMember({
+    familyGroupKey: thread.familyGroupKey,
+    conversationId: conversation.conversationId,
+    personId: actorPersonId,
+  });
+  if (!conversationMember || !conversationMember.isActive) {
+    await upsertOciShareConversationMember({
+      conversationMemberId: buildConversationMemberId(conversation.conversationId, actorPersonId),
+      conversationId: conversation.conversationId,
+      threadId: thread.threadId,
+      familyGroupKey: thread.familyGroupKey,
+      personId: actorPersonId,
+      memberRole: "member",
+      joinedAt: nowIso,
+      isActive: true,
+    });
+  }
   if (!parsed.data.caption && !parsed.data.fileId) {
     return NextResponse.json({ error: "caption_or_file_required" }, { status: 400 });
   }
-
-  const nowIso = new Date().toISOString();
   const post = await createOciSharePost({
     postId: buildPostId(),
     threadId: thread.threadId,
+    conversationId: conversation.conversationId,
     familyGroupKey: thread.familyGroupKey,
     fileId: parsed.data.fileId,
     captionText: parsed.data.caption,
@@ -195,6 +256,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       entityId: post.postId,
       payloadJson: JSON.stringify({
         threadId: thread.threadId,
+        conversationId: conversation.conversationId,
         postId: post.postId,
         caption: post.captionText,
         fileId: post.fileId,
@@ -220,9 +282,11 @@ export async function POST(request: Request, { params }: RouteProps) {
     tenantKey: resolved.tenant.tenantKey,
     threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
+    conversationId: conversation.conversationId,
     post: {
       postId: post.postId,
       threadId: post.threadId,
+      conversationId: post.conversationId,
       fileId: post.fileId,
       caption: post.captionText,
       authorPersonId: post.authorPersonId,

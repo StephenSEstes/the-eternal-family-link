@@ -77,10 +77,12 @@ export async function AppHeader({ tenantKey }: AppHeaderProps = {}) {
             loginType={loginType}
             appVersion={appVersion}
             avatarInitials={avatarInitials}
+            basePath={basePath}
+            isAdmin={tenant.role === "ADMIN"}
           />
         </div>
 
-        <HeaderNav basePath={basePath} isAdmin={tenant.role === "ADMIN"} />
+        <HeaderNav basePath={basePath} />
       </div>
     </header>
   );

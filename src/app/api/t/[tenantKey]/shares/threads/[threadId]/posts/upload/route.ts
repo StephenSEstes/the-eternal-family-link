@@ -23,8 +23,11 @@ import { getOciObjectStorageLocation, putOciObjectByKey } from "@/lib/oci/object
 import {
   createOciNotificationOutboxEntries,
   createOciSharePost,
+  getOciShareConversationById,
+  getOciShareConversationMember,
   getOciShareThreadMember,
   listOciShareThreadMembers,
+  upsertOciShareConversationMember,
   upsertOciMediaAsset,
 } from "@/lib/oci/tables";
 import { resolveAccessibleShareThread } from "@/lib/shares/thread-access";
@@ -47,6 +50,12 @@ function buildPostId() {
 
 function buildNotificationId() {
   return `nout-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
+}
+
+function buildConversationMemberId(conversationId: string, personId: string) {
+  const c = conversationId.trim().replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "conv";
+  const p = personId.trim().replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "person";
+  return `scm-${c}-${p}-${randomUUID().replace(/[^a-zA-Z0-9]/g, "").slice(0, 6)}`;
 }
 
 function parseTaggedPeople(raw: string): string[] {
@@ -115,6 +124,35 @@ export async function POST(request: Request, { params }: RouteProps) {
     const file = fileField as Blob & { name?: string; type?: string; lastModified?: number };
 
     const caption = String(formData?.get("caption") ?? "").trim();
+    const conversationId = String(formData?.get("conversationId") ?? "").trim();
+    if (!conversationId) {
+      return NextResponse.json({ error: "conversation_id_required" }, { status: 400 });
+    }
+    const conversation = await getOciShareConversationById({
+      familyGroupKey: thread.familyGroupKey,
+      threadId: thread.threadId,
+      conversationId,
+    });
+    if (!conversation) {
+      return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
+    }
+    const conversationMember = await getOciShareConversationMember({
+      familyGroupKey: thread.familyGroupKey,
+      conversationId: conversation.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversationMember || !conversationMember.isActive) {
+      await upsertOciShareConversationMember({
+        conversationMemberId: buildConversationMemberId(conversation.conversationId, actorPersonId),
+        conversationId: conversation.conversationId,
+        threadId: thread.threadId,
+        familyGroupKey: thread.familyGroupKey,
+        personId: actorPersonId,
+        memberRole: "member",
+        joinedAt: new Date().toISOString(),
+        isActive: true,
+      });
+    }
     const requestedTaggedPeople = Array.from(
       new Set(
         parseTaggedPeople(String(formData?.get("taggedPersonIds") ?? ""))
@@ -285,6 +323,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     const post = await createOciSharePost({
       postId: buildPostId(),
       threadId: thread.threadId,
+      conversationId,
       familyGroupKey: thread.familyGroupKey,
       fileId,
       captionText: caption,
@@ -312,6 +351,7 @@ export async function POST(request: Request, { params }: RouteProps) {
         entityId: post.postId,
         payloadJson: JSON.stringify({
           threadId: thread.threadId,
+          conversationId,
           postId: post.postId,
           caption: post.captionText,
           fileId: post.fileId,
@@ -337,6 +377,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       tenantKey: resolved.tenant.tenantKey,
       threadFamilyGroupKey: thread.familyGroupKey,
       threadId: thread.threadId,
+      conversationId,
       postId: post.postId,
       fileId,
       mediaId,

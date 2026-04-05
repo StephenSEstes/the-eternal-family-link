@@ -203,6 +203,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     commentId: buildCommentId(),
     postId: post.postId,
     threadId: thread.threadId,
+    conversationId: post.conversationId,
     familyGroupKey: thread.familyGroupKey,
     parentCommentId,
     authorPersonId: actorPersonId,
@@ -230,6 +231,7 @@ export async function POST(request: Request, { params }: RouteProps) {
       entityId: createdComment.commentId,
       payloadJson: JSON.stringify({
         threadId: thread.threadId,
+        conversationId: post.conversationId,
         postId: post.postId,
         commentId: createdComment.commentId,
       }),
@@ -254,6 +256,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     tenantKey: resolved.tenant.tenantKey,
     threadFamilyGroupKey: thread.familyGroupKey,
     threadId: thread.threadId,
+    conversationId: post.conversationId,
     postId: post.postId,
     comment: toClientComment({
       comment: createdComment,

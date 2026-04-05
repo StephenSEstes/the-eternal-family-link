@@ -110,6 +110,19 @@ type PhotoLibraryItem = {
   households: Array<{ householdId: string; label: string }>;
 };
 
+type PersonShareConversationItem = {
+  conversationId: string;
+  threadId: string;
+  familyGroupKey: string;
+  title: string;
+  audienceType: string;
+  audienceLabel: string;
+  createdAt: string;
+  lastActivityAt: string;
+  latestPostId: string;
+  latestPostCreatedAt: string;
+};
+
 type StoryChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -1019,6 +1032,9 @@ export function PersonEditModal({
   }>({ people: [], households: [], attributes: [] });
   const [photoAssociationStatus, setPhotoAssociationStatus] = useState("");
   const [showPhotoDetail, setShowPhotoDetail] = useState(false);
+  const [personShareConversations, setPersonShareConversations] = useState<PersonShareConversationItem[]>([]);
+  const [personShareConversationsLoading, setPersonShareConversationsLoading] = useState(false);
+  const [personShareConversationsStatus, setPersonShareConversationsStatus] = useState("");
   const [faces, setFaces] = useState<FaceRecord[]>([]);
   const [facesLoading, setFacesLoading] = useState(false);
   const [facesDebug, setFacesDebug] = useState<Record<string, unknown> | null>(null);
@@ -1903,6 +1919,46 @@ export function PersonEditModal({
       cancelled = true;
     };
   }, [activeTenantKey, open, person?.personId]);
+
+  useEffect(() => {
+    if (!open || !person?.personId || activeTab !== "photos") {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setPersonShareConversationsLoading(true);
+      setPersonShareConversationsStatus("");
+      try {
+        const res = await fetch(
+          `/api/t/${encodeURIComponent(activeTenantKey)}/people/${encodeURIComponent(person.personId)}/share-conversations?limit=80`,
+          { cache: "no-store" },
+        );
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(String(body?.message || body?.error || "Failed to load linked share conversations."));
+        }
+        if (cancelled) return;
+        const items = Array.isArray(body?.items)
+          ? (body.items as PersonShareConversationItem[])
+          : [];
+        setPersonShareConversations(items);
+      } catch (error) {
+        if (!cancelled) {
+          setPersonShareConversations([]);
+          setPersonShareConversationsStatus(
+            error instanceof Error ? error.message : "Failed to load linked share conversations.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPersonShareConversationsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, activeTenantKey, open, person?.personId]);
 
   const personOptions = localPeople.filter((item) => item.personId !== person?.personId);
   const facePeopleOptions = useMemo(() => {
@@ -4058,6 +4114,67 @@ export function PersonEditModal({
 
         {activeTab === "photos" ? (
           <>
+            <div className="card" style={{ marginBottom: "0.85rem", display: "grid", gap: "0.55rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Linked Share Conversations</h4>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  {personShareConversations.length} conversation{personShareConversations.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {personShareConversationsStatus ? (
+                <p className="page-subtitle" style={{ margin: 0 }}>{personShareConversationsStatus}</p>
+              ) : null}
+              {personShareConversationsLoading ? (
+                <p className="page-subtitle" style={{ margin: 0 }}>Loading linked conversations...</p>
+              ) : null}
+              {!personShareConversationsLoading && personShareConversations.length === 0 ? (
+                <p className="page-subtitle" style={{ margin: 0 }}>
+                  No linked share conversations yet.
+                </p>
+              ) : null}
+              {personShareConversations.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.45rem" }}>
+                  {personShareConversations.map((item) => {
+                    const destinationTenantKey = normalizeFamilyGroupKey(item.familyGroupKey) || normalizeFamilyGroupKey(activeTenantKey);
+                    const href = `/t/${encodeURIComponent(destinationTenantKey)}/shares?threadId=${encodeURIComponent(item.threadId)}&conversationId=${encodeURIComponent(item.conversationId)}`;
+                    const activityLabel = formatDisplayDate(item.lastActivityAt || item.latestPostCreatedAt || item.createdAt);
+                    return (
+                      <div
+                        key={`person-share-conversation-${item.conversationId}`}
+                        style={{
+                          border: "1px solid var(--line)",
+                          borderRadius: "12px",
+                          padding: "0.55rem 0.65rem",
+                          display: "grid",
+                          gap: "0.25rem",
+                          background: "var(--surface-muted)",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.55rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <strong>{item.title || "Conversation"}</strong>
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="button secondary tap-button"
+                            style={{ width: "auto", textDecoration: "none", minHeight: "30px", padding: "0 0.55rem", fontSize: "0.82rem" }}
+                          >
+                            Open
+                          </a>
+                        </div>
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          {(item.audienceLabel || item.audienceType || "Share Group")} · {item.familyGroupKey}
+                        </span>
+                        <span className="page-subtitle" style={{ margin: 0 }}>
+                          Activity: {activityLabel || "-"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
             <div className="card person-photo-gallery-card">
               <div className="person-photo-gallery-toolbar">
                 <h4 className="ui-section-title" style={{ marginBottom: 0 }}>Media Gallery</h4>

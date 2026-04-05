@@ -418,9 +418,59 @@ END;
 
 BEGIN
   EXECUTE IMMEDIATE '
+    CREATE TABLE share_conversations (
+      conversation_id VARCHAR2(128 CHAR) NOT NULL,
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      title VARCHAR2(512 CHAR) NOT NULL,
+      conversation_kind VARCHAR2(32 CHAR),
+      owner_person_id VARCHAR2(128 CHAR),
+      created_by_person_id VARCHAR2(128 CHAR),
+      created_by_email VARCHAR2(320 CHAR),
+      created_at VARCHAR2(64 CHAR),
+      updated_at VARCHAR2(64 CHAR),
+      last_activity_at VARCHAR2(64 CHAR),
+      conversation_status VARCHAR2(32 CHAR),
+      CONSTRAINT pk_share_conversations PRIMARY KEY (conversation_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
+    CREATE TABLE share_conversation_members (
+      conversation_member_id VARCHAR2(128 CHAR) NOT NULL,
+      conversation_id VARCHAR2(128 CHAR) NOT NULL,
+      thread_id VARCHAR2(128 CHAR) NOT NULL,
+      family_group_key VARCHAR2(128 CHAR) NOT NULL,
+      person_id VARCHAR2(128 CHAR) NOT NULL,
+      member_role VARCHAR2(64 CHAR),
+      joined_at VARCHAR2(64 CHAR),
+      last_read_at VARCHAR2(64 CHAR),
+      is_active VARCHAR2(8 CHAR),
+      CONSTRAINT pk_share_conversation_members PRIMARY KEY (conversation_member_id)
+    )
+  ';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE '
     CREATE TABLE share_posts (
       post_id VARCHAR2(128 CHAR) NOT NULL,
       thread_id VARCHAR2(128 CHAR) NOT NULL,
+      conversation_id VARCHAR2(128 CHAR),
       family_group_key VARCHAR2(128 CHAR) NOT NULL,
       file_id VARCHAR2(512 CHAR),
       caption_text CLOB,
@@ -769,7 +819,77 @@ END;
 /
 
 BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_conversations_thread ON share_conversations (thread_id, last_activity_at, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_conversations_owner ON share_conversations (family_group_key, owner_person_id, last_activity_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_conversations_status ON share_conversations (family_group_key, conversation_status, last_activity_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX ux_share_conversation_members_person ON share_conversation_members (conversation_id, person_id)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_conversation_members_lookup ON share_conversation_members (family_group_key, thread_id, person_id, is_active)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_conversation_members_conversation ON share_conversation_members (family_group_key, conversation_id, is_active)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
   EXECUTE IMMEDIATE 'CREATE INDEX ix_share_posts_thread ON share_posts (thread_id, created_at)';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX ix_share_posts_conversation ON share_posts (conversation_id, thread_id, created_at)';
 EXCEPTION
   WHEN OTHERS THEN
     IF SQLCODE != -955 THEN

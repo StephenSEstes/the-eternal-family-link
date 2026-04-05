@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 type HeaderNavProps = {
   basePath: string;
-  isAdmin: boolean;
 };
 
 type NavItem = {
@@ -14,7 +13,6 @@ type NavItem = {
   href: string;
   match: (pathname: string) => boolean;
   icon: ReactNode;
-  openInWindow?: boolean;
 };
 
 function HomeIcon() {
@@ -86,64 +84,8 @@ function SharesIcon() {
     </svg>
   );
 }
-
-function HelpIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9.5 9a2.5 2.5 0 1 1 4.4 1.6c-.9 1-1.9 1.6-1.9 3" />
-      <circle cx="12" cy="17.2" r="0.8" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
-      <path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.6-2-3.4-2.5 1a8.2 8.2 0 0 0-1.7-1L14.8 4h-5.6l-.4 2.9a8.2 8.2 0 0 0-1.7 1l-2.5-1-2 3.4 2 1.6a7.9 7.9 0 0 0-.1 1 7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.5-1a8.2 8.2 0 0 0 1.7 1l.4 2.9h5.6l.4-2.9a8.2 8.2 0 0 0 1.7-1l2.5 1 2-3.4-2-1.6z" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
-      <path d="M16 17l5-5-5-5" />
-      <path d="M21 12H9" />
-    </svg>
-  );
-}
-
-export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
-  const router = useRouter();
+export function HeaderNav({ basePath }: HeaderNavProps) {
   const pathname = usePathname() || "/";
-
-  const openHelpInWindow = (href: string) => {
-    if (typeof window === "undefined") {
-      router.push(href);
-      return;
-    }
-
-    const popup = window.open(
-      href,
-      "efl_help",
-      "popup=yes,width=1120,height=820,resizable=yes,scrollbars=yes",
-    );
-    if (popup) {
-      popup.focus();
-      return;
-    }
-
-    const tab = window.open(href, "_blank", "noopener,noreferrer");
-    if (tab) {
-      tab.focus();
-      return;
-    }
-
-    router.push(href);
-  };
 
   const sectionItems: NavItem[] = [
     {
@@ -188,31 +130,7 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
       match: (path) => path.startsWith(`${basePath}/shares`),
       icon: <SharesIcon />,
     },
-    {
-      label: "Help",
-      href: `${basePath}/help`,
-      match: (path) => path.startsWith(`${basePath}/help`),
-      icon: <HelpIcon />,
-      openInWindow: true,
-    },
   ];
-
-  if (isAdmin) {
-    sectionItems.push({
-      label: "Admin",
-      href: `${basePath}/settings`,
-      match: (path) => path.startsWith(`${basePath}/settings`),
-      icon: <SettingsIcon />,
-    });
-  }
-
-  const items: NavItem[] = [...sectionItems];
-  items.push({
-    label: "Sign out",
-    href: "/api/auth/signout",
-    match: () => false,
-    icon: <LogoutIcon />,
-  });
 
   const activeSection = sectionItems.find((item) => item.match(pathname)) ?? sectionItems[0];
 
@@ -224,13 +142,9 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
           aria-label="Select page"
           value={activeSection?.href ?? sectionItems[0]?.href}
           onChange={(event) => {
-            const nextHref = event.target.value;
-            const selected = sectionItems.find((item) => item.href === nextHref);
-            if (selected?.openInWindow) {
-              openHelpInWindow(nextHref);
-              return;
-            }
-            router.push(nextHref);
+            const nextHref = event.target.value.trim();
+            if (!nextHref) return;
+            window.location.assign(nextHref);
           }}
         >
           {sectionItems.map((item) => (
@@ -241,21 +155,8 @@ export function HeaderNav({ basePath, isAdmin }: HeaderNavProps) {
         </select>
       </div>
       <div className="app-nav">
-        {items.map((item) => {
+        {sectionItems.map((item) => {
           const active = item.match(pathname);
-          if (item.openInWindow) {
-            return (
-              <button
-                key={item.label}
-                type="button"
-                className={active ? "nav-pill nav-pill-active" : "nav-pill"}
-                onClick={() => openHelpInWindow(item.href)}
-              >
-                <span className="nav-pill-icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            );
-          }
           return (
             <Link
               key={item.label}

@@ -150,6 +150,52 @@ I will update this list as we add, complete, or remove work.
     - Completion criteria:
       - Thread-first Share UX is in place with no quick-audience dependency.
       - Default audience conversations are visible and usable from the thread list.
+  - Phase 8: Conversation-topics model inside each share group + header action relocation
+    - Status: In progress 2026-04-04
+    - Scope:
+      - Treat each share group (`share_threads`) as a continuous communication container.
+      - Add distinct conversation/topic records inside each share group with required titles.
+      - Track per-conversation read state so unread status reflects unseen uploads/comments per conversation.
+      - Allow creating a new conversation with:
+        - required `title`
+        - optional initial message
+        - optional media via the canonical Add Media attach flow
+      - Ensure conversations are linked to:
+        - creator person (`owner_person_id` / `created_by_person_id`)
+        - tagged people through canonical media links on attached media posts
+      - Surface linked conversations in Person modal media context (readable list).
+      - Move top-level Help/Admin actions into the user-initials area and remove duplicate Sign out from main nav.
+    - API/UI/data changes:
+      - Data/schema:
+        - Add `share_conversations` (conversation identity + metadata + last activity).
+        - Add `share_conversation_members` (conversation membership/read state).
+        - Add `conversation_id` on `share_posts` (nullable for compatibility reads).
+      - API:
+        - Add conversation list/create routes under share thread:
+          - `GET/POST /api/t/[tenantKey]/shares/threads/[threadId]/conversations`
+        - Add conversation read-state route:
+          - `POST /api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/read`
+        - Extend posts routes to filter/create by `conversationId`.
+        - Add person-linked conversation list route for Person modal reads.
+      - UI:
+        - Shares: selecting a share group shows conversation list ordered by recent activity.
+        - Shares: selecting a conversation loads its messages/media/comments.
+        - Shares: Add New Conversation flow requires title and supports optional initial text/media.
+        - Header: question-mark Help action beside user initials; Admin moved into initials popout; remove Sign out from main menu.
+        - Person modal: linked conversation list under media context with open-navigation affordance.
+    - Validation:
+      - `npm run lint` passes.
+      - `npm run build` passes.
+      - In a share group, user can create multiple titled conversations and reopen them by date/activity order.
+      - Conversation unread badges clear only after conversation read update.
+      - New conversation can be created with title-only, title+text, or title+media.
+      - Media attached in conversation still creates canonical media/person links.
+      - Header nav no longer shows Help/Admin/Sign out pills; Help/Admin/Sign out available from initials area.
+      - Person modal shows linked conversations for that person (creator-linked and media-tag-linked).
+    - Completion criteria:
+      - Share groups contain multiple durable conversation topics with per-topic unread tracking.
+      - New conversation creation and media posting run through canonical media link behavior.
+      - Navigation/action placement matches requested UX with no duplicate sign-out entry.
   API/UI/data changes:
   - API: new `/api/t/[tenantKey]/shares/...` routes plus push subscription endpoints and dispatch hook.
   - UI: Home feed card + Shares screen + compose/comments interactions.

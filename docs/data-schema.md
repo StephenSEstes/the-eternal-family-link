@@ -72,10 +72,19 @@ This section is a quick reference for the three data areas that drive profile/me
     - One member row per thread + person
     - Key: `thread_member_id`
     - Uniqueness: (`thread_id`, `person_id`)
+  - `ShareConversations`
+    - Conversation/topic containers inside each share thread
+    - Key: `conversation_id`
+    - Parent: `thread_id -> ShareThreads.thread_id`
+  - `ShareConversationMembers`
+    - One membership/read-state row per conversation + person
+    - Key: `conversation_member_id`
+    - Uniqueness: (`conversation_id`, `person_id`)
   - `SharePosts`
-    - One row per thread post (text-only or media-backed by `file_id`)
+    - One row per conversation post (text-only or media-backed by `file_id`)
     - Key: `post_id`
     - Parent: `thread_id -> ShareThreads.thread_id`
+    - Parent: `conversation_id -> ShareConversations.conversation_id`
   - `SharePostComments`
     - Threaded post comments using `parent_comment_id`
     - Key: `comment_id`
@@ -133,7 +142,10 @@ This section is a quick reference for the three data areas that drive profile/me
   - `ShareGroups.group_id` -> `ShareGroupMembers.group_id`
   - `ShareGroups.group_id` -> `ShareThreads.group_id` (custom-group threads)
   - `ShareThreads.thread_id` -> `ShareThreadMembers.thread_id`
+  - `ShareThreads.thread_id` -> `ShareConversations.thread_id`
+  - `ShareConversations.conversation_id` -> `ShareConversationMembers.conversation_id`
   - `ShareThreads.thread_id` -> `SharePosts.thread_id`
+  - `ShareConversations.conversation_id` -> `SharePosts.conversation_id`
   - `SharePosts.post_id` -> `SharePostComments.post_id`
   - `SharePosts.file_id` -> `MediaAssets.file_id` (optional media-backed post)
 - Notification pipeline:
@@ -157,6 +169,7 @@ This section is a quick reference for the three data areas that drive profile/me
 - Share membership uniqueness:
   - Unique (`thread_id`, `person_id`) in `ShareThreadMembers`
   - Unique (`group_id`, `person_id`) in `ShareGroupMembers`
+  - Unique (`conversation_id`, `person_id`) in `ShareConversationMembers`
 
 ## Tables And Columns
 
@@ -550,11 +563,55 @@ This section is a quick reference for the three data areas that drive profile/me
   - Unique composite: (`thread_id`, `person_id`)
   - Common lookup: (`family_group_key`, `person_id`, `is_active`)
 
+## ShareConversations
+
+- Columns:
+  - `conversation_id`
+  - `thread_id`
+  - `family_group_key`
+  - `title`
+  - `conversation_kind` (`general` | `topic`)
+  - `owner_person_id`
+  - `created_by_person_id`
+  - `created_by_email`
+  - `created_at`
+  - `updated_at`
+  - `last_activity_at`
+  - `conversation_status`
+- Purpose:
+  - Topic-level conversation containers inside each share group/thread.
+  - Drive conversation ordering and per-conversation unread state.
+- Logical index/key:
+  - Unique: `conversation_id`
+  - Common lookup: (`thread_id`, `last_activity_at`, `created_at`)
+  - Common lookup: (`family_group_key`, `owner_person_id`, `last_activity_at`)
+
+## ShareConversationMembers
+
+- Columns:
+  - `conversation_member_id`
+  - `conversation_id`
+  - `thread_id`
+  - `family_group_key`
+  - `person_id`
+  - `member_role` (`owner` | `member`)
+  - `joined_at`
+  - `last_read_at`
+  - `is_active`
+- Purpose:
+  - Membership and read-state per conversation topic.
+- Logical index/key:
+  - Unique: `conversation_member_id`
+  - Unique composite: (`conversation_id`, `person_id`)
+  - Common lookup: (`family_group_key`, `thread_id`, `person_id`, `is_active`)
+  - Common lookup: (`family_group_key`, `conversation_id`, `is_active`)
+
 ## SharePosts
 
 - Columns:
   - `post_id`
   - `thread_id`
+  - `conversation_id`
   - `family_group_key`
   - `file_id`
   - `caption_text`
@@ -569,6 +626,7 @@ This section is a quick reference for the three data areas that drive profile/me
 - Logical index/key:
   - Unique: `post_id`
   - Common lookup: (`thread_id`, `created_at`)
+  - Common lookup: (`conversation_id`, `thread_id`, `created_at`)
   - Common lookup: (`family_group_key`, `created_at`)
 
 ## SharePostComments

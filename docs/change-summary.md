@@ -13,6 +13,25 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (Share groups now contain conversation topics + header action relocation)
+
+- `Date`: 2026-04-05
+- `Change`: Added conversation-topic modeling inside each share group (`thread`) with required-title creation, per-conversation unread/read tracking, conversation-scoped posting, and deep-link open support (`threadId` + `conversationId`). Also moved Help/Admin/Sign out actions into the user-initials area (Help as `?` icon beside initials; Admin + Sign out in popout) and removed those actions from top nav.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was a model mismatch: share groups had only one flat post stream, so distinct topics and topic-level read state were not possible. Header actions were also duplicated across top nav and user menu, creating navigation clutter.
+- `Files`: `src/components/shares/SharesClient.tsx`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/read/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/route.ts`, `src/lib/oci/tables.ts`, `src/app/api/t/[tenantKey]/people/[personId]/share-conversations/route.ts`, `src/components/PersonEditModal.tsx`, `src/components/HeaderNav.tsx`, `src/components/UserMenu.tsx`, `src/components/AppHeader.tsx`, `src/app/globals.css`, `oci-schema.sql`, `docs/data-schema.md`, `designchoices.md`, `docs/design-decisions.md`, `TODO.md`
+- `Data Changes`: Added `share_conversations` and `share_conversation_members` compatibility/bootstrap paths and added `conversation_id` on `share_posts` with index support.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` still fails in this workspace on the pre-existing Windows path-casing + `/404` prerender issue (not introduced by this change).
+  - In Shares UI, opening a share group shows conversation topics ordered by activity with unread badges.
+  - Creating a conversation requires a title and can include initial text/media.
+  - Selecting a conversation loads only that conversation’s posts/comments and marks it read.
+  - Person modal `Media` tab now shows linked share conversations with open links to the conversation context.
+  - Header no longer shows top-level Help/Admin/Sign out pills; those actions are available from the user-initials area.
+- `Rollback Notes`: Revert this commit to return to flat thread-only shares and prior header action placement.
+- `Design Decision Change`: Yes. Added decisions for conversation-topic modeling and header action placement in `designchoices.md`.
+
 ## 2026-04-04 (Share thread-first UX + seeded defaults + chat alignment)
 
 - `Date`: 2026-04-04

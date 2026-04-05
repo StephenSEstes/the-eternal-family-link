@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ModalCloseButton } from "@/components/ui/primitives";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
@@ -24,6 +25,7 @@ type ShareThread = {
 
 type SharePost = {
   postId: string;
+  conversationId: string;
   fileId: string;
   caption: string;
   authorPersonId: string;
@@ -39,6 +41,20 @@ type ShareComment = {
   commentText: string;
   createdAt: string;
   author: { personId: string; displayName: string };
+};
+
+type ShareConversation = {
+  conversationId: string;
+  threadId: string;
+  familyGroupKey: string;
+  title: string;
+  conversationKind: string;
+  ownerPersonId: string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+  unreadCount: number;
+  latestPost: { caption: string; authorDisplayName: string } | null;
 };
 
 type MemberColor = {
@@ -74,6 +90,10 @@ function previewFallback(tenantKey: string, fileId: string) {
   return `/t/${encodeURIComponent(tenantKey)}/viewer/photo/${encodeURIComponent(fileId)}?variant=preview`;
 }
 
+function sumConversationUnread(conversations: ShareConversation[]) {
+  return conversations.reduce((total, entry) => total + Math.max(0, Number(entry.unreadCount ?? 0)), 0);
+}
+
 async function assertOkWithAuth(res: Response, fallbackMessage: string) {
   if (res.ok) return;
   if (res.status === 401 || res.status === 403) throw new Error("Session expired. Please refresh and sign in again.");
@@ -82,6 +102,9 @@ async function assertOkWithAuth(res: Response, fallbackMessage: string) {
 }
 
 export function SharesClient({ tenantKey }: SharesClientProps) {
+  const searchParams = useSearchParams();
+  const requestedThreadId = String(searchParams?.get("threadId") ?? "").trim();
+  const requestedConversationId = String(searchParams?.get("conversationId") ?? "").trim();
   const [threads, setThreads] = useState<ShareThread[]>([]);
   const [availableFamilyGroups, setAvailableFamilyGroups] = useState<FamilyGroupOption[]>([]);
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
@@ -91,9 +114,23 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [threadsStatus, setThreadsStatus] = useState("");
   const [threadsRefreshKey, setThreadsRefreshKey] = useState(0);
+  const [routeSelectionApplied, setRouteSelectionApplied] = useState(false);
 
   const [selectedThreadId, setSelectedThreadId] = useState("");
   const [threadModalOpen, setThreadModalOpen] = useState(false);
+  const [conversations, setConversations] = useState<ShareConversation[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationsStatus, setConversationsStatus] = useState("");
+  const [conversationsRefreshKey, setConversationsRefreshKey] = useState(0);
+  const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [createConversationModalOpen, setCreateConversationModalOpen] = useState(false);
+  const [newConversationTitle, setNewConversationTitle] = useState("");
+  const [newConversationMessage, setNewConversationMessage] = useState("");
+  const [newConversationFileIds, setNewConversationFileIds] = useState<string[]>([]);
+  const [newConversationAttachSummary, setNewConversationAttachSummary] = useState("");
+  const [createConversationBusy, setCreateConversationBusy] = useState(false);
+  const [createConversationStatus, setCreateConversationStatus] = useState("");
+  const [createConversationAttachOpen, setCreateConversationAttachOpen] = useState(false);
 
   const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
   const [customFamilyGroupKey, setCustomFamilyGroupKey] = useState("");
@@ -160,6 +197,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
 
   useEffect(() => {
     setDefaultThreadsEnsured(false);
+    setRouteSelectionApplied(false);
   }, [tenantKey]);
 
   useEffect(() => {
@@ -231,11 +269,114 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   }, [tenantKey]);
 
   useEffect(() => {
+    if (routeSelectionApplied || threadsLoading) {
+      return;
+    }
+    if (threads.length === 0) {
+      setRouteSelectionApplied(true);
+      return;
+    }
+    setRouteSelectionApplied(true);
+    if (!requestedThreadId) {
+      return;
+    }
+    const requestedThread = threads.find((entry) => entry.threadId === requestedThreadId);
+    if (!requestedThread) {
+      return;
+    }
+    setSelectedThreadId(requestedThread.threadId);
+    setSelectedConversationId(requestedConversationId);
+    setThreadModalOpen(true);
+    setConversationsRefreshKey((current) => current + 1);
+    setPostsRefreshKey((current) => current + 1);
+  }, [requestedConversationId, requestedThreadId, routeSelectionApplied, threads, threadsLoading]);
+
+  useEffect(() => {
     if (!selectedThreadId) {
-      setThreadModalOpen(false);
+      setConversations([]);
+      setThreadMembers([]);
+      setSelectedConversationId("");
+      setConversationsStatus("");
       setPosts([]);
       setCommentsByPostId({});
-      setThreadMembers([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setConversationsLoading(true);
+      setConversationsStatus("");
+      try {
+        const [conversationRes, membersRes] = await Promise.all([
+          fetch(
+            `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations`,
+            { cache: "no-store" },
+          ),
+          fetch(
+            `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts?limit=1`,
+            { cache: "no-store" },
+          ),
+        ]);
+        await assertOkWithAuth(conversationRes, "Failed to load conversations.");
+        await assertOkWithAuth(membersRes, "Failed to load thread members.");
+        const conversationBody = (await conversationRes.json()) as {
+          conversations?: ShareConversation[];
+          defaultConversationId?: string;
+        };
+        const membersBody = (await membersRes.json()) as {
+          members?: ThreadMember[];
+        };
+        if (cancelled) return;
+        const incomingConversations = Array.isArray(conversationBody.conversations) ? conversationBody.conversations : [];
+        const incomingMembers = Array.isArray(membersBody.members) ? membersBody.members : [];
+        const requestedId = requestedConversationId;
+        const defaultConversationId = String(conversationBody.defaultConversationId ?? "").trim();
+
+        setConversations(incomingConversations);
+        setThreadMembers(incomingMembers);
+        setThreads((current) =>
+          current.map((thread) =>
+            thread.threadId === selectedThreadId
+              ? { ...thread, unreadCount: sumConversationUnread(incomingConversations) }
+              : thread,
+          ),
+        );
+        setSelectedConversationId((current) => {
+          const choices = [
+            current,
+            requestedId,
+            defaultConversationId,
+            String(incomingConversations[0]?.conversationId ?? "").trim(),
+          ].map((entry) => String(entry ?? "").trim()).filter(Boolean);
+          const next = choices.find((candidate) =>
+            incomingConversations.some((conversation) => conversation.conversationId === candidate),
+          );
+          return next ?? "";
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setConversations([]);
+          setThreadMembers([]);
+          setSelectedConversationId("");
+          setConversationsStatus(error instanceof Error ? error.message : "Failed to load conversations.");
+        }
+      } finally {
+        if (!cancelled) setConversationsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationsRefreshKey, requestedConversationId, selectedThreadId, tenantKey]);
+
+  const selectedConversationKnown = conversations.some(
+    (entry) => entry.conversationId === selectedConversationId,
+  );
+
+  useEffect(() => {
+    if (!selectedThreadId || !selectedConversationId || !selectedConversationKnown) {
+      setPosts([]);
+      setCommentsByPostId({});
+      setPostsStatus("");
       return;
     }
     let cancelled = false;
@@ -243,12 +384,12 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       setPostsLoading(true);
       setPostsStatus("");
       try {
-        const res = await fetch(
-          `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts?limit=80`,
+        const postsRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts?limit=120&conversationId=${encodeURIComponent(selectedConversationId)}`,
           { cache: "no-store" },
         );
-        await assertOkWithAuth(res, "Failed to load thread posts.");
-        const body = (await res.json()) as { posts?: SharePost[]; members?: ThreadMember[] };
+        await assertOkWithAuth(postsRes, "Failed to load conversation posts.");
+        const body = (await postsRes.json()) as { posts?: SharePost[]; members?: ThreadMember[] };
         if (cancelled) return;
         const incomingPosts = Array.isArray(body.posts) ? body.posts : [];
         const incomingMembers = Array.isArray(body.members) ? body.members : [];
@@ -268,13 +409,38 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             return [post.postId, comments] as const;
           }),
         );
-        if (!cancelled) setCommentsByPostId(Object.fromEntries(commentEntries));
+        if (!cancelled) {
+          setCommentsByPostId(Object.fromEntries(commentEntries));
+        }
+        const markReadRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations/${encodeURIComponent(selectedConversationId)}/read`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          },
+        );
+        if (!markReadRes.ok || cancelled) {
+          return;
+        }
+        setConversations((current) => {
+          const next = current.map((entry) =>
+            entry.conversationId === selectedConversationId ? { ...entry, unreadCount: 0 } : entry,
+          );
+          setThreads((threadsCurrent) =>
+            threadsCurrent.map((thread) =>
+              thread.threadId === selectedThreadId
+                ? { ...thread, unreadCount: sumConversationUnread(next) }
+                : thread,
+            ),
+          );
+          return next;
+        });
       } catch (error) {
         if (!cancelled) {
           setPosts([]);
           setCommentsByPostId({});
-          setThreadMembers([]);
-          setPostsStatus(error instanceof Error ? error.message : "Failed to load thread posts.");
+          setPostsStatus(error instanceof Error ? error.message : "Failed to load conversation posts.");
         }
       } finally {
         if (!cancelled) setPostsLoading(false);
@@ -283,12 +449,23 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [tenantKey, selectedThreadId, postsRefreshKey]);
+  }, [postsRefreshKey, selectedConversationId, selectedConversationKnown, selectedThreadId, tenantKey]);
 
   const selectedThread = useMemo(() => threads.find((thread) => thread.threadId === selectedThreadId) ?? null, [threads, selectedThreadId]);
   const orderedThreads = useMemo(
     () => threads.slice().sort((a, b) => ts(b.lastPostAt || b.createdAt) - ts(a.lastPostAt || a.createdAt)),
     [threads],
+  );
+  const selectedConversation = useMemo(
+    () => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null,
+    [conversations, selectedConversationId],
+  );
+  const orderedConversations = useMemo(
+    () =>
+      conversations
+        .slice()
+        .sort((a, b) => ts(b.lastActivityAt || b.createdAt) - ts(a.lastActivityAt || a.createdAt)),
+    [conversations],
   );
   const orderedPosts = useMemo(() => posts.slice().sort((a, b) => ts(a.createdAt) - ts(b.createdAt)), [posts]);
   const attachPreselectedPersonIds = useMemo(
@@ -323,11 +500,34 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       .slice(0, 12);
   }, [peopleOptions, customMemberPersonIds, memberSearchDraft]);
 
-  const openThread = (threadId: string) => {
+  const openThread = (threadId: string, conversationId = "") => {
     setSelectedThreadId(threadId);
+    setSelectedConversationId(conversationId.trim());
     setThreadModalOpen(true);
+    setConversationsStatus("");
     setPostsStatus("");
     setComposeStatus("");
+    setCreateConversationStatus("");
+    setConversationsRefreshKey((current) => current + 1);
+    setPostsRefreshKey((current) => current + 1);
+  };
+
+  const openCreateConversationModal = () => {
+    setCreateConversationStatus("");
+    setNewConversationTitle("");
+    setNewConversationMessage("");
+    setNewConversationFileIds([]);
+    setNewConversationAttachSummary("");
+    setCreateConversationModalOpen(true);
+  };
+
+  const selectConversation = (conversationId: string) => {
+    const normalized = conversationId.trim();
+    if (!normalized) return;
+    setSelectedConversationId(normalized);
+    setComposeStatus("");
+    setPostsStatus("");
+    setPostsRefreshKey((current) => current + 1);
   };
 
   const addPersonToCustomGroup = (personId: string) => {
@@ -401,8 +601,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       await assertOkWithAuth(res, "Failed to create group thread.");
       const body = (await res.json()) as { thread?: ShareThread; recipientCount?: number; existingThread?: boolean };
       if (body.thread?.threadId) {
-        setSelectedThreadId(body.thread.threadId);
-        setThreadModalOpen(true);
+        openThread(body.thread.threadId);
       }
       setCreateGroupStatus(
         body.existingThread ? "Group with the same members already exists. Opened existing thread." : `Created group thread${typeof body.recipientCount === "number" ? ` (${body.recipientCount} members)` : ""}.`,
@@ -418,20 +617,111 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     }
   };
 
+  const createConversationWithOptionalContent = async () => {
+    if (!selectedThreadId) return;
+    const title = newConversationTitle.trim();
+    if (!title) {
+      setCreateConversationStatus("Conversation title is required.");
+      return;
+    }
+    setCreateConversationBusy(true);
+    setCreateConversationStatus("");
+    try {
+      const createRes = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        },
+      );
+      await assertOkWithAuth(createRes, "Failed to create conversation.");
+      const createBody = (await createRes.json()) as {
+        conversation?: { conversationId?: string; title?: string };
+      };
+      const conversationId = String(createBody.conversation?.conversationId ?? "").trim();
+      if (!conversationId) {
+        throw new Error("Conversation was created but no conversation ID was returned.");
+      }
+
+      const message = newConversationMessage.trim();
+      if (message) {
+        const postRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId, caption: message }),
+          },
+        );
+        await assertOkWithAuth(postRes, "Failed to add initial conversation message.");
+      }
+
+      for (const fileId of newConversationFileIds) {
+        const postRes = await fetch(
+          `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId, fileId, caption: "" }),
+          },
+        );
+        await assertOkWithAuth(postRes, "Failed to add initial conversation media.");
+      }
+
+      setCreateConversationModalOpen(false);
+      setNewConversationTitle("");
+      setNewConversationMessage("");
+      setNewConversationFileIds([]);
+      setNewConversationAttachSummary("");
+      setSelectedConversationId(conversationId);
+      setThreadModalOpen(true);
+      setThreadsRefreshKey((current) => current + 1);
+      setConversationsRefreshKey((current) => current + 1);
+      setPostsRefreshKey((current) => current + 1);
+      setComposeStatus("Conversation created.");
+    } catch (error) {
+      setCreateConversationStatus(error instanceof Error ? error.message : "Failed to create conversation.");
+    } finally {
+      setCreateConversationBusy(false);
+    }
+  };
+
+  const handleNewConversationAttachComplete = (summary: MediaAttachExecutionSummary) => {
+    setCreateConversationAttachOpen(false);
+    const uploadedFileIds = Array.isArray(summary.fileIds)
+      ? summary.fileIds.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [];
+    if (uploadedFileIds.length > 0) {
+      setNewConversationFileIds((current) => {
+        const next = new Set(current);
+        for (const fileId of uploadedFileIds) {
+          next.add(fileId);
+        }
+        return Array.from(next);
+      });
+    }
+    setNewConversationAttachSummary(formatMediaAttachUserSummary(summary));
+  };
+
   const postTextOnly = async () => {
-    if (!selectedThreadId || !captionDraft.trim()) return;
+    if (!selectedThreadId || !selectedConversationId || !captionDraft.trim()) return;
     setComposeBusy(true);
     setComposeStatus("");
     try {
       const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption: captionDraft.trim() }),
+        body: JSON.stringify({
+          conversationId: selectedConversationId,
+          caption: captionDraft.trim(),
+        }),
       });
       await assertOkWithAuth(res, "Failed to post message.");
       setCaptionDraft("");
       setComposeStatus("Posted.");
       setThreadsRefreshKey((current) => current + 1);
+      setConversationsRefreshKey((current) => current + 1);
       setPostsRefreshKey((current) => current + 1);
     } catch (error) {
       setComposeStatus(error instanceof Error ? error.message : "Failed to post message.");
@@ -443,7 +733,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const handleShareAttachComplete = async (summary: MediaAttachExecutionSummary) => {
     setShareAttachOpen(false);
     const uploadedFileIds = Array.isArray(summary.fileIds) ? summary.fileIds : [];
-    if (!selectedThreadId || uploadedFileIds.length === 0) {
+    if (!selectedThreadId || !selectedConversationId || uploadedFileIds.length === 0) {
       setComposeStatus(formatMediaAttachUserSummary(summary));
       return;
     }
@@ -457,6 +747,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            conversationId: selectedConversationId,
             fileId,
             caption: index === 0 ? caption : "",
           }),
@@ -466,6 +757,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       setCaptionDraft("");
       setComposeStatus(`Media shared (${uploadedFileIds.length}).`);
       setThreadsRefreshKey((current) => current + 1);
+      setConversationsRefreshKey((current) => current + 1);
       setPostsRefreshKey((current) => current + 1);
     } catch (error) {
       setComposeStatus(error instanceof Error ? error.message : "Failed to share attached media.");
@@ -495,6 +787,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       }
       setCommentDraftByPostId((current) => ({ ...current, [postId]: "" }));
       setThreadsRefreshKey((current) => current + 1);
+      setConversationsRefreshKey((current) => current + 1);
     } catch (error) {
       setPostsStatus(error instanceof Error ? error.message : "Failed to post comment.");
     } finally {
@@ -509,11 +802,11 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   return (
     <main className="section">
       <h1 className="page-title">Family Share</h1>
-      <p className="page-subtitle">Share media in ongoing family threads by audience.</p>
+      <p className="page-subtitle">Share media in ongoing groups with distinct conversation topics.</p>
 
       <div style={{ marginTop: "1rem", maxWidth: "480px" }}>
         <section className="card" style={{ display: "grid", gap: "0.75rem", alignContent: "start" }}>
-          <h2 style={{ margin: 0 }}>Threads</h2>
+          <h2 style={{ margin: 0 }}>Share Groups</h2>
           <p className="page-subtitle" style={{ margin: 0 }}>
             All threads you belong to.
           </p>
@@ -748,6 +1041,94 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         </div>
       ) : null}
 
+      {createConversationModalOpen && selectedThread ? (
+        <div className="person-modal-backdrop" onClick={() => setCreateConversationModalOpen(false)}>
+          <div
+            className="person-modal-panel"
+            style={{ maxWidth: "760px", width: "min(760px, 96vw)", height: "auto", maxHeight: "90vh" }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="person-modal-sticky-head">
+              <div className="person-modal-header" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", paddingRight: 0 }}>
+                <div className="person-modal-header-copy">
+                  <h3 className="person-modal-title">New Conversation</h3>
+                  <p className="person-modal-meta">{selectedThread.audienceLabel || selectedThread.audienceType}</p>
+                </div>
+                <ModalCloseButton className="modal-close-button--floating" onClick={() => setCreateConversationModalOpen(false)} />
+              </div>
+            </div>
+            <div className="person-modal-content">
+              <div style={{ display: "grid", gap: "0.65rem" }}>
+                <div>
+                  <label className="label">Title (required)</label>
+                  <input
+                    className="input"
+                    value={newConversationTitle}
+                    onChange={(event) => setNewConversationTitle(event.target.value)}
+                    placeholder="Sunday Memories"
+                    disabled={createConversationBusy}
+                  />
+                </div>
+                <div>
+                  <label className="label">Initial Message (optional)</label>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    value={newConversationMessage}
+                    onChange={(event) => setNewConversationMessage(event.target.value)}
+                    placeholder="Add context or a note for this conversation..."
+                    style={{ resize: "vertical" }}
+                    disabled={createConversationBusy}
+                  />
+                </div>
+                <div style={{ display: "grid", gap: "0.45rem" }}>
+                  <label className="label">Initial Media (optional)</label>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="button secondary tap-button"
+                      onClick={() => setCreateConversationAttachOpen(true)}
+                      disabled={createConversationBusy}
+                      style={{ width: "auto" }}
+                    >
+                      Choose File
+                    </button>
+                    <span className="page-subtitle" style={{ margin: 0 }}>
+                      {newConversationFileIds.length > 0
+                        ? `${newConversationFileIds.length} file(s) selected`
+                        : "No files selected"}
+                    </span>
+                  </div>
+                  {newConversationAttachSummary ? (
+                    <p className="page-subtitle" style={{ margin: 0 }}>{newConversationAttachSummary}</p>
+                  ) : null}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="button secondary tap-button"
+                  onClick={() => setCreateConversationModalOpen(false)}
+                  style={{ width: "auto" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="button tap-button"
+                  onClick={() => void createConversationWithOptionalContent()}
+                  disabled={createConversationBusy || !newConversationTitle.trim()}
+                  style={{ width: "auto" }}
+                >
+                  {createConversationBusy ? "Creating..." : "Create Conversation"}
+                </button>
+              </div>
+              {createConversationStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{createConversationStatus}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {threadModalOpen && selectedThread ? (
         <div className="person-modal-backdrop" onClick={() => setThreadModalOpen(false)}>
           <div
@@ -758,17 +1139,20 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             <div className="person-modal-sticky-head">
               <div className="person-modal-header" style={{ gridTemplateColumns: "minmax(0, 1fr) auto auto", paddingRight: 0 }}>
                 <div className="person-modal-header-copy">
-                  <h3 className="person-modal-title">{selectedThread.audienceLabel || "Thread"}</h3>
+                  <h3 className="person-modal-title">{selectedThread.audienceLabel || "Share Group"}</h3>
                   <p className="person-modal-meta">{selectedThread.familyGroupKey} - {selectedThread.audienceType}</p>
                 </div>
                 <button
                   type="button"
                   className="button secondary tap-button"
-                  onClick={() => setPostsRefreshKey((current) => current + 1)}
-                  disabled={postsLoading}
+                  onClick={() => {
+                    setConversationsRefreshKey((current) => current + 1);
+                    setPostsRefreshKey((current) => current + 1);
+                  }}
+                  disabled={postsLoading || conversationsLoading}
                   style={{ width: "auto" }}
                 >
-                  {postsLoading ? "Refreshing..." : "Refresh"}
+                  {postsLoading || conversationsLoading ? "Refreshing..." : "Refresh"}
                 </button>
                 <ModalCloseButton className="modal-close-button--floating" onClick={() => setThreadModalOpen(false)} />
               </div>
@@ -796,7 +1180,79 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             </div>
             <div className="person-modal-content">
               <div className="card" style={{ margin: 0, display: "grid", gap: "0.55rem" }}>
-                <label className="label">Post Message</label>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <label className="label" style={{ marginBottom: 0 }}>Conversations</label>
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={openCreateConversationModal}
+                    disabled={!selectedThreadId}
+                    style={{ width: "auto" }}
+                  >
+                    New Conversation
+                  </button>
+                </div>
+                {conversationsStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{conversationsStatus}</p> : null}
+                {conversationsLoading ? <p className="page-subtitle" style={{ margin: 0 }}>Loading conversations...</p> : null}
+                {!conversationsLoading && orderedConversations.length === 0 ? (
+                  <p className="page-subtitle" style={{ margin: 0 }}>No conversations in this share group yet.</p>
+                ) : null}
+                <div style={{ display: "grid", gap: "0.45rem", maxHeight: "240px", overflow: "auto" }}>
+                  {orderedConversations.map((conversation) => {
+                    const active = conversation.conversationId === selectedConversationId;
+                    return (
+                      <button
+                        key={`conversation-${conversation.conversationId}`}
+                        type="button"
+                        className="button secondary tap-button"
+                        onClick={() => selectConversation(conversation.conversationId)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          display: "grid",
+                          gap: "0.28rem",
+                          background: active ? "var(--accent-soft)" : undefined,
+                          borderColor: active ? "var(--accent)" : undefined,
+                        }}
+                      >
+                        <span style={{ display: "flex", justifyContent: "space-between", gap: "0.45rem", alignItems: "center" }}>
+                          <strong>{conversation.title || "Conversation"}</strong>
+                          <span
+                            style={{
+                              minWidth: "1.7rem",
+                              height: "1.35rem",
+                              borderRadius: "999px",
+                              border: "1px solid var(--line)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              background: conversation.unreadCount > 0 ? "var(--accent-soft)" : "var(--surface-muted)",
+                              color: conversation.unreadCount > 0 ? "var(--accent-strong)" : "var(--text-muted)",
+                            }}
+                          >
+                            {conversation.unreadCount}
+                          </span>
+                        </span>
+                        <span className="page-subtitle" style={{ margin: 0, fontSize: "0.8rem" }}>
+                          {conversation.latestPost?.authorDisplayName
+                            ? `${conversation.latestPost.authorDisplayName}: ${conversation.latestPost.caption || "Media"}`
+                            : "No posts yet"}
+                        </span>
+                        <span className="page-subtitle" style={{ margin: 0, fontSize: "0.78rem" }}>
+                          {dt(conversation.lastActivityAt || conversation.createdAt)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="card" style={{ margin: 0, display: "grid", gap: "0.55rem" }}>
+                <label className="label">
+                  {selectedConversation ? `Post in "${selectedConversation.title || "Conversation"}"` : "Post Message"}
+                </label>
                 <textarea
                   className="input"
                   rows={2}
@@ -807,14 +1263,20 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                   disabled={composeBusy}
                 />
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <button type="button" className="button tap-button" onClick={() => void postTextOnly()} disabled={composeBusy || !captionDraft.trim()} style={{ width: "auto" }}>
+                  <button
+                    type="button"
+                    className="button tap-button"
+                    onClick={() => void postTextOnly()}
+                    disabled={composeBusy || !selectedConversationId || !captionDraft.trim()}
+                    style={{ width: "auto" }}
+                  >
                     {composeBusy ? "Posting..." : "Post Text"}
                   </button>
                   <button
                     type="button"
                     className="button secondary tap-button"
                     onClick={() => setShareAttachOpen(true)}
-                    disabled={composeBusy || !selectedThreadId}
+                    disabled={composeBusy || !selectedThreadId || !selectedConversationId}
                     style={{ width: "auto" }}
                   >
                     Choose File
@@ -824,9 +1286,14 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
               </div>
 
               {postsStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{postsStatus}</p> : null}
-              {postsLoading ? <p className="page-subtitle" style={{ margin: 0 }}>Loading posts...</p> : null}
+              {selectedConversationId && postsLoading ? <p className="page-subtitle" style={{ margin: 0 }}>Loading posts...</p> : null}
+              {!selectedConversationId ? (
+                <p className="page-subtitle" style={{ margin: 0 }}>Select a conversation to view posts and comments.</p>
+              ) : null}
               {!postsLoading && orderedPosts.length === 0 ? (
-                <p className="page-subtitle" style={{ margin: 0 }}>No posts in this thread yet.</p>
+                <p className="page-subtitle" style={{ margin: 0 }}>
+                  {selectedConversationId ? "No posts in this conversation yet." : ""}
+                </p>
               ) : null}
 
               <div style={{ display: "grid", gap: "0.75rem" }}>
@@ -967,6 +1434,22 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         }}
         onClose={() => setShareAttachOpen(false)}
         onComplete={(summary) => void handleShareAttachComplete(summary)}
+      />
+      <MediaAttachWizard
+        open={createConversationAttachOpen}
+        context={{
+          tenantKey,
+          source: "library",
+          canManage: true,
+          allowHouseholdLinks: false,
+          defaultAttributeType: "media",
+          preselectedPersonIds: attachPreselectedPersonIds,
+          preselectedHouseholdIds: [],
+          peopleOptions,
+          householdOptions: [],
+        }}
+        onClose={() => setCreateConversationAttachOpen(false)}
+        onComplete={(summary) => handleNewConversationAttachComplete(summary)}
       />
     </main>
   );
