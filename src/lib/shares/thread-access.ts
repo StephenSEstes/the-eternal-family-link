@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { TenantContext } from "@/lib/family-group/context";
-import { getOciShareThreadById, type OciShareThreadRow } from "@/lib/oci/tables";
+import { getOciShareThreadForPerson, type OciShareThreadRow } from "@/lib/oci/tables";
 
 function normalize(value: string | undefined) {
   return String(value ?? "").trim().toLowerCase();
@@ -27,17 +27,15 @@ export function getAccessibleFamilyGroupKeys(tenant: TenantContext): string[] {
 export async function resolveAccessibleShareThread(input: {
   threadId: string;
   tenant: TenantContext;
+  actorPersonId?: string;
 }): Promise<OciShareThreadRow | null> {
   const threadId = String(input.threadId ?? "").trim();
   if (!threadId) {
     return null;
   }
-  const keys = getAccessibleFamilyGroupKeys(input.tenant);
-  for (const familyGroupKey of keys) {
-    const thread = await getOciShareThreadById({ familyGroupKey, threadId });
-    if (thread) {
-      return thread;
-    }
+  const actorPersonId = String(input.actorPersonId ?? input.tenant.personId ?? "").trim();
+  if (!actorPersonId) {
+    return null;
   }
-  return null;
+  return getOciShareThreadForPerson({ threadId, personId: actorPersonId });
 }

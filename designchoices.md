@@ -404,3 +404,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep Help/Admin/Sign out as top-level nav pills.
 - `Impact`: Header nav now contains only section destinations; Help/Admin/Sign out are available from the user-initials area.
 - `Follow-up`: Keep future account-scoped actions in the same user popout to avoid duplicate controls.
+
+## 2026-04-05
+
+- `Area`: Family Shares access model (people-first kickoff)
+- `Decision`: Shift Shares runtime read/access semantics to membership-first. Thread list and thread resolution are based on `share_thread_members(person_id)` membership, not active family-group route context. Family-group audience concepts remain creation templates and metadata in this phase.
+- `Reason`: Users think in recipient/member conversations, not family-group containers. Active-family-gated reads caused avoidable context switches and inconsistent visibility for multi-family users.
+- `Alternatives Considered`: Keep family-group-gated reads and rely on more UI hints/training.
+- `Impact`: Shares inbox and thread access become stable across family-group switching for valid members; existing thread/post/comment payload contracts stay compatible.
+- `Follow-up`: Complete people-first creation identity (member-signature-first threads) and then retire legacy family-group-centric share gating logic.

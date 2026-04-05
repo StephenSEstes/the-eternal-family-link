@@ -103,6 +103,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     const thread = await resolveAccessibleShareThread({
       threadId,
       tenant: resolved.tenant,
+      actorPersonId,
     });
     if (!thread) {
       return NextResponse.json({ error: "thread_not_found" }, { status: 404 });

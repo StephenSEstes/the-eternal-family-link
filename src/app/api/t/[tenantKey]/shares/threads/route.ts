@@ -10,13 +10,13 @@ import {
   getOciShareGroupBySignature,
   getOciShareThreadByGroupId,
   getOciShareThreadByAudience,
+  listOciShareThreadsForPersonAnyFamily,
   listOciShareThreadsForPerson,
   updateOciShareThreadGroup,
   upsertOciShareGroupMember,
   upsertOciShareThreadMember,
 } from "@/lib/oci/tables";
 import { resolveShareAudience, type ShareAudienceType } from "@/lib/shares/audience";
-import { getAccessibleFamilyGroupKeys } from "@/lib/shares/thread-access";
 
 type RouteProps = {
   params: Promise<{ tenantKey: string }>;
@@ -110,25 +110,10 @@ export async function GET(request: Request, { params }: RouteProps) {
   const rawLimit = Number(url.searchParams.get("limit") ?? "40");
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(200, Math.trunc(rawLimit))) : 40;
 
-  const familyGroupKeys = getAccessibleFamilyGroupKeys(resolved.tenant);
-  const groupedThreads = await Promise.all(
-    familyGroupKeys.map((familyGroupKey) =>
-      listOciShareThreadsForPerson({
-        familyGroupKey,
-        personId: actorPersonId,
-        limit,
-      }).catch(() => []),
-    ),
-  );
-  const deduped = new Map<string, Awaited<ReturnType<typeof listOciShareThreadsForPerson>>[number]>();
-  for (const bucket of groupedThreads) {
-    for (const thread of bucket) {
-      if (!deduped.has(thread.threadId)) {
-        deduped.set(thread.threadId, thread);
-      }
-    }
-  }
-  const threads = Array.from(deduped.values())
+  const threads = (await listOciShareThreadsForPersonAnyFamily({
+    personId: actorPersonId,
+    limit,
+  }))
     .sort(
       (left, right) =>
         parseSortableTimestamp(right.lastPostAt || right.createdAt) -

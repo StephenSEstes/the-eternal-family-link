@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (People-first Shares phase 9.1: membership-based thread access/listing)
+
+- `Date`: 2026-04-05
+- `Change`: Started people-first Shares Phase 9.1 by moving thread inbox/listing and thread resolution to membership-first lookup. Shares thread GET now lists all threads where the actor is an active member across families, and thread route resolution now validates by (`thread_id`, `person_id`) membership instead of active-family-group key lookup.
+- `Type`: API | Data
+- `Why`: Root cause was family-group-scoped resolution in the share read path. Reproduction: users switching active family group could lose expected conversation visibility/context despite being valid thread members, because thread lookup depended on active-family-group key iteration first.
+- `Files`: `src/lib/oci/tables.ts`, `src/lib/shares/thread-access.ts`, `src/app/api/t/[tenantKey]/shares/threads/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/read/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/route.ts`, `src/app/api/t/[tenantKey]/shares/threads/[threadId]/read/route.ts`, `TODO.md`, `designchoices.md`, `docs/data-schema.md`, `docs/design-decisions.md`
+- `Data Changes`: No schema migration in this phase. Added new OCI helper query paths only (`getOciShareThreadForPerson`, `listOciShareThreadsForPersonAnyFamily`).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (existing unrelated TreeGraph warning remains).
+  - `/api/t/[tenantKey]/shares/threads` returns actor-member threads across family groups.
+  - `/api/t/[tenantKey]/shares/threads/[threadId]/...` resolves valid member access even when active family group differs from thread family context.
+- `Rollback Notes`: Revert this commit to restore family-group-first thread listing and resolution behavior.
+- `Design Decision Change`: Yes. Added people-first membership-first Shares access kickoff decision in `designchoices.md`.
+
 ## 2026-04-05 (Header Help icon rendered as question mark)
 
 - `Date`: 2026-04-05

@@ -38,7 +38,11 @@ export async function POST(request: Request, { params }: RouteProps) {
   if (!actorPersonId) {
     return NextResponse.json({ error: "missing_actor_person_id" }, { status: 400 });
   }
-  const thread = await resolveAccessibleShareThread({ threadId: normalize(threadId), tenant: resolved.tenant });
+  const thread = await resolveAccessibleShareThread({
+    threadId: normalize(threadId),
+    tenant: resolved.tenant,
+    actorPersonId,
+  });
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
@@ -102,4 +106,3 @@ export async function POST(request: Request, { params }: RouteProps) {
     lastReadAt: targetReadAt,
   });
 }
-

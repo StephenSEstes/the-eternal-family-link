@@ -89,6 +89,9 @@ This section is a quick reference for the three data areas that drive profile/me
     - Threaded post comments using `parent_comment_id`
     - Key: `comment_id`
     - Parent: `post_id -> SharePosts.post_id`
+- Runtime access model (current kickoff phase):
+  - Primary read/access check is membership (`ShareThreadMembers.person_id` / `ShareConversationMembers.person_id`).
+  - `family_group_key` remains on share rows for template/context metadata and compatibility, but it is no longer the primary read gate for inbox/thread resolution.
 - Notification readiness model:
   - `PushSubscriptions`
     - Active web-push endpoints per person/device in a family group
@@ -139,6 +142,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `FaceMatches.face_id` -> `FaceInstances.face_id`
   - `PersonFaceProfiles.person_id` -> `People.person_id`
 - Family shares:
+  - Membership-first resolution: `ShareThreadMembers (thread_id, person_id)` is the primary read/access path.
   - `ShareGroups.group_id` -> `ShareGroupMembers.group_id`
   - `ShareGroups.group_id` -> `ShareThreads.group_id` (custom-group threads)
   - `ShareThreads.thread_id` -> `ShareThreadMembers.thread_id`

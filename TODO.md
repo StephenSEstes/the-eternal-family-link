@@ -40,6 +40,7 @@ I will update this list as we add, complete, or remove work.
   - In progress: Normalize custom share groups into first-class `share_groups` / `share_group_members` with `share_threads.group_id` linkage.
   - In progress: Shares media upload cutover to canonical person-attribute/media association path (no migration/backfill required for current test-only data set).
   - In progress: Share thread UX pass (remove quick-audience selector, auto-ensure default audience threads, chip-based member editing in Create New Group, unread count badge on thread list, and right/left chat bubble alignment).
+  - In progress: Phase 9 people-first conversation model kickoff (member-based thread access/listing independent of active family group; family group retained as audience-template metadata).
   - Remaining: deeper UX polish and production push transport.
   Est date: 2026-04-12
   Desc: Add a Home-level family sharing feed where users can upload media, tag/link people, choose a sharing audience (siblings, household, entire family, specific family group), and continue conversation threads with comments.
@@ -196,6 +197,49 @@ I will update this list as we add, complete, or remove work.
       - Share groups contain multiple durable conversation topics with per-topic unread tracking.
       - New conversation creation and media posting run through canonical media link behavior.
       - Navigation/action placement matches requested UX with no duplicate sign-out entry.
+  - Phase 9: People-first conversation identity and access model (cross-family conversations)
+    - Status: In progress 2026-04-05
+    - Scope:
+      - Shift Shares mental model from family-group containers to people/member containers.
+      - Make thread/conversation visibility primarily membership-based (`person_id` in active members), not active family-group based.
+      - Keep family-group audiences (`Immediate Family`, `Siblings`, `Family Group`) as recipient templates for conversation creation, not as read/access gates.
+      - Preserve existing media-link behavior so posts continue to augment person/media history.
+      - Deliver in safe incremental passes without breaking existing shares UX.
+    - Phases:
+      - Phase 9.1 (current): member-based read/access foundation
+        - Add OCI helper reads for:
+          - list all threads for a person across all family groups
+          - resolve thread by (`thread_id`, `person_id`) membership
+        - Update share thread list and thread resolution paths to use member-based lookup first.
+        - Keep payload/contracts unchanged for current UI compatibility.
+      - Phase 9.2: creation model split (template vs conversation identity)
+        - Keep audience template selection in UI.
+        - Store conversation identity by member-set/thread membership semantics, not by active family-group route.
+        - Prevent duplicate conversations by canonical active-member signature where applicable.
+      - Phase 9.3: UI language and flow simplification
+        - Rename user-facing surfaces from family-group wording to conversation wording (`Conversations`, `Chats`).
+        - Keep family-group picker only for template defaults and filtering, not inbox scoping.
+      - Phase 9.4: migration and cleanup
+        - Backfill or normalize existing share rows into the final people-first model.
+        - Remove obsolete family-group-scoped share guard logic once parity is proven.
+    - API/UI/data changes:
+      - API:
+        - `/api/t/[tenantKey]/shares/threads` GET should return all conversations the actor belongs to, regardless of active family-group route.
+        - `/api/t/[tenantKey]/shares/threads/[threadId]/...` routes should resolve access by membership first.
+      - UI:
+        - Shares list behaves as a member inbox.
+        - Existing post/comment/conversation behavior remains while access semantics shift.
+      - Data:
+        - Start with helper/index/query changes only; no destructive schema migration in Phase 9.1.
+    - Validation:
+      - `npm run lint` passes.
+      - `npm run build` passes.
+      - Member sees the same threads when switching active family group.
+      - Opening/posting/commenting in a thread does not fail due to active family-group mismatch when membership is valid.
+    - Completion criteria:
+      - Shares behaves as people-first conversation inbox.
+      - Family group is no longer the primary runtime access key for reading conversations.
+      - Existing media/person linkage remains intact.
   API/UI/data changes:
   - API: new `/api/t/[tenantKey]/shares/...` routes plus push subscription endpoints and dispatch hook.
   - UI: Home feed card + Shares screen + compose/comments interactions.

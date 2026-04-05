@@ -5091,6 +5091,101 @@ export async function getOciShareThreadById(input: {
   });
 }
 
+export async function getOciShareThreadForPerson(input: {
+  threadId: string;
+  personId: string;
+}): Promise<OciShareThreadRow | null> {
+  const threadId = input.threadId.trim();
+  const personId = input.personId.trim();
+  if (!threadId || !personId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    await ensureShareThreadMembersTableCompatibility(connection);
+    await ensureSharePostsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         t.thread_id,
+         t.family_group_key,
+         t.group_id,
+         t.audience_type,
+         t.audience_key,
+         t.audience_label,
+         t.owner_person_id,
+         t.created_by_person_id,
+         t.created_by_email,
+         t.created_at,
+         t.updated_at,
+         t.last_post_at,
+         t.thread_status,
+         m.last_read_at AS member_last_read_at,
+         (
+           SELECT COUNT(*)
+           FROM share_posts up
+           WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
+             AND (
+               NULLIF(TRIM(m.last_read_at), '') IS NULL
+               OR TRIM(up.created_at) > TRIM(m.last_read_at)
+             )
+         ) AS unread_count,
+         (
+           SELECT p.post_id
+           FROM share_posts p
+           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+           ORDER BY p.created_at DESC, p.post_id DESC
+           FETCH FIRST 1 ROWS ONLY
+         ) AS latest_post_id,
+         (
+           SELECT p.file_id
+           FROM share_posts p
+           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+           ORDER BY p.created_at DESC, p.post_id DESC
+           FETCH FIRST 1 ROWS ONLY
+         ) AS latest_post_file_id,
+         (
+           SELECT p.caption_text
+           FROM share_posts p
+           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+           ORDER BY p.created_at DESC, p.post_id DESC
+           FETCH FIRST 1 ROWS ONLY
+         ) AS latest_post_caption,
+         (
+           SELECT p.created_at
+           FROM share_posts p
+           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+           ORDER BY p.created_at DESC, p.post_id DESC
+           FETCH FIRST 1 ROWS ONLY
+         ) AS latest_post_created_at,
+         (
+           SELECT p.author_display_name
+           FROM share_posts p
+           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+           ORDER BY p.created_at DESC, p.post_id DESC
+           FETCH FIRST 1 ROWS ONLY
+         ) AS latest_post_author_display_name
+       FROM share_thread_members m
+       INNER JOIN share_threads t
+         ON TRIM(t.thread_id) = TRIM(m.thread_id)
+       WHERE TRIM(t.thread_id) = :threadId
+         AND TRIM(m.person_id) = :personId
+         AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
+         AND LOWER(TRIM(NVL(t.thread_status, 'active'))) <> 'archived'
+       FETCH FIRST 1 ROWS ONLY`,
+      { threadId, personId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciShareThreadRow(row) : null;
+  });
+}
+
 export async function createOciShareThread(input: {
   threadId: string;
   familyGroupKey: string;
@@ -6080,6 +6175,104 @@ export async function listOciShareThreadsForPerson(input: {
        )
        WHERE ROWNUM <= :limit`,
       { familyGroupKey, personId, limit },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciShareThreadRow);
+  });
+}
+
+export async function listOciShareThreadsForPersonAnyFamily(input: {
+  personId: string;
+  limit?: number;
+}): Promise<OciShareThreadRow[]> {
+  const personId = input.personId.trim();
+  if (!personId) {
+    return [];
+  }
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.trunc(input.limit ?? 50))) : 50;
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    await ensureShareThreadMembersTableCompatibility(connection);
+    await ensureSharePostsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT * FROM (
+         SELECT
+           t.thread_id,
+           t.family_group_key,
+           t.group_id,
+           t.audience_type,
+           t.audience_key,
+           t.audience_label,
+           t.owner_person_id,
+           t.created_by_person_id,
+           t.created_by_email,
+           t.created_at,
+           t.updated_at,
+           t.last_post_at,
+           t.thread_status,
+           m.last_read_at AS member_last_read_at,
+           (
+             SELECT COUNT(*)
+             FROM share_posts up
+             WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
+               AND (
+                 NULLIF(TRIM(m.last_read_at), '') IS NULL
+                 OR TRIM(up.created_at) > TRIM(m.last_read_at)
+               )
+           ) AS unread_count,
+           (
+             SELECT p.post_id
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_id,
+           (
+             SELECT p.file_id
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_file_id,
+           (
+             SELECT p.caption_text
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_caption,
+           (
+             SELECT p.created_at
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_created_at,
+           (
+             SELECT p.author_display_name
+             FROM share_posts p
+             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
+               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+             ORDER BY p.created_at DESC, p.post_id DESC
+             FETCH FIRST 1 ROWS ONLY
+           ) AS latest_post_author_display_name
+         FROM share_thread_members m
+         INNER JOIN share_threads t
+           ON TRIM(t.thread_id) = TRIM(m.thread_id)
+         WHERE TRIM(m.person_id) = :personId
+           AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
+           AND LOWER(TRIM(NVL(t.thread_status, 'active'))) <> 'archived'
+         ORDER BY
+           COALESCE(NULLIF(TRIM(t.last_post_at), ''), NULLIF(TRIM(t.updated_at), ''), TRIM(t.created_at)) DESC,
+           t.thread_id DESC
+       )
+       WHERE ROWNUM <= :limit`,
+      { personId, limit },
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     return ((result.rows ?? []) as Record<string, unknown>[]).map(mapOciShareThreadRow);
