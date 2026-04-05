@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-05: Fixed Shares comment posting so the UI stays in the active conversation (no jump back to whole-family/general after comment submit). See `docs/change-summary.md`.
 - 2026-04-05: Share groups now contain distinct conversation topics with per-conversation unread/read state, required-title conversation creation, conversation-scoped posts/uploads/comments, and person-modal linked conversation visibility. Header actions were also relocated: Help is a `?` beside user initials, Admin moved into the initials popout, and top-nav duplicate Sign out was removed. See `docs/change-summary.md`.
 - 2026-04-04: Share is now thread-first: quick-audience picker removed, default audience threads auto-seeded into the list, unread badges shown on the right, Create New Group uses search chips with audience seeding, and chat bubbles align right for `You` and left for others. See `docs/change-summary.md`.
 - 2026-04-04: Share UX now uses modal thread viewing and modal `Create New Group`; nav/home label is `Share`, and thread message bubbles are color-coded by member. See `docs/change-summary.md`.

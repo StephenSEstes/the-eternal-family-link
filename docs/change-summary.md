@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-05 (Shares comment post now preserves active conversation context)
+
+- `Date`: 2026-04-05
+- `Change`: Updated Shares comment-post behavior so posting a comment no longer forces full thread/conversation refresh keys. Instead, it updates local conversation/thread state in place (`lastActivityAt`, unread totals, and comment list) and preserves the currently open conversation.
+- `Type`: UI
+- `Why`: Root cause was a state-reset bug in [`createComment`](src/components/shares/SharesClient.tsx): after successful comment post, it bumped both `threadsRefreshKey` and `conversationsRefreshKey`, which re-ran selection logic and could jump the UI back to a default/general conversation.
+- `Files`: `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (existing unrelated TreeGraph warning remains).
+  - In Shares, posting a comment keeps the user in the same conversation instead of jumping to whole-family/general.
+- `Rollback Notes`: Revert this commit to restore refresh-key behavior after comment post.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (Share groups now contain conversation topics + header action relocation)
 
 - `Date`: 2026-04-05

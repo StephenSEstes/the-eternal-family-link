@@ -780,14 +780,36 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       await assertOkWithAuth(res, "Failed to post comment.");
       const body = (await res.json()) as { comment?: ShareComment };
       if (body.comment) {
+        const activityAt = String(body.comment.createdAt ?? "").trim() || new Date().toISOString();
         setCommentsByPostId((current) => {
           const existing = Array.isArray(current[postId]) ? current[postId] : [];
           return { ...current, [postId]: [...existing, body.comment!].sort((a, b) => ts(a.createdAt) - ts(b.createdAt)) };
         });
+        setConversations((current) => {
+          const next = current.map((entry) =>
+            entry.conversationId === selectedConversationId
+              ? {
+                  ...entry,
+                  lastActivityAt: activityAt,
+                  unreadCount: 0,
+                }
+              : entry,
+          );
+          setThreads((threadsCurrent) =>
+            threadsCurrent.map((thread) =>
+              thread.threadId === selectedThreadId
+                ? {
+                    ...thread,
+                    lastPostAt: activityAt,
+                    unreadCount: sumConversationUnread(next),
+                  }
+                : thread,
+            ),
+          );
+          return next;
+        });
       }
       setCommentDraftByPostId((current) => ({ ...current, [postId]: "" }));
-      setThreadsRefreshKey((current) => current + 1);
-      setConversationsRefreshKey((current) => current + 1);
     } catch (error) {
       setPostsStatus(error instanceof Error ? error.message : "Failed to post comment.");
     } finally {
