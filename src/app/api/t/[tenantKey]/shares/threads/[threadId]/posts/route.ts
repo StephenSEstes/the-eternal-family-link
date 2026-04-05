@@ -81,7 +81,7 @@ export async function GET(request: Request, { params }: RouteProps) {
       threadId: thread.threadId,
       conversationId: requestedConversationId,
     });
-    if (!conversation) {
+    if (!conversation || String(conversation.conversationStatus ?? "").trim().toLowerCase() === "archived") {
       return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
     }
     const conversationMember = await getOciShareConversationMember({
@@ -203,7 +203,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     threadId: thread.threadId,
     conversationId,
   });
-  if (!conversation) {
+  if (!conversation || String(conversation.conversationStatus ?? "").trim().toLowerCase() === "archived") {
     return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
   }
   const nowIso = new Date().toISOString();

@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: RouteProps) {
     threadId: thread.threadId,
     conversationId: normalize(conversationId),
   });
-  if (!conversation) {
+  if (!conversation || normalize(conversation.conversationStatus).toLowerCase() === "archived") {
     return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
   }
 

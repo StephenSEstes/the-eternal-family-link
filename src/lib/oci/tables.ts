@@ -5328,6 +5328,38 @@ export async function updateOciShareThreadGroup(input: {
   });
 }
 
+export async function updateOciShareThreadStatus(input: {
+  familyGroupKey: string;
+  threadId: string;
+  threadStatus: string;
+  updatedAt: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const threadStatus = input.threadStatus.trim().toLowerCase();
+  if (!familyGroupKey || !threadId || !threadStatus) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareThreadsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_threads
+       SET thread_status = :threadStatus,
+           updated_at = :updatedAt
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId`,
+      {
+        threadStatus,
+        updatedAt: input.updatedAt.trim(),
+        familyGroupKey,
+        threadId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
+  });
+}
+
 export async function getOciShareThreadMember(input: {
   familyGroupKey: string;
   threadId: string;
@@ -5639,6 +5671,45 @@ export async function createOciShareConversation(input: {
       throw new Error("Failed to load created share conversation");
     }
     return created;
+  });
+}
+
+export async function updateOciShareConversationStatus(input: {
+  familyGroupKey: string;
+  threadId: string;
+  conversationId: string;
+  conversationStatus: string;
+  updatedAt: string;
+  lastActivityAt?: string;
+}) {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const threadId = input.threadId.trim();
+  const conversationId = input.conversationId.trim();
+  const conversationStatus = input.conversationStatus.trim().toLowerCase();
+  if (!familyGroupKey || !threadId || !conversationId || !conversationStatus) {
+    return false;
+  }
+  return withConnection(async (connection) => {
+    await ensureShareConversationsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_conversations
+       SET conversation_status = :conversationStatus,
+           updated_at = :updatedAt,
+           last_activity_at = COALESCE(NULLIF(TRIM(:lastActivityAt), ''), last_activity_at)
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(thread_id) = :threadId
+         AND TRIM(conversation_id) = :conversationId`,
+      {
+        conversationStatus,
+        updatedAt: input.updatedAt.trim(),
+        lastActivityAt: String(input.lastActivityAt ?? "").trim(),
+        familyGroupKey,
+        threadId,
+        conversationId,
+      },
+      { autoCommit: true },
+    );
+    return (result.rowsAffected ?? 0) > 0;
   });
 }
 
@@ -6541,6 +6612,44 @@ export async function getOciSharePostCommentsForPost(input: {
   });
 }
 
+export async function getOciSharePostCommentById(input: {
+  familyGroupKey: string;
+  commentId: string;
+}): Promise<OciSharePostCommentRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const commentId = input.commentId.trim();
+  if (!familyGroupKey || !commentId) {
+    return null;
+  }
+  return withConnection(async (connection) => {
+    await ensureSharePostCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `SELECT
+         comment_id,
+         post_id,
+         thread_id,
+         family_group_key,
+         parent_comment_id,
+         author_person_id,
+         author_display_name,
+         author_email,
+         comment_text,
+         comment_status,
+         created_at,
+         updated_at,
+         deleted_at
+       FROM share_post_comments
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(comment_id) = :commentId
+       FETCH FIRST 1 ROWS ONLY`,
+      { familyGroupKey, commentId },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const row = (result.rows?.[0] as Record<string, unknown> | undefined) ?? null;
+    return row ? mapOciSharePostCommentRow(row) : null;
+  });
+}
+
 export async function createOciSharePostComment(input: {
   commentId: string;
   postId: string;
@@ -6654,6 +6763,60 @@ export async function createOciSharePostComment(input: {
       throw new Error("Failed to load created share post comment");
     }
     return created;
+  });
+}
+
+export async function updateOciSharePostCommentById(input: {
+  familyGroupKey: string;
+  commentId: string;
+  commentText?: string;
+  commentStatus?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}): Promise<OciSharePostCommentRow | null> {
+  const familyGroupKey = input.familyGroupKey.trim().toLowerCase();
+  const commentId = input.commentId.trim();
+  if (!familyGroupKey || !commentId) {
+    return null;
+  }
+  const setClauses: string[] = [];
+  const binds: Record<string, unknown> = {
+    familyGroupKey,
+    commentId,
+  };
+  if (input.commentText !== undefined) {
+    setClauses.push("comment_text = :commentText");
+    binds.commentText = input.commentText;
+  }
+  if (input.commentStatus !== undefined) {
+    setClauses.push("comment_status = :commentStatus");
+    binds.commentStatus = input.commentStatus.trim().toLowerCase() || "active";
+  }
+  if (input.updatedAt !== undefined) {
+    setClauses.push("updated_at = :updatedAt");
+    binds.updatedAt = input.updatedAt.trim();
+  }
+  if (input.deletedAt !== undefined) {
+    setClauses.push("deleted_at = :deletedAt");
+    binds.deletedAt = input.deletedAt.trim() || null;
+  }
+  if (setClauses.length === 0) {
+    return getOciSharePostCommentById({ familyGroupKey, commentId });
+  }
+  return withConnection(async (connection) => {
+    await ensureSharePostCommentsTableCompatibility(connection);
+    const result = await connection.execute(
+      `UPDATE share_post_comments
+       SET ${setClauses.join(", ")}
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(comment_id) = :commentId`,
+      binds,
+      { autoCommit: true },
+    );
+    if (!(result.rowsAffected ?? 0)) {
+      return null;
+    }
+    return getOciSharePostCommentById({ familyGroupKey, commentId });
   });
 }
 

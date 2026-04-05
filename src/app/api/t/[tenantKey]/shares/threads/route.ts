@@ -78,6 +78,7 @@ function toClientThread(thread: Awaited<ReturnType<typeof listOciShareThreadsFor
     audienceKey: thread.audienceKey,
     audienceLabel: thread.audienceLabel,
     ownerPersonId: thread.ownerPersonId,
+    createdByPersonId: thread.createdByPersonId,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     lastPostAt: thread.lastPostAt,

@@ -17,6 +17,8 @@ type ShareThread = {
   familyGroupKey: string;
   audienceType: "siblings" | "household" | "entire_family" | "family_group" | "custom_group";
   audienceLabel: string;
+  ownerPersonId: string;
+  createdByPersonId: string;
   createdAt: string;
   lastPostAt: string;
   unreadCount: number;
@@ -41,6 +43,7 @@ type ShareComment = {
   commentText: string;
   createdAt: string;
   author: { personId: string; displayName: string };
+  canDelete?: boolean;
 };
 
 type ShareConversation = {
@@ -50,6 +53,7 @@ type ShareConversation = {
   title: string;
   conversationKind: string;
   ownerPersonId: string;
+  createdByPersonId: string;
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string;
@@ -151,12 +155,15 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, ShareComment[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [commentBusyIds, setCommentBusyIds] = useState<Set<string>>(new Set());
+  const [commentDeleteBusyIds, setCommentDeleteBusyIds] = useState<Set<string>>(new Set());
   const [failedPreviewFileIds, setFailedPreviewFileIds] = useState<Set<string>>(new Set());
 
   const [captionDraft, setCaptionDraft] = useState("");
   const [shareAttachOpen, setShareAttachOpen] = useState(false);
   const [composeBusy, setComposeBusy] = useState(false);
   const [composeStatus, setComposeStatus] = useState("");
+  const [threadDeleteBusy, setThreadDeleteBusy] = useState(false);
+  const [conversationDeleteBusy, setConversationDeleteBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -471,6 +478,18 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     [conversations],
   );
   const orderedPosts = useMemo(() => posts.slice().sort((a, b) => ts(a.createdAt) - ts(b.createdAt)), [posts]);
+  const canDeleteSelectedThread = useMemo(() => {
+    if (!selectedThread || !actorPersonId) return false;
+    const owner = String(selectedThread.ownerPersonId ?? "").trim();
+    const creator = String(selectedThread.createdByPersonId ?? "").trim();
+    return owner === actorPersonId || creator === actorPersonId;
+  }, [selectedThread, actorPersonId]);
+  const canDeleteSelectedConversation = useMemo(() => {
+    if (!selectedConversation || !actorPersonId) return false;
+    const owner = String(selectedConversation.ownerPersonId ?? "").trim();
+    const creator = String(selectedConversation.createdByPersonId ?? "").trim();
+    return owner === actorPersonId || creator === actorPersonId;
+  }, [selectedConversation, actorPersonId]);
   const attachPreselectedPersonIds = useMemo(
     () =>
       Array.from(
@@ -824,6 +843,87 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         next.delete(postId);
         return next;
       });
+    }
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (!selectedThreadId || !postId || !commentId) return;
+    const confirmed = window.confirm("Delete this comment?");
+    if (!confirmed) return;
+    setCommentDeleteBusyIds((current) => new Set(current).add(commentId));
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+        { method: "DELETE" },
+      );
+      await assertOkWithAuth(res, "Failed to delete comment.");
+      setCommentsByPostId((current) => {
+        const existing = Array.isArray(current[postId]) ? current[postId] : [];
+        return {
+          ...current,
+          [postId]: existing.filter((entry) => entry.commentId !== commentId),
+        };
+      });
+    } catch (error) {
+      setPostsStatus(error instanceof Error ? error.message : "Failed to delete comment.");
+    } finally {
+      setCommentDeleteBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(commentId);
+        return next;
+      });
+    }
+  };
+
+  const deleteSelectedConversation = async () => {
+    if (!selectedThreadId || !selectedConversationId) return;
+    const confirmed = window.confirm("Delete this conversation?");
+    if (!confirmed) return;
+    setConversationDeleteBusy(true);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/conversations/${encodeURIComponent(selectedConversationId)}`,
+        { method: "DELETE" },
+      );
+      await assertOkWithAuth(res, "Failed to delete conversation.");
+      setConversations((current) => current.filter((entry) => entry.conversationId !== selectedConversationId));
+      setConversationModalOpen(false);
+      setSelectedConversationId("");
+      setPosts([]);
+      setCommentsByPostId({});
+      setConversationsRefreshKey((current) => current + 1);
+      setThreadsRefreshKey((current) => current + 1);
+    } catch (error) {
+      setPostsStatus(error instanceof Error ? error.message : "Failed to delete conversation.");
+    } finally {
+      setConversationDeleteBusy(false);
+    }
+  };
+
+  const deleteSelectedThread = async () => {
+    if (!selectedThreadId) return;
+    const confirmed = window.confirm("Delete this thread?");
+    if (!confirmed) return;
+    setThreadDeleteBusy(true);
+    try {
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}`,
+        { method: "DELETE" },
+      );
+      await assertOkWithAuth(res, "Failed to delete thread.");
+      setThreadModalOpen(false);
+      setConversationModalOpen(false);
+      setCreateConversationModalOpen(false);
+      setSelectedConversationId("");
+      setConversations([]);
+      setPosts([]);
+      setCommentsByPostId({});
+      setThreadsRefreshKey((current) => current + 1);
+      setConversationsRefreshKey((current) => current + 1);
+    } catch (error) {
+      setThreadsStatus(error instanceof Error ? error.message : "Failed to delete thread.");
+    } finally {
+      setThreadDeleteBusy(false);
     }
   };
 

@@ -41,11 +41,9 @@ function buildNotificationId() {
 function canMutateComment(input: {
   actorPersonId: string;
   actorEmail: string;
-  actorRole: string;
   authorPersonId: string;
   authorEmail: string;
 }) {
-  if (normalizeLower(input.actorRole) === "admin") return true;
   if (input.actorPersonId && input.actorPersonId === input.authorPersonId) return true;
   if (input.actorEmail && input.actorEmail === input.authorEmail) return true;
   return false;
@@ -55,14 +53,12 @@ function toClientComment(input: {
   comment: Awaited<ReturnType<typeof getOciSharePostCommentsForPost>>[number];
   actorPersonId: string;
   actorEmail: string;
-  actorRole: string;
 }) {
   const authorPersonId = normalize(input.comment.authorPersonId);
   const authorEmail = normalizeLower(input.comment.authorEmail);
   const canMutate = canMutateComment({
     actorPersonId: input.actorPersonId,
     actorEmail: input.actorEmail,
-    actorRole: input.actorRole,
     authorPersonId,
     authorEmail,
   });
@@ -140,7 +136,6 @@ export async function GET(_: Request, { params }: RouteProps) {
         comment,
         actorPersonId,
         actorEmail,
-        actorRole: resolved.tenant.role,
       }),
     ),
   });
@@ -260,12 +255,11 @@ export async function POST(request: Request, { params }: RouteProps) {
     threadId: thread.threadId,
     conversationId: post.conversationId,
     postId: post.postId,
-    comment: toClientComment({
-      comment: createdComment,
-      actorPersonId,
-      actorEmail,
-      actorRole: resolved.tenant.role,
-    }),
+      comment: toClientComment({
+        comment: createdComment,
+        actorPersonId,
+        actorEmail,
+      }),
     notificationOutboxCount: outboxRows.length,
   });
 }

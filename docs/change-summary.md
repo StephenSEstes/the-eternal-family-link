@@ -6925,3 +6925,27 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes (from canonical path `C:\\Users\\steph\\the-eternal-family-link`).
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-05 (shares delete/archive operations for threads, conversations, and comments)
+
+- `Change`: Added Shares delete APIs for threads, conversations, and post comments, implemented as archive/soft-delete status updates with creator-only mutation rules. Also hardened Shares read/post/upload/read-state routes so archived conversations are treated as not found, and exposed creator metadata in thread/conversation payloads for UI delete authorization.
+- `Type`: Bug fix, Shares lifecycle control, Access control hardening
+- `Why`: Root cause was missing delete lifecycle support in the new Shares conversation model: users could create content but had no supported way to remove mistaken/obsolete threads/conversations/comments, and archived items were not consistently excluded from active routes.
+- `Files`:
+  - `src/lib/oci/tables.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/[conversationId]/read/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/upload/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/posts/[postId]/comments/[commentId]/route.ts`
+  - `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None (code-path and route behavior only).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.
