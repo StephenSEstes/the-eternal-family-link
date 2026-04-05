@@ -290,3 +290,4 @@ This file is a quick release-log entry point.
 - 2026-03-29: Fixed person modal Media tab parity to include direct person-linked media (not just attribute-linked media), deduped by file ID. See `docs/change-summary.md`.
 - 2026-03-27: Added feature-flagged multi-tenant session refresh in middleware and the family switch API, plus session typing for `accessibleTenants`, to reduce 401/403 on tenant change. See `docs/change-summary.md`.
 - 2026-03-25: Fixed media recency so uploads sort by database add time instead of old file timestamps, and backfilled 26 OCI `MediaAssets.created_at` rows from upload audit evidence. See `docs/change-summary.md`.
+- 2026-04-04: Share thread composer now uses the shared Add Media wizard behind a single `Choose File` button (legacy upload controls removed), and Create Group `Start From Share Group` now seeds members from selected thread membership. See `docs/change-summary.md`.

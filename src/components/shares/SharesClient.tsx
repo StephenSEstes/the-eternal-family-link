@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ModalCloseButton } from "@/components/ui/primitives";
+import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
 type SharesClientProps = { tenantKey: string };
-type QuickAudienceType = "siblings" | "household" | "entire_family" | "family_group";
 
 type FamilyGroupOption = { familyGroupKey: string; familyGroupName: string };
 type PersonOption = { personId: string; displayName: string };
@@ -99,8 +100,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [customGroupLabel, setCustomGroupLabel] = useState("");
   const [customMemberPersonIds, setCustomMemberPersonIds] = useState<string[]>([]);
   const [memberSearchDraft, setMemberSearchDraft] = useState("");
-  const [seedAudienceType, setSeedAudienceType] = useState<QuickAudienceType>("siblings");
-  const [seedFamilyGroupKey, setSeedFamilyGroupKey] = useState("");
+  const [seedThreadId, setSeedThreadId] = useState("");
   const [seedLoadBusy, setSeedLoadBusy] = useState(false);
   const [createGroupBusy, setCreateGroupBusy] = useState(false);
   const [createGroupStatus, setCreateGroupStatus] = useState("");
@@ -116,8 +116,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [failedPreviewFileIds, setFailedPreviewFileIds] = useState<Set<string>>(new Set());
 
   const [captionDraft, setCaptionDraft] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedTaggedPersonIds, setSelectedTaggedPersonIds] = useState<string[]>([]);
+  const [shareAttachOpen, setShareAttachOpen] = useState(false);
   const [composeBusy, setComposeBusy] = useState(false);
   const [composeStatus, setComposeStatus] = useState("");
 
@@ -143,7 +142,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         const defaultFg = String(familyGroups[0]?.familyGroupKey ?? "").trim();
         if (defaultFg) {
           setCustomFamilyGroupKey((current) => current || defaultFg);
-          setSeedFamilyGroupKey((current) => current || defaultFg);
         }
         setSelectedThreadId((current) => (incomingThreads.some((entry) => entry.threadId === current) ? current : incomingThreads[0]?.threadId ?? ""));
       } catch (error) {
@@ -172,7 +170,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     let cancelled = false;
     void (async () => {
       setDefaultThreadsEnsured(true);
-      const requests: Array<{ audienceType: QuickAudienceType; targetFamilyGroupKey?: string }> = [
+      const requests: Array<{ audienceType: "siblings" | "household" | "entire_family" | "family_group"; targetFamilyGroupKey?: string }> = [
         { audienceType: "siblings" },
         { audienceType: "household" },
         { audienceType: "entire_family" },
@@ -293,6 +291,17 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     [threads],
   );
   const orderedPosts = useMemo(() => posts.slice().sort((a, b) => ts(a.createdAt) - ts(b.createdAt)), [posts]);
+  const attachPreselectedPersonIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          threadMembers
+            .map((member) => String(member.personId ?? "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    [threadMembers],
+  );
 
   const memberColorByPersonId = useMemo(() => {
     const map = new Map<string, MemberColor>();
@@ -306,10 +315,11 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   }, [peopleOptions]);
   const filteredMemberSearchResults = useMemo(() => {
     const query = memberSearchDraft.trim().toLowerCase();
+    if (!query) return [] as PersonOption[];
     const selected = new Set(customMemberPersonIds);
     return peopleOptions
       .filter((person) => !selected.has(person.personId))
-      .filter((person) => !query || person.displayName.toLowerCase().includes(query))
+      .filter((person) => person.displayName.toLowerCase().includes(query))
       .slice(0, 12);
   }, [peopleOptions, customMemberPersonIds, memberSearchDraft]);
 
@@ -334,28 +344,27 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     setCustomMemberPersonIds((current) => current.filter((entry) => entry !== personId));
   };
 
-  const loadSeedAudienceMembers = async () => {
+  const loadSeedShareGroupMembers = async () => {
+    if (!seedThreadId) return;
     setSeedLoadBusy(true);
     setCreateGroupStatus("");
     try {
-      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/audience/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audienceType: seedAudienceType,
-          targetFamilyGroupKey: seedAudienceType === "family_group" ? seedFamilyGroupKey : "",
-        }),
-      });
-      await assertOkWithAuth(res, "Failed to load audience members.");
+      const selectedSeedThread = orderedThreads.find((entry) => entry.threadId === seedThreadId) ?? null;
+      if (!selectedSeedThread) {
+        throw new Error("Select a valid share group.");
+      }
+      const res = await fetch(
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(seedThreadId)}/posts?limit=1`,
+        { cache: "no-store" },
+      );
+      await assertOkWithAuth(res, "Failed to load share group members.");
       const body = (await res.json()) as {
-        familyGroupKey?: string;
-        recipients?: Array<{ personId?: string }>;
-        recipientCount?: number;
+        members?: Array<{ personId?: string }>;
       };
-      const nextMembers = Array.isArray(body.recipients)
+      const nextMembers = Array.isArray(body.members)
         ? Array.from(
             new Set(
-              body.recipients
+              body.members
                 .map((entry) => String(entry.personId ?? "").trim())
                 .filter(Boolean),
             ),
@@ -364,23 +373,12 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       if (nextMembers.length > 0) {
         setCustomMemberPersonIds(nextMembers);
       }
-      const resolvedFamilyGroupKey = String(body.familyGroupKey ?? "").trim().toLowerCase();
-      if (resolvedFamilyGroupKey) {
-        setCustomFamilyGroupKey(resolvedFamilyGroupKey);
-      }
+      setCustomFamilyGroupKey(selectedSeedThread.familyGroupKey);
       setCreateGroupStatus(
-        `Loaded ${typeof body.recipientCount === "number" ? body.recipientCount : nextMembers.length} members from ${
-          seedAudienceType === "siblings"
-            ? "My Siblings"
-            : seedAudienceType === "household"
-              ? "Immediate Family"
-              : seedAudienceType === "entire_family"
-                ? "Entire Family"
-                : "Specific Family Group"
-        }.`,
+        `Loaded ${nextMembers.length} members from share group "${selectedSeedThread.audienceLabel || selectedSeedThread.audienceType}".`,
       );
     } catch (error) {
-      setCreateGroupStatus(error instanceof Error ? error.message : "Failed to load audience members.");
+      setCreateGroupStatus(error instanceof Error ? error.message : "Failed to load share group members.");
     } finally {
       setSeedLoadBusy(false);
     }
@@ -442,25 +440,35 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     }
   };
 
-  const uploadMediaPost = async () => {
-    if (!selectedThreadId || !selectedFile) return;
+  const handleShareAttachComplete = async (summary: MediaAttachExecutionSummary) => {
+    setShareAttachOpen(false);
+    const uploadedFileIds = Array.isArray(summary.fileIds) ? summary.fileIds : [];
+    if (!selectedThreadId || uploadedFileIds.length === 0) {
+      setComposeStatus(formatMediaAttachUserSummary(summary));
+      return;
+    }
     setComposeBusy(true);
-    setComposeStatus("");
+    setComposeStatus("Posting shared media...");
     try {
-      const formData = new FormData();
-      formData.set("file", selectedFile);
-      formData.set("caption", captionDraft.trim());
-      formData.set("taggedPersonIds", JSON.stringify(selectedTaggedPersonIds));
-      const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts/upload`, { method: "POST", body: formData });
-      await assertOkWithAuth(res, "Failed to upload media post.");
-      setSelectedFile(null);
-      setSelectedTaggedPersonIds([]);
+      const caption = captionDraft.trim();
+      for (let index = 0; index < uploadedFileIds.length; index += 1) {
+        const fileId = uploadedFileIds[index];
+        const res = await fetch(`/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileId,
+            caption: index === 0 ? caption : "",
+          }),
+        });
+        await assertOkWithAuth(res, "Failed to post attached media.");
+      }
       setCaptionDraft("");
-      setComposeStatus("Media shared.");
+      setComposeStatus(`Media shared (${uploadedFileIds.length}).`);
       setThreadsRefreshKey((current) => current + 1);
       setPostsRefreshKey((current) => current + 1);
     } catch (error) {
-      setComposeStatus(error instanceof Error ? error.message : "Failed to upload media post.");
+      setComposeStatus(error instanceof Error ? error.message : "Failed to share attached media.");
     } finally {
       setComposeBusy(false);
     }
@@ -566,6 +574,8 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             className="button tap-button"
             onClick={() => {
               setCreateGroupStatus("");
+              setMemberSearchDraft("");
+              setSeedThreadId(selectedThreadId || orderedThreads[0]?.threadId || "");
               setCreateGroupModalOpen(true);
             }}
           >
@@ -618,41 +628,29 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                 </select>
               </div>
               <div>
-                <label className="label">Start From Audience (Optional)</label>
+                <label className="label">Start From Share Group (Optional)</label>
                 <div style={{ display: "grid", gap: "0.45rem" }}>
                   <select
                     className="input"
-                    value={seedAudienceType}
-                    onChange={(event) => setSeedAudienceType(event.target.value as QuickAudienceType)}
+                    value={seedThreadId}
+                    onChange={(event) => setSeedThreadId(event.target.value)}
                     disabled={createGroupBusy || seedLoadBusy}
                   >
-                    <option value="siblings">My Siblings</option>
-                    <option value="household">Immediate Family</option>
-                    <option value="entire_family">Entire Family</option>
-                    <option value="family_group">Specific Family Group</option>
+                    <option value="">Select thread</option>
+                    {orderedThreads.map((thread) => (
+                      <option key={`seed-thread-${thread.threadId}`} value={thread.threadId}>
+                        {(thread.audienceLabel || thread.audienceType) + " - " + thread.familyGroupKey}
+                      </option>
+                    ))}
                   </select>
-                  {seedAudienceType === "family_group" ? (
-                    <select
-                      className="input"
-                      value={seedFamilyGroupKey}
-                      onChange={(event) => setSeedFamilyGroupKey(event.target.value)}
-                      disabled={createGroupBusy || seedLoadBusy}
-                    >
-                      {availableFamilyGroups.map((item) => (
-                        <option key={`seed-family-group-${item.familyGroupKey}`} value={item.familyGroupKey}>
-                          {item.familyGroupName || item.familyGroupKey}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
                   <button
                     type="button"
                     className="button secondary tap-button"
-                    onClick={() => void loadSeedAudienceMembers()}
-                    disabled={createGroupBusy || seedLoadBusy || (seedAudienceType === "family_group" && !seedFamilyGroupKey)}
+                    onClick={() => void loadSeedShareGroupMembers()}
+                    disabled={createGroupBusy || seedLoadBusy || !seedThreadId}
                     style={{ width: "auto" }}
                   >
-                    {seedLoadBusy ? "Loading..." : "Load Audience Members"}
+                    {seedLoadBusy ? "Loading..." : "Load Share Group"}
                   </button>
                 </div>
               </div>
@@ -808,33 +806,18 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                   style={{ resize: "vertical" }}
                   disabled={composeBusy}
                 />
-                <label className="label">Attach Media (optional)</label>
-                <input className="input" type="file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} disabled={composeBusy} />
-                {selectedFile ? (
-                  <div>
-                    <label className="label">Tag People On This Media</label>
-                    <select
-                      className="input"
-                      multiple
-                      value={selectedTaggedPersonIds}
-                      onChange={(event) => setSelectedTaggedPersonIds(Array.from(event.target.selectedOptions).map((option) => option.value))}
-                      disabled={composeBusy}
-                      style={{ minHeight: "120px" }}
-                    >
-                      {peopleOptions.map((person) => (
-                        <option key={`tag-person-${person.personId}`} value={person.personId}>
-                          {person.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button type="button" className="button tap-button" onClick={() => void postTextOnly()} disabled={composeBusy || !captionDraft.trim()} style={{ width: "auto" }}>
                     {composeBusy ? "Posting..." : "Post Text"}
                   </button>
-                  <button type="button" className="button secondary tap-button" onClick={() => void uploadMediaPost()} disabled={composeBusy || !selectedFile} style={{ width: "auto" }}>
-                    {composeBusy ? "Uploading..." : "Upload Media"}
+                  <button
+                    type="button"
+                    className="button secondary tap-button"
+                    onClick={() => setShareAttachOpen(true)}
+                    disabled={composeBusy || !selectedThreadId}
+                    style={{ width: "auto" }}
+                  >
+                    Choose File
                   </button>
                 </div>
                 {composeStatus ? <p className="page-subtitle" style={{ margin: 0 }}>{composeStatus}</p> : null}
@@ -968,6 +951,23 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
           </div>
         </div>
       ) : null}
+
+      <MediaAttachWizard
+        open={shareAttachOpen}
+        context={{
+          tenantKey,
+          source: "library",
+          canManage: true,
+          allowHouseholdLinks: false,
+          defaultAttributeType: "media",
+          preselectedPersonIds: attachPreselectedPersonIds,
+          preselectedHouseholdIds: [],
+          peopleOptions,
+          householdOptions: [],
+        }}
+        onClose={() => setShareAttachOpen(false)}
+        onComplete={(summary) => void handleShareAttachComplete(summary)}
+      />
     </main>
   );
 }

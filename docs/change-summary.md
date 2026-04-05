@@ -6797,3 +6797,18 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Person modal `Media` tab now includes files linked directly to the person (for example via AI face-associate) even when no attribute row exists.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-04 (share composer uses Add Media modal + thread-seeded group creation)
+
+- `Change`: Updated Share thread compose to remove the legacy inline file input/upload path and use the shared `MediaAttachWizard` via a single `Choose File` button. Added thread-member preselection into the wizard so attached media follows existing person-link behavior. Also completed custom-group seed behavior so `Start From Share Group` loads members from the selected existing share thread.
+- `Type`: UX consistency, Reliability, Share flow
+- `Why`: Root cause was an incomplete refactor where the share composer still rendered legacy upload controls and stale state references (`selectedFile`, `selectedTaggedPersonIds`, `uploadMediaPost`) instead of the shared add-media flow. Group seeding also needed to derive from existing share-thread membership rather than quick-audience assumptions.
+- `Files`:
+  - `src/components/shares/SharesClient.tsx`
+  - `src/lib/media/attach-orchestrator.ts`
+- `Data Changes`: None (code-path only).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes (from canonical path `C:\\Users\\steph\\the-eternal-family-link`).
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

@@ -101,6 +101,7 @@ export type MediaAttachExecutionSummary = {
   createdLinks: number;
   createdAttributes: number;
   skipped: number;
+  fileIds: string[];
   failures: MediaAttachFailure[];
 };
 
@@ -475,6 +476,7 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
     createdLinks: 0,
     createdAttributes: 0,
     skipped: 0,
+    fileIds: [],
     failures: [],
   };
   const total = input.items.length;
@@ -602,6 +604,10 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
         }
       }
 
+      if (fileId) {
+        summary.fileIds.push(fileId);
+      }
+
       const pendingPersonLinks = personIds.filter((personId) => personId && (!uploadedViaPerson || personId !== uploadedViaPersonId));
       const pendingHouseholdLinks = input.context.allowHouseholdLinks
         ? householdIds.filter((householdId) => householdId && (!uploadedViaHousehold || householdId !== uploadedViaHouseholdId))
@@ -693,5 +699,6 @@ export async function runMediaAttachPlan(input: RunPlanInput): Promise<MediaAtta
   }
 
   input.onProgress?.("Save complete", total, total);
+  summary.fileIds = Array.from(new Set(summary.fileIds.map((value) => value.trim()).filter(Boolean)));
   return summary;
 }
