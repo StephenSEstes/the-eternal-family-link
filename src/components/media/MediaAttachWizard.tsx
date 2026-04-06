@@ -830,7 +830,7 @@ export function MediaAttachWizard({
                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                   {item.previewUrl ? (
                     <div style={{ width: "72px", minWidth: "72px" }}>
-                      {renderMediaPreview(kind, item.previewUrl, "", { maxHeight: "72px", compact: true, cover: kind === "image" })}
+                      {renderMediaPreview(kind, item.previewUrl, "", { maxHeight: "72px", compact: true })}
                     </div>
                   ) : null}
                   <span style={{ fontSize: "0.9rem" }}>{item.title || item.file?.name || item.fileId || "Media"} <span style={{ color: "#6b7280" }}>({mediaLabel(kind)})</span></span>

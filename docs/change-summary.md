@@ -6997,3 +6997,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-06 (image cropping fix across media surfaces)
+
+- `Change`: Updated non-avatar image surfaces to render full images without forced crop by switching key preview/tile/detail surfaces from `object-fit: cover` to `object-fit: contain`, while retaining avatar-focused surfaces on `cover`.
+- `Type`: Bug fix, UX consistency
+- `Why`: Root cause was mixed image-fit usage where content/media surfaces reused avatar-style `cover` rules in constrained containers, causing portrait/landscape photos to be visibly cropped in Shares, media library previews, and person/household photo flows.
+- `Files`:
+  - `src/app/globals.css`
+  - `src/components/MediaLibraryClient.tsx`
+  - `src/components/shares/SharesClient.tsx`
+  - `src/components/media/MediaAttachWizard.tsx`
+- `Data Changes`: None (presentation-layer style behavior only).
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` fails in this workspace due to an existing pre-render/casing issue (`/404` prerender `useContext` null with mixed path casing), not introduced by this change.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

@@ -1634,7 +1634,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                     <img
                       src={getMediaTilePreviewSrc(item)}
                       alt={item.name || item.fileId}
-                      style={{ width: "100%", maxHeight: "160px", objectFit: "cover", objectPosition: "top center", borderRadius: "8px" }}
+                      style={{ width: "100%", maxHeight: "160px", objectFit: "contain", objectPosition: "center", borderRadius: "8px", background: "#f8fafc" }}
                       onError={() => {
                         if (!item.previewUrl) {
                           return;

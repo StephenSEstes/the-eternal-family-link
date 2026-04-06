@@ -1789,7 +1789,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                             style={{
                               width: "100%",
                               maxHeight: "380px",
-                              objectFit: "cover",
+                              objectFit: "contain",
                               borderRadius: "12px",
                               border: "1px solid var(--line)",
                               background: "#fff",
