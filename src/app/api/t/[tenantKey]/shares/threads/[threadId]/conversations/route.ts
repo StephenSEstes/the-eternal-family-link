@@ -5,7 +5,7 @@ import { requireTenantAccess } from "@/lib/family-group/guard";
 import {
   backfillOciSharePostsConversationIdForThread,
   createOciShareConversation,
-  listOciShareConversationMembers,
+  getOciShareThreadMember,
   listOciShareConversationsForThread,
   listOciShareThreadMembers,
   upsertOciShareConversationMember,
@@ -69,12 +69,11 @@ export async function GET(_: Request, { params }: RouteProps) {
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
-  const threadMember = (
-    await listOciShareThreadMembers({
-      familyGroupKey: thread.familyGroupKey,
-      threadId: thread.threadId,
-    })
-  ).find((item) => item.personId === actorPersonId && item.isActive);
+  const threadMember = await getOciShareThreadMember({
+    familyGroupKey: thread.familyGroupKey,
+    threadId: thread.threadId,
+    personId: actorPersonId,
+  });
   if (!threadMember) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -122,32 +121,7 @@ export async function GET(_: Request, { params }: RouteProps) {
     });
   }
 
-  for (const conversation of conversations) {
-    const members = await listOciShareConversationMembers({
-      familyGroupKey: thread.familyGroupKey,
-      conversationId: conversation.conversationId,
-    });
-    if (!members.some((item) => item.personId === actorPersonId && item.isActive)) {
-      await upsertOciShareConversationMember({
-        conversationMemberId: buildConversationMemberId(conversation.conversationId, actorPersonId),
-        conversationId: conversation.conversationId,
-        threadId: thread.threadId,
-        familyGroupKey: thread.familyGroupKey,
-        personId: actorPersonId,
-        memberRole: "member",
-        joinedAt: nowIso,
-        isActive: true,
-      });
-    }
-  }
-
-  const finalConversations = await listOciShareConversationsForThread({
-    familyGroupKey: thread.familyGroupKey,
-    threadId: thread.threadId,
-    personId: actorPersonId,
-    limit: 200,
-  });
-  const sorted = finalConversations
+  const sorted = conversations
     .slice()
     .sort(
       (a, b) =>
@@ -200,12 +174,11 @@ export async function POST(request: Request, { params }: RouteProps) {
   if (!thread) {
     return NextResponse.json({ error: "thread_not_found" }, { status: 404 });
   }
-  const threadMember = (
-    await listOciShareThreadMembers({
-      familyGroupKey: thread.familyGroupKey,
-      threadId: thread.threadId,
-    })
-  ).find((item) => item.personId === actorPersonId && item.isActive);
+  const threadMember = await getOciShareThreadMember({
+    familyGroupKey: thread.familyGroupKey,
+    threadId: thread.threadId,
+    personId: actorPersonId,
+  });
   if (!threadMember) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

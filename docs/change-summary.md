@@ -6980,3 +6980,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-06 (shares thread/conversation load performance pass)
+
+- `Change`: Improved Shares loading performance by removing redundant conversation-read loops, adding a lightweight thread-members API, and replacing hot thread/conversation list correlated subqueries with CTE + join/window aggregation queries. Added a person-first thread-members index to support any-family thread inbox lookups.
+- `Type`: Performance, Query optimization, Shares reliability
+- `Why`: Root cause was cumulative load latency from redundant API round trips (`posts?limit=1` used only for members), extra conversation-read membership/requery loops, and repeated correlated subqueries for unread/latest metadata in thread and conversation list SQL paths.
+- `Files`:
+  - `src/components/shares/SharesClient.tsx`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/conversations/route.ts`
+  - `src/app/api/t/[tenantKey]/shares/threads/[threadId]/members/route.ts`
+  - `src/lib/oci/tables.ts`
+- `Data Changes`: No schema migration required. Runtime compatibility path now creates an additional OCI index on `share_thread_members(person_id, is_active, thread_id, family_group_key)` if missing.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from canonical path `C:\\Users\\steph\\the-eternal-family-link`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

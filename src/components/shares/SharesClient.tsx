@@ -331,7 +331,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             { cache: "no-store" },
           ),
           fetch(
-            `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/posts?limit=1`,
+            `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}/members`,
             { cache: "no-store" },
           ),
         ]);
@@ -598,7 +598,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
         throw new Error("Select a valid share group.");
       }
       const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(seedThreadId)}/posts?limit=1`,
+        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(seedThreadId)}/members`,
         { cache: "no-store" },
       );
       await assertOkWithAuth(res, "Failed to load share group members.");

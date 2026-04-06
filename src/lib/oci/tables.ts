@@ -1204,6 +1204,7 @@ async function ensureShareThreadMembersTableCompatibility(connection: OciConnect
     );
     await connection.execute(`CREATE UNIQUE INDEX ux_share_thread_members_person ON share_thread_members(thread_id, person_id)`);
     await connection.execute(`CREATE INDEX ix_share_thread_members_lookup ON share_thread_members(family_group_key, person_id, is_active)`);
+    await connection.execute(`CREATE INDEX ix_share_thread_members_person_any ON share_thread_members(person_id, is_active, thread_id, family_group_key)`);
     await connection.commit();
   } catch (error) {
     const message = (error as Error).message ?? "";
@@ -1236,13 +1237,14 @@ async function ensureShareThreadMembersTableCompatibility(connection: OciConnect
   const indexStatements = [
     "CREATE UNIQUE INDEX ux_share_thread_members_person ON share_thread_members(thread_id, person_id)",
     "CREATE INDEX ix_share_thread_members_lookup ON share_thread_members(family_group_key, person_id, is_active)",
+    "CREATE INDEX ix_share_thread_members_person_any ON share_thread_members(person_id, is_active, thread_id, family_group_key)",
   ];
   for (const sql of indexStatements) {
     try {
       await connection.execute(sql);
     } catch (error) {
       const message = (error as Error).message ?? "";
-      if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      if (!/ORA-00955|ORA-01408|name is already used by an existing object|such column list already indexed/i.test(message)) {
         throw error;
       }
     }
@@ -5103,7 +5105,6 @@ export async function getOciShareThreadForPerson(input: {
   return withConnection(async (connection) => {
     await ensureShareThreadsTableCompatibility(connection);
     await ensureShareThreadMembersTableCompatibility(connection);
-    await ensureSharePostsTableCompatibility(connection);
     const result = await connection.execute(
       `SELECT
          t.thread_id,
@@ -5120,56 +5121,12 @@ export async function getOciShareThreadForPerson(input: {
          t.last_post_at,
          t.thread_status,
          m.last_read_at AS member_last_read_at,
-         (
-           SELECT COUNT(*)
-           FROM share_posts up
-           WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
-             AND (
-               NULLIF(TRIM(m.last_read_at), '') IS NULL
-               OR TRIM(up.created_at) > TRIM(m.last_read_at)
-             )
-         ) AS unread_count,
-         (
-           SELECT p.post_id
-           FROM share_posts p
-           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-           ORDER BY p.created_at DESC, p.post_id DESC
-           FETCH FIRST 1 ROWS ONLY
-         ) AS latest_post_id,
-         (
-           SELECT p.file_id
-           FROM share_posts p
-           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-           ORDER BY p.created_at DESC, p.post_id DESC
-           FETCH FIRST 1 ROWS ONLY
-         ) AS latest_post_file_id,
-         (
-           SELECT p.caption_text
-           FROM share_posts p
-           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-           ORDER BY p.created_at DESC, p.post_id DESC
-           FETCH FIRST 1 ROWS ONLY
-         ) AS latest_post_caption,
-         (
-           SELECT p.created_at
-           FROM share_posts p
-           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-           ORDER BY p.created_at DESC, p.post_id DESC
-           FETCH FIRST 1 ROWS ONLY
-         ) AS latest_post_created_at,
-         (
-           SELECT p.author_display_name
-           FROM share_posts p
-           WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-             AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-           ORDER BY p.created_at DESC, p.post_id DESC
-           FETCH FIRST 1 ROWS ONLY
-         ) AS latest_post_author_display_name
+         0 AS unread_count,
+         '' AS latest_post_id,
+         '' AS latest_post_file_id,
+         '' AS latest_post_caption,
+         '' AS latest_post_created_at,
+         '' AS latest_post_author_display_name
        FROM share_thread_members m
        INNER JOIN share_threads t
          ON TRIM(t.thread_id) = TRIM(m.thread_id)
@@ -5963,7 +5920,7 @@ export async function listOciShareConversationsForThread(input: {
     await ensureSharePostsTableCompatibility(connection);
     await ensureSharePostCommentsTableCompatibility(connection);
     const result = await connection.execute(
-      `SELECT * FROM (
+      `WITH member_conversations AS (
          SELECT
            c.conversation_id,
            c.thread_id,
@@ -5977,75 +5934,7 @@ export async function listOciShareConversationsForThread(input: {
            c.updated_at,
            c.last_activity_at,
            c.conversation_status,
-           cm.last_read_at AS member_last_read_at,
-           (
-             SELECT COUNT(*)
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-               AND (
-                 NULLIF(TRIM(cm.last_read_at), '') IS NULL
-                 OR TRIM(p.created_at) > TRIM(cm.last_read_at)
-               )
-           ) + (
-             SELECT COUNT(*)
-             FROM share_post_comments sc
-             INNER JOIN share_posts sp
-               ON TRIM(sp.post_id) = TRIM(sc.post_id)
-             WHERE TRIM(sp.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(sp.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
-               AND (
-                 NULLIF(TRIM(cm.last_read_at), '') IS NULL
-                 OR TRIM(sc.created_at) > TRIM(cm.last_read_at)
-               )
-           ) AS unread_count,
-           (
-             SELECT p.post_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_id,
-           (
-             SELECT p.file_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_file_id,
-           (
-             SELECT p.caption_text
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_caption,
-           (
-             SELECT p.created_at
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_created_at,
-           (
-             SELECT p.author_display_name
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(c.thread_id)
-               AND TRIM(NVL(p.conversation_id, '')) = TRIM(c.conversation_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_author_display_name
+           cm.last_read_at AS member_last_read_at
          FROM share_conversation_members cm
          INNER JOIN share_conversations c
            ON TRIM(c.conversation_id) = TRIM(cm.conversation_id)
@@ -6056,9 +5945,112 @@ export async function listOciShareConversationsForThread(input: {
            AND TRIM(cm.person_id) = :personId
            AND LOWER(TRIM(NVL(cm.is_active, 'TRUE'))) <> 'false'
            AND LOWER(TRIM(NVL(c.conversation_status, 'active'))) <> 'archived'
+       ),
+       posts_active AS (
+         SELECT
+           TRIM(p.thread_id) AS thread_id,
+           TRIM(NVL(p.conversation_id, '')) AS conversation_id,
+           p.post_id,
+           p.file_id,
+           p.caption_text,
+           p.created_at,
+           p.author_display_name
+         FROM share_posts p
+         INNER JOIN member_conversations mc
+           ON TRIM(mc.thread_id) = TRIM(p.thread_id)
+          AND TRIM(mc.conversation_id) = TRIM(NVL(p.conversation_id, ''))
+         WHERE LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+       ),
+       latest_posts AS (
+         SELECT
+           pa.thread_id,
+           pa.conversation_id,
+           pa.post_id,
+           pa.file_id,
+           pa.caption_text,
+           pa.created_at,
+           pa.author_display_name,
+           ROW_NUMBER() OVER (
+             PARTITION BY pa.thread_id, pa.conversation_id
+             ORDER BY pa.created_at DESC, pa.post_id DESC
+           ) AS rn
+         FROM posts_active pa
+       ),
+       unread_post_counts AS (
+         SELECT
+           mc.conversation_id,
+           COUNT(
+             CASE
+               WHEN NULLIF(TRIM(mc.member_last_read_at), '') IS NULL
+                    OR TRIM(pa.created_at) > TRIM(mc.member_last_read_at)
+               THEN 1
+             END
+           ) AS unread_post_count
+         FROM member_conversations mc
+         LEFT JOIN posts_active pa
+           ON TRIM(pa.thread_id) = TRIM(mc.thread_id)
+          AND TRIM(pa.conversation_id) = TRIM(mc.conversation_id)
+         GROUP BY mc.conversation_id, mc.member_last_read_at
+       ),
+       comments_active AS (
+         SELECT
+           pa.thread_id,
+           pa.conversation_id,
+           sc.created_at
+         FROM posts_active pa
+         INNER JOIN share_post_comments sc
+           ON TRIM(sc.post_id) = TRIM(pa.post_id)
+         WHERE LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
+       ),
+       unread_comment_counts AS (
+         SELECT
+           mc.conversation_id,
+           COUNT(
+             CASE
+               WHEN NULLIF(TRIM(mc.member_last_read_at), '') IS NULL
+                    OR TRIM(ca.created_at) > TRIM(mc.member_last_read_at)
+               THEN 1
+             END
+           ) AS unread_comment_count
+         FROM member_conversations mc
+         LEFT JOIN comments_active ca
+           ON TRIM(ca.thread_id) = TRIM(mc.thread_id)
+          AND TRIM(ca.conversation_id) = TRIM(mc.conversation_id)
+         GROUP BY mc.conversation_id, mc.member_last_read_at
+       )
+       SELECT * FROM (
+         SELECT
+           mc.conversation_id,
+           mc.thread_id,
+           mc.family_group_key,
+           mc.title,
+           mc.conversation_kind,
+           mc.owner_person_id,
+           mc.created_by_person_id,
+           mc.created_by_email,
+           mc.created_at,
+           mc.updated_at,
+           mc.last_activity_at,
+           mc.conversation_status,
+           mc.member_last_read_at,
+           NVL(upc.unread_post_count, 0) + NVL(ucc.unread_comment_count, 0) AS unread_count,
+           NVL(lp.post_id, '') AS latest_post_id,
+           NVL(lp.file_id, '') AS latest_post_file_id,
+           NVL(lp.caption_text, '') AS latest_post_caption,
+           NVL(lp.created_at, '') AS latest_post_created_at,
+           NVL(lp.author_display_name, '') AS latest_post_author_display_name
+         FROM member_conversations mc
+         LEFT JOIN unread_post_counts upc
+           ON TRIM(upc.conversation_id) = TRIM(mc.conversation_id)
+         LEFT JOIN unread_comment_counts ucc
+           ON TRIM(ucc.conversation_id) = TRIM(mc.conversation_id)
+         LEFT JOIN latest_posts lp
+           ON TRIM(lp.thread_id) = TRIM(mc.thread_id)
+          AND TRIM(lp.conversation_id) = TRIM(mc.conversation_id)
+          AND lp.rn = 1
          ORDER BY
-           COALESCE(NULLIF(TRIM(c.last_activity_at), ''), NULLIF(TRIM(c.updated_at), ''), TRIM(c.created_at)) DESC,
-           c.conversation_id DESC
+           COALESCE(NULLIF(TRIM(mc.last_activity_at), ''), NULLIF(TRIM(mc.updated_at), ''), TRIM(mc.created_at)) DESC,
+           mc.conversation_id DESC
        )
        WHERE ROWNUM <= :limit`,
       { familyGroupKey, threadId, personId, limit },
@@ -6209,7 +6201,7 @@ export async function listOciShareThreadsForPerson(input: {
     await ensureShareThreadMembersTableCompatibility(connection);
     await ensureSharePostsTableCompatibility(connection);
     const result = await connection.execute(
-      `SELECT * FROM (
+      `WITH member_threads AS (
          SELECT
            t.thread_id,
            t.family_group_key,
@@ -6224,57 +6216,7 @@ export async function listOciShareThreadsForPerson(input: {
            t.updated_at,
            t.last_post_at,
            t.thread_status,
-           m.last_read_at AS member_last_read_at,
-           (
-             SELECT COUNT(*)
-             FROM share_posts up
-             WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
-               AND (
-                 NULLIF(TRIM(m.last_read_at), '') IS NULL
-                 OR TRIM(up.created_at) > TRIM(m.last_read_at)
-               )
-           ) AS unread_count,
-           (
-             SELECT p.post_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_id,
-           (
-             SELECT p.file_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_file_id,
-           (
-             SELECT p.caption_text
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_caption,
-           (
-             SELECT p.created_at
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_created_at,
-           (
-             SELECT p.author_display_name
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_author_display_name
+           m.last_read_at AS member_last_read_at
          FROM share_thread_members m
          INNER JOIN share_threads t
            ON TRIM(t.thread_id) = TRIM(m.thread_id)
@@ -6283,9 +6225,80 @@ export async function listOciShareThreadsForPerson(input: {
            AND TRIM(m.person_id) = :personId
            AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
            AND LOWER(TRIM(NVL(t.thread_status, 'active'))) <> 'archived'
+       ),
+       posts_active AS (
+         SELECT
+           TRIM(p.thread_id) AS thread_id,
+           p.post_id,
+           p.file_id,
+           p.caption_text,
+           p.created_at,
+           p.author_display_name
+         FROM share_posts p
+         INNER JOIN member_threads mt
+           ON TRIM(mt.thread_id) = TRIM(p.thread_id)
+         WHERE LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+       ),
+       latest_posts AS (
+         SELECT
+           pa.thread_id,
+           pa.post_id,
+           pa.file_id,
+           pa.caption_text,
+           pa.created_at,
+           pa.author_display_name,
+           ROW_NUMBER() OVER (
+             PARTITION BY pa.thread_id
+             ORDER BY pa.created_at DESC, pa.post_id DESC
+           ) AS rn
+         FROM posts_active pa
+       ),
+       unread_counts AS (
+         SELECT
+           mt.thread_id,
+           COUNT(
+             CASE
+               WHEN NULLIF(TRIM(mt.member_last_read_at), '') IS NULL
+                    OR TRIM(pa.created_at) > TRIM(mt.member_last_read_at)
+               THEN 1
+             END
+           ) AS unread_count
+         FROM member_threads mt
+         LEFT JOIN posts_active pa
+           ON TRIM(pa.thread_id) = TRIM(mt.thread_id)
+         GROUP BY mt.thread_id, mt.member_last_read_at
+       )
+       SELECT * FROM (
+         SELECT
+           mt.thread_id,
+           mt.family_group_key,
+           mt.group_id,
+           mt.audience_type,
+           mt.audience_key,
+           mt.audience_label,
+           mt.owner_person_id,
+           mt.created_by_person_id,
+           mt.created_by_email,
+           mt.created_at,
+           mt.updated_at,
+           mt.last_post_at,
+           mt.thread_status,
+           mt.member_last_read_at,
+           NVL(uc.unread_count, 0) AS unread_count,
+           NVL(lp.post_id, '') AS latest_post_id,
+           NVL(lp.file_id, '') AS latest_post_file_id,
+           NVL(lp.caption_text, '') AS latest_post_caption,
+           NVL(lp.created_at, '') AS latest_post_created_at,
+           NVL(lp.author_display_name, '') AS latest_post_author_display_name
+         FROM member_threads mt
+         LEFT JOIN unread_counts uc
+           ON TRIM(uc.thread_id) = TRIM(mt.thread_id)
+         LEFT JOIN latest_posts lp
+           ON TRIM(lp.thread_id) = TRIM(mt.thread_id)
+          AND lp.rn = 1
          ORDER BY
-           COALESCE(NULLIF(TRIM(t.last_post_at), ''), NULLIF(TRIM(t.updated_at), ''), TRIM(t.created_at)) DESC,
-           t.thread_id DESC
+           COALESCE(NULLIF(TRIM(mt.last_post_at), ''), NULLIF(TRIM(mt.updated_at), ''), TRIM(mt.created_at)) DESC,
+           mt.thread_id DESC
        )
        WHERE ROWNUM <= :limit`,
       { familyGroupKey, personId, limit },
@@ -6309,7 +6322,7 @@ export async function listOciShareThreadsForPersonAnyFamily(input: {
     await ensureShareThreadMembersTableCompatibility(connection);
     await ensureSharePostsTableCompatibility(connection);
     const result = await connection.execute(
-      `SELECT * FROM (
+      `WITH member_threads AS (
          SELECT
            t.thread_id,
            t.family_group_key,
@@ -6324,66 +6337,87 @@ export async function listOciShareThreadsForPersonAnyFamily(input: {
            t.updated_at,
            t.last_post_at,
            t.thread_status,
-           m.last_read_at AS member_last_read_at,
-           (
-             SELECT COUNT(*)
-             FROM share_posts up
-             WHERE TRIM(up.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(up.post_status, 'active'))) <> 'deleted'
-               AND (
-                 NULLIF(TRIM(m.last_read_at), '') IS NULL
-                 OR TRIM(up.created_at) > TRIM(m.last_read_at)
-               )
-           ) AS unread_count,
-           (
-             SELECT p.post_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_id,
-           (
-             SELECT p.file_id
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_file_id,
-           (
-             SELECT p.caption_text
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_caption,
-           (
-             SELECT p.created_at
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_created_at,
-           (
-             SELECT p.author_display_name
-             FROM share_posts p
-             WHERE TRIM(p.thread_id) = TRIM(t.thread_id)
-               AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
-             ORDER BY p.created_at DESC, p.post_id DESC
-             FETCH FIRST 1 ROWS ONLY
-           ) AS latest_post_author_display_name
+           m.last_read_at AS member_last_read_at
          FROM share_thread_members m
          INNER JOIN share_threads t
            ON TRIM(t.thread_id) = TRIM(m.thread_id)
          WHERE TRIM(m.person_id) = :personId
            AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
            AND LOWER(TRIM(NVL(t.thread_status, 'active'))) <> 'archived'
+       ),
+       posts_active AS (
+         SELECT
+           TRIM(p.thread_id) AS thread_id,
+           p.post_id,
+           p.file_id,
+           p.caption_text,
+           p.created_at,
+           p.author_display_name
+         FROM share_posts p
+         INNER JOIN member_threads mt
+           ON TRIM(mt.thread_id) = TRIM(p.thread_id)
+         WHERE LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+       ),
+       latest_posts AS (
+         SELECT
+           pa.thread_id,
+           pa.post_id,
+           pa.file_id,
+           pa.caption_text,
+           pa.created_at,
+           pa.author_display_name,
+           ROW_NUMBER() OVER (
+             PARTITION BY pa.thread_id
+             ORDER BY pa.created_at DESC, pa.post_id DESC
+           ) AS rn
+         FROM posts_active pa
+       ),
+       unread_counts AS (
+         SELECT
+           mt.thread_id,
+           COUNT(
+             CASE
+               WHEN NULLIF(TRIM(mt.member_last_read_at), '') IS NULL
+                    OR TRIM(pa.created_at) > TRIM(mt.member_last_read_at)
+               THEN 1
+             END
+           ) AS unread_count
+         FROM member_threads mt
+         LEFT JOIN posts_active pa
+           ON TRIM(pa.thread_id) = TRIM(mt.thread_id)
+         GROUP BY mt.thread_id, mt.member_last_read_at
+       )
+       SELECT * FROM (
+         SELECT
+           mt.thread_id,
+           mt.family_group_key,
+           mt.group_id,
+           mt.audience_type,
+           mt.audience_key,
+           mt.audience_label,
+           mt.owner_person_id,
+           mt.created_by_person_id,
+           mt.created_by_email,
+           mt.created_at,
+           mt.updated_at,
+           mt.last_post_at,
+           mt.thread_status,
+           mt.member_last_read_at,
+           NVL(uc.unread_count, 0) AS unread_count,
+           NVL(lp.post_id, '') AS latest_post_id,
+           NVL(lp.file_id, '') AS latest_post_file_id,
+           NVL(lp.caption_text, '') AS latest_post_caption,
+           NVL(lp.created_at, '') AS latest_post_created_at,
+           NVL(lp.author_display_name, '') AS latest_post_author_display_name
+         FROM member_threads mt
+         LEFT JOIN unread_counts uc
+           ON TRIM(uc.thread_id) = TRIM(mt.thread_id)
+         LEFT JOIN latest_posts lp
+           ON TRIM(lp.thread_id) = TRIM(mt.thread_id)
+          AND lp.rn = 1
          ORDER BY
-           COALESCE(NULLIF(TRIM(t.last_post_at), ''), NULLIF(TRIM(t.updated_at), ''), TRIM(t.created_at)) DESC,
-           t.thread_id DESC
+           COALESCE(NULLIF(TRIM(mt.last_post_at), ''), NULLIF(TRIM(mt.updated_at), ''), TRIM(mt.created_at)) DESC,
+           mt.thread_id DESC
        )
        WHERE ROWNUM <= :limit`,
       { personId, limit },
