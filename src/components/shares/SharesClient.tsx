@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ModalCloseButton } from "@/components/ui/primitives";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { ImageLightboxModal } from "@/components/media/ImageLightboxModal";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 
 type SharesClientProps = { tenantKey: string };
@@ -162,6 +163,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [commentEditDraftById, setCommentEditDraftById] = useState<Record<string, string>>({});
   const [commentDeleteBusyIds, setCommentDeleteBusyIds] = useState<Set<string>>(new Set());
   const [failedPreviewFileIds, setFailedPreviewFileIds] = useState<Set<string>>(new Set());
+  const [lightboxPostId, setLightboxPostId] = useState("");
 
   const [captionDraft, setCaptionDraft] = useState("");
   const [shareAttachOpen, setShareAttachOpen] = useState(false);
@@ -481,6 +483,15 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     };
   }, [postsRefreshKey, selectedConversationId, selectedConversationKnown, selectedThreadId, tenantKey]);
 
+  useEffect(() => {
+    if (conversationModalOpen) return;
+    setLightboxPostId("");
+  }, [conversationModalOpen]);
+
+  useEffect(() => {
+    setLightboxPostId("");
+  }, [selectedConversationId]);
+
   const selectedThread = useMemo(() => threads.find((thread) => thread.threadId === selectedThreadId) ?? null, [threads, selectedThreadId]);
   const orderedThreads = useMemo(
     () => threads.slice().sort((a, b) => ts(b.lastPostAt || b.createdAt) - ts(a.lastPostAt || a.createdAt)),
@@ -498,6 +509,26 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     [conversations],
   );
   const orderedPosts = useMemo(() => posts.slice().sort((a, b) => ts(a.createdAt) - ts(b.createdAt)), [posts]);
+  const resolvePostMediaSrc = (post: SharePost) => {
+    const directPreviewUrl = String(post.media?.previewUrl ?? "").trim();
+    const directOriginalUrl = String(post.media?.originalUrl ?? "").trim();
+    if (!post.fileId) return "";
+    if (!failedPreviewFileIds.has(post.fileId) && directPreviewUrl) return directPreviewUrl;
+    if (!failedPreviewFileIds.has(post.fileId) && directOriginalUrl) return directOriginalUrl;
+    return previewFallback(tenantKey, post.fileId);
+  };
+  const orderedPostsWithMedia = useMemo(
+    () => orderedPosts.filter((post) => Boolean(String(post.fileId ?? "").trim())),
+    [orderedPosts],
+  );
+  const lightboxPost = useMemo(
+    () => (lightboxPostId ? orderedPostsWithMedia.find((entry) => entry.postId === lightboxPostId) ?? null : null),
+    [lightboxPostId, orderedPostsWithMedia],
+  );
+  const lightboxPostIndex = useMemo(
+    () => orderedPostsWithMedia.findIndex((entry) => entry.postId === lightboxPostId),
+    [lightboxPostId, orderedPostsWithMedia],
+  );
   const canDeleteSelectedThread = useMemo(() => {
     if (!selectedThread || !actorPersonId) return false;
     const owner = String(selectedThread.ownerPersonId ?? "").trim();
@@ -1755,13 +1786,7 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                 {orderedPosts.map((post) => {
                   const directPreviewUrl = String(post.media?.previewUrl ?? "").trim();
                   const directOriginalUrl = String(post.media?.originalUrl ?? "").trim();
-                  const fallback = previewFallback(tenantKey, post.fileId);
-                  const previewSrc = (() => {
-                    if (!post.fileId) return "";
-                    if (!failedPreviewFileIds.has(post.fileId) && directPreviewUrl) return directPreviewUrl;
-                    if (!failedPreviewFileIds.has(post.fileId) && directOriginalUrl) return directOriginalUrl;
-                    return fallback;
-                  })();
+                  const previewSrc = resolvePostMediaSrc(post);
                   const isMyPost = Boolean(actorPersonId) && post.authorPersonId === actorPersonId;
                   const postColor = getMemberColor(post.authorPersonId);
                   const comments = Array.isArray(commentsByPostId[post.postId]) ? commentsByPostId[post.postId] : [];
@@ -1793,6 +1818,10 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
                               borderRadius: "12px",
                               border: "1px solid var(--line)",
                               background: "#fff",
+                              cursor: "zoom-in",
+                            }}
+                            onClick={() => {
+                              setLightboxPostId(post.postId);
                             }}
                             onError={() => {
                               if ((directPreviewUrl || directOriginalUrl) && post.fileId) {
@@ -1998,6 +2027,37 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {lightboxPost ? (
+        <ImageLightboxModal
+          open
+          imageSrc={resolvePostMediaSrc(lightboxPost)}
+          alt={lightboxPost.caption || lightboxPost.media?.label || "Shared media"}
+          caption={lightboxPost.caption || lightboxPost.media?.label || ""}
+          indexLabel={
+            lightboxPostIndex >= 0 && orderedPostsWithMedia.length > 0
+              ? `${lightboxPostIndex + 1} of ${orderedPostsWithMedia.length}`
+              : undefined
+          }
+          canPrev={lightboxPostIndex > 0}
+          canNext={lightboxPostIndex >= 0 && lightboxPostIndex < orderedPostsWithMedia.length - 1}
+          onPrev={
+            lightboxPostIndex > 0
+              ? () => {
+                  setLightboxPostId(orderedPostsWithMedia[lightboxPostIndex - 1].postId);
+                }
+              : undefined
+          }
+          onNext={
+            lightboxPostIndex >= 0 && lightboxPostIndex < orderedPostsWithMedia.length - 1
+              ? () => {
+                  setLightboxPostId(orderedPostsWithMedia[lightboxPostIndex + 1].postId);
+                }
+              : undefined
+          }
+          onClose={() => setLightboxPostId("")}
+        />
       ) : null}
 
       <MediaAttachWizard

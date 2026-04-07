@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-06 (fullscreen image lightbox with zoom + navigation)
+
+- `Date`: 2026-04-06
+- `Change`: Added a reusable fullscreen image lightbox and wired it into person, household, media-library, and shares image views so clicking an image opens a maximized preview with zoom controls and previous/next navigation where applicable.
+- `Type`: UI
+- `Why`: Root cause was static large-image previews across multiple surfaces with no shared zoom state or gallery navigation path. Users could open larger previews but could not zoom or move through adjacent images from the same context.
+- `Files`: `src/components/media/ImageLightboxModal.tsx`, `src/components/PersonEditModal.tsx`, `src/components/HouseholdEditModal.tsx`, `src/components/MediaLibraryClient.tsx`, `src/components/shares/SharesClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` still fails in this workspace due to existing mixed path-casing warnings and pre-existing `/404` prerender `useContext` null failure, not introduced by this change.
+  - Clicking images in person/household/media-library/shares opens fullscreen viewer with zoom controls and keyboard navigation (`Esc`, arrow keys, `+`, `-`, `0`).
+- `Rollback Notes`: Revert this commit to restore prior static large-preview behavior.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-05 (New Conversation modal stacking fix)
 
 - `Date`: 2026-04-05

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { ImageLightboxModal } from "@/components/media/ImageLightboxModal";
 import { matchesCanonicalMediaFileId, type AttributeWithMedia } from "@/lib/attributes/media-response";
 import type { MediaAttachExecutionSummary } from "@/lib/media/attach-orchestrator";
 import { inferStoredMediaKind } from "@/lib/media/upload";
@@ -342,6 +343,7 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
   const [pendingCommentOps, setPendingCommentOps] = useState<Set<string>>(new Set());
   const [failedDirectPreviewFileIds, setFailedDirectPreviewFileIds] = useState<Set<string>>(new Set());
   const [failedDirectOriginalFileIds, setFailedDirectOriginalFileIds] = useState<Set<string>>(new Set());
+  const [lightboxFileId, setLightboxFileId] = useState("");
   const [linkedFilterPersonIds, setLinkedFilterPersonIds] = useState<string[]>([]);
   const [linkedFilterHouseholdIds, setLinkedFilterHouseholdIds] = useState<string[]>([]);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("all");
@@ -592,9 +594,42 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
     });
   }, [filteredMediaItems.length, mediaPageSize]);
 
+  useEffect(() => {
+    if (showPhotoEditor) return;
+    setLightboxFileId("");
+  }, [showPhotoEditor]);
+
   const visibleMediaItems = useMemo(
     () => filteredMediaItems.slice(pageOffset, pageOffset + mediaPageSize),
     [filteredMediaItems, pageOffset, mediaPageSize],
+  );
+  const filteredMediaByFileId = useMemo(() => {
+    const map = new Map<string, MediaItem>();
+    for (const item of filteredMediaItems) {
+      map.set(item.fileId, item);
+    }
+    return map;
+  }, [filteredMediaItems]);
+  const visibleImageFileIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of visibleMediaItems) {
+      if (readMediaKind(item) !== "image") continue;
+      ids.push(item.fileId);
+    }
+    return ids;
+  }, [visibleMediaItems]);
+  const lightboxItem = useMemo(
+    () => (lightboxFileId ? filteredMediaByFileId.get(lightboxFileId) ?? null : null),
+    [filteredMediaByFileId, lightboxFileId],
+  );
+  const lightboxOriginalSrc = lightboxItem
+    ? (lightboxItem.originalUrl && !failedDirectOriginalFileIds.has(lightboxItem.fileId)
+        ? lightboxItem.originalUrl
+        : getPhotoProxyPath(lightboxItem.fileId, tenantKey))
+    : getPhotoProxyPath(lightboxFileId, tenantKey);
+  const lightboxImageIndex = useMemo(
+    () => visibleImageFileIds.findIndex((fileId) => fileId === lightboxFileId),
+    [visibleImageFileIds, lightboxFileId],
   );
 
   const visibleRangeStart = filteredMediaItems.length === 0 ? 0 : pageOffset + 1;
@@ -1726,6 +1761,10 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
                       src={selectedPhotoOriginalSrc}
                       alt={selectedPhotoDetail.name || "photo"}
                       className="person-photo-detail-preview"
+                      onClick={() => {
+                        setLightboxFileId(selectedPhotoDetail.fileId);
+                      }}
+                      style={{ cursor: "zoom-in" }}
                       onError={() => {
                         if (!selectedPhotoDetail.originalUrl) {
                           return;
@@ -2406,6 +2445,36 @@ export function MediaLibraryClient({ tenantKey, canManage }: MediaLibraryClientP
             </div>
           </div>
         </div>
+      ) : null}
+      {lightboxFileId ? (
+        <ImageLightboxModal
+          open
+          imageSrc={lightboxOriginalSrc}
+          alt={lightboxItem?.name || "Large preview"}
+          caption={lightboxItem?.name || ""}
+          indexLabel={
+            lightboxImageIndex >= 0 && visibleImageFileIds.length > 0
+              ? `${lightboxImageIndex + 1} of ${visibleImageFileIds.length}`
+              : undefined
+          }
+          canPrev={lightboxImageIndex > 0}
+          canNext={lightboxImageIndex >= 0 && lightboxImageIndex < visibleImageFileIds.length - 1}
+          onPrev={
+            lightboxImageIndex > 0
+              ? () => {
+                  setLightboxFileId(visibleImageFileIds[lightboxImageIndex - 1]);
+                }
+              : undefined
+          }
+          onNext={
+            lightboxImageIndex >= 0 && lightboxImageIndex < visibleImageFileIds.length - 1
+              ? () => {
+                  setLightboxFileId(visibleImageFileIds[lightboxImageIndex + 1]);
+                }
+              : undefined
+          }
+          onClose={() => setLightboxFileId("")}
+        />
       ) : null}
     </main>
   );

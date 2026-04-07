@@ -13,6 +13,7 @@ import {
 import { formatUsPhoneForEdit } from "@/lib/phone-format";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { ImageLightboxModal } from "@/components/media/ImageLightboxModal";
 import type { AiStoryImportProposal } from "@/lib/ai/story-import-types";
 import {
   matchesCanonicalMediaFileId,
@@ -1384,6 +1385,24 @@ export function PersonEditModal({
     () => (largePhotoFileId ? mediaByFileId.get(largePhotoFileId) ?? null : null),
     [largePhotoFileId, mediaByFileId],
   );
+  const personImageFileIds = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const item of allMediaAttributes) {
+      if (inferPersonMediaKind(item.valueText, item.mediaMetadata || item.valueJson) !== "image") {
+        continue;
+      }
+      const fileId = item.valueText.trim();
+      if (!fileId || seen.has(fileId)) continue;
+      seen.add(fileId);
+      ids.push(fileId);
+    }
+    return ids;
+  }, [allMediaAttributes]);
+  const largePhotoImageIndex = useMemo(
+    () => personImageFileIds.findIndex((fileId) => fileId === largePhotoFileId),
+    [personImageFileIds, largePhotoFileId],
+  );
   const largePhotoOriginalSrc = largePhotoSelectedItem
     ? getPersonMediaOriginalSrc(largePhotoSelectedItem)
     : getPhotoProxyPath(largePhotoFileId, activeTenantKey);
@@ -2684,6 +2703,20 @@ export function PersonEditModal({
   const openPhotoDetail = (fileId: string) => {
     setSelectedPhotoFileId(fileId);
     setShowPhotoDetail(true);
+  };
+
+  const clearLargePhotoViewer = () => {
+    setLargePhotoFileId("");
+    setLargePhotoIsVideo(false);
+    setLargePhotoIsDocument(false);
+    setLargePhotoIsAudio(false);
+  };
+
+  const openLargePhotoViewer = (fileId: string, metadataRaw?: string) => {
+    setLargePhotoFileId(fileId);
+    setLargePhotoIsVideo(isVideoMediaByMetadata(fileId, metadataRaw));
+    setLargePhotoIsDocument(isDocumentMediaByMetadata(fileId, metadataRaw));
+    setLargePhotoIsAudio(isAudioMediaByMetadata(fileId, metadataRaw));
   };
 
   const saveSelectedPhotoMetadata = async () => {
@@ -4278,10 +4311,7 @@ export function PersonEditModal({
                   <PhotoDetailHeader
                     onClose={() => setShowPhotoDetail(false)}
                     onViewLarge={() => {
-                      setLargePhotoFileId(selectedPhoto.valueText);
-                      setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
-                      setLargePhotoIsDocument(isDocumentMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
-                      setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson));
+                      openLargePhotoViewer(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson);
                     }}
                     viewLabel={isDocumentMediaByMetadata(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson) ? "Open Document" : "View Large"}
                   />
@@ -4318,6 +4348,10 @@ export function PersonEditModal({
                         src={getPersonMediaOriginalSrc(selectedPhoto)}
                         alt={selectedPhoto.label || "photo"}
                         className="person-photo-detail-preview"
+                        onClick={() => {
+                          openLargePhotoViewer(selectedPhoto.valueText, selectedPhoto.mediaMetadata || selectedPhoto.valueJson);
+                        }}
+                        style={{ cursor: "zoom-in" }}
                         onError={() => {
                           if (!selectedPhoto.originalUrl) {
                             return;
@@ -4590,63 +4624,91 @@ export function PersonEditModal({
               />
             ) : null}
 
-            {largePhotoFileId ? (
+            {largePhotoFileId && !(largePhotoIsVideo || largePhotoIsAudio || largePhotoIsDocument) ? (
+              <ImageLightboxModal
+                open
+                imageSrc={largePhotoOriginalSrc}
+                alt={largePhotoSelectedItem?.label || "Large preview"}
+                caption={largePhotoSelectedItem?.label || ""}
+                indexLabel={
+                  largePhotoImageIndex >= 0 && personImageFileIds.length > 0
+                    ? `${largePhotoImageIndex + 1} of ${personImageFileIds.length}`
+                    : undefined
+                }
+                canPrev={largePhotoImageIndex > 0}
+                canNext={largePhotoImageIndex >= 0 && largePhotoImageIndex < personImageFileIds.length - 1}
+                onPrev={
+                  largePhotoImageIndex > 0
+                    ? () => {
+                        setLargePhotoFileId(personImageFileIds[largePhotoImageIndex - 1]);
+                      }
+                    : undefined
+                }
+                onNext={
+                  largePhotoImageIndex >= 0 && largePhotoImageIndex < personImageFileIds.length - 1
+                    ? () => {
+                        setLargePhotoFileId(personImageFileIds[largePhotoImageIndex + 1]);
+                      }
+                    : undefined
+                }
+                onClose={clearLargePhotoViewer}
+              />
+            ) : null}
+
+            {largePhotoFileId && (largePhotoIsVideo || largePhotoIsAudio || largePhotoIsDocument) ? (
               <div
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
-                onClick={() => {
-      setLargePhotoFileId("");
-      setLargePhotoIsVideo(false);
-      setLargePhotoIsDocument(false);
-      setLargePhotoIsAudio(false);
-                }}
+                onClick={clearLargePhotoViewer}
               >
-                {largePhotoIsVideo ? (
-                  <video
-                    src={largePhotoOriginalSrc}
-                    controls
-                    playsInline
-                    style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                  />
-                ) : largePhotoIsAudio ? (
-                  <audio
-                    src={largePhotoOriginalSrc}
-                    controls
-                    style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                  />
-                ) : largePhotoIsDocument ? (
-                  <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
-                    <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
-                    <strong>Document</strong>
-                    <a
-                      href={largePhotoOriginalSrc}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="button secondary tap-button"
-                      style={{ textDecoration: "none" }}
-                    >
-                      Open Document
-                    </a>
-                  </div>
-                ) : (
-                  <img
-                    src={largePhotoOriginalSrc}
-                    alt="Large preview"
-                    style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                    onError={() => {
-                      if (!largePhotoSelectedItem?.originalUrl || !largePhotoFileId) {
-                        return;
-                      }
-                      setFailedDirectOriginalFileIds((current) => {
-                        if (current.has(largePhotoFileId)) {
-                          return current;
+                <div onClick={(event) => event.stopPropagation()}>
+                  {largePhotoIsVideo ? (
+                    <video
+                      src={largePhotoOriginalSrc}
+                      controls
+                      playsInline
+                      style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                    />
+                  ) : largePhotoIsAudio ? (
+                    <audio
+                      src={largePhotoOriginalSrc}
+                      controls
+                      style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                    />
+                  ) : largePhotoIsDocument ? (
+                    <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
+                      <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                      <strong>Document</strong>
+                      <a
+                        href={largePhotoOriginalSrc}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="button secondary tap-button"
+                        style={{ textDecoration: "none" }}
+                      >
+                        Open Document
+                      </a>
+                    </div>
+                  ) : (
+                    <img
+                      src={largePhotoOriginalSrc}
+                      alt="Large preview"
+                      style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                      onError={() => {
+                        if (!largePhotoSelectedItem?.originalUrl || !largePhotoFileId) {
+                          return;
                         }
-                        const next = new Set(current);
-                        next.add(largePhotoFileId);
-                        return next;
-                      });
-                    }}
-                  />
-                )}
+                        setFailedDirectOriginalFileIds((current) => {
+                          if (current.has(largePhotoFileId)) {
+                            return current;
+                          }
+                          const next = new Set(current);
+                          next.add(largePhotoFileId);
+                          return next;
+                        });
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             ) : null}
           </>

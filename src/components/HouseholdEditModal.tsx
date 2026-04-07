@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getPhotoPreviewProxyPath, getPhotoProxyPath } from "@/lib/google/photo-path";
 import { AttributesModal } from "@/components/AttributesModal";
 import { MediaAttachWizard, formatMediaAttachUserSummary } from "@/components/media/MediaAttachWizard";
+import { ImageLightboxModal } from "@/components/media/ImageLightboxModal";
 import {
   AsyncActionButton,
   ModalActionBar,
@@ -311,6 +312,49 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
   const canShowChildMaidenName = gender === "female" && isOlderThanAge(birthDate, 19);
   const defaultChildLastName = extractLastName(household?.husbandName);
   const householdStatusTone = inferStatusTone(status);
+  const householdImageFileIds = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const photo of photos) {
+      if (inferHouseholdMediaKind(photo.fileId, photo.mediaMetadata) !== "image") continue;
+      const fileId = photo.fileId.trim();
+      if (!fileId || seen.has(fileId)) continue;
+      seen.add(fileId);
+      ids.push(fileId);
+    }
+    return ids;
+  }, [photos]);
+  const householdPhotoByFileId = useMemo(() => {
+    const map = new Map<string, HouseholdPhoto>();
+    for (const photo of photos) {
+      const fileId = photo.fileId.trim();
+      if (!fileId || map.has(fileId)) continue;
+      map.set(fileId, photo);
+    }
+    return map;
+  }, [photos]);
+  const largeHouseholdPhoto = useMemo(
+    () => (largePhotoFileId ? householdPhotoByFileId.get(largePhotoFileId) ?? null : null),
+    [householdPhotoByFileId, largePhotoFileId],
+  );
+  const largeHouseholdPhotoIndex = useMemo(
+    () => householdImageFileIds.findIndex((fileId) => fileId === largePhotoFileId),
+    [householdImageFileIds, largePhotoFileId],
+  );
+
+  const clearLargePhotoViewer = () => {
+    setLargePhotoFileId("");
+    setLargePhotoIsVideo(false);
+    setLargePhotoIsDocument(false);
+    setLargePhotoIsAudio(false);
+  };
+
+  const openLargePhotoViewer = (fileId: string, metadataRaw?: string) => {
+    setLargePhotoFileId(fileId);
+    setLargePhotoIsVideo(isVideoMediaByMetadata(fileId, metadataRaw));
+    setLargePhotoIsDocument(isDocumentMediaByMetadata(fileId, metadataRaw));
+    setLargePhotoIsAudio(isAudioMediaByMetadata(fileId, metadataRaw));
+  };
 
   const resetAddChildForm = () => {
     setFirstName("");
@@ -342,10 +386,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
     setPhotos(Array.isArray(body.photos) ? (body.photos as HouseholdPhoto[]) : []);
     setSelectedPhotoId("");
     setShowPhotoDetail(false);
-    setLargePhotoFileId("");
-    setLargePhotoIsVideo(false);
-    setLargePhotoIsDocument(false);
-    setLargePhotoIsAudio(false);
+    clearLargePhotoViewer();
     setWeddingPhotoFileId(String(next.weddingPhotoFileId ?? ""));
     setMarriedDate(String(next.marriedDate ?? ""));
     setLabel(String(next.label ?? ""));
@@ -1164,10 +1205,7 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             type="button"
                               className="button secondary tap-button"
                               onClick={() => {
-                                setLargePhotoFileId(selectedPhoto.fileId);
-                                setLargePhotoIsVideo(isVideoMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
-                                setLargePhotoIsDocument(isDocumentMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
-                                setLargePhotoIsAudio(isAudioMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata));
+                                openLargePhotoViewer(selectedPhoto.fileId, selectedPhoto.mediaMetadata);
                               }}
                             >
                               {isDocumentMediaByMetadata(selectedPhoto.fileId, selectedPhoto.mediaMetadata) ? "Open Document" : "View Large"}
@@ -1215,6 +1253,10 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                             src={getPhotoProxyPath(selectedPhoto.fileId, tenantKey)}
                             alt={selectedPhoto.name || "photo"}
                             className="person-photo-detail-preview"
+                            onClick={() => {
+                              openLargePhotoViewer(selectedPhoto.fileId, selectedPhoto.mediaMetadata);
+                            }}
+                            style={{ cursor: "zoom-in" }}
                           />
                         )}
                       </div>
@@ -1375,50 +1417,77 @@ export function HouseholdEditModal({ open, tenantKey, householdId, onClose, onSa
                     void handleWizardComplete(summary);
                   }}
                 />
-                {largePhotoFileId ? (
+                {largePhotoFileId && !(largePhotoIsVideo || largePhotoIsAudio || largePhotoIsDocument) ? (
+                  <ImageLightboxModal
+                    open
+                    imageSrc={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                    alt="Large preview"
+                    caption={largeHouseholdPhoto?.name || ""}
+                    indexLabel={
+                      largeHouseholdPhotoIndex >= 0 && householdImageFileIds.length > 0
+                        ? `${largeHouseholdPhotoIndex + 1} of ${householdImageFileIds.length}`
+                        : undefined
+                    }
+                    canPrev={largeHouseholdPhotoIndex > 0}
+                    canNext={largeHouseholdPhotoIndex >= 0 && largeHouseholdPhotoIndex < householdImageFileIds.length - 1}
+                    onPrev={
+                      largeHouseholdPhotoIndex > 0
+                        ? () => {
+                            setLargePhotoFileId(householdImageFileIds[largeHouseholdPhotoIndex - 1]);
+                          }
+                        : undefined
+                    }
+                    onNext={
+                      largeHouseholdPhotoIndex >= 0 && largeHouseholdPhotoIndex < householdImageFileIds.length - 1
+                        ? () => {
+                            setLargePhotoFileId(householdImageFileIds[largeHouseholdPhotoIndex + 1]);
+                          }
+                        : undefined
+                    }
+                    onClose={clearLargePhotoViewer}
+                  />
+                ) : null}
+                {largePhotoFileId && (largePhotoIsVideo || largePhotoIsAudio || largePhotoIsDocument) ? (
                   <div
                     style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 140, display: "grid", placeItems: "center", padding: "1rem" }}
-                    onClick={() => {
-                      setLargePhotoFileId("");
-                      setLargePhotoIsVideo(false);
-                      setLargePhotoIsDocument(false);
-                      setLargePhotoIsAudio(false);
-                    }}
+                    onClick={clearLargePhotoViewer}
                   >
-                    {largePhotoIsVideo ? (
-                      <video
-                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                        controls
-                        playsInline
-                        style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                      />
-                    ) : largePhotoIsAudio ? (
-                      <audio
-                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                        controls
-                        style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                      />
-                    ) : largePhotoIsDocument ? (
-                      <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
-                        <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
-                        <strong>Document</strong>
-                        <a
-                          href={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="button secondary tap-button"
-                          style={{ textDecoration: "none" }}
-                        >
-                          Open Document
-                        </a>
-                      </div>
-                    ) : (
-                      <img
-                        src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
-                        alt="Large preview"
-                        style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
-                      />
-                    )}
+                    <div onClick={(event) => event.stopPropagation()}>
+                      {largePhotoIsVideo ? (
+                        <video
+                          src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                          controls
+                          playsInline
+                          style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                        />
+                      ) : largePhotoIsAudio ? (
+                        <audio
+                          src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                          controls
+                          style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                        />
+                      ) : largePhotoIsDocument ? (
+                        <div style={{ width: "min(640px, 95vw)", borderRadius: 14, border: "1px solid var(--line)", background: "#fff", padding: "1.25rem", display: "grid", placeItems: "center", gap: "0.65rem", textAlign: "center" }}>
+                          <span style={{ color: "#0f4c81" }}><DocumentIcon /></span>
+                          <strong>Document</strong>
+                          <a
+                            href={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="button secondary tap-button"
+                            style={{ textDecoration: "none" }}
+                          >
+                            Open Document
+                          </a>
+                        </div>
+                      ) : (
+                        <img
+                          src={getPhotoProxyPath(largePhotoFileId, tenantKey)}
+                          alt="Large preview"
+                          style={{ maxWidth: "min(1200px, 95vw)", maxHeight: "90vh", borderRadius: 14, border: "1px solid var(--line)", background: "#fff" }}
+                        />
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </>
