@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-08 (Unit 1 isolated access-policy lab: `/u1` + `/api/u1/access/*`)
+
+- `Date`: 2026-04-08
+- `Change`: Implemented Unit 1 isolated access-policy lab with new Unit 1 OCI-compatible tables, resolver/recompute pipeline, authenticated API surface under `/api/u1/access/*`, and a minimal `/u1` admin UI for editing subscription/sharing rules, triggering resync/audit, and previewing effective access outcomes.
+- `Type`: UI | API | Data | Schema
+- `Why`: Root cause was missing dedicated infrastructure for the new relationship-driven subscription/share model. There was no isolated surface to define rules/exceptions, no derived access-map recompute path, and no deterministic preview/status path for validating behavior before broader feature integration.
+- `Files`: `src/lib/oci/tables.ts`, `src/lib/u1/types.ts`, `src/lib/u1/access-store.ts`, `src/lib/u1/access-resolver.ts`, `src/lib/u1/api.ts`, `src/app/api/u1/access/catalog/route.ts`, `src/app/api/u1/access/subscription/defaults/route.ts`, `src/app/api/u1/access/subscription/exceptions/people/route.ts`, `src/app/api/u1/access/subscription/exceptions/households/route.ts`, `src/app/api/u1/access/sharing/defaults/route.ts`, `src/app/api/u1/access/sharing/exceptions/people/route.ts`, `src/app/api/u1/access/sharing/exceptions/households/route.ts`, `src/app/api/u1/access/resync/route.ts`, `src/app/api/u1/access/resync/status/route.ts`, `src/app/api/u1/access/preview/route.ts`, `src/app/u1/page.tsx`, `src/components/u1/U1AccessLabClient.tsx`, `TODO.md`
+- `Data Changes`: Added compatibility-managed tables and indexes for Unit 1 (`subscription_default_rules`, `subscription_person_exceptions`, `subscription_household_exceptions`, `owner_share_default_rules`, `owner_share_person_exceptions`, `owner_share_household_exceptions`, `profile_access_map`, `access_recompute_jobs`, `access_recompute_runs`). No destructive migration applied.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes from canonical Windows path `C:\Users\steph\the-eternal-family-link`.
+  - `/u1` loads for authenticated users and can save each JSON rule/exception payload.
+  - `Resync Access` and `Resync + Audit` return status and update latest recompute job/run state.
+  - `Preview Access` returns effective visibility/placeholder/scope outcome for selected target person.
+- `Rollback Notes`: Revert this commit to remove Unit 1 routes/libs/UI and table-compatibility additions.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-06 (fullscreen image lightbox with zoom + navigation)
 
 - `Date`: 2026-04-06

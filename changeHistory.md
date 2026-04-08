@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-08: Added Unit 1 isolated access-policy lab with `/u1` admin UI, `/api/u1/access/*` endpoints, Unit 1 compatibility tables/indexes, recompute job/run + derived map pipeline, and access preview/status flows. See `docs/change-summary.md`.
 - 2026-04-06: Added fullscreen image lightbox behavior across person, household, media-library, and shares image surfaces so click-to-open now supports maximize view, zoom controls, and previous/next navigation where applicable. See `docs/change-summary.md`.
 - 2026-04-05: Fixed Shares `New Conversation` modal stacking so it opens above the thread modal (higher z-index). See `docs/change-summary.md`.
 - 2026-04-05: Shares now uses separate modals for conversation list vs conversation content (posting/comments move to the conversation modal opened from a selected conversation). See `docs/change-summary.md`.

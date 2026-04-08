@@ -58,6 +58,15 @@ let auditLogTableCompatEnsured = false;
 let faceInstancesTableCompatEnsured = false;
 let faceMatchesTableCompatEnsured = false;
 let personFaceProfilesTableCompatEnsured = false;
+let subscriptionDefaultRulesTableCompatEnsured = false;
+let subscriptionPersonExceptionsTableCompatEnsured = false;
+let subscriptionHouseholdExceptionsTableCompatEnsured = false;
+let ownerShareDefaultRulesTableCompatEnsured = false;
+let ownerSharePersonExceptionsTableCompatEnsured = false;
+let ownerShareHouseholdExceptionsTableCompatEnsured = false;
+let profileAccessMapTableCompatEnsured = false;
+let accessRecomputeJobsTableCompatEnsured = false;
+let accessRecomputeRunsTableCompatEnsured = false;
 export const OCI_GLOBAL_FACE_SCOPE_KEY = "__global__";
 
 function isColumnAlreadyCompatibleError(message: string) {
@@ -563,6 +572,136 @@ const TABLES: Record<string, TableConfig> = {
       "expires_at",
       "completed_at",
       "created_at",
+    ],
+  },
+  SubscriptionDefaultRules: {
+    tableName: "subscription_default_rules",
+    headers: [
+      "rule_id",
+      "viewer_person_id",
+      "relationship_category",
+      "lineage_side",
+      "is_subscribed",
+      "is_active",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  SubscriptionPersonExceptions: {
+    tableName: "subscription_person_exceptions",
+    headers: [
+      "exception_id",
+      "viewer_person_id",
+      "target_person_id",
+      "effect",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  SubscriptionHouseholdExceptions: {
+    tableName: "subscription_household_exceptions",
+    headers: [
+      "exception_id",
+      "viewer_person_id",
+      "household_id",
+      "effect",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  OwnerShareDefaultRules: {
+    tableName: "owner_share_default_rules",
+    headers: [
+      "rule_id",
+      "owner_person_id",
+      "relationship_category",
+      "lineage_side",
+      "share_vitals",
+      "share_stories",
+      "share_media",
+      "share_conversations",
+      "is_active",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  OwnerSharePersonExceptions: {
+    tableName: "owner_share_person_exceptions",
+    headers: [
+      "exception_id",
+      "owner_person_id",
+      "target_person_id",
+      "effect",
+      "share_vitals",
+      "share_stories",
+      "share_media",
+      "share_conversations",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  OwnerShareHouseholdExceptions: {
+    tableName: "owner_share_household_exceptions",
+    headers: [
+      "exception_id",
+      "owner_person_id",
+      "household_id",
+      "effect",
+      "share_vitals",
+      "share_stories",
+      "share_media",
+      "share_conversations",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  ProfileAccessMap: {
+    tableName: "profile_access_map",
+    headers: [
+      "map_id",
+      "viewer_person_id",
+      "target_person_id",
+      "is_subscribed",
+      "is_shared",
+      "can_vitals",
+      "can_stories",
+      "can_media",
+      "can_conversations",
+      "placeholder_only",
+      "reason_code",
+      "map_version",
+      "computed_at",
+    ],
+  },
+  AccessRecomputeJobs: {
+    tableName: "access_recompute_jobs",
+    headers: [
+      "job_id",
+      "viewer_person_id",
+      "reason",
+      "status",
+      "dedupe_key",
+      "requested_at",
+      "started_at",
+      "completed_at",
+      "error_message",
+    ],
+  },
+  AccessRecomputeRuns: {
+    tableName: "access_recompute_runs",
+    headers: [
+      "run_id",
+      "job_id",
+      "viewer_person_id",
+      "status",
+      "started_at",
+      "completed_at",
+      "processed_count",
+      "changed_count",
+      "overexposed_count",
+      "underexposed_count",
+      "stale_count",
+      "error_message",
     ],
   },
 };
@@ -2231,6 +2370,247 @@ async function ensurePersonFaceProfilesTableCompatibility(connection: OciConnect
   personFaceProfilesTableCompatEnsured = true;
 }
 
+async function ensureCreateTableAndIndexes(
+  connection: OciConnection,
+  createTableSql: string,
+  indexStatements: string[],
+) {
+  try {
+    await connection.execute(createTableSql);
+    await connection.commit();
+  } catch (error) {
+    const message = (error as Error).message ?? "";
+    if (!/ORA-00955|name is already used by an existing object/i.test(message)) {
+      throw error;
+    }
+  }
+
+  for (const sql of indexStatements) {
+    try {
+      await connection.execute(sql);
+    } catch (error) {
+      const message = (error as Error).message ?? "";
+      if (!/ORA-00955|ORA-01408|name is already used by an existing object|such column list already indexed/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+
+  await connection.commit();
+}
+
+async function ensureSubscriptionDefaultRulesTableCompatibility(connection: OciConnection) {
+  if (subscriptionDefaultRulesTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE subscription_default_rules (
+       rule_id VARCHAR2(128) PRIMARY KEY,
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       relationship_category VARCHAR2(64) NOT NULL,
+       lineage_side VARCHAR2(24) NOT NULL,
+       is_subscribed VARCHAR2(8) NOT NULL,
+       is_active VARCHAR2(8) NOT NULL,
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_subscription_default_rules_scope ON subscription_default_rules(viewer_person_id, relationship_category, lineage_side)",
+      "CREATE INDEX ix_subscription_default_rules_viewer ON subscription_default_rules(viewer_person_id, is_active)",
+    ],
+  );
+  subscriptionDefaultRulesTableCompatEnsured = true;
+}
+
+async function ensureSubscriptionPersonExceptionsTableCompatibility(connection: OciConnection) {
+  if (subscriptionPersonExceptionsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE subscription_person_exceptions (
+       exception_id VARCHAR2(128) PRIMARY KEY,
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       target_person_id VARCHAR2(128) NOT NULL,
+       effect VARCHAR2(16) NOT NULL,
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_subscription_person_exceptions_scope ON subscription_person_exceptions(viewer_person_id, target_person_id)",
+      "CREATE INDEX ix_subscription_person_exceptions_viewer ON subscription_person_exceptions(viewer_person_id)",
+    ],
+  );
+  subscriptionPersonExceptionsTableCompatEnsured = true;
+}
+
+async function ensureSubscriptionHouseholdExceptionsTableCompatibility(connection: OciConnection) {
+  if (subscriptionHouseholdExceptionsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE subscription_household_exceptions (
+       exception_id VARCHAR2(128) PRIMARY KEY,
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       household_id VARCHAR2(128) NOT NULL,
+       effect VARCHAR2(16) NOT NULL,
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_subscription_household_exceptions_scope ON subscription_household_exceptions(viewer_person_id, household_id)",
+      "CREATE INDEX ix_subscription_household_exceptions_viewer ON subscription_household_exceptions(viewer_person_id)",
+    ],
+  );
+  subscriptionHouseholdExceptionsTableCompatEnsured = true;
+}
+
+async function ensureOwnerShareDefaultRulesTableCompatibility(connection: OciConnection) {
+  if (ownerShareDefaultRulesTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE owner_share_default_rules (
+       rule_id VARCHAR2(128) PRIMARY KEY,
+       owner_person_id VARCHAR2(128) NOT NULL,
+       relationship_category VARCHAR2(64) NOT NULL,
+       lineage_side VARCHAR2(24) NOT NULL,
+       share_vitals VARCHAR2(8) NOT NULL,
+       share_stories VARCHAR2(8) NOT NULL,
+       share_media VARCHAR2(8) NOT NULL,
+       share_conversations VARCHAR2(8) NOT NULL,
+       is_active VARCHAR2(8) NOT NULL,
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_owner_share_default_rules_scope ON owner_share_default_rules(owner_person_id, relationship_category, lineage_side)",
+      "CREATE INDEX ix_owner_share_default_rules_owner ON owner_share_default_rules(owner_person_id, is_active)",
+    ],
+  );
+  ownerShareDefaultRulesTableCompatEnsured = true;
+}
+
+async function ensureOwnerSharePersonExceptionsTableCompatibility(connection: OciConnection) {
+  if (ownerSharePersonExceptionsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE owner_share_person_exceptions (
+       exception_id VARCHAR2(128) PRIMARY KEY,
+       owner_person_id VARCHAR2(128) NOT NULL,
+       target_person_id VARCHAR2(128) NOT NULL,
+       effect VARCHAR2(16) NOT NULL,
+       share_vitals VARCHAR2(8),
+       share_stories VARCHAR2(8),
+       share_media VARCHAR2(8),
+       share_conversations VARCHAR2(8),
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_owner_share_person_exceptions_scope ON owner_share_person_exceptions(owner_person_id, target_person_id)",
+      "CREATE INDEX ix_owner_share_person_exceptions_owner ON owner_share_person_exceptions(owner_person_id)",
+    ],
+  );
+  ownerSharePersonExceptionsTableCompatEnsured = true;
+}
+
+async function ensureOwnerShareHouseholdExceptionsTableCompatibility(connection: OciConnection) {
+  if (ownerShareHouseholdExceptionsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE owner_share_household_exceptions (
+       exception_id VARCHAR2(128) PRIMARY KEY,
+       owner_person_id VARCHAR2(128) NOT NULL,
+       household_id VARCHAR2(128) NOT NULL,
+       effect VARCHAR2(16) NOT NULL,
+       share_vitals VARCHAR2(8),
+       share_stories VARCHAR2(8),
+       share_media VARCHAR2(8),
+       share_conversations VARCHAR2(8),
+       created_at VARCHAR2(64),
+       updated_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_owner_share_household_exceptions_scope ON owner_share_household_exceptions(owner_person_id, household_id)",
+      "CREATE INDEX ix_owner_share_household_exceptions_owner ON owner_share_household_exceptions(owner_person_id)",
+    ],
+  );
+  ownerShareHouseholdExceptionsTableCompatEnsured = true;
+}
+
+async function ensureProfileAccessMapTableCompatibility(connection: OciConnection) {
+  if (profileAccessMapTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE profile_access_map (
+       map_id VARCHAR2(128) PRIMARY KEY,
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       target_person_id VARCHAR2(128) NOT NULL,
+       is_subscribed VARCHAR2(8) NOT NULL,
+       is_shared VARCHAR2(8) NOT NULL,
+       can_vitals VARCHAR2(8) NOT NULL,
+       can_stories VARCHAR2(8) NOT NULL,
+       can_media VARCHAR2(8) NOT NULL,
+       can_conversations VARCHAR2(8) NOT NULL,
+       placeholder_only VARCHAR2(8) NOT NULL,
+       reason_code VARCHAR2(128),
+       map_version VARCHAR2(64),
+       computed_at VARCHAR2(64)
+     )`,
+    [
+      "CREATE UNIQUE INDEX ux_profile_access_map_scope ON profile_access_map(viewer_person_id, target_person_id)",
+      "CREATE INDEX ix_profile_access_map_viewer ON profile_access_map(viewer_person_id)",
+      "CREATE INDEX ix_profile_access_map_target ON profile_access_map(target_person_id)",
+    ],
+  );
+  profileAccessMapTableCompatEnsured = true;
+}
+
+async function ensureAccessRecomputeJobsTableCompatibility(connection: OciConnection) {
+  if (accessRecomputeJobsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE access_recompute_jobs (
+       job_id VARCHAR2(128) PRIMARY KEY,
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       reason VARCHAR2(64) NOT NULL,
+       status VARCHAR2(24) NOT NULL,
+       dedupe_key VARCHAR2(256),
+       requested_at VARCHAR2(64),
+       started_at VARCHAR2(64),
+       completed_at VARCHAR2(64),
+       error_message VARCHAR2(4000)
+     )`,
+    [
+      "CREATE INDEX ix_access_recompute_jobs_viewer ON access_recompute_jobs(viewer_person_id, status)",
+      "CREATE INDEX ix_access_recompute_jobs_requested ON access_recompute_jobs(requested_at)",
+    ],
+  );
+  accessRecomputeJobsTableCompatEnsured = true;
+}
+
+async function ensureAccessRecomputeRunsTableCompatibility(connection: OciConnection) {
+  if (accessRecomputeRunsTableCompatEnsured) return;
+  await ensureCreateTableAndIndexes(
+    connection,
+    `CREATE TABLE access_recompute_runs (
+       run_id VARCHAR2(128) PRIMARY KEY,
+       job_id VARCHAR2(128),
+       viewer_person_id VARCHAR2(128) NOT NULL,
+       status VARCHAR2(24) NOT NULL,
+       started_at VARCHAR2(64),
+       completed_at VARCHAR2(64),
+       processed_count VARCHAR2(32),
+       changed_count VARCHAR2(32),
+       overexposed_count VARCHAR2(32),
+       underexposed_count VARCHAR2(32),
+       stale_count VARCHAR2(32),
+       error_message VARCHAR2(4000)
+     )`,
+    [
+      "CREATE INDEX ix_access_recompute_runs_viewer ON access_recompute_runs(viewer_person_id, started_at)",
+      "CREATE INDEX ix_access_recompute_runs_job ON access_recompute_runs(job_id)",
+    ],
+  );
+  accessRecomputeRunsTableCompatEnsured = true;
+}
+
 async function ensureTableCompatibility(connection: OciConnection, tableName: string) {
   if (tableName === "attributes") {
     await ensureAttributesTableCompatibility(connection);
@@ -2326,6 +2706,42 @@ async function ensureTableCompatibility(connection: OciConnection, tableName: st
   }
   if (tableName === "person_face_profiles") {
     await ensurePersonFaceProfilesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "subscription_default_rules") {
+    await ensureSubscriptionDefaultRulesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "subscription_person_exceptions") {
+    await ensureSubscriptionPersonExceptionsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "subscription_household_exceptions") {
+    await ensureSubscriptionHouseholdExceptionsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "owner_share_default_rules") {
+    await ensureOwnerShareDefaultRulesTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "owner_share_person_exceptions") {
+    await ensureOwnerSharePersonExceptionsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "owner_share_household_exceptions") {
+    await ensureOwnerShareHouseholdExceptionsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "profile_access_map") {
+    await ensureProfileAccessMapTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "access_recompute_jobs") {
+    await ensureAccessRecomputeJobsTableCompatibility(connection);
+    return;
+  }
+  if (tableName === "access_recompute_runs") {
+    await ensureAccessRecomputeRunsTableCompatibility(connection);
   }
 }
 

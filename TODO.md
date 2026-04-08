@@ -4,6 +4,68 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Unit 1 isolated access-policy lab (subscription + sharing preferences only)
+  Priority: High (#0)
+  Status: In progress 2026-04-07
+  Progress 2026-04-08:
+  - Completed: Phase 1 data model + compatibility plumbing (`src/lib/oci/tables.ts`, `src/lib/u1/types.ts`, `src/lib/u1/access-store.ts`).
+  - Completed: Phase 2 resolver + recompute path (`src/lib/u1/access-resolver.ts`).
+  - Completed: Phase 3 Unit 1 API surface (`/api/u1/access/*` routes for defaults/exceptions/catalog/resync/status/preview).
+  - Completed: Phase 4 Unit 1 UI shell (`/u1` + `src/components/u1/U1AccessLabClient.tsx` JSON-editor admin workflow).
+  - In progress: Phase 5 release-cycle docs/deploy bookkeeping after user approval.
+  Est date: 2026-04-08
+  Desc: Build a minimal Unit 1 app surface that only includes login/session + subscription/share preference administration and derived profile access map recompute. Do not bring media/people/calendar/share feature UI into Unit 1.
+  Scope:
+  - Add isolated Unit 1 UI surface (`/u1`) with:
+    - subscription default rules editor
+    - subscription person/household exception editors
+    - owner-share default rules editor
+    - owner-share person exception editor
+    - preview panel and `Resync Access` trigger/status
+  - Add Unit 1 API namespace (`/api/u1/access/...`) for all Unit 1 preference/resync operations.
+  - Add Unit 1 tables (new schema objects only; no destructive edits to existing feature tables):
+    - `subscription_default_rules`
+    - `subscription_person_exceptions`
+    - `subscription_household_exceptions`
+    - `owner_share_default_rules`
+    - `owner_share_person_exceptions`
+    - `profile_access_map`
+    - `access_recompute_jobs`
+    - `access_recompute_runs`
+  - Implement resolver/recompute path:
+    - subscription precedence and owner-share precedence as approved
+    - effective outcome: hidden vs placeholder vs scoped-visible
+    - background-friendly recompute function with manual trigger
+  - Keep runtime enforcement and settings reflection split:
+    - settings read/write from intent tables
+    - runtime checks/preview from derived map + resolver output
+  Phases:
+  - Phase 1: Data model + compatibility plumbing
+    - Add Unit 1 table configs + OCI compatibility creation/indexing.
+    - Add typed Unit 1 store utilities for intent rows, map rows, job/run rows.
+  - Phase 2: Resolver + recompute worker path
+    - Implement relationship-derived subscription resolver.
+    - Implement owner-share resolver + intersection logic.
+    - Implement viewer-scope recompute + run logging.
+  - Phase 3: Unit 1 API surface
+    - Implement `/api/u1/access/*` endpoints for defaults/exceptions/resync/status/preview.
+    - Enforce auth and self-scope guards.
+  - Phase 4: Unit 1 UI shell
+    - Add `/u1` route and minimal admin-oriented page to edit preferences and run resync.
+    - Add pending/completed status UX and preview reason text.
+  - Phase 5: Verification + docs
+    - `npm run lint` and `npm run build`.
+    - Update `docs/change-summary.md` and `changeHistory.md` in release cycle.
+  Validation:
+  - `npm run lint` passes.
+  - `npm run build` passes (environment permitting).
+  - Logged-in user can save subscription/share preferences on `/u1`.
+  - `Resync Access` enqueues/recomputes and status updates are visible.
+  - Preview shows hidden/placeholder/scoped-visible outcomes.
+  Completion criteria:
+  - Unit 1 is usable end-to-end without relying on media/people/calendar/share feature UIs.
+  - Existing app surfaces remain behaviorally unchanged outside new `/u1` + `/api/u1` namespace.
+
 - [ ] Legacy media/share compatibility hard cutover + test-content reset
   Priority: High
   Status: In progress 2026-04-04
