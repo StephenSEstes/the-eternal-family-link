@@ -417,7 +417,7 @@ This is the canonical design decision log for product, data, and UX behavior in 
 ## 2026-04-08
 
 - `Area`: Unit 1 redesign execution model
-- `Decision`: Implement Unit 1 as an isolated greenfield app under `unit1-lab/` on a dedicated branch/deploy track, and migrate functionality in small units. Do not ship Unit 1 by extending the legacy EFL app surfaces on `main`.
+- `Decision`: Implement Unit 1 as an isolated greenfield app under `efl2/` on a dedicated branch/deploy track, and migrate functionality in small units. Do not ship Unit 1 by extending the legacy EFL app surfaces on `main`.
 - `Reason`: Prior additive rollout carried legacy scope and conflicted with the agreed goal of rebuilding access/visibility behavior from a clean baseline.
 - `Alternatives Considered`: Continue additive `/u1` inside the existing app; pause implementation until a future full rewrite branch.
 - `Impact`: Unit 1 development is constrained to login/session + preference administration first, with explicit module boundaries and separate deployment targeting.

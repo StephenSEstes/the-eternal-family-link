@@ -1,6 +1,6 @@
-# Unit 1 Lab (Greenfield)
+# EFL2 (Greenfield)
 
-This app is the isolated Unit 1 build track.
+This app is the isolated EFL2 build track.
 
 ## Scope
 
@@ -25,19 +25,18 @@ This app is the isolated Unit 1 build track.
 ## Run
 
 ```powershell
-npm install --prefix unit1-lab
-npm run dev --prefix unit1-lab
+npm install --prefix efl2
+npm run dev --prefix efl2
 ```
 
 ## Build/Lint
 
 ```powershell
-npm run lint --prefix unit1-lab
-npm run build --prefix unit1-lab
+npm run lint --prefix efl2
+npm run build --prefix efl2
 ```
 
 ## Deploy isolation
 
-- Deploy this folder as a separate Vercel project with root directory `unit1-lab/`.
+- Deploy this folder as a separate Vercel project with root directory `efl2/`.
 - Do not deploy this app to the existing production alias for the legacy EFL app.
-

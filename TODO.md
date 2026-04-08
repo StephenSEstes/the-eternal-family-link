@@ -12,13 +12,13 @@ I will update this list as we add, complete, or remove work.
   - Completed: Created isolated implementation branch (`unit1-greenfield`).
   - Completed earlier (kept for reference only, not release target): additive `/u1` implementation on `main` in commit `b6bd3a3` was rolled back in production.
   Est date: 2026-04-10
-  Desc: Build a standalone Unit 1 app under `unit1-lab/` that contains only login/session and subscription/sharing preference administration. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.).
+  Desc: Build a standalone Unit 1 app under `efl2/` that contains only login/session and subscription/sharing preference administration. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.).
   Guardrails:
   - No imports from legacy feature UI modules under `src/app` or `src/components` except explicitly approved auth/session utilities.
   - No deployment of this track to the existing production project alias.
   - No schema-destructive changes; add-only schema/table/index updates when needed.
   Scope:
-  - Create standalone `unit1-lab/` Next.js app with:
+  - Create standalone `efl2/` Next.js app with:
     - login page
     - authenticated Unit 1 preferences page
     - subscription defaults editor
@@ -27,7 +27,7 @@ I will update this list as we add, complete, or remove work.
     - sharing person exception editor
     - resync trigger + status
     - preview outcome panel (hidden/placeholder/scoped-visible)
-  - Create isolated Unit 1 API surface inside `unit1-lab/` only for preference CRUD, preview, and resync.
+  - Create isolated Unit 1 API surface inside `efl2/` only for preference CRUD, preview, and resync.
   - Reuse only required database entities for Unit 1 behavior:
     - `subscription_default_rules`
     - `subscription_person_exceptions`
@@ -38,7 +38,7 @@ I will update this list as we add, complete, or remove work.
     - `access_recompute_runs`
   Phases:
   - Phase 1: Greenfield scaffold and boundaries
-    - Create `unit1-lab/` app shell, package scripts, and route structure.
+    - Create `efl2/` app shell, package scripts, and route structure.
     - Add explicit module-boundary note and lint guard to prevent legacy feature imports.
   - Phase 2: Minimal auth/session
     - Implement login/session gate for Unit 1 routes.
@@ -50,17 +50,17 @@ I will update this list as we add, complete, or remove work.
     - Build minimal admin UX for editing rules, running resync, and previewing results.
     - Add clear pending/progress/success/failure messaging for long-running operations.
   - Phase 5: Verification + docs + deployment split
-    - Run `npm run lint --prefix unit1-lab` and `npm run build --prefix unit1-lab`.
+    - Run `npm run lint --prefix efl2` and `npm run build --prefix efl2`.
     - Update `docs/change-summary.md` and `changeHistory.md`.
-    - Document separate Vercel project/root-dir deployment steps for `unit1-lab`.
+    - Document separate Vercel project/root-dir deployment steps for `efl2`.
   Validation:
   - Unauthenticated access to Unit 1 routes is blocked and redirected to login.
   - Logged-in user can save/read subscription/share preferences.
   - Resync can run and status can be queried.
   - Preview returns expected visibility outcome and reason.
-  - `unit1-lab` build/lint pass without importing unrelated legacy feature modules.
+  - `efl2` build/lint pass without importing unrelated legacy feature modules.
   Completion criteria:
-  - Unit 1 is independently deployable from `unit1-lab/` as a separate project.
+  - Unit 1 is independently deployable from `efl2/` as a separate project.
   - Existing EFL production app remains untouched by Unit 1 lab deployments.
 
 - [ ] Legacy media/share compatibility hard cutover + test-content reset

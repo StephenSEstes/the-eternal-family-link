@@ -152,7 +152,7 @@ export function U1PreferencesClient({ session }: { session: SessionInfo }) {
     <main className="u1-shell u1-grid">
       <section className="u1-card u1-grid">
         <div className="u1-toolbar">
-          <strong>Unit 1 Lab</strong>
+          <strong>EFL2</strong>
           <span className="u1-muted">Signed in as `{session.username}`</span>
           <span className="u1-muted">person_id `{session.personId}`</span>
         </div>

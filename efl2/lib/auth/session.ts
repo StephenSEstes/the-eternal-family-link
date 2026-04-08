@@ -9,7 +9,7 @@ export type Unit1Session = {
   expiresAt: string;
 };
 
-const COOKIE_NAME = "unit1_session";
+const COOKIE_NAME = "efl2_session";
 const TTL_SECONDS = 60 * 60 * 8;
 
 function base64UrlEncode(input: Buffer | string) {

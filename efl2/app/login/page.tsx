@@ -34,7 +34,7 @@ export default function LoginPage() {
   return (
     <main className="u1-shell">
       <section className="u1-card u1-grid" style={{ maxWidth: 420, margin: "72px auto 0" }}>
-        <h2>Unit 1 Lab Login</h2>
+        <h2>EFL2 Login</h2>
         <p className="u1-muted">Local username/password only.</p>
         <form className="u1-grid" onSubmit={onSubmit}>
           <label>
