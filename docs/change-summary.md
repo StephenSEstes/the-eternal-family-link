@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-08 (Unit 1 greenfield isolation reset: rollback + `unit1-lab/` scaffold)
+
+- `Date`: 2026-04-08
+- `Change`: Rolled production back to pre-Unit-1 deployment, then started a true isolated Unit 1 greenfield track on branch `unit1-greenfield` with a standalone app in `unit1-lab/` (login/session + Unit 1 preferences/resync/preview only).
+- `Type`: Infra | UI | API | Schema
+- `Why`: Root cause was release-scope mismatch. Unit 1 had been shipped as an additive feature set on `main`, which violated the agreed requirement to rebuild in an isolated track and migrate functionality in controlled units.
+- `Files`: `TODO.md`, `designchoices.md`, `unit1-lab/package.json`, `unit1-lab/tsconfig.json`, `unit1-lab/next.config.ts`, `unit1-lab/.eslintrc.json`, `unit1-lab/README.md`, `unit1-lab/app/layout.tsx`, `unit1-lab/app/page.tsx`, `unit1-lab/app/login/page.tsx`, `unit1-lab/app/u1/page.tsx`, `unit1-lab/components/U1PreferencesClient.tsx`, `unit1-lab/app/api/auth/login/route.ts`, `unit1-lab/app/api/auth/logout/route.ts`, `unit1-lab/app/api/u1/access/catalog/route.ts`, `unit1-lab/app/api/u1/access/subscription/defaults/route.ts`, `unit1-lab/app/api/u1/access/subscription/exceptions/people/route.ts`, `unit1-lab/app/api/u1/access/sharing/defaults/route.ts`, `unit1-lab/app/api/u1/access/sharing/exceptions/people/route.ts`, `unit1-lab/app/api/u1/access/resync/route.ts`, `unit1-lab/app/api/u1/access/resync/status/route.ts`, `unit1-lab/app/api/u1/access/preview/route.ts`, `unit1-lab/lib/auth/password.ts`, `unit1-lab/lib/auth/session.ts`, `unit1-lab/lib/auth/guards.ts`, `unit1-lab/lib/oci/client.ts`, `unit1-lab/lib/u1/types.ts`, `unit1-lab/lib/u1/store.ts`, `unit1-lab/lib/u1/resolver.ts`, `unit1-lab/types/oracledb.d.ts`
+- `Data Changes`: No destructive DB changes. `unit1-lab` includes add-only compatibility ensures for Unit 1 tables/indexes (`subscription_default_rules`, `subscription_person_exceptions`, `owner_share_default_rules`, `owner_share_person_exceptions`, `profile_access_map`, `access_recompute_jobs`, `access_recompute_runs`).
+- `Verify`:
+  - Production rollback completed: `vercel rollback https://the-eternal-family-link-c4wglyatu-steve-estes-projects.vercel.app --yes`.
+  - `npm run lint --prefix unit1-lab` passes.
+  - `npm run build --prefix unit1-lab` passes.
+  - Build output contains only Unit 1 lab routes (`/login`, `/u1`, `/api/u1/access/*`, `/api/auth/login`, `/api/auth/logout`).
+- `Rollback Notes`: To undo greenfield scaffold, remove `unit1-lab/` and revert this commit on `unit1-greenfield`. Existing production app remains on the rolled-back deployment lineage.
+- `Design Decision Change`: Yes. Added a new decision in `designchoices.md` (2026-04-08) that Unit 1 must be built/deployed as an isolated greenfield track.
+
 ## 2026-04-08 (Unit 1 isolated access-policy lab: `/u1` + `/api/u1/access/*`)
 
 - `Date`: 2026-04-08

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-08: Rolled production back to pre-Unit-1 deployment and started an isolated Unit 1 greenfield app (`unit1-lab/`) with only login/session + subscription/share preferences + preview/resync APIs. See `docs/change-summary.md`.
 - 2026-04-08: Added Unit 1 isolated access-policy lab with `/u1` admin UI, `/api/u1/access/*` endpoints, Unit 1 compatibility tables/indexes, recompute job/run + derived map pipeline, and access preview/status flows. See `docs/change-summary.md`.
 - 2026-04-06: Added fullscreen image lightbox behavior across person, household, media-library, and shares image surfaces so click-to-open now supports maximize view, zoom controls, and previous/next navigation where applicable. See `docs/change-summary.md`.
 - 2026-04-05: Fixed Shares `New Conversation` modal stacking so it opens above the thread modal (higher z-index). See `docs/change-summary.md`.

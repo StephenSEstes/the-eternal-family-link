@@ -4,67 +4,64 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
-- [ ] Unit 1 isolated access-policy lab (subscription + sharing preferences only)
+- [ ] Unit 1 greenfield lab app (isolated, no legacy feature imports)
   Priority: High (#0)
-  Status: In progress 2026-04-07
+  Status: In progress 2026-04-08 (execution reset after rollback)
   Progress 2026-04-08:
-  - Completed: Phase 1 data model + compatibility plumbing (`src/lib/oci/tables.ts`, `src/lib/u1/types.ts`, `src/lib/u1/access-store.ts`).
-  - Completed: Phase 2 resolver + recompute path (`src/lib/u1/access-resolver.ts`).
-  - Completed: Phase 3 Unit 1 API surface (`/api/u1/access/*` routes for defaults/exceptions/catalog/resync/status/preview).
-  - Completed: Phase 4 Unit 1 UI shell (`/u1` + `src/components/u1/U1AccessLabClient.tsx` JSON-editor admin workflow).
-  - In progress: Phase 5 release-cycle docs/deploy bookkeeping after user approval.
-  Est date: 2026-04-08
-  Desc: Build a minimal Unit 1 app surface that only includes login/session + subscription/share preference administration and derived profile access map recompute. Do not bring media/people/calendar/share feature UI into Unit 1.
+  - Completed: Rolled production back to pre-Unit-1 deployment (`dpl_9g8DGF1Hp2ueAknScdeEume7hFD5`).
+  - Completed: Created isolated implementation branch (`unit1-greenfield`).
+  - Completed earlier (kept for reference only, not release target): additive `/u1` implementation on `main` in commit `b6bd3a3` was rolled back in production.
+  Est date: 2026-04-10
+  Desc: Build a standalone Unit 1 app under `unit1-lab/` that contains only login/session and subscription/sharing preference administration. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.).
+  Guardrails:
+  - No imports from legacy feature UI modules under `src/app` or `src/components` except explicitly approved auth/session utilities.
+  - No deployment of this track to the existing production project alias.
+  - No schema-destructive changes; add-only schema/table/index updates when needed.
   Scope:
-  - Add isolated Unit 1 UI surface (`/u1`) with:
-    - subscription default rules editor
-    - subscription person/household exception editors
-    - owner-share default rules editor
-    - owner-share person exception editor
-    - preview panel and `Resync Access` trigger/status
-  - Add Unit 1 API namespace (`/api/u1/access/...`) for all Unit 1 preference/resync operations.
-  - Add Unit 1 tables (new schema objects only; no destructive edits to existing feature tables):
+  - Create standalone `unit1-lab/` Next.js app with:
+    - login page
+    - authenticated Unit 1 preferences page
+    - subscription defaults editor
+    - subscription person exception editor
+    - sharing defaults editor
+    - sharing person exception editor
+    - resync trigger + status
+    - preview outcome panel (hidden/placeholder/scoped-visible)
+  - Create isolated Unit 1 API surface inside `unit1-lab/` only for preference CRUD, preview, and resync.
+  - Reuse only required database entities for Unit 1 behavior:
     - `subscription_default_rules`
     - `subscription_person_exceptions`
-    - `subscription_household_exceptions`
     - `owner_share_default_rules`
     - `owner_share_person_exceptions`
     - `profile_access_map`
     - `access_recompute_jobs`
     - `access_recompute_runs`
-  - Implement resolver/recompute path:
-    - subscription precedence and owner-share precedence as approved
-    - effective outcome: hidden vs placeholder vs scoped-visible
-    - background-friendly recompute function with manual trigger
-  - Keep runtime enforcement and settings reflection split:
-    - settings read/write from intent tables
-    - runtime checks/preview from derived map + resolver output
   Phases:
-  - Phase 1: Data model + compatibility plumbing
-    - Add Unit 1 table configs + OCI compatibility creation/indexing.
-    - Add typed Unit 1 store utilities for intent rows, map rows, job/run rows.
-  - Phase 2: Resolver + recompute worker path
-    - Implement relationship-derived subscription resolver.
-    - Implement owner-share resolver + intersection logic.
-    - Implement viewer-scope recompute + run logging.
-  - Phase 3: Unit 1 API surface
-    - Implement `/api/u1/access/*` endpoints for defaults/exceptions/resync/status/preview.
-    - Enforce auth and self-scope guards.
-  - Phase 4: Unit 1 UI shell
-    - Add `/u1` route and minimal admin-oriented page to edit preferences and run resync.
-    - Add pending/completed status UX and preview reason text.
-  - Phase 5: Verification + docs
-    - `npm run lint` and `npm run build`.
-    - Update `docs/change-summary.md` and `changeHistory.md` in release cycle.
+  - Phase 1: Greenfield scaffold and boundaries
+    - Create `unit1-lab/` app shell, package scripts, and route structure.
+    - Add explicit module-boundary note and lint guard to prevent legacy feature imports.
+  - Phase 2: Minimal auth/session
+    - Implement login/session gate for Unit 1 routes.
+    - Keep token handling standard and secure (no user-id-only gate).
+  - Phase 3: Unit 1 data/store + API
+    - Implement minimal OCI data access for approved Unit 1 tables only.
+    - Add CRUD endpoints for defaults/exceptions and preview/resync/status.
+  - Phase 4: Unit 1 UI
+    - Build minimal admin UX for editing rules, running resync, and previewing results.
+    - Add clear pending/progress/success/failure messaging for long-running operations.
+  - Phase 5: Verification + docs + deployment split
+    - Run `npm run lint --prefix unit1-lab` and `npm run build --prefix unit1-lab`.
+    - Update `docs/change-summary.md` and `changeHistory.md`.
+    - Document separate Vercel project/root-dir deployment steps for `unit1-lab`.
   Validation:
-  - `npm run lint` passes.
-  - `npm run build` passes (environment permitting).
-  - Logged-in user can save subscription/share preferences on `/u1`.
-  - `Resync Access` enqueues/recomputes and status updates are visible.
-  - Preview shows hidden/placeholder/scoped-visible outcomes.
+  - Unauthenticated access to Unit 1 routes is blocked and redirected to login.
+  - Logged-in user can save/read subscription/share preferences.
+  - Resync can run and status can be queried.
+  - Preview returns expected visibility outcome and reason.
+  - `unit1-lab` build/lint pass without importing unrelated legacy feature modules.
   Completion criteria:
-  - Unit 1 is usable end-to-end without relying on media/people/calendar/share feature UIs.
-  - Existing app surfaces remain behaviorally unchanged outside new `/u1` + `/api/u1` namespace.
+  - Unit 1 is independently deployable from `unit1-lab/` as a separate project.
+  - Existing EFL production app remains untouched by Unit 1 lab deployments.
 
 - [ ] Legacy media/share compatibility hard cutover + test-content reset
   Priority: High

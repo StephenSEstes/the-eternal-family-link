@@ -1,0 +1,91 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: #f5f7fb;
+  color: #111827;
+}
+
+a {
+  color: inherit;
+}
+
+.u1-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.u1-card {
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.u1-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.u1-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.u1-button {
+  border: 1px solid #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.u1-button.secondary {
+  border-color: #b8c3d1;
+  background: #ffffff;
+  color: #111827;
+}
+
+.u1-input,
+.u1-textarea {
+  width: 100%;
+  border: 1px solid #cad5e2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.u1-textarea {
+  min-height: 180px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.u1-muted {
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.u1-error {
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.u1-ok {
+  color: #047857;
+  font-size: 13px;
+}
+
