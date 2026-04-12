@@ -13,6 +13,55 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-12 (Famailink recompute + persisted derived maps)
+
+- `Date`: 2026-04-12
+- `Change`: Added Famailink recompute/status with persisted `profile_visibility_map` and `profile_subscription_map` rows, plus `/api/access/recompute` and `/api/access/recompute/status` and a status panel on the preferences page.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was that Famailink could edit and preview rules but still had no persisted recompute lifecycle. That meant there was no durable “save rules -> recompute -> inspect latest derived state” path, and no separation between live preview and stored derived results. This fix adds that missing persisted lifecycle while keeping subscription results separate from visibility/share results.
+- `Files`: `TODO.md`, `changeHistory.md`, `docs/change-summary.md`, `docs/data-schema.md`, `famailink/README.md`, `famailink/app/globals.css`, `famailink/app/api/access/recompute/route.ts`, `famailink/app/api/access/recompute/status/route.ts`, `famailink/components/AccessPreferencesClient.tsx`, `famailink/lib/access/types.ts`, `famailink/lib/access/store.ts`, `famailink/lib/access/preview.ts`, `famailink/lib/access/recompute.ts`
+- `Data Changes`: Add-only schema compatibility in `famailink/` for `profile_visibility_map`, `profile_subscription_map`, `access_recompute_jobs`, and `access_recompute_runs`.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/preferences` can run recompute and reload latest persisted status.
+  - `/api/access/recompute/status` returns latest job/run plus derived-map summary.
+- `Rollback Notes`: Revert this change to remove the Famailink recompute routes, persisted derived-map writes, and recompute status UI.
+- `Design Decision Change`: No design decision change.
+
+## 2026-04-12 (Famailink preferences + live preview)
+
+- `Date`: 2026-04-12
+- `Change`: Extended `famailink/` with a protected preferences page, direct OCI-backed APIs for subscription defaults, subscription person exceptions, sharing defaults, and sharing person exceptions, plus a live preview panel that shows relationship-driven tree visibility, subscription status, and sharing scope separately for a selected family member.
+- `Type`: UI | API | Schema
+- `Why`: Root cause was that the clean Famailink track could derive the family tree but still had no way to persist or preview the clarified product model. The prior Unit 1 implementation path also treated subscription as an access gate, which blurred the separation between tree visibility, notification preferences, and content sharing. This change addresses that root cause by adding a clean Famailink-only CRUD and preview surface on top of the relationship graph instead of reusing the older combined model.
+- `Files`: `TODO.md`, `changeHistory.md`, `docs/change-summary.md`, `docs/data-schema.md`, `famailink/README.md`, `famailink/app/globals.css`, `famailink/app/tree/page.tsx`, `famailink/app/preferences/page.tsx`, `famailink/app/api/access/catalog/route.ts`, `famailink/app/api/access/preview/route.ts`, `famailink/app/api/access/subscription/defaults/route.ts`, `famailink/app/api/access/subscription/exceptions/people/route.ts`, `famailink/app/api/access/sharing/defaults/route.ts`, `famailink/app/api/access/sharing/exceptions/people/route.ts`, `famailink/components/AccessPreferencesClient.tsx`, `famailink/lib/model/relationships.ts`, `famailink/lib/family/store.ts`, `famailink/lib/access/types.ts`, `famailink/lib/access/store.ts`, `famailink/lib/access/preview.ts`, `famailink/lib/access/validation.ts`
+- `Data Changes`: Add-only schema compatibility in `famailink/` for `subscription_default_rules`, `subscription_person_exceptions`, `owner_share_default_rules`, and `owner_share_person_exceptions`.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `famailink/` exposes `/preferences` plus `/api/access/catalog`, `/api/access/subscription/defaults`, `/api/access/subscription/exceptions/people`, `/api/access/sharing/defaults`, `/api/access/sharing/exceptions/people`, and `/api/access/preview`.
+  - Tree lab still loads and links to the preferences page.
+  - Preferences page saves/reloads subscription and sharing edits and preview reports tree visibility separately from notification and sharing outcomes.
+- `Rollback Notes`: Revert this change to remove the Famailink preferences/API slice and the add-only access preference tables.
+- `Design Decision Change`: No design decision change.
+
+## 2026-04-11 (Famailink clean app shell + OCI preflight fix)
+
+- `Date`: 2026-04-11
+- `Change`: Started a clean `famailink/` app track with local login only, signed-cookie session, OCI-backed people/relationship reads, and a first tree-lab page that groups visible relatives by relationship bucket around the signed-in person. Also fixed `scripts/oci-db-preflight.cjs` so it loads `.env.local` / `.env` before checking OCI connectivity.
+- `Type`: UI | API | Infra
+- `Why`: Root cause was scope drift and model confusion in the prior `efl2` path. Famailink needed a cleaner starting point that proves local auth and relationship derivation first, without carrying mixed-auth behavior or older Unit 1 assumptions. Separately, the OCI preflight script was giving false failures because it did not load the same local env files as the other OCI scripts.
+- `Files`: `TODO.md`, `designchoices.md`, `changeHistory.md`, `docs/change-summary.md`, `scripts/oci-db-preflight.cjs`, `famailink/package.json`, `famailink/tsconfig.json`, `famailink/next.config.ts`, `famailink/.eslintrc.json`, `famailink/README.md`, `famailink/oracledb.d.ts`, `famailink/app/layout.tsx`, `famailink/app/page.tsx`, `famailink/app/login/page.tsx`, `famailink/app/tree/page.tsx`, `famailink/app/api/auth/login/route.ts`, `famailink/app/api/auth/logout/route.ts`, `famailink/lib/auth/password.ts`, `famailink/lib/auth/session.ts`, `famailink/lib/auth/guards.ts`, `famailink/lib/oci/client.ts`, `famailink/lib/family/store.ts`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run db:preflight` passes and connects as the configured OCI app user.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `famailink/` exposes only `/`, `/login`, `/tree`, `/api/auth/login`, and `/api/auth/logout`.
+- `Rollback Notes`: Revert this change to remove the new `famailink/` app shell and the local-env preflight behavior.
+- `Design Decision Change`: Yes. The repository now records the clarified Famailink model where tree visibility, subscriptions, and sharing are separate concerns.
+
 ## 2026-04-08 (Unit 1 greenfield isolation reset: rollback + `efl2/` scaffold)
 
 - `Date`: 2026-04-08

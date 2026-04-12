@@ -422,3 +422,29 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Continue additive `/u1` inside the existing app; pause implementation until a future full rewrite branch.
 - `Impact`: Unit 1 development is constrained to login/session + preference administration first, with explicit module boundaries and separate deployment targeting.
 - `Follow-up`: Keep each new unit explicitly scoped and approved before importing any legacy module or extending to new domains (media, people, calendars, stories).
+
+## 2026-04-11
+
+- `Area`: Unit 1/Famailink relationship visibility, subscriptions, and sharing
+- `Decision`: Split the model into three separate concepts:
+  - family-tree visibility: supported family members are always visible in the tree at least by name and relationship
+  - subscriptions: notification/update preferences only
+  - sharing: content visibility rules for `vitals`, `stories`, `media`, and `conversations`
+- `Reason`: Treating subscription as an access gate made the model harder to understand and did not match the intended product behavior.
+- `Alternatives Considered`: Keep subscription as the main visibility/access gate; hide unsubscribed relatives entirely from the tree.
+- `Impact`: Unit 1/Famailink must show supported relatives in the tree regardless of subscription state, allow subscribe/unsubscribe from that tree surface, and evaluate sharing separately from notification preferences.
+- `Follow-up`: Keep derived visibility/share results separate from derived subscription results in the Unit 1 implementation.
+
+- `Area`: Unit 1/Famailink relationship storage
+- `Decision`: Store only direct structural relationships in the relationship layer and derive extended family categories from those direct rows.
+- `Reason`: Direct-only relationship rows are easier to maintain and avoid drift from storing both direct and derived family links.
+- `Alternatives Considered`: Store sibling/cousin/aunt/uncle style derived relationships directly; move father/mother/spouse IDs onto `People` as the only family-structure model.
+- `Impact`: Direct relationship rows should cover the core structural links (`parent`, `step_parent`, `spouse`, `ex_spouse`, with `adoptive_parent` / `guardian` available if needed). Extended categories used by Unit 1 (`siblings`, `cousins`, `cousins_children`, etc.) are derived in code or derived-map tables.
+- `Follow-up`: Keep schema additions additive and validate the derivation logic through the Unit 1 family tree MVP.
+
+- `Area`: Unit 1/Famailink MVP test surface
+- `Decision`: The MVP must prove the model through a family tree view, not only through admin/rule-edit screens.
+- `Reason`: The easiest way to validate whether the model works is to let the signed-in user change rules and immediately see family members in the tree reflect the expected visibility, sharing, and subscription state.
+- `Alternatives Considered`: Build preferences-only administration first and defer the tree test surface.
+- `Impact`: The isolated Unit 1 app should include login, rule editors, recompute/status, preview, and a family tree test view where every supported family member appears at least by name.
+- `Follow-up`: Keep the first MVP scope narrow and use the tree to validate the principle before porting the model back into broader EFL surfaces.

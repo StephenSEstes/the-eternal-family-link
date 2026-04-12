@@ -7,6 +7,9 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-12: Added Famailink recompute/status with persisted derived subscription and visibility/share maps, plus `/api/access/recompute` and `/api/access/recompute/status`. See `docs/change-summary.md`.
+- 2026-04-12: Extended `famailink/` with a protected preferences page, direct OCI-backed subscription/share default and person-exception APIs, and a live preview panel that keeps tree visibility separate from notifications and content sharing. See `docs/change-summary.md`.
+- 2026-04-11: Started the clean `famailink/` app track with local login only, signed-cookie session, OCI-backed people/relationship reads, and a first tree-lab page grouped by relationship buckets. Also fixed `scripts/oci-db-preflight.cjs` so it loads local env files and can verify OCI connectivity directly. See `docs/change-summary.md`.
 - 2026-04-08: Rolled production back to pre-Unit-1 deployment and started an isolated Unit 1 greenfield app (`efl2/`) with only login/session + subscription/share preferences + preview/resync APIs. See `docs/change-summary.md`.
 - 2026-04-08: Added Unit 1 isolated access-policy lab with `/u1` admin UI, `/api/u1/access/*` endpoints, Unit 1 compatibility tables/indexes, recompute job/run + derived map pipeline, and access preview/status flows. See `docs/change-summary.md`.
 - 2026-04-06: Added fullscreen image lightbox behavior across person, household, media-library, and shares image surfaces so click-to-open now supports maximize view, zoom controls, and previous/next navigation where applicable. See `docs/change-summary.md`.

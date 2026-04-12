@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const fs = require("fs");
+const path = require("path");
 const oracledb = require("oracledb");
 
 const REQUIRED_VARS = [
@@ -14,7 +16,33 @@ function getMissingVars() {
   return REQUIRED_VARS.filter((name) => !process.env[name]);
 }
 
+function loadLocalEnvFiles() {
+  const candidates = [".env.local", ".env"];
+  for (const fileName of candidates) {
+    const fullPath = path.join(process.cwd(), fileName);
+    if (!fs.existsSync(fullPath)) continue;
+    const content = fs.readFileSync(fullPath, "utf8");
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      if (!key || process.env[key] !== undefined) continue;
+      let value = trimmed.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
+    }
+  }
+}
+
 async function main() {
+  loadLocalEnvFiles();
   const missing = getMissingVars();
   if (missing.length > 0) {
     console.error(`OCI preflight failed: missing env vars: ${missing.join(", ")}`);

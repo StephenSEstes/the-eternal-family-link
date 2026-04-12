@@ -6,61 +6,98 @@ I will update this list as we add, complete, or remove work.
 ## Active
 - [ ] Unit 1 greenfield lab app (isolated, no legacy feature imports)
   Priority: High (#0)
-  Status: In progress 2026-04-08 (execution reset after rollback)
+  Status: In progress 2026-04-11 (execution model clarified after rollback)
   Progress 2026-04-08:
   - Completed: Rolled production back to pre-Unit-1 deployment (`dpl_9g8DGF1Hp2ueAknScdeEume7hFD5`).
   - Completed: Created isolated implementation branch (`unit1-greenfield`).
   - Completed earlier (kept for reference only, not release target): additive `/u1` implementation on `main` in commit `b6bd3a3` was rolled back in production.
+  Progress 2026-04-11:
+  - Confirmed: subscription is a notification/update preference, not a profile/tree visibility gate.
+  - Confirmed: supported family members remain visible in the tree at least by name and relationship.
+  - Confirmed: sharing controls content visibility (`vitals`, `stories`, `media`, `conversations`).
+  - Confirmed: MVP should prove the model through a family tree test view, not only a rule-editor/admin page.
+  Progress 2026-04-12:
+  - Completed: `famailink/` now includes an authenticated preferences page with direct OCI CRUD for subscription defaults, subscription person exceptions, sharing defaults, and sharing person exceptions.
+  - Completed: Added live Famailink preview API/UI that reports tree visibility, subscription status, and content-sharing scope separately for a selected family member.
+  - Completed: Added Famailink recompute trigger/status with persisted derived subscription and visibility/share maps plus latest job/run summary on the preferences page.
+  - Completed: Tree lab now links directly to the new preferences surface.
+  - Remaining: deployment split documentation and any tree-surface readback of persisted recompute state.
   Est date: 2026-04-10
-  Desc: Build a standalone Unit 1 app under `efl2/` that contains only login/session and subscription/sharing preference administration. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.).
+  Desc: Build a standalone Unit 1/Famailink MVP that proves relationship-based tree visibility, notification subscriptions, and content sharing from a clean baseline. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.) beyond what is explicitly needed for the MVP.
   Guardrails:
   - No imports from legacy feature UI modules under `src/app` or `src/components` except explicitly approved auth/session utilities.
   - No deployment of this track to the existing production project alias.
   - No schema-destructive changes; add-only schema/table/index updates when needed.
   Scope:
-  - Create standalone `efl2/` Next.js app with:
+  - Create standalone Unit 1/Famailink app with:
     - login page
     - authenticated Unit 1 preferences page
     - subscription defaults editor
     - subscription person exception editor
     - sharing defaults editor
     - sharing person exception editor
-    - resync trigger + status
-    - preview outcome panel (hidden/placeholder/scoped-visible)
-  - Create isolated Unit 1 API surface inside `efl2/` only for preference CRUD, preview, and resync.
-  - Reuse only required database entities for Unit 1 behavior:
+    - family tree test view
+    - recompute trigger + status
+    - preview panel for selected family member
+  - Create isolated Unit 1 API surface only for preference CRUD, preview, tree reads, and recompute.
+  - Keep the model split explicit:
+    - tree visibility = supported family relationship graph
+    - subscription = notifications/newsletters/update preference
+    - sharing = content visibility by type
+  - Reuse only required database entities for Unit 1 behavior plus any new derived map tables needed to keep visibility and subscription results separate:
     - `subscription_default_rules`
     - `subscription_person_exceptions`
     - `owner_share_default_rules`
     - `owner_share_person_exceptions`
-    - `profile_access_map`
+    - derived visibility/share map table(s)
+    - derived subscription map table(s)
     - `access_recompute_jobs`
     - `access_recompute_runs`
   Phases:
   - Phase 1: Greenfield scaffold and boundaries
-    - Create `efl2/` app shell, package scripts, and route structure.
+    - Create the isolated app shell, package scripts, and route structure.
     - Add explicit module-boundary note and lint guard to prevent legacy feature imports.
   - Phase 2: Minimal auth/session
     - Implement login/session gate for Unit 1 routes.
-    - Keep token handling standard and secure (no user-id-only gate).
+    - Keep token handling standard and secure.
+    - Keep normal sign-in local username/password; any Stephen-only recovery path must remain an explicit break-glass exception, not a general mixed-auth model.
   - Phase 3: Unit 1 data/store + API
     - Implement minimal OCI data access for approved Unit 1 tables only.
-    - Add CRUD endpoints for defaults/exceptions and preview/resync/status.
+    - Add CRUD endpoints for defaults/exceptions, tree reads, preview, and recompute/status.
+    - Keep direct family structure in relationship rows only; derive extended relationships (`siblings`, `cousins`, etc.) from direct rows.
   - Phase 4: Unit 1 UI
-    - Build minimal admin UX for editing rules, running resync, and previewing results.
+    - Build minimal UX for editing rules, running recompute, previewing results, and testing the model in a family tree view.
     - Add clear pending/progress/success/failure messaging for long-running operations.
   - Phase 5: Verification + docs + deployment split
-    - Run `npm run lint --prefix efl2` and `npm run build --prefix efl2`.
+    - Run lint/build for the active Unit 1 app root.
     - Update `docs/change-summary.md` and `changeHistory.md`.
-    - Document separate Vercel project/root-dir deployment steps for `efl2`.
+    - Document separate Vercel project/root-dir deployment steps for the isolated Unit 1 app.
+  MVP relationship categories:
+  - `self`
+  - `spouse`
+  - `parents`
+  - `grandparents`
+  - `children`
+  - `grandchildren`
+  - `siblings`
+  - `aunts_uncles`
+  - `nieces_nephews`
+  - `cousins`
+  - `cousins_children`
+  MVP tree rules:
+  - Every supported family member is visible in the tree at least by name and relationship.
+  - Subscription never hides a person from the tree.
+  - Sharing controls visibility of `vitals`, `stories`, `media`, and `conversations`.
+  - Every visible family member can be subscribed/unsubscribed for updates.
   Validation:
   - Unauthenticated access to Unit 1 routes is blocked and redirected to login.
   - Logged-in user can save/read subscription/share preferences.
-  - Resync can run and status can be queried.
-  - Preview returns expected visibility outcome and reason.
-  - `efl2` build/lint pass without importing unrelated legacy feature modules.
+  - Logged-in user can view a family tree with supported family members present by name.
+  - Recompute can run and status can be queried.
+  - Preview returns the expected relationship, subscription, sharing, and final content-visibility outcome.
+  - The isolated Unit 1 build/lint pass without importing unrelated legacy feature modules.
   Completion criteria:
-  - Unit 1 is independently deployable from `efl2/` as a separate project.
+  - Unit 1/Famailink is independently deployable as a separate project.
   - Existing EFL production app remains untouched by Unit 1 lab deployments.
 
 - [ ] Legacy media/share compatibility hard cutover + test-content reset

@@ -339,6 +339,165 @@ This section is a quick reference for the three data areas that drive profile/me
   - Recommended unique: `token_hash`
   - Common lookup: (`reset_email`, `status`), (`person_id`, `family_group_key`, `status`)
 
+## SubscriptionDefaultRules
+
+- Columns:
+  - `rule_id`
+  - `viewer_person_id`
+  - `relationship_category`
+  - `lineage_side`
+  - `is_subscribed`
+  - `is_active`
+  - `created_at`
+  - `updated_at`
+- Purpose:
+  - Viewer-owned default notification/update preference rules for Famailink.
+  - These rules affect newsletter/update subscription state only; they do not control whether a supported relative is visible in the tree.
+- Logical index/key:
+  - Unique: `rule_id`
+  - Unique composite: (`viewer_person_id`, `relationship_category`, `lineage_side`)
+  - Common lookup: (`viewer_person_id`, `is_active`)
+
+## SubscriptionPersonExceptions
+
+- Columns:
+  - `exception_id`
+  - `viewer_person_id`
+  - `target_person_id`
+  - `effect` (`allow` | `deny`)
+  - `created_at`
+  - `updated_at`
+- Purpose:
+  - Viewer-owned person-specific subscription overrides for Famailink.
+  - Used to explicitly subscribe or unsubscribe one supported family member regardless of matched default rules.
+- Logical index/key:
+  - Unique: `exception_id`
+  - Unique composite: (`viewer_person_id`, `target_person_id`)
+  - Common lookup: (`viewer_person_id`)
+
+## OwnerShareDefaultRules
+
+- Columns:
+  - `rule_id`
+  - `owner_person_id`
+  - `relationship_category`
+  - `lineage_side`
+  - `share_vitals`
+  - `share_stories`
+  - `share_media`
+  - `share_conversations`
+  - `is_active`
+  - `created_at`
+  - `updated_at`
+- Purpose:
+  - Person-owned default content-sharing rules for Famailink.
+  - These rules determine which categories of profile content are visible to a supported relative; they do not control tree visibility.
+- Logical index/key:
+  - Unique: `rule_id`
+  - Unique composite: (`owner_person_id`, `relationship_category`, `lineage_side`)
+  - Common lookup: (`owner_person_id`, `is_active`)
+
+## OwnerSharePersonExceptions
+
+- Columns:
+  - `exception_id`
+  - `owner_person_id`
+  - `target_person_id`
+  - `effect` (`allow` | `deny`)
+  - `share_vitals`
+  - `share_stories`
+  - `share_media`
+  - `share_conversations`
+  - `created_at`
+  - `updated_at`
+- Purpose:
+  - Person-owned relative-specific sharing overrides for Famailink.
+  - A `null` scope value means the override applies to all content scopes; `Y`/`N` values allow the app to scope the override to selected visibility areas.
+- Logical index/key:
+  - Unique: `exception_id`
+  - Unique composite: (`owner_person_id`, `target_person_id`)
+  - Common lookup: (`owner_person_id`)
+
+## ProfileVisibilityMap
+
+- Columns:
+  - `map_id`
+  - `viewer_person_id`
+  - `target_person_id`
+  - `tree_visible`
+  - `can_vitals`
+  - `can_stories`
+  - `can_media`
+  - `can_conversations`
+  - `placeholder_only`
+  - `reason_code`
+  - `map_version`
+  - `computed_at`
+- Purpose:
+  - Persisted Famailink derived visibility/share results for one viewer against supported relatives.
+  - Tree visibility and content visibility stay together here because they both describe what the viewer can currently see of the target profile, independent of notification subscription state.
+- Logical index/key:
+  - Unique: `map_id`
+  - Unique composite: (`viewer_person_id`, `target_person_id`)
+  - Common lookup: (`viewer_person_id`, `computed_at`)
+
+## ProfileSubscriptionMap
+
+- Columns:
+  - `map_id`
+  - `viewer_person_id`
+  - `target_person_id`
+  - `is_subscribed`
+  - `reason_code`
+  - `map_version`
+  - `computed_at`
+- Purpose:
+  - Persisted Famailink derived subscription results for one viewer against supported relatives.
+  - This table is intentionally separate from `ProfileVisibilityMap` so notification/update preferences do not act as the visibility gate.
+- Logical index/key:
+  - Unique: `map_id`
+  - Unique composite: (`viewer_person_id`, `target_person_id`)
+  - Common lookup: (`viewer_person_id`, `computed_at`)
+
+## AccessRecomputeJobs
+
+- Columns:
+  - `job_id`
+  - `viewer_person_id`
+  - `reason`
+  - `status`
+  - `dedupe_key`
+  - `requested_at`
+  - `started_at`
+  - `completed_at`
+  - `error_message`
+- Purpose:
+  - Job-level audit trail for Famailink recompute requests.
+  - Tracks the viewer, request reason, current lifecycle state, and any failure message.
+- Logical index/key:
+  - Unique: `job_id`
+  - Common lookup: (`viewer_person_id`, `status`)
+
+## AccessRecomputeRuns
+
+- Columns:
+  - `run_id`
+  - `job_id`
+  - `viewer_person_id`
+  - `status`
+  - `started_at`
+  - `completed_at`
+  - `processed_count`
+  - `changed_count`
+  - `error_message`
+- Purpose:
+  - Run-level result summary for one completed or failed Famailink recompute execution.
+  - Stores how many target rows were processed and how many changed versus the previous persisted snapshot.
+- Logical index/key:
+  - Unique: `run_id`
+  - Common lookup: (`viewer_person_id`, `started_at`)
+  - Common lookup: (`job_id`)
+
 ## FamilyConfig
 
 - Columns:
