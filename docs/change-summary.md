@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-13 (Famailink tree reads persisted recompute state)
+
+- `Date`: 2026-04-13
+- `Change`: Updated the Famailink tree page to read back persisted recompute output. Tree cards now show saved subscription/share outcomes from `profile_subscription_map` and `profile_visibility_map`, and the page header shows the latest recompute summary and last computed timestamp.
+- `Type`: UI | API
+- `Why`: Root cause was that `/tree` still rendered only the raw relationship graph from OCI people/relationship reads. That meant Famailink had a persisted recompute pipeline, but the main tree proof surface still did not show the stored derived results.
+- `Files`: `TODO.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/app/tree/page.tsx`, `famailink/app/globals.css`
+- `Data Changes`: No schema change. The tree now reads existing persisted rows from `profile_visibility_map` and `profile_subscription_map`.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/tree` shows recompute summary metadata when persisted rows exist.
+  - `/tree` falls back to a clear “run recompute first” message when no persisted rows exist yet.
+  - Tree cards show the saved subscription/share state rather than only raw relationship grouping.
+- `Rollback Notes`: Revert this change to restore the tree to raw relationship-bucket rendering with no persisted recompute readback.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-12 (Famailink preferences one-row-per-relationship defaults)
 
 - `Date`: 2026-04-12

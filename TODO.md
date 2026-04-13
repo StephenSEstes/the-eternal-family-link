@@ -21,6 +21,8 @@ I will update this list as we add, complete, or remove work.
   - Completed: Added live Famailink preview API/UI that reports tree visibility, subscription status, and content-sharing scope separately for a selected family member.
   - Completed: Added Famailink recompute trigger/status with persisted derived subscription and visibility/share maps plus latest job/run summary on the preferences page.
   - Completed: Tree lab now links directly to the new preferences surface.
+  Progress 2026-04-13:
+  - Completed: Tree lab now reads back persisted recompute state (`profile_visibility_map`, `profile_subscription_map`, and recompute summary) so saved subscription/share outcomes are visible directly on the tree surface.
   Agreed implementation plan 2026-04-12 (preferences simplification):
   - Scope:
     - Replace the current side-row default editor model that renders separate `both`, `maternal`, and `paternal` rows for the same relationship bucket.
@@ -54,7 +56,7 @@ I will update this list as we add, complete, or remove work.
     - No defaults table shows duplicate rows for the same relationship category.
     - The saved default model is one logical row per relationship category.
     - Evaluation logic no longer depends on overlapping side rows for the same relationship bucket.
-  - Remaining: deployment split documentation and any tree-surface readback of persisted recompute state.
+  - Remaining: deployment split documentation.
   Est date: 2026-04-10
   Desc: Build a standalone Unit 1/Famailink MVP that proves relationship-based tree visibility, notification subscriptions, and content sharing from a clean baseline. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.) beyond what is explicitly needed for the MVP.
   Guardrails:

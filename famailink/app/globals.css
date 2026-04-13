@@ -132,6 +132,11 @@ input {
   font-size: 1.6rem;
 }
 
+.recompute-value {
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
 .tree-layout {
   display: grid;
   gap: 18px;
@@ -219,6 +224,36 @@ input {
   background: var(--berry-soft);
   border-color: rgba(139, 58, 58, 0.16);
   color: var(--berry);
+}
+
+.badge.state {
+  border-color: rgba(31, 26, 20, 0.08);
+}
+
+.badge.subscribed,
+.badge.shared {
+  background: rgba(223, 242, 239, 0.95);
+  border-color: rgba(15, 118, 110, 0.18);
+  color: var(--accent);
+}
+
+.badge.placeholder,
+.badge.pending {
+  background: rgba(241, 199, 107, 0.2);
+  border-color: rgba(183, 132, 20, 0.18);
+  color: #8c6515;
+}
+
+.badge.closed {
+  background: rgba(244, 227, 227, 0.95);
+  border-color: rgba(139, 58, 58, 0.16);
+  color: var(--berry);
+}
+
+.person-detail {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .empty-state {
