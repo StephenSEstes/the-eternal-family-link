@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-12: Reworked Famailink defaults so each relationship category is edited once, with a single side selection for side-specific relationships instead of overlapping `both` / `maternal` / `paternal` rows. See `docs/change-summary.md`.
 - 2026-04-12: Fixed Famailink local login against OCI so populated `user_access.password_hash` rows are recognized correctly under Oracle semantics. See `docs/change-summary.md`.
 - 2026-04-12: Added Famailink recompute/status with persisted derived subscription and visibility/share maps, plus `/api/access/recompute` and `/api/access/recompute/status`. See `docs/change-summary.md`.
 - 2026-04-12: Extended `famailink/` with a protected preferences page, direct OCI-backed subscription/share default and person-exception APIs, and a live preview panel that keeps tree visibility separate from notifications and content sharing. See `docs/change-summary.md`.

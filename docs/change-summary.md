@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-12 (Famailink preferences one-row-per-relationship defaults)
+
+- `Date`: 2026-04-12
+- `Change`: Reworked Famailink preference defaults so each relationship category is edited as one row instead of separate overlapping `both` / `maternal` / `paternal` rows. Subscription defaults now use one lineage selection per relationship, and sharing defaults now use one relationship row with one side selection plus the existing content-scope toggles.
+- `Type`: UI | API
+- `Why`: Root cause was that the original preferences screen exposed storage granularity directly. That produced duplicate relationship rows, contradictory states, and ambiguous evaluation because one person could match multiple side rows for the same relationship category at once.
+- `Files`: `TODO.md`, `designchoices.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/components/AccessPreferencesClient.tsx`, `famailink/lib/access/types.ts`, `famailink/lib/access/store.ts`, `famailink/lib/access/preview.ts`, `famailink/lib/access/validation.ts`
+- `Data Changes`: No schema migration. Existing default rows are folded into the new one-row-per-relationship model on read, and future saves persist one logical default row per relationship category.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/preferences` shows each relationship category once in `Subscription Defaults`.
+  - `/preferences` shows each relationship category once in `Sharing Defaults`.
+  - Saving and reloading defaults preserves the selected side choice without recreating duplicate side rows.
+- `Rollback Notes`: Revert this change to restore the prior side-row editor model and overlapping-rule evaluation behavior.
+- `Design Decision Change`: Yes. Recorded in `designchoices.md` that Famailink defaults are one logical row per relationship category with a single lineage selection for side-specific relationships.
+
 ## 2026-04-12 (Famailink local login Oracle password-hash filter fix)
 
 - `Date`: 2026-04-12

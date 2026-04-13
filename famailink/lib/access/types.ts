@@ -1,12 +1,20 @@
-import type { EffectType, LineageSide, RelationshipCategory, RelationshipHit } from "@/lib/model/relationships";
+import type { EffectType, RelationshipCategory, RelationshipHit } from "@/lib/model/relationships";
+
+export const DEFAULT_LINEAGE_SELECTIONS = ["none", "not_applicable", "both", "maternal", "paternal"] as const;
+export type DefaultLineageSelection = (typeof DEFAULT_LINEAGE_SELECTIONS)[number];
+export const DEFAULT_LINEAGE_SELECTION_LABELS: Record<DefaultLineageSelection, string> = {
+  none: "None",
+  not_applicable: "Applies",
+  both: "Both Sides",
+  maternal: "Maternal",
+  paternal: "Paternal",
+};
 
 export type SubscriptionDefaultRule = {
   ruleId: string;
   viewerPersonId: string;
   relationshipCategory: RelationshipCategory;
-  lineageSide: LineageSide;
-  isSubscribed: boolean;
-  isActive: boolean;
+  lineageSelection: DefaultLineageSelection;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,12 +32,11 @@ export type ShareDefaultRule = {
   ruleId: string;
   ownerPersonId: string;
   relationshipCategory: RelationshipCategory;
-  lineageSide: LineageSide;
+  lineageSelection: DefaultLineageSelection;
   shareVitals: boolean;
   shareStories: boolean;
   shareMedia: boolean;
   shareConversations: boolean;
-  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 };

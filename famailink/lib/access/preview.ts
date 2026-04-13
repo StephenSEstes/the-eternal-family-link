@@ -17,6 +17,7 @@ import {
 import type {
   AccessCatalogPayload,
   AccessPreview,
+  DefaultLineageSelection,
   PreviewScopeKey,
   PreviewScopeResult,
   ProfileSubscriptionMapRow,
@@ -61,11 +62,12 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function sideMatches(ruleSide: LineageSide, sides: Set<LineageSide>) {
-  if (ruleSide === "both") return true;
-  if (ruleSide === "not_applicable") return sides.has("not_applicable");
+function sideMatches(selection: DefaultLineageSelection, sides: Set<LineageSide>) {
+  if (selection === "none") return false;
+  if (selection === "both") return sides.has("both") || sides.has("maternal") || sides.has("paternal");
+  if (selection === "not_applicable") return sides.has("not_applicable");
   if (sides.has("both")) return true;
-  return sides.has(ruleSide);
+  return sides.has(selection);
 }
 
 function evaluateSubscriptionDefault(
@@ -77,18 +79,13 @@ function evaluateSubscriptionDefault(
   }
 
   const matchedRules = rules.filter((rule) => {
-    if (!rule.isActive) return false;
     const sides = targetHits.get(rule.relationshipCategory);
     if (!sides) return false;
-    return sideMatches(rule.lineageSide, sides);
+    return sideMatches(rule.lineageSelection, sides);
   });
 
   if (!matchedRules.length) {
     return { allowed: false, source: "no_matching_subscription_rule" };
-  }
-
-  if (matchedRules.some((rule) => !rule.isSubscribed)) {
-    return { allowed: false, source: "subscription_default_deny" };
   }
 
   return { allowed: true, source: "subscription_default_allow" };
@@ -116,10 +113,9 @@ function evaluateShareDefaultScope(
   }
 
   const matchedRules = rules.filter((rule) => {
-    if (!rule.isActive) return false;
     const sides = viewerHitsFromOwner.get(rule.relationshipCategory);
     if (!sides) return false;
-    return sideMatches(rule.lineageSide, sides);
+    return sideMatches(rule.lineageSelection, sides);
   });
 
   if (!matchedRules.length) {

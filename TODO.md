@@ -21,6 +21,39 @@ I will update this list as we add, complete, or remove work.
   - Completed: Added live Famailink preview API/UI that reports tree visibility, subscription status, and content-sharing scope separately for a selected family member.
   - Completed: Added Famailink recompute trigger/status with persisted derived subscription and visibility/share maps plus latest job/run summary on the preferences page.
   - Completed: Tree lab now links directly to the new preferences surface.
+  Agreed implementation plan 2026-04-12 (preferences simplification):
+  - Scope:
+    - Replace the current side-row default editor model that renders separate `both`, `maternal`, and `paternal` rows for the same relationship bucket.
+    - Keep person-level exception behavior unchanged in this pass.
+    - Keep existing OCI tables in place; normalize the runtime and UI to one default row per relationship category.
+  - Root cause:
+    - The current Famailink preferences UI exposed the storage granularity directly, which allowed overlapping side rules for the same relationship bucket and created ambiguous evaluation behavior.
+    - Subscription and sharing default evaluators both matched multiple rows for one target person when side-specific rows overlapped.
+  - API/data/runtime changes:
+    - Subscription defaults:
+      - Move to one logical default per relationship category.
+      - For side-specific categories, store a single lineage selection value (`both`, `maternal`, `paternal`, or `none`) instead of multiple active rows.
+      - For non-side-specific categories, keep one logical row only.
+    - Sharing defaults:
+      - Move to one logical default per relationship category.
+      - Use one lineage selection per relationship row; scope booleans (`vitals`, `stories`, `media`, `conversations`) remain on that single row.
+    - Runtime compatibility:
+      - Fold any older multi-row side-specific defaults into the new one-row shape on read so existing saved data does not break the UI.
+      - Persist saves back as one row per relationship category.
+  - UI changes:
+    - Subscription defaults table becomes one row per relationship.
+    - Side-specific relationships use a single selector (`None`, `Both Sides`, `Maternal`, `Paternal`) instead of three rows.
+    - Sharing defaults table becomes one row per relationship and no longer repeats the same relationship across multiple side rows.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Preferences page shows each relationship once in both defaults tables.
+    - Saving/reloading preserves the selected side value per relationship.
+    - Preview/recompute still report expected subscription and sharing outcomes with no overlapping side-rule ambiguity.
+  - Completion criteria:
+    - No defaults table shows duplicate rows for the same relationship category.
+    - The saved default model is one logical row per relationship category.
+    - Evaluation logic no longer depends on overlapping side rows for the same relationship bucket.
   - Remaining: deployment split documentation and any tree-surface readback of persisted recompute state.
   Est date: 2026-04-10
   Desc: Build a standalone Unit 1/Famailink MVP that proves relationship-based tree visibility, notification subscriptions, and content sharing from a clean baseline. Do not carry over legacy EFL feature UIs/modules (media, people, calendars, shares, attributes, household editors, etc.) beyond what is explicitly needed for the MVP.

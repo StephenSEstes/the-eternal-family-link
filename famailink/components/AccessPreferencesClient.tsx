@@ -6,16 +6,17 @@ import type {
   AccessCatalogPayload,
   AccessPreview,
   AccessRecomputeStatus,
+  DefaultLineageSelection,
   ShareDefaultRule,
   SharePersonException,
   SubscriptionDefaultRule,
   SubscriptionPersonException,
 } from "@/lib/access/types";
+import { DEFAULT_LINEAGE_SELECTION_LABELS } from "@/lib/access/types";
 import {
   LINEAGE_LABELS,
   RELATIONSHIP_LABELS,
   type EffectType,
-  type LineageSide,
   type RelationshipCategory,
   type RelationshipHit,
 } from "@/lib/model/relationships";
@@ -25,20 +26,16 @@ type SessionInfo = {
   personId: string;
 };
 
-type SubscriptionDefaultDraft = Pick<
-  SubscriptionDefaultRule,
-  "relationshipCategory" | "lineageSide" | "isSubscribed" | "isActive"
->;
+type SubscriptionDefaultDraft = Pick<SubscriptionDefaultRule, "relationshipCategory" | "lineageSelection">;
 
 type ShareDefaultDraft = Pick<
   ShareDefaultRule,
   | "relationshipCategory"
-  | "lineageSide"
+  | "lineageSelection"
   | "shareVitals"
   | "shareStories"
   | "shareMedia"
   | "shareConversations"
-  | "isActive"
 >;
 
 type ShareExceptionDraft = {
@@ -76,48 +73,51 @@ const EDITABLE_CATEGORIES: RelationshipCategory[] = [
 
 const EFFECT_OPTIONS: EffectType[] = ["allow", "deny"];
 
-function ruleKey(input: { relationshipCategory: RelationshipCategory; lineageSide: LineageSide }) {
-  return `${input.relationshipCategory}:${input.lineageSide}`;
+function isSideSpecificCategory(relationshipCategory: RelationshipCategory) {
+  return SIDE_SPECIFIC_CATEGORIES.has(relationshipCategory);
 }
 
-function buildTemplatePairs() {
-  return EDITABLE_CATEGORIES.flatMap((relationshipCategory) =>
-    SIDE_SPECIFIC_CATEGORIES.has(relationshipCategory)
-      ? (["both", "maternal", "paternal"] as LineageSide[]).map((lineageSide) => ({
-          relationshipCategory,
-          lineageSide,
-        }))
-      : [{ relationshipCategory, lineageSide: "not_applicable" as LineageSide }],
-  );
+function defaultLineageSelectionForCategory(relationshipCategory: RelationshipCategory): DefaultLineageSelection {
+  return isSideSpecificCategory(relationshipCategory) ? "none" : "not_applicable";
 }
 
-const RULE_TEMPLATES = buildTemplatePairs();
+function ruleKey(relationshipCategory: RelationshipCategory) {
+  return relationshipCategory;
+}
+
+const RULE_TEMPLATES = EDITABLE_CATEGORIES.map((relationshipCategory) => ({
+  relationshipCategory,
+  lineageSelection: defaultLineageSelectionForCategory(relationshipCategory),
+}));
+
+function lineageSelectionOptions(relationshipCategory: RelationshipCategory): DefaultLineageSelection[] {
+  return isSideSpecificCategory(relationshipCategory)
+    ? ["none", "both", "maternal", "paternal"]
+    : ["none", "not_applicable"];
+}
 
 function buildSubscriptionDefaults(rows: SubscriptionDefaultRule[]): SubscriptionDefaultDraft[] {
-  const byKey = new Map(rows.map((row) => [ruleKey(row), row]));
+  const byKey = new Map(rows.map((row) => [ruleKey(row.relationshipCategory), row]));
   return RULE_TEMPLATES.map((template) => {
-    const existing = byKey.get(ruleKey(template));
+    const existing = byKey.get(ruleKey(template.relationshipCategory));
     return {
       relationshipCategory: template.relationshipCategory,
-      lineageSide: template.lineageSide,
-      isSubscribed: existing?.isSubscribed ?? false,
-      isActive: existing?.isActive ?? true,
+      lineageSelection: existing?.lineageSelection ?? template.lineageSelection,
     };
   });
 }
 
 function buildShareDefaults(rows: ShareDefaultRule[]): ShareDefaultDraft[] {
-  const byKey = new Map(rows.map((row) => [ruleKey(row), row]));
+  const byKey = new Map(rows.map((row) => [ruleKey(row.relationshipCategory), row]));
   return RULE_TEMPLATES.map((template) => {
-    const existing = byKey.get(ruleKey(template));
+    const existing = byKey.get(ruleKey(template.relationshipCategory));
     return {
       relationshipCategory: template.relationshipCategory,
-      lineageSide: template.lineageSide,
+      lineageSelection: existing?.lineageSelection ?? template.lineageSelection,
       shareVitals: existing?.shareVitals ?? false,
       shareStories: existing?.shareStories ?? false,
       shareMedia: existing?.shareMedia ?? false,
       shareConversations: existing?.shareConversations ?? false,
-      isActive: existing?.isActive ?? true,
     };
   });
 }
@@ -473,7 +473,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Subscription Defaults</h2>
-              <p className="muted">These control notifications, newsletters, and update preferences only.</p>
+              <p className="muted">
+                These control notifications, newsletters, and update preferences only. Each relationship gets one
+                default selection.
+              </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveSubscriptionDefaults()} disabled={busy}>
               Save
@@ -484,41 +487,33 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
               <thead>
                 <tr>
                   <th>Relationship</th>
-                  <th>Side</th>
-                  <th>Active</th>
-                  <th>Subscribed</th>
+                  <th>Default</th>
                 </tr>
               </thead>
               <tbody>
                 {subscriptionDefaults.map((row, index) => (
-                  <tr key={ruleKey(row)}>
+                  <tr key={ruleKey(row.relationshipCategory)}>
                     <td>{RELATIONSHIP_LABELS[row.relationshipCategory]}</td>
-                    <td>{LINEAGE_LABELS[row.lineageSide]}</td>
                     <td>
-                      <input
-                        type="checkbox"
-                        checked={row.isActive}
+                      <select
+                        className="input"
+                        value={row.lineageSelection}
                         onChange={(event) =>
                           setSubscriptionDefaults((current) =>
                             current.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, isActive: event.target.checked } : entry,
+                              entryIndex === index
+                                ? { ...entry, lineageSelection: event.target.value as DefaultLineageSelection }
+                                : entry,
                             ),
                           )
                         }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={row.isSubscribed}
-                        onChange={(event) =>
-                          setSubscriptionDefaults((current) =>
-                            current.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, isSubscribed: event.target.checked } : entry,
-                            ),
-                          )
-                        }
-                      />
+                      >
+                        {lineageSelectionOptions(row.relationshipCategory).map((option) => (
+                          <option key={option} value={option}>
+                            {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 ))}
@@ -531,7 +526,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Sharing Defaults</h2>
-              <p className="muted">These control content visibility when another relative looks at your profile data.</p>
+              <p className="muted">
+                These control content visibility when another relative looks at your profile data. Each relationship gets
+                one side selection.
+              </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveShareDefaults()} disabled={busy}>
               Save
@@ -542,8 +540,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
               <thead>
                 <tr>
                   <th>Relationship</th>
-                  <th>Side</th>
-                  <th>Active</th>
+                  <th>Applies To</th>
                   <th>Vitals</th>
                   <th>Stories</th>
                   <th>Media</th>
@@ -552,27 +549,46 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
               </thead>
               <tbody>
                 {shareDefaults.map((row, index) => (
-                  <tr key={ruleKey(row)}>
+                  <tr key={ruleKey(row.relationshipCategory)}>
                     <td>{RELATIONSHIP_LABELS[row.relationshipCategory]}</td>
-                    <td>{LINEAGE_LABELS[row.lineageSide]}</td>
                     <td>
-                      <input
-                        type="checkbox"
-                        checked={row.isActive}
+                      <select
+                        className="input"
+                        value={row.lineageSelection}
                         onChange={(event) =>
                           setShareDefaults((current) =>
                             current.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, isActive: event.target.checked } : entry,
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    lineageSelection: event.target.value as DefaultLineageSelection,
+                                    ...(event.target.value === "none"
+                                      ? {
+                                          shareVitals: false,
+                                          shareStories: false,
+                                          shareMedia: false,
+                                          shareConversations: false,
+                                        }
+                                      : {}),
+                                  }
+                                : entry,
                             ),
                           )
                         }
-                      />
+                      >
+                        {lineageSelectionOptions(row.relationshipCategory).map((option) => (
+                          <option key={option} value={option}>
+                            {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     {(["shareVitals", "shareStories", "shareMedia", "shareConversations"] as const).map((field) => (
                       <td key={field}>
                         <input
                           type="checkbox"
                           checked={row[field]}
+                          disabled={row.lineageSelection === "none"}
                           onChange={(event) =>
                             setShareDefaults((current) =>
                               current.map((entry, entryIndex) =>

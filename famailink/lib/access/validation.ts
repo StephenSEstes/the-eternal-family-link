@@ -1,5 +1,7 @@
-import type { EffectType, LineageSide, RelationshipCategory } from "@/lib/model/relationships";
-import { EFFECT_TYPES, LINEAGE_SIDES, RELATIONSHIP_CATEGORIES } from "@/lib/model/relationships";
+import type { DefaultLineageSelection } from "@/lib/access/types";
+import { DEFAULT_LINEAGE_SELECTIONS } from "@/lib/access/types";
+import type { EffectType, RelationshipCategory } from "@/lib/model/relationships";
+import { EFFECT_TYPES, RELATIONSHIP_CATEGORIES } from "@/lib/model/relationships";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -35,8 +37,8 @@ function isRelationshipCategory(value: string): value is RelationshipCategory {
   return (RELATIONSHIP_CATEGORIES as readonly string[]).includes(value);
 }
 
-function isLineageSide(value: string): value is LineageSide {
-  return (LINEAGE_SIDES as readonly string[]).includes(value);
+function isDefaultLineageSelection(value: string): value is DefaultLineageSelection {
+  return (DEFAULT_LINEAGE_SELECTIONS as readonly string[]).includes(value);
 }
 
 function isEffectType(value: string): value is EffectType {
@@ -54,19 +56,17 @@ export function parseSubscriptionDefaultRows(payload: unknown) {
     }
 
     const relationshipCategory = normalizeString(row.relationshipCategory);
-    const lineageSide = normalizeString(row.lineageSide);
+    const lineageSelection = normalizeString(row.lineageSelection ?? row.lineageSide);
     if (!isRelationshipCategory(relationshipCategory)) {
       throw new Error(`invalid_relationship_category:${relationshipCategory}`);
     }
-    if (!isLineageSide(lineageSide)) {
-      throw new Error(`invalid_lineage_side:${lineageSide}`);
+    if (!isDefaultLineageSelection(lineageSelection)) {
+      throw new Error(`invalid_lineage_selection:${lineageSelection}`);
     }
 
     return {
       relationshipCategory,
-      lineageSide,
-      isSubscribed: parseBoolean(row.isSubscribed),
-      isActive: parseBoolean(row.isActive, true),
+      lineageSelection,
     };
   });
 }
@@ -108,22 +108,21 @@ export function parseShareDefaultRows(payload: unknown) {
     }
 
     const relationshipCategory = normalizeString(row.relationshipCategory);
-    const lineageSide = normalizeString(row.lineageSide);
+    const lineageSelection = normalizeString(row.lineageSelection ?? row.lineageSide);
     if (!isRelationshipCategory(relationshipCategory)) {
       throw new Error(`invalid_relationship_category:${relationshipCategory}`);
     }
-    if (!isLineageSide(lineageSide)) {
-      throw new Error(`invalid_lineage_side:${lineageSide}`);
+    if (!isDefaultLineageSelection(lineageSelection)) {
+      throw new Error(`invalid_lineage_selection:${lineageSelection}`);
     }
 
     return {
       relationshipCategory,
-      lineageSide,
+      lineageSelection,
       shareVitals: parseBoolean(row.shareVitals),
       shareStories: parseBoolean(row.shareStories),
       shareMedia: parseBoolean(row.shareMedia),
       shareConversations: parseBoolean(row.shareConversations),
-      isActive: parseBoolean(row.isActive, true),
     };
   });
 }

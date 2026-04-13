@@ -448,3 +448,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Build preferences-only administration first and defer the tree test surface.
 - `Impact`: The isolated Unit 1 app should include login, rule editors, recompute/status, preview, and a family tree test view where every supported family member appears at least by name.
 - `Follow-up`: Keep the first MVP scope narrow and use the tree to validate the principle before porting the model back into broader EFL surfaces.
+
+## 2026-04-12
+
+- `Area`: Famailink preferences default-rule modeling
+- `Decision`: Default preferences must be expressed as one logical row per relationship category. For side-specific categories, the saved default is a single lineage selection (`none`, `both`, `maternal`, or `paternal`) rather than overlapping side rows.
+- `Reason`: Rendering and evaluating separate `both`, `maternal`, and `paternal` rows for the same relationship category exposed storage mechanics directly in the UI, allowed contradictory states, and created ambiguous rule resolution.
+- `Alternatives Considered`: Keep one row per side with overlap rules; add more precedence logic on top of the existing row model.
+- `Impact`: Preferences UI/runtime should no longer repeat the same relationship category across multiple side rows. Subscription and sharing defaults should read and save one logical default per relationship category.
+- `Follow-up`: If future product needs truly independent side overrides again, reintroduce them only with explicit fallback/override semantics rather than overlapping peer rows.
