@@ -297,7 +297,7 @@ export async function listLocalUsersByUsername(username: string): Promise<UserLo
         WHERE LOWER(TRIM(username)) = :username
           AND (LOWER(TRIM(NVL(local_access, 'TRUE'))) IN ('y','yes','true','1'))
           AND (LOWER(TRIM(NVL(is_enabled, 'TRUE'))) IN ('y','yes','true','1'))
-          AND NVL(password_hash, '') <> ''
+          AND TRIM(password_hash) IS NOT NULL
         ORDER BY person_id`,
       { username: normalized },
       OUT_FORMAT,

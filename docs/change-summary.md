@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-12 (Famailink local login Oracle password-hash filter fix)
+
+- `Date`: 2026-04-12
+- `Change`: Fixed the Famailink local-login user lookup so Oracle-backed password hashes are treated as present when populated, using `TRIM(password_hash) IS NOT NULL` instead of `NVL(password_hash, '') <> ''`.
+- `Type`: API
+- `Why`: Root cause was Oracle empty-string semantics in the local-login query. The prior predicate compared against `''`, which Oracle treats as `NULL`, so the password-hash filter evaluated false even when `password_hash` was populated and valid. This blocked all Famailink local sign-in attempts.
+- `Files`: `changeHistory.md`, `docs/change-summary.md`, `famailink/lib/family/store.ts`
+- `Data Changes`: No schema change. Existing local-login users still require a populated `user_access.password_hash` row to sign in.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - OCI query for the live username now matches rows with populated password hashes.
+- `Rollback Notes`: Revert this change to restore the previous Oracle-invalid password-hash presence check.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-12 (Famailink recompute + persisted derived maps)
 
 - `Date`: 2026-04-12
