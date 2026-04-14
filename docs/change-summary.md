@@ -13,6 +13,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-14 (Famailink UX clarity pass for tree and preferences)
+
+- `Date`: 2026-04-14
+- `Change`: Tightened the Famailink tree and preferences wording so the MVP reads more like a working product surface and less like internal diagnostics. Tree counters now make graph-wide scope explicit, pending badges distinguish subscription vs sharing, and the surrounding copy explains saved readback behavior more clearly.
+- `Type`: UI
+- `Why`: Root cause was misleading and overly internal copy. `Relationship Rows` read like a viewer-specific count, generic `Pending Recompute` badges did not say which derived state was missing, and repeated `Lab` / `slice proves` language added noise while the app was already functioning as the active concept-validation surface.
+- `Files`: `TODO.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/app/tree/page.tsx`, `famailink/components/AccessPreferencesClient.tsx`
+- `Data Changes`: No schema or data change.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Tree stats now distinguish graph-wide counts from viewer-specific counts.
+  - Missing derived rows show `Subscription Pending` and `Sharing Pending` instead of a generic repeated pending label.
+  - Preferences and tree copy remain aligned with the current model: family-tree visibility, subscriptions, and sharing are separate.
+- `Rollback Notes`: Revert this change to restore the previous tree/preferences wording.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-13 (Famailink family graph OCI filter fix)
 
 - `Date`: 2026-04-13

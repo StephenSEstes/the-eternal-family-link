@@ -411,10 +411,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
       <header className="masthead">
         <div>
           <p className="eyebrow">Famailink</p>
-          <h1 className="title">Preferences Lab</h1>
+          <h1 className="title">Preferences</h1>
           <p className="lead">
-            This slice proves the clarified Famailink model: relationship-driven tree visibility stays separate from
-            notification subscriptions and from content sharing.
+            Use this page to control update subscriptions and profile sharing by relationship without changing who
+            appears in your tree.
           </p>
           <p className="muted">
             Signed in as <strong>{session.username}</strong> on <code>{session.personId}</code>.
@@ -445,10 +445,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         <section className="panel">
           <div className="section-head">
             <div>
-              <h2>Family Catalog</h2>
+              <h2>Family Members</h2>
               <p className="muted">
-                These are the currently supported relatives from the relationship graph. Tree visibility comes from this
-                list, not from subscription state.
+                These relatives are derived from your family graph. Their presence in the tree does not depend on your
+                subscription choices.
               </p>
             </div>
           </div>
@@ -474,8 +474,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
             <div>
               <h2>Subscription Defaults</h2>
               <p className="muted">
-                These control notifications, newsletters, and update preferences only. Each relationship gets one
-                default selection.
+                These control whether you receive updates for each relationship group. Each relationship gets one saved
+                default.
               </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveSubscriptionDefaults()} disabled={busy}>
@@ -527,8 +527,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
             <div>
               <h2>Sharing Defaults</h2>
               <p className="muted">
-                These control content visibility when another relative looks at your profile data. Each relationship gets
-                one side selection.
+                These control what each relationship group can see when they view your profile. Each relationship gets
+                one saved side selection.
               </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveShareDefaults()} disabled={busy}>
@@ -610,7 +610,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Subscription Person Exceptions</h2>
-              <p className="muted">Use explicit allow or deny for a specific supported relative.</p>
+              <p className="muted">Override the default subscription rule for one specific relative.</p>
             </div>
             <div className="row-actions">
               <button className="secondary-button" type="button" onClick={addSubscriptionException} disabled={busy}>
@@ -680,7 +680,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Sharing Person Exceptions</h2>
-              <p className="muted">These override your sharing defaults for a specific supported relative.</p>
+              <p className="muted">Override your sharing defaults for one specific relative.</p>
             </div>
             <div className="row-actions">
               <button className="secondary-button" type="button" onClick={addShareException} disabled={busy}>
@@ -784,7 +784,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
             <div>
               <h2>Recompute Status</h2>
               <p className="muted">
-                Recompute persists the current derived subscription and visibility/share maps for this signed-in viewer.
+                Saving now applies automatically, but you can still run a full recompute to refresh every saved
+                subscription and sharing row for this signed-in viewer.
               </p>
             </div>
             <div className="row-actions">
@@ -855,10 +856,9 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         <section className="panel preview-panel">
           <div className="section-head">
             <div>
-              <h2>Live Preview</h2>
+              <h2>Preview One Relative</h2>
               <p className="muted">
-                Preview keeps the new model explicit: tree visibility, subscription, and sharing are reported
-                separately.
+                Preview shows how one relative is treated by the current relationship, subscription, and sharing rules.
               </p>
             </div>
             <div className="row-actions">

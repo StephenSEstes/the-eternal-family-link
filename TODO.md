@@ -23,6 +23,40 @@ I will update this list as we add, complete, or remove work.
   - Completed: Tree lab now links directly to the new preferences surface.
   Progress 2026-04-13:
   - Completed: Tree lab now reads back persisted recompute state (`profile_visibility_map`, `profile_subscription_map`, and recompute summary) so saved subscription/share outcomes are visible directly on the tree surface.
+  Progress 2026-04-14:
+  - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
+  - Scope:
+    - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.
+    - Keep the current access model, derivation logic, and recompute/storage behavior unchanged in this pass.
+    - Focus only on labels, explanatory copy, and empty/pending-state wording that caused user confusion.
+  - Root cause:
+    - Several current labels expose internal implementation framing rather than user intent.
+    - `Relationship Rows` reads like a viewer-specific count when it is actually the full graph row count loaded from OCI.
+    - Per-person `Pending Recompute` badges are ambiguous because they do not say whether subscription, sharing, or both are missing derived rows.
+    - Repeated `Lab` / `This slice proves` phrasing makes the surface harder to read as a working product test view.
+  - UI changes:
+    - Tree page:
+      - Rename graph-wide counters to make their scope explicit.
+      - Add brief guidance that badges are saved derived readback, not live rule inputs.
+      - Replace generic pending badges with explicit subscription/sharing pending wording.
+      - Tighten the bottom explanatory panel so it reads as page guidance rather than internal project framing.
+    - Preferences page:
+      - Replace internal/lab framing with clearer user-facing copy.
+      - Clarify the purpose of family-member list, defaults, recompute, and preview sections.
+  - API/data/runtime changes:
+    - None. This pass is copy/label only.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Tree labels no longer imply `339 relationships for me`.
+    - Missing derived rows show distinct subscription/sharing pending states.
+    - Preferences copy remains aligned with the current model: tree visibility, subscription, and sharing are separate.
+  - Completion criteria:
+    - The Famailink UX is understandable without explaining internal implementation terms during normal use.
+    - The tree page makes clear which counts are graph-wide vs viewer-specific.
+    - Pending derived states are specific enough that they do not read like a generic failure.
+  - Remaining: deployment split documentation.
   Agreed implementation plan 2026-04-12 (preferences simplification):
   - Scope:
     - Replace the current side-row default editor model that renders separate `both`, `maternal`, and `paternal` rows for the same relationship bucket.

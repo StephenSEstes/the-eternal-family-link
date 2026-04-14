@@ -37,7 +37,7 @@ function formatTimestamp(value: string) {
 
 function shareSummary(row: ProfileVisibilityMapRow | undefined) {
   if (!row) {
-    return { label: "Pending Recompute", badgeClass: "pending" };
+    return { label: "Sharing Pending", badgeClass: "pending" };
   }
   if (row.placeholderOnly) {
     return { label: "Name Only", badgeClass: "placeholder" };
@@ -50,7 +50,7 @@ function shareSummary(row: ProfileVisibilityMapRow | undefined) {
 
 function subscriptionSummary(row: ProfileSubscriptionMapRow | undefined) {
   if (!row) {
-    return { label: "Pending Recompute", badgeClass: "pending" };
+    return { label: "Subscription Pending", badgeClass: "pending" };
   }
   return row.isSubscribed
     ? { label: "Subscribed", badgeClass: "subscribed" }
@@ -158,10 +158,10 @@ export default async function TreePage() {
       <header className="masthead">
         <div>
           <p className="eyebrow">Famailink</p>
-          <h1 className="title">Tree Lab</h1>
+          <h1 className="title">Family Tree</h1>
           <p className="lead">
-            The tree groups relatives by relationship bucket and now reads back the persisted recompute results so you
-            can see saved subscription and sharing outcomes directly on the tree.
+            Your tree groups relatives by relationship and shows the last saved subscription and sharing results
+            directly on each card.
           </p>
         </div>
         <div className="masthead-actions">
@@ -183,19 +183,19 @@ export default async function TreePage() {
             <p className="stat-value">{snapshot.viewer.displayName}</p>
           </article>
           <article className="stat-card">
-            <p className="stat-label">People Read</p>
+            <p className="stat-label">People Loaded</p>
             <p className="stat-value">{snapshot.peopleCount}</p>
           </article>
           <article className="stat-card">
-            <p className="stat-label">Relationship Rows</p>
+            <p className="stat-label">Graph Relationship Rows</p>
             <p className="stat-value">{snapshot.relationshipCount}</p>
           </article>
           <article className="stat-card">
-            <p className="stat-label">Visible Relatives</p>
+            <p className="stat-label">Relatives In Your Tree</p>
             <p className="stat-value">{snapshot.relatedCount}</p>
           </article>
           <article className="stat-card">
-            <p className="stat-label">Persisted Readback</p>
+            <p className="stat-label">Saved Readback</p>
             <p className="stat-value">{hasPersistedMaps ? "Ready" : "Pending"}</p>
           </article>
           <article className="stat-card">
@@ -206,19 +206,24 @@ export default async function TreePage() {
       </section>
 
       <section className="panel">
-        <h2>Persisted Access Readback</h2>
+        <h2>How To Read The Badges</h2>
         {hasPersistedMaps ? (
           <>
             <p className="muted">
-              Tree cards below are showing the last saved recompute state, not just the raw relationship graph.
+              Tree cards below are showing the last saved subscription and sharing snapshot, not just the raw
+              relationship graph.
+            </p>
+            <p className="muted">
+              If a badge says <strong>Subscription Pending</strong> or <strong>Sharing Pending</strong>, that person
+              does not yet have a saved derived row for that badge. Save preferences or run recompute to refresh it.
             </p>
             <div className="stat-grid recompute-summary-grid">
               <article className="stat-card">
-                <p className="stat-label">Visibility Rows</p>
+                <p className="stat-label">Saved Sharing Rows</p>
                 <p className="stat-value">{recomputeStatus.summary?.visibilityRowCount ?? 0}</p>
               </article>
               <article className="stat-card">
-                <p className="stat-label">Subscription Rows</p>
+                <p className="stat-label">Saved Subscription Rows</p>
                 <p className="stat-value">{recomputeStatus.summary?.subscriptionRowCount ?? 0}</p>
               </article>
               <article className="stat-card">
@@ -235,8 +240,8 @@ export default async function TreePage() {
           </>
         ) : (
           <p className="muted">
-            No persisted recompute output exists yet for this viewer. Run recompute from Preferences to populate the
-            saved subscription and sharing state that this tree reads back.
+            No saved subscription or sharing snapshot exists yet for this viewer. Save preferences or run recompute
+            from Preferences to populate the badges this tree reads back.
           </p>
         )}
       </section>
@@ -259,14 +264,14 @@ export default async function TreePage() {
       </section>
 
       <section className="panel">
-        <h2>What This Slice Proves</h2>
+        <h2>How This Page Works</h2>
         <p className="muted">
-          The clean Famailink app can sign in locally, read OCI people and relationship rows, derive the agreed
-          relationship buckets, and show the last persisted recompute results on the tree itself.
+          Relatives appear here because of the relationship graph. Subscription settings do not remove them from the
+          tree.
         </p>
         <p className="muted">
-          Preferences remains the edit surface, while the tree is now the readback surface for the stored subscription
-          and sharing outputs.
+          Preferences is the edit surface. This tree is the saved readback surface for subscription and sharing
+          outcomes.
         </p>
       </section>
     </main>
