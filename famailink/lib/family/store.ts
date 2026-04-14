@@ -332,7 +332,7 @@ export async function listPeopleLite(): Promise<PersonLite[]> {
               COALESCE(NULLIF(TRIM(display_name), ''), TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), person_id) AS display_name,
               LOWER(TRIM(NVL(gender, ''))) AS gender
          FROM people
-        WHERE NVL(TRIM(person_id), '') <> ''
+        WHERE TRIM(person_id) IS NOT NULL
         ORDER BY display_name`,
       {},
       OUT_FORMAT,
@@ -351,9 +351,9 @@ export async function listRelationshipsLite(): Promise<RelationshipLite[]> {
     const result = await connection.execute(
       `SELECT from_person_id, to_person_id, LOWER(TRIM(rel_type)) AS rel_type
          FROM relationships
-        WHERE NVL(TRIM(from_person_id), '') <> ''
-          AND NVL(TRIM(to_person_id), '') <> ''
-          AND NVL(TRIM(rel_type), '') <> ''`,
+        WHERE TRIM(from_person_id) IS NOT NULL
+          AND TRIM(to_person_id) IS NOT NULL
+          AND TRIM(rel_type) IS NOT NULL`,
       {},
       OUT_FORMAT,
     );

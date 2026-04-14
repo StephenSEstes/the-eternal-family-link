@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-13 (Famailink family graph OCI filter fix)
+
+- `Date`: 2026-04-13
+- `Change`: Fixed the Famailink people and relationship reads so the tree and preferences catalog can load family members from OCI again. The OCI filters now use `TRIM(...) IS NOT NULL` instead of Oracle-invalid empty-string comparisons.
+- `Type`: API
+- `Why`: Root cause was Oracle empty-string semantics in `listPeopleLite()` and `listRelationshipsLite()`. The prior filters used `NVL(TRIM(...), '') <> ''`, which Oracle can evaluate as null-comparisons and exclude valid rows. That caused the family graph input to collapse to zero people/relationship rows even though the database contained valid data.
+- `Files`: `changeHistory.md`, `docs/change-summary.md`, `famailink/lib/family/store.ts`
+- `Data Changes`: No schema or data change. Existing `people` and `relationships` rows are now read correctly.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Direct OCI counts confirm the underlying data exists (`people`: 139, `relationships`: 339).
+  - `/preferences` and `/tree` show supported relatives again for users with relationship rows.
+- `Rollback Notes`: Revert this change to restore the broken Oracle-empty-string filters on Famailink family reads.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-13 (Famailink preference saves now apply immediately)
 
 - `Date`: 2026-04-13
