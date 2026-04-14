@@ -7228,3 +7228,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the approved explicit in-law category decision to `designchoices.md`.
+
+## 2026-04-13 (Famailink inclusive defaults + exception-first narrowing)
+
+- `Change`: Switched Famailink to a broad inclusive default posture for the MVP. Missing default rows now synthesize broad subscription and sharing defaults at runtime, the preferences screen loads broad defaults before first save, and person exceptions default to `Exclude` so narrowing one person is faster.
+- `Type`: UX, Runtime behavior, Product-default posture
+- `Why`: Root cause was exclusive-by-absence behavior. With no saved default rows, Famailink fell through to `no matching rule`, which behaved as deny/no-share in runtime and made the preferences UI start from an unnecessarily restrictive state.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/lib/access/defaults.ts`
+  - `famailink/lib/access/store.ts`
+  - `famailink/lib/access/preview.ts`
+  - `famailink/components/AccessPreferencesClient.tsx`
+- `Data Changes`: None. Existing OCI rule tables are unchanged; inclusive defaults are synthesized in runtime/read paths.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the approved liberal inclusive default posture decision to `designchoices.md`.

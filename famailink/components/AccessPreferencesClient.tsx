@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  EDITABLE_CATEGORIES,
+  defaultInclusiveLineageSelectionForCategory,
+  isSideSpecificCategory,
+  mergeWithSystemShareDefaults,
+  mergeWithSystemSubscriptionDefaults,
+} from "@/lib/access/defaults";
 import type {
   AccessCatalogPayload,
   AccessPreview,
@@ -48,44 +55,11 @@ type ShareExceptionDraft = {
   shareConversations: boolean;
 };
 
-const SIDE_SPECIFIC_CATEGORIES = new Set<RelationshipCategory>([
-  "parents",
-  "grandparents",
-  "siblings",
-  "aunts_uncles",
-  "nieces_nephews",
-  "cousins",
-  "cousins_children",
-]);
-
-const EDITABLE_CATEGORIES: RelationshipCategory[] = [
-  "spouse",
-  "parents",
-  "parents_in_law",
-  "grandparents",
-  "children",
-  "children_in_law",
-  "grandchildren",
-  "siblings",
-  "siblings_in_law",
-  "aunts_uncles",
-  "aunts_uncles_in_law",
-  "nieces_nephews",
-  "nieces_nephews_in_law",
-  "cousins",
-  "cousins_in_law",
-  "cousins_children",
-];
-
-const EFFECT_OPTIONS: EffectType[] = ["allow", "deny"];
-
-function isSideSpecificCategory(relationshipCategory: RelationshipCategory) {
-  return SIDE_SPECIFIC_CATEGORIES.has(relationshipCategory);
-}
-
-function defaultLineageSelectionForCategory(relationshipCategory: RelationshipCategory): DefaultLineageSelection {
-  return isSideSpecificCategory(relationshipCategory) ? "none" : "not_applicable";
-}
+const EFFECT_OPTIONS: EffectType[] = ["deny", "allow"];
+const EFFECT_LABELS: Record<EffectType, string> = {
+  deny: "Exclude",
+  allow: "Include",
+};
 
 function ruleKey(relationshipCategory: RelationshipCategory) {
   return relationshipCategory;
@@ -93,7 +67,7 @@ function ruleKey(relationshipCategory: RelationshipCategory) {
 
 const RULE_TEMPLATES = EDITABLE_CATEGORIES.map((relationshipCategory) => ({
   relationshipCategory,
-  lineageSelection: defaultLineageSelectionForCategory(relationshipCategory),
+  lineageSelection: defaultInclusiveLineageSelectionForCategory(relationshipCategory),
 }));
 
 function lineageSelectionOptions(relationshipCategory: RelationshipCategory): DefaultLineageSelection[] {
@@ -103,7 +77,9 @@ function lineageSelectionOptions(relationshipCategory: RelationshipCategory): De
 }
 
 function buildSubscriptionDefaults(rows: SubscriptionDefaultRule[]): SubscriptionDefaultDraft[] {
-  const byKey = new Map(rows.map((row) => [ruleKey(row.relationshipCategory), row]));
+  const byKey = new Map(
+    mergeWithSystemSubscriptionDefaults("", rows).map((row) => [ruleKey(row.relationshipCategory), row]),
+  );
   return RULE_TEMPLATES.map((template) => {
     const existing = byKey.get(ruleKey(template.relationshipCategory));
     return {
@@ -114,16 +90,18 @@ function buildSubscriptionDefaults(rows: SubscriptionDefaultRule[]): Subscriptio
 }
 
 function buildShareDefaults(rows: ShareDefaultRule[]): ShareDefaultDraft[] {
-  const byKey = new Map(rows.map((row) => [ruleKey(row.relationshipCategory), row]));
+  const byKey = new Map(
+    mergeWithSystemShareDefaults("", rows).map((row) => [ruleKey(row.relationshipCategory), row]),
+  );
   return RULE_TEMPLATES.map((template) => {
     const existing = byKey.get(ruleKey(template.relationshipCategory));
     return {
       relationshipCategory: template.relationshipCategory,
       lineageSelection: existing?.lineageSelection ?? template.lineageSelection,
-      shareVitals: existing?.shareVitals ?? false,
-      shareStories: existing?.shareStories ?? false,
-      shareMedia: existing?.shareMedia ?? false,
-      shareConversations: existing?.shareConversations ?? false,
+      shareVitals: existing?.shareVitals ?? true,
+      shareStories: existing?.shareStories ?? true,
+      shareMedia: existing?.shareMedia ?? true,
+      shareConversations: existing?.shareConversations ?? true,
     };
   });
 }
@@ -385,7 +363,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         exceptionId: "",
         viewerPersonId: session.personId,
         targetPersonId,
-        effect: "allow",
+        effect: "deny",
         createdAt: "",
         updatedAt: "",
       },
@@ -402,7 +380,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
       ...current,
       {
         targetPersonId,
-        effect: "allow",
+        effect: "deny",
         allScopes: true,
         shareVitals: false,
         shareStories: false,
@@ -480,8 +458,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
             <div>
               <h2>Subscription Defaults</h2>
               <p className="muted">
-                These control whether you receive updates for each relationship group. Each relationship gets one saved
-                default.
+                These start broad so you stay connected by default. Use person exceptions below when you want to mute
+                one specific relative without narrowing the whole relationship group.
               </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveSubscriptionDefaults()} disabled={busy}>
@@ -533,8 +511,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
             <div>
               <h2>Sharing Defaults</h2>
               <p className="muted">
-                These control what each relationship group can see when they view your profile. Each relationship gets
-                one saved side selection.
+                These start broad in the MVP so family can see your profile content by relationship group. Use person
+                exceptions below when you need to narrow one specific relative.
               </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void saveShareDefaults()} disabled={busy}>
@@ -616,7 +594,9 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Subscription Person Exceptions</h2>
-              <p className="muted">Override the default subscription rule for one specific relative.</p>
+              <p className="muted">
+                Use this when you want to exclude one person from an otherwise broad subscription default.
+              </p>
             </div>
             <div className="row-actions">
               <button className="secondary-button" type="button" onClick={addSubscriptionException} disabled={busy}>
@@ -661,7 +641,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
                   >
                     {EFFECT_OPTIONS.map((effect) => (
                       <option key={effect} value={effect}>
-                        {effect}
+                        {EFFECT_LABELS[effect]}
                       </option>
                     ))}
                   </select>
@@ -677,7 +657,9 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
                 </div>
               ))
             ) : (
-              <p className="empty-state">No person-level subscription exceptions yet.</p>
+              <p className="empty-state">
+                Broad defaults are active. Add an exception only when one person should be treated differently.
+              </p>
             )}
           </div>
         </section>
@@ -686,7 +668,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <div className="section-head">
             <div>
               <h2>Sharing Person Exceptions</h2>
-              <p className="muted">Override your sharing defaults for one specific relative.</p>
+              <p className="muted">
+                Use this when you want to narrow sharing for one person without changing the broader relationship
+                default.
+              </p>
             </div>
             <div className="row-actions">
               <button className="secondary-button" type="button" onClick={addShareException} disabled={busy}>
@@ -732,7 +717,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
                     >
                       {EFFECT_OPTIONS.map((effect) => (
                         <option key={effect} value={effect}>
-                          {effect}
+                          {EFFECT_LABELS[effect]}
                         </option>
                       ))}
                     </select>
@@ -780,7 +765,9 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
                 </div>
               ))
             ) : (
-              <p className="empty-state">No person-level sharing exceptions yet.</p>
+              <p className="empty-state">
+                Broad defaults are active. Add an exception only when one person should be treated differently.
+              </p>
             )}
           </div>
         </section>

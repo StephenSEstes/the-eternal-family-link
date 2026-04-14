@@ -2,6 +2,11 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import oracledb from "oracledb";
+import {
+  isSideSpecificCategory,
+  mergeWithSystemShareDefaults,
+  mergeWithSystemSubscriptionDefaults,
+} from "@/lib/access/defaults";
 import { withConnection } from "@/lib/oci/client";
 import type {
   AccessDerivedSummary,
@@ -20,15 +25,6 @@ import type { EffectType, RelationshipCategory } from "@/lib/model/relationships
 const OUT_FORMAT = { outFormat: oracledb.OUT_FORMAT_OBJECT };
 
 let schemaEnsured = false;
-const SIDE_SPECIFIC_CATEGORIES = new Set<RelationshipCategory>([
-  "parents",
-  "grandparents",
-  "siblings",
-  "aunts_uncles",
-  "nieces_nephews",
-  "cousins",
-  "cousins_children",
-]);
 
 function normalize(value?: string) {
   return String(value ?? "").trim();
@@ -76,11 +72,9 @@ function sortByUpdatedDesc<T extends { updatedAt: string; createdAt: string }>(r
   });
 }
 
-function isSideSpecificCategory(relationshipCategory: RelationshipCategory) {
-  return SIDE_SPECIFIC_CATEGORIES.has(relationshipCategory);
-}
-
-function defaultLineageSelectionForCategory(relationshipCategory: RelationshipCategory): DefaultLineageSelection {
+function storedFallbackLineageSelectionForCategory(
+  relationshipCategory: RelationshipCategory,
+): DefaultLineageSelection {
   return isSideSpecificCategory(relationshipCategory) ? "none" : "not_applicable";
 }
 
@@ -96,7 +90,7 @@ function normalizeStoredLineageSelection(
   if (normalized === "both" || normalized === "maternal" || normalized === "paternal") {
     return normalized;
   }
-  return defaultLineageSelectionForCategory(relationshipCategory);
+  return storedFallbackLineageSelectionForCategory(relationshipCategory);
 }
 
 async function safeExecute(connection: any, sql: string) {
@@ -267,7 +261,7 @@ function normalizeSubscriptionDefaults(rows: RawSubscriptionDefaultRule[]): Subs
     const activeRows = group.filter((row) => row.isActive);
     const subscribedRows = activeRows.filter((row) => row.isSubscribed);
 
-    let lineageSelection = defaultLineageSelectionForCategory(relationshipCategory);
+    let lineageSelection = storedFallbackLineageSelectionForCategory(relationshipCategory);
     if (!subscribedRows.length) {
       lineageSelection = "none";
     } else if (!isSideSpecificCategory(relationshipCategory)) {
@@ -315,7 +309,7 @@ function normalizeShareDefaults(rows: RawShareDefaultRule[]): ShareDefaultRule[]
       (row) => row.shareVitals || row.shareStories || row.shareMedia || row.shareConversations,
     );
 
-    let lineageSelection = defaultLineageSelectionForCategory(latest.relationshipCategory);
+    let lineageSelection = storedFallbackLineageSelectionForCategory(latest.relationshipCategory);
     if (!rowsWithAnyShare.length) {
       lineageSelection = "none";
     } else if (!isSideSpecificCategory(latest.relationshipCategory)) {
@@ -361,25 +355,28 @@ export async function listSubscriptionDefaults(viewerPersonId: string): Promise<
         ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST`,
       { viewerPersonId: normalize(viewerPersonId) },
       OUT_FORMAT,
-    );
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return normalizeSubscriptionDefaults(
-      rows.map((row) => ({
-        ruleId: getCell(row, "RULE_ID"),
-        viewerPersonId: getCell(row, "VIEWER_PERSON_ID"),
-        relationshipCategory: getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
-        lineageSelection: normalizeStoredLineageSelection(
-          getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
-          getCell(row, "LINEAGE_SIDE"),
+      );
+      const rows = (result.rows ?? []) as Record<string, unknown>[];
+      return mergeWithSystemSubscriptionDefaults(
+        normalize(viewerPersonId),
+        normalizeSubscriptionDefaults(
+          rows.map((row) => ({
+            ruleId: getCell(row, "RULE_ID"),
+            viewerPersonId: getCell(row, "VIEWER_PERSON_ID"),
+            relationshipCategory: getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
+            lineageSelection: normalizeStoredLineageSelection(
+              getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
+              getCell(row, "LINEAGE_SIDE"),
+            ),
+            isSubscribed: asBool(getCell(row, "IS_SUBSCRIBED")),
+            isActive: asBool(getCell(row, "IS_ACTIVE")),
+            createdAt: getCell(row, "CREATED_AT"),
+            updatedAt: getCell(row, "UPDATED_AT"),
+          })),
         ),
-        isSubscribed: asBool(getCell(row, "IS_SUBSCRIBED")),
-        isActive: asBool(getCell(row, "IS_ACTIVE")),
-        createdAt: getCell(row, "CREATED_AT"),
-        updatedAt: getCell(row, "UPDATED_AT"),
-      })),
-    );
-  });
-}
+      );
+    });
+  }
 
 export async function replaceSubscriptionDefaults(
   viewerPersonId: string,
@@ -501,28 +498,31 @@ export async function listShareDefaults(ownerPersonId: string): Promise<ShareDef
         ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST`,
       { ownerPersonId: normalize(ownerPersonId) },
       OUT_FORMAT,
-    );
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return normalizeShareDefaults(
-      rows.map((row) => ({
-        ruleId: getCell(row, "RULE_ID"),
-        ownerPersonId: getCell(row, "OWNER_PERSON_ID"),
-        relationshipCategory: getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
-        lineageSelection: normalizeStoredLineageSelection(
-          getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
-          getCell(row, "LINEAGE_SIDE"),
+      );
+      const rows = (result.rows ?? []) as Record<string, unknown>[];
+      return mergeWithSystemShareDefaults(
+        normalize(ownerPersonId),
+        normalizeShareDefaults(
+          rows.map((row) => ({
+            ruleId: getCell(row, "RULE_ID"),
+            ownerPersonId: getCell(row, "OWNER_PERSON_ID"),
+            relationshipCategory: getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
+            lineageSelection: normalizeStoredLineageSelection(
+              getCell(row, "RELATIONSHIP_CATEGORY") as RelationshipCategory,
+              getCell(row, "LINEAGE_SIDE"),
+            ),
+            shareVitals: asBool(getCell(row, "SHARE_VITALS")),
+            shareStories: asBool(getCell(row, "SHARE_STORIES")),
+            shareMedia: asBool(getCell(row, "SHARE_MEDIA")),
+            shareConversations: asBool(getCell(row, "SHARE_CONVERSATIONS")),
+            isActive: asBool(getCell(row, "IS_ACTIVE")),
+            createdAt: getCell(row, "CREATED_AT"),
+            updatedAt: getCell(row, "UPDATED_AT"),
+          })),
         ),
-        shareVitals: asBool(getCell(row, "SHARE_VITALS")),
-        shareStories: asBool(getCell(row, "SHARE_STORIES")),
-        shareMedia: asBool(getCell(row, "SHARE_MEDIA")),
-        shareConversations: asBool(getCell(row, "SHARE_CONVERSATIONS")),
-        isActive: asBool(getCell(row, "IS_ACTIVE")),
-        createdAt: getCell(row, "CREATED_AT"),
-        updatedAt: getCell(row, "UPDATED_AT"),
-      })),
-    );
-  });
-}
+      );
+    });
+  }
 
 export async function listAllShareDefaults(): Promise<ShareDefaultRule[]> {
   await ensureSchema();

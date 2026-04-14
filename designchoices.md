@@ -466,3 +466,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the blood-line-only model; silently fold in-laws into existing blood categories; recursively expand in-laws of in-laws.
 - `Impact`: Famailink tree/catalog/preview/defaults now need to surface explicit in-law categories. These categories are non-side-specific in v1 and remain limited to one marriage hop.
 - `Follow-up`: Revisit whether spouse-side extended relatives should become separate categories in a later pass, but do not add recursive in-law expansion without explicit approval.
+
+- `Area`: Famailink default posture
+- `Decision`: Famailink defaults should be liberally inclusive in the MVP. Missing default rows are treated as broad system defaults rather than deny-by-absence, and person exceptions are the primary way to narrow behavior for specific people.
+- `Reason`: The product intent is to encourage closer family relationships, and the previous exclusive-by-absence behavior made the MVP feel like a rule engine users had to opt into category by category.
+- `Alternatives Considered`: Keep deny-by-absence runtime behavior; add presets instead of changing the default posture; hide rows to simplify the screen.
+- `Impact`: Subscription defaults synthesize broad coverage by relationship, sharing defaults synthesize broad baseline scope visibility, and the preferences UI should present exceptions as the normal way to exclude one person without narrowing a whole category.
+- `Follow-up`: Revisit whether some sharing scopes should become less broad by default only if real usage shows the current MVP default is too open.

@@ -74,6 +74,43 @@ I will update this list as we add, complete, or remove work.
     - In-laws are represented explicitly in the Famailink relationship model.
     - `Both Sides` on blood relatives no longer has to carry the burden of implying in-laws.
     - Users can set defaults for supported in-law categories without ambiguity.
+  Agreed implementation plan 2026-04-13 (Famailink inclusive-defaults UX pass):
+  - Scope:
+    - Keep the current Famailink model intact: tree visibility, subscription, and sharing remain separate; relationship categories and person exceptions remain in place.
+    - Change the default posture so the MVP behaves broadly inclusive when no explicit rows exist.
+    - Make defaults and person exceptions easier to understand without adding presets or hiding rows.
+  - Root cause:
+    - The current Famailink MVP is exclusive by absence: when no saved default rows exist, runtime evaluation falls through to `no matching rule`, which behaves as deny/no-share.
+    - The preferences UI mirrors that posture by initializing side-specific subscription defaults to `None` and sharing scopes to unchecked.
+    - Person exceptions exist, but the screen copy does not present them as the normal way to narrow a broad default.
+  - Runtime/default-model changes:
+    - Treat missing default rows as inclusive system defaults instead of deny-by-absence.
+    - Subscription defaults:
+      - Supported categories default to subscribed.
+      - Side-specific categories default to `Both Sides`.
+      - Non-side-specific categories default to `Not Side-Specific`.
+    - Sharing defaults:
+      - Supported categories default to `Both Sides` or `Not Side-Specific` as applicable.
+      - Baseline sharing scopes default on for the current MVP broad-default posture.
+    - Existing saved rows and explicit person exceptions still override the synthesized defaults.
+  - UI changes:
+    - Preferences defaults tables load broad inclusive defaults even before first save.
+    - Defaults section copy explicitly says the app starts broad and person exceptions are the normal way to exclude specific people.
+    - Person exception add flows default to `deny` so exclusions are faster to create.
+    - Keep all rows visible; do not add presets in this pass.
+  - API/data changes:
+    - No schema changes.
+    - No data migration required; synthesized defaults apply in runtime/read paths.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - With no saved defaults, preview/recompute treat supported relatives as subscribed/shared by default.
+    - Existing explicit `none` or person-level deny settings still narrow behavior correctly.
+    - Preferences page initially shows broad defaults instead of empty/unchecked state.
+  - Completion criteria:
+    - Famailink behaves liberally inclusive by default in the MVP.
+    - Users can narrow behavior primarily through person exceptions without first opting broad categories in one by one.
+    - The preferences copy makes the intended broad-default mental model clear.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

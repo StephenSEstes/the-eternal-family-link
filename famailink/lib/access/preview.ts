@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { mergeWithSystemShareDefaults } from "@/lib/access/defaults";
 import {
   buildFamilyGraph,
   computeRelativeHitsForViewer,
@@ -137,6 +138,7 @@ function evaluateShareDefaultScope(
 
 function evaluateSharingScopes(input: {
   viewerPersonId: string;
+  ownerPersonId: string;
   ownerDefaults: ShareDefaultRule[];
   ownerPersonExceptions: SharePersonException[];
   viewerHitsFromOwner: HitMap | undefined;
@@ -144,6 +146,7 @@ function evaluateSharingScopes(input: {
   const personExceptions = input.ownerPersonExceptions.filter(
     (row) => normalize(row.targetPersonId) === normalize(input.viewerPersonId),
   );
+  const effectiveOwnerDefaults = mergeWithSystemShareDefaults(input.ownerPersonId, input.ownerDefaults);
 
   const scopes: PreviewScopeKey[] = ["vitals", "stories", "media", "conversations"];
   const out = {} as Record<PreviewScopeKey, PreviewScopeResult>;
@@ -156,11 +159,11 @@ function evaluateSharingScopes(input: {
 
     const allowed = personExceptions.some((row) => row.effect === "allow" && appliesToScope(row, scope));
     if (allowed) {
-      out[scope] = { allowed: true, source: "share_person_exception_allow" };
-      continue;
-    }
+        out[scope] = { allowed: true, source: "share_person_exception_allow" };
+        continue;
+      }
 
-    out[scope] = evaluateShareDefaultScope(input.ownerDefaults, input.viewerHitsFromOwner, scope);
+    out[scope] = evaluateShareDefaultScope(effectiveOwnerDefaults, input.viewerHitsFromOwner, scope);
   }
 
   return out;
@@ -245,6 +248,7 @@ function computeTargetAccess(input: {
       ? buildSelfSharingScopes()
       : evaluateSharingScopes({
           viewerPersonId: viewerId,
+          ownerPersonId: targetId,
           ownerDefaults: input.state.ownerDefaultsByOwner.get(targetId) ?? [],
           ownerPersonExceptions: input.state.ownerExceptionsByOwner.get(targetId) ?? [],
           viewerHitsFromOwner: targetHits.get(viewerId),
