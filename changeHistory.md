@@ -318,3 +318,4 @@ This file is a quick release-log entry point.
 - 2026-04-13: Expanded Famailink to include explicit one-hop in-law categories across derivation, preferences, preview, and tree rendering, including a dedicated `In-Laws` tree section. See `docs/change-summary.md`.
 - 2026-04-13: Switched Famailink to broad inclusive synthesized defaults for subscription and sharing, with person exceptions positioned as the primary narrowing tool and defaulting to `Exclude` in the preferences UI. See `docs/change-summary.md`.
 - 2026-04-13: Added the canonical Famailink deployment split runbook for project `famailink-mvp`, including deploy root, env requirements, post-deploy checks, and rollback guidance. See `docs/change-summary.md`.
+- 2026-04-13: Added Famailink login show/hide password plus a local password reset flow with reset email delivery, reset-token routes/pages, and automatic sign-in after successful reset. See `docs/change-summary.md`.

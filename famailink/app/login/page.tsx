@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +39,7 @@ export default function LoginPage() {
         <p className="eyebrow">Famailink</p>
         <h1 className="title">Local Sign In</h1>
         <p className="lead">
-          This clean app track starts with local login only and a relationship-driven tree lab page.
+          Use your username and password to sign in to your Famailink tree and preferences.
         </p>
         <form className="login-form" onSubmit={onSubmit}>
           <label className="field">
@@ -53,11 +55,19 @@ export default function LoginPage() {
             <span className="field-label">Password</span>
             <input
               className="input"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
+          </label>
+          <label className="scope-toggle">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(event) => setShowPassword(event.target.checked)}
+            />
+            Show password
           </label>
           <button className="primary-button" type="submit" disabled={busy}>
             {busy ? "Signing in..." : "Sign in"}
@@ -65,7 +75,7 @@ export default function LoginPage() {
         </form>
         {error ? <p className="error-text">{error}</p> : null}
         <p className="login-note">
-          Stephen’s emergency recovery path will be handled separately. It is not part of this first shell.
+          <Link href="/forgot-password">Forgot Password?</Link>
         </p>
       </section>
     </main>

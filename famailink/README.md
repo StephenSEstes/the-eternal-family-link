@@ -5,6 +5,8 @@ This is the clean Famailink MVP app track.
 ## Scope in this first slice
 
 - local username/password login
+- show/hide password on sign-in
+- self-service local password reset
 - signed-cookie session
 - relationship-driven tree lab page
 - authenticated preferences page
@@ -30,6 +32,13 @@ This is the clean Famailink MVP app track.
 - `OCI_WALLET_PASSWORD`
 - `OCI_WALLET_FILES_JSON` or `TNS_ADMIN`
 - `FAMAILINK_SESSION_SECRET` or `UNIT1_SESSION_SECRET`
+
+Optional for password reset email delivery:
+
+- `GMAIL_SENDER_EMAIL`
+- `GMAIL_OAUTH_CLIENT_ID`
+- `GMAIL_OAUTH_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
 
 ## Run
 
@@ -61,8 +70,12 @@ Use [docs/deploy-runbook.md](C:/Users/steph/the-eternal-family-link/docs/deploy-
 - `/login`
 - `/tree`
 - `/preferences`
+- `/forgot-password`
+- `/reset-password/[token]`
 - `/api/auth/login`
 - `/api/auth/logout`
+- `/api/password-reset/request`
+- `/api/password-reset/[token]`
 - `/api/access/catalog`
 - `/api/access/subscription/defaults`
 - `/api/access/subscription/exceptions/people`

@@ -137,6 +137,37 @@ I will update this list as we add, complete, or remove work.
   - Completion criteria:
     - A future deploy can be executed correctly from the written runbook without relying on memory or chat history.
     - The isolated Famailink deployment path is clearly separated from the legacy app deployment path.
+  Agreed implementation plan 2026-04-13 (Famailink login UX + password reset):
+  - Scope:
+    - Improve the Famailink login experience by adding a show/hide password control and a visible `Forgot Password?` path.
+    - Add a minimal Famailink-native self-service password reset flow aligned with the existing local-password product decision.
+    - Keep local username/password sign-in as the only user-facing auth mode in Famailink.
+  - Root cause:
+    - The current Famailink login page is missing common usability affordances (`show password`, `forgot password`) even though local password recovery is already an approved product behavior in the main app.
+    - Famailink has no reset-token/email/update plumbing yet, so users who forget their password in this isolated app track have no self-service recovery path.
+  - API/runtime changes:
+    - Add Famailink password-reset request route that accepts email, resolves exactly one active local user, stores a reset token, and sends a reset email.
+    - Add Famailink password-reset completion route that validates token status/expiry, updates `user_access.password_hash`, marks the reset token used, and returns the username for optional sign-in.
+    - Add additive OCI compatibility for `password_resets` in Famailink using the canonical table shape already documented in `docs/data-schema.md`.
+    - Reuse the same Gmail env contract as the main app for outbound reset email delivery.
+  - UI changes:
+    - Login page:
+      - Add show/hide password toggle.
+      - Add `Forgot Password?` link.
+    - Add `forgot-password` page with email-entry form and generic success messaging.
+    - Add `reset-password/[token]` page with new-password + confirm-password form and clear expired/used-link messaging.
+    - After successful reset, attempt to sign the user in automatically and redirect to `/tree`.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Login page renders show/hide password affordance and forgot-password link.
+    - Request route returns generic success message for both match and non-match cases.
+    - Valid reset token allows password update and subsequent sign-in.
+    - Used/expired token shows a clear invalid-link state.
+  - Completion criteria:
+    - Famailink local login is more user friendly.
+    - Famailink users have a self-service password reset path compatible with the current local-auth model.
+    - The reset flow stays isolated to Famailink without reintroducing mixed-auth behavior.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

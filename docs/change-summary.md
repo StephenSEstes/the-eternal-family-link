@@ -7264,3 +7264,31 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Documented deploy command matches the successful production deploy path used for `famailink-mvp`.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-13 (Famailink login UX + local password reset)
+
+- `Change`: Added show/hide password on the Famailink login page, added a visible `Forgot Password?` path, and implemented a Famailink-native local password reset flow with reset-token storage, Gmail delivery, reset pages/routes, and automatic sign-in after a successful reset.
+- `Type`: UX, Auth usability, Local password recovery
+- `Why`: Root cause was missing self-service recovery and missing common login affordances in the isolated Famailink app. Users on the local-only auth track had no way to reset a forgotten password, and the login page lacked baseline usability features that already exist in the main app.
+- `Files`:
+  - `TODO.md`
+  - `docs/deploy-runbook.md`
+  - `famailink/package.json`
+  - `famailink/package-lock.json`
+  - `famailink/README.md`
+  - `famailink/app/login/page.tsx`
+  - `famailink/app/forgot-password/page.tsx`
+  - `famailink/app/reset-password/[token]/page.tsx`
+  - `famailink/app/api/password-reset/request/route.ts`
+  - `famailink/app/api/password-reset/[token]/route.ts`
+  - `famailink/components/ForgotPasswordClient.tsx`
+  - `famailink/components/PasswordResetClient.tsx`
+  - `famailink/lib/auth/email.ts`
+  - `famailink/lib/auth/password.ts`
+  - `famailink/lib/auth/password-reset.ts`
+- `Data Changes`: Additive OCI compatibility only. Famailink now ensures the canonical `password_resets` table and supporting indexes exist if missing; no destructive schema change or data migration.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

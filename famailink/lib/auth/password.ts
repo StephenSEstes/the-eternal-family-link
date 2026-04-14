@@ -1,6 +1,22 @@
-import { scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
 const KEY_LEN = 64;
+
+export function hashPassword(password: string) {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, KEY_LEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
+  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
+
+export function validatePasswordComplexity(password: string) {
+  if (password.trim().length < 8) {
+    return "Password must be at least 8 characters.";
+  }
+  return "";
+}
 
 export function verifyPassword(password: string, storedHash: string) {
   try {

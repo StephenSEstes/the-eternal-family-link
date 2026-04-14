@@ -20,6 +20,13 @@ This section is the canonical deployment path for the isolated Famailink MVP. Do
 - `OCI_WALLET_FILES_JSON` or `TNS_ADMIN`
 - `FAMAILINK_SESSION_SECRET` or `UNIT1_SESSION_SECRET`
 
+Optional for self-service password reset email delivery:
+
+- `GMAIL_SENDER_EMAIL`
+- `GMAIL_OAUTH_CLIENT_ID`
+- `GMAIL_OAUTH_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
+
 ### Pre-Deploy
 
 - From repo root:
@@ -51,6 +58,9 @@ Expected result:
 - signed-out `/preferences` resolves to the login surface
 - local username/password login succeeds for a known working account
 - after sign-in, `/tree` and `/preferences` both load
+- if password-reset changes were part of the release:
+  - `/forgot-password` loads
+  - submitting a known local-account email returns the generic success message
 - if access/default changes were part of the release:
   - save one preference
   - confirm `/tree` readback reflects the saved state
