@@ -457,3 +457,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep one row per side with overlap rules; add more precedence logic on top of the existing row model.
 - `Impact`: Preferences UI/runtime should no longer repeat the same relationship category across multiple side rows. Subscription and sharing defaults should read and save one logical default per relationship category.
 - `Follow-up`: If future product needs truly independent side overrides again, reintroduce them only with explicit fallback/override semantics rather than overlapping peer rows.
+
+## 2026-04-13
+
+- `Area`: Famailink in-law relationship modeling
+- `Decision`: Represent in-laws as explicit one-hop relationship categories in Famailink instead of implying them through blood-line category selectors. The supported in-law categories are `parents_in_law`, `siblings_in_law`, `children_in_law`, `aunts_uncles_in_law`, `nieces_nephews_in_law`, and `cousins_in_law`.
+- `Reason`: Users expect by-marriage relatives to be visible and configurable explicitly. Using blood-line controls such as `Both Sides` to imply in-laws would make those controls ambiguous and unstable.
+- `Alternatives Considered`: Keep the blood-line-only model; silently fold in-laws into existing blood categories; recursively expand in-laws of in-laws.
+- `Impact`: Famailink tree/catalog/preview/defaults now need to surface explicit in-law categories. These categories are non-side-specific in v1 and remain limited to one marriage hop.
+- `Follow-up`: Revisit whether spouse-side extended relatives should become separate categories in a later pass, but do not add recursive in-law expansion without explicit approval.

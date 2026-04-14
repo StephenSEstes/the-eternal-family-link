@@ -7209,3 +7209,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build` fails in this workspace due to an existing pre-render/casing issue (`/404` prerender `useContext` null with mixed path casing), not introduced by this change.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-13 (Famailink explicit in-law categories)
+
+- `Change`: Expanded Famailink to represent supported in-laws as explicit one-hop relationship categories across the relationship model, family-graph derivation, preferences defaults, relationship preview/catalog, and tree rendering. Added a dedicated `In-Laws` tree section and new default rows for `parents_in_law`, `siblings_in_law`, `children_in_law`, `aunts_uncles_in_law`, `nieces_nephews_in_law`, and `cousins_in_law`.
+- `Type`: Design-aligned feature expansion, Relationship modeling, UX clarity
+- `Why`: Root cause was a model gap: Famailink only derived blood-line categories plus spouse, so `Both Sides` widened maternal/paternal blood lineage only and could never express by-marriage relatives. Making in-laws explicit fixes that ambiguity at the model level instead of overloading existing blood-relative controls.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/lib/model/relationships.ts`
+  - `famailink/lib/family/store.ts`
+  - `famailink/components/AccessPreferencesClient.tsx`
+  - `famailink/app/tree/page.tsx`
+- `Data Changes`: None. Existing Famailink OCI rule and derived-map tables are reused without schema changes.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the approved explicit in-law category decision to `designchoices.md`.

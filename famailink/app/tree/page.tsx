@@ -16,6 +16,17 @@ const TREE_COLUMNS: Array<{ title: string; categories: RelationshipCategory[] }>
   { title: "Center", categories: ["siblings", "self", "spouse"] },
   { title: "Branches", categories: ["children", "grandchildren"] },
   { title: "Extended", categories: ["aunts_uncles", "cousins", "cousins_children", "nieces_nephews"] },
+  {
+    title: "In-Laws",
+    categories: [
+      "parents_in_law",
+      "siblings_in_law",
+      "children_in_law",
+      "aunts_uncles_in_law",
+      "nieces_nephews_in_law",
+      "cousins_in_law",
+    ],
+  },
 ];
 
 function readSideLabel(side: string) {

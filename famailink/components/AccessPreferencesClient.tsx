@@ -61,13 +61,19 @@ const SIDE_SPECIFIC_CATEGORIES = new Set<RelationshipCategory>([
 const EDITABLE_CATEGORIES: RelationshipCategory[] = [
   "spouse",
   "parents",
+  "parents_in_law",
   "grandparents",
   "children",
+  "children_in_law",
   "grandchildren",
   "siblings",
+  "siblings_in_law",
   "aunts_uncles",
+  "aunts_uncles_in_law",
   "nieces_nephews",
+  "nieces_nephews_in_law",
   "cousins",
+  "cousins_in_law",
   "cousins_children",
 ];
 

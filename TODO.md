@@ -25,6 +25,55 @@ I will update this list as we add, complete, or remove work.
   - Completed: Tree lab now reads back persisted recompute state (`profile_visibility_map`, `profile_subscription_map`, and recompute summary) so saved subscription/share outcomes are visible directly on the tree surface.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Agreed implementation plan 2026-04-13 (Famailink in-law category expansion):
+  - Scope:
+    - Extend the Famailink relationship model to include explicit one-hop in-law categories in the tree, catalog, preview, defaults, and recompute/readback surfaces.
+    - Preserve the existing blood-line categories and their maternal/paternal side behavior.
+    - Keep the current OCI rule tables and derived map tables unchanged; this is a relationship-model and UI/runtime expansion, not a schema redesign.
+  - Root cause:
+    - The current Famailink model only derives blood-line categories plus spouse.
+    - Existing side selectors such as `Both Sides` broaden maternal/paternal blood lineage only; they do not express by-marriage relatives.
+    - Users expect in-laws to be represented explicitly rather than hidden inside an existing blood category such as `siblings`.
+  - Relationship-model changes:
+    - Add explicit relationship categories:
+      - `parents_in_law`
+      - `siblings_in_law`
+      - `children_in_law`
+      - `aunts_uncles_in_law`
+      - `nieces_nephews_in_law`
+      - `cousins_in_law`
+    - Derive these as one marriage hop only:
+      - `parents_in_law` = spouse's parents
+      - `siblings_in_law` = spouse's siblings plus sibling spouses
+      - `children_in_law` = children's spouses
+      - `aunts_uncles_in_law` = spouses of aunts/uncles
+      - `nieces_nephews_in_law` = spouses of nieces/nephews
+      - `cousins_in_law` = spouses of cousins
+    - Do not derive recursive in-law networks in this pass (`in-laws of in-laws`, spouse-family of cousin-spouse, etc.).
+  - API/runtime changes:
+    - Extend `RelationshipCategory` constants/labels and request validation to accept the new categories.
+    - Update family-graph derivation to emit explicit in-law hits while keeping current blood-line hit logic unchanged.
+    - Treat the new in-law categories as `not_applicable` for lineage selection in v1.
+    - Ensure access preview and recompute continue to evaluate defaults/exceptions correctly against the expanded category set without schema changes.
+  - UI changes:
+    - Preferences:
+      - Add one logical default row for each new in-law category in both subscription and sharing defaults.
+      - Keep the lineage selector for these categories non-side-specific in v1.
+    - Tree:
+      - Surface the new categories in a distinct in-law section/column rather than silently mixing them into blood-line buckets.
+    - Catalog/preview:
+      - Show the explicit in-law relationship labels wherever relationship hits are listed.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Supported in-laws appear in the access catalog and tree for users with applicable relationship paths.
+    - New in-law categories can be saved in defaults and survive reload.
+    - Preview and recompute treat explicit in-law categories as valid relationship hits.
+    - Existing blood-line categories and side-specific behavior still work unchanged.
+  - Completion criteria:
+    - In-laws are represented explicitly in the Famailink relationship model.
+    - `Both Sides` on blood relatives no longer has to carry the burden of implying in-laws.
+    - Users can set defaults for supported in-law categories without ambiguity.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.
