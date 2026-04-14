@@ -7247,3 +7247,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the approved liberal inclusive default posture decision to `designchoices.md`.
+
+## 2026-04-13 (Famailink deployment split runbook)
+
+- `Change`: Documented the canonical deployment and verification path for the isolated `famailink-mvp` project, including the correct app root, env requirements, deploy command, post-deploy checks, and rollback guidance. Added a short production-deploy pointer to the Famailink README.
+- `Type`: Documentation, Ops runbook
+- `Why`: Root cause was operational ambiguity. The Famailink deploy path had been working, but the exact project/root-dir flow lived in chat history and memory instead of a canonical written runbook.
+- `Files`:
+  - `TODO.md`
+  - `docs/deploy-runbook.md`
+  - `famailink/README.md`
+- `Data Changes`: None.
+- `Verify`:
+  - Runbook project name matches `famailink/.vercel/project.json`.
+  - Documented env list matches Famailink runtime requirements.
+  - Documented deploy command matches the successful production deploy path used for `famailink-mvp`.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change.

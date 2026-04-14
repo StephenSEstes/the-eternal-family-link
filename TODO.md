@@ -23,9 +23,11 @@ I will update this list as we add, complete, or remove work.
   - Completed: Tree lab now links directly to the new preferences surface.
   Progress 2026-04-13:
   - Completed: Tree lab now reads back persisted recompute state (`profile_visibility_map`, `profile_subscription_map`, and recompute summary) so saved subscription/share outcomes are visible directly on the tree surface.
+  - Completed: Famailink now represents one-hop in-law categories explicitly across derivation, preferences, preview/catalog, and tree rendering.
+  - Completed: Famailink now defaults broadly inclusive in the MVP, with synthesized broad defaults and person exceptions positioned as the primary narrowing tool.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
-  Agreed implementation plan 2026-04-13 (Famailink in-law category expansion):
+  Agreed implementation plan 2026-04-13 (Famailink in-law category expansion) [Completed]:
   - Scope:
     - Extend the Famailink relationship model to include explicit one-hop in-law categories in the tree, catalog, preview, defaults, and recompute/readback surfaces.
     - Preserve the existing blood-line categories and their maternal/paternal side behavior.
@@ -74,7 +76,7 @@ I will update this list as we add, complete, or remove work.
     - In-laws are represented explicitly in the Famailink relationship model.
     - `Both Sides` on blood relatives no longer has to carry the burden of implying in-laws.
     - Users can set defaults for supported in-law categories without ambiguity.
-  Agreed implementation plan 2026-04-13 (Famailink inclusive-defaults UX pass):
+  Agreed implementation plan 2026-04-13 (Famailink inclusive-defaults UX pass) [Completed]:
   - Scope:
     - Keep the current Famailink model intact: tree visibility, subscription, and sharing remain separate; relationship categories and person exceptions remain in place.
     - Change the default posture so the MVP behaves broadly inclusive when no explicit rows exist.
@@ -111,6 +113,30 @@ I will update this list as we add, complete, or remove work.
     - Famailink behaves liberally inclusive by default in the MVP.
     - Users can narrow behavior primarily through person exceptions without first opting broad categories in one by one.
     - The preferences copy makes the intended broad-default mental model clear.
+  Agreed implementation plan 2026-04-13 (Famailink deployment split documentation):
+  - Scope:
+    - Document the repeatable deployment and verification path for the isolated `famailink-mvp` Vercel project.
+    - Make the split between the legacy app and Famailink explicit so future deploys do not target the wrong project/root.
+    - Keep this pass documentation-only; no runtime or schema changes.
+  - Root cause:
+    - Famailink has been deployed through an isolated project/root flow, but the exact procedure currently lives in chat history and local knowledge rather than a canonical runbook.
+    - Without a written runbook, the highest near-term risk is project/root-dir drift or accidental deployment to the wrong target.
+  - Documentation changes:
+    - Update the shared deploy runbook with a Famailink-specific section that covers:
+      - Vercel project name and app root
+      - required environment variables for Famailink
+      - local pre-deploy checks
+      - production deploy command from the correct working directory
+      - post-deploy verification checklist for `/login`, `/tree`, and `/preferences`
+      - rollback guidance using Vercel deployment history or git revert on `famailink-mvp`
+    - Update the Famailink README with a short production deployment section that points to the canonical runbook.
+  - Validation checks:
+    - The documented project name matches `.vercel/project.json` under `famailink/`.
+    - The documented env list matches Famailink runtime requirements.
+    - The deploy command matches the working deploy path already used successfully for `famailink-mvp`.
+  - Completion criteria:
+    - A future deploy can be executed correctly from the written runbook without relying on memory or chat history.
+    - The isolated Famailink deployment path is clearly separated from the legacy app deployment path.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

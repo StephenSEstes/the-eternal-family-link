@@ -45,6 +45,17 @@ npm run lint --prefix famailink
 npm run build --prefix famailink
 ```
 
+## Production Deploy
+
+- Vercel project: `famailink-mvp`
+- Deploy from app root: `C:\Users\steph\the-eternal-family-link\famailink`
+
+```powershell
+vercel --prod --yes
+```
+
+Use [docs/deploy-runbook.md](C:/Users/steph/the-eternal-family-link/docs/deploy-runbook.md) as the canonical Famailink deploy and verification runbook.
+
 ## Current routes
 
 - `/login`
