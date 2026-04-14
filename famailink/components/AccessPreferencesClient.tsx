@@ -260,7 +260,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         method: "PUT",
         body: JSON.stringify(subscriptionDefaults),
       });
-      setMessage("Subscription defaults saved.");
+      setMessage("Subscription defaults saved and applied.");
       setLoadVersion((current) => current + 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save subscription defaults.");
@@ -277,7 +277,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         method: "PUT",
         body: JSON.stringify(dedupeByTarget(subscriptionExceptions)),
       });
-      setMessage("Subscription person exceptions saved.");
+      setMessage("Subscription person exceptions saved and applied.");
       setLoadVersion((current) => current + 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save subscription exceptions.");
@@ -294,7 +294,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
         method: "PUT",
         body: JSON.stringify(shareDefaults),
       });
-      setMessage("Sharing defaults saved.");
+      setMessage("Sharing defaults saved and applied.");
       setLoadVersion((current) => current + 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save sharing defaults.");
@@ -320,7 +320,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           })),
         ),
       });
-      setMessage("Sharing person exceptions saved.");
+      setMessage("Sharing person exceptions saved and applied.");
       setLoadVersion((current) => current + 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save sharing exceptions.");
@@ -540,7 +540,7 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
               <thead>
                 <tr>
                   <th>Relationship</th>
-                  <th>Applies To</th>
+                  <th>Family Side</th>
                   <th>Vitals</th>
                   <th>Stories</th>
                   <th>Media</th>

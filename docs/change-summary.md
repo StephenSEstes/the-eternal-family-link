@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-13 (Famailink preference saves now apply immediately)
+
+- `Date`: 2026-04-13
+- `Change`: Updated Famailink preference save routes so saving subscription or sharing defaults/exceptions immediately runs recompute and applies the new derived map state that `/tree` reads back. Also replaced the unclear sharing-side label `Applies` with `Not Side-Specific` and renamed the sharing column header to `Family Side`.
+- `Type`: UI | API
+- `Why`: Root cause was a mismatch between the save path and the readback path. `/preferences` saved source rule tables only, while `/tree` read `profile_subscription_map` and `profile_visibility_map`, which changed only after recompute. That made successful saves appear to do nothing. Separately, the `Applies` label was unclear and did not explain the non-side-specific case.
+- `Files`: `changeHistory.md`, `docs/change-summary.md`, `famailink/app/api/access/sharing/defaults/route.ts`, `famailink/app/api/access/sharing/exceptions/people/route.ts`, `famailink/app/api/access/subscription/defaults/route.ts`, `famailink/app/api/access/subscription/exceptions/people/route.ts`, `famailink/components/AccessPreferencesClient.tsx`, `famailink/lib/access/types.ts`
+- `Data Changes`: No schema change. Saving preferences now also refreshes the existing derived rows in `profile_subscription_map` and `profile_visibility_map`.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Saving a preference on `/preferences` returns success and the new state is immediately reflected on `/tree` without a separate manual recompute step.
+  - Sharing defaults now show `Family Side` / `Not Side-Specific` wording instead of `Applies`.
+- `Rollback Notes`: Revert this change to restore manual recompute as a separate step after editing preferences.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-13 (Famailink tree reads persisted recompute state)
 
 - `Date`: 2026-04-13

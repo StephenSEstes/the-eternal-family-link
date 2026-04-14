@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-13: Famailink preference saves now run recompute immediately, so `/tree` reflects saved subscription/share changes without a separate manual recompute step. Also clarified the sharing-side labels. See `docs/change-summary.md`.
 - 2026-04-13: Tree lab now reads the persisted Famailink recompute state and shows saved subscription/share outcomes directly on tree cards, plus the latest recompute summary. See `docs/change-summary.md`.
 - 2026-04-12: Reworked Famailink defaults so each relationship category is edited once, with a single side selection for side-specific relationships instead of overlapping `both` / `maternal` / `paternal` rows. See `docs/change-summary.md`.
 - 2026-04-12: Fixed Famailink local login against OCI so populated `user_access.password_hash` rows are recognized correctly under Oracle semantics. See `docs/change-summary.md`.

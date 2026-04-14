@@ -4,7 +4,7 @@ export const DEFAULT_LINEAGE_SELECTIONS = ["none", "not_applicable", "both", "ma
 export type DefaultLineageSelection = (typeof DEFAULT_LINEAGE_SELECTIONS)[number];
 export const DEFAULT_LINEAGE_SELECTION_LABELS: Record<DefaultLineageSelection, string> = {
   none: "None",
-  not_applicable: "Applies",
+  not_applicable: "Not Side-Specific",
   both: "Both Sides",
   maternal: "Maternal",
   paternal: "Paternal",

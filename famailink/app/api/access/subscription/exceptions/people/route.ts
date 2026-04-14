@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { runViewerRecompute } from "@/lib/access/recompute";
 import { listSubscriptionPersonExceptions, replaceSubscriptionPersonExceptions } from "@/lib/access/store";
 import { parseSubscriptionPersonExceptionRows } from "@/lib/access/validation";
 import { requireRouteSession } from "@/lib/auth/guards";
@@ -15,15 +16,28 @@ export async function PUT(request: NextRequest) {
   const { session, unauthorized } = requireRouteSession(request);
   if (!session) return unauthorized;
 
+  const payload = await request.json().catch(() => null);
+  let rows: ReturnType<typeof parseSubscriptionPersonExceptionRows>;
   try {
-    const payload = await request.json().catch(() => null);
-    const rows = parseSubscriptionPersonExceptionRows(payload);
-    await replaceSubscriptionPersonExceptions(session.personId, rows);
-    return NextResponse.json({ ok: true });
+    rows = parseSubscriptionPersonExceptionRows(payload);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "invalid_payload" },
       { status: 400 },
+    );
+  }
+
+  try {
+    await replaceSubscriptionPersonExceptions(session.personId, rows);
+    const recompute = await runViewerRecompute({
+      viewerPersonId: session.personId,
+      reason: "subscription_exceptions_saved",
+    });
+    return NextResponse.json({ ok: true, recompute });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "save_failed" },
+      { status: 500 },
     );
   }
 }
