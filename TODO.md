@@ -168,6 +168,46 @@ I will update this list as we add, complete, or remove work.
     - Famailink local login is more user friendly.
     - Famailink users have a self-service password reset path compatible with the current local-auth model.
     - The reset flow stays isolated to Famailink without reintroducing mixed-auth behavior.
+  Agreed implementation plan 2026-04-13 (Famailink tree-driven preference modal):
+  - Scope:
+    - Add a tree-driven edit path so clicking a relative on `/tree` opens a modal for managing that relative's subscription and sharing preferences.
+    - Keep the existing Famailink defaults/exceptions storage model intact in this pass.
+    - Preserve `/preferences` as the full-table fallback surface for broader edits and recompute controls.
+  - Root cause:
+    - The current preferences experience is table-first and abstract, even though the product intent is relationship-centered and inclusive.
+    - Users naturally think in terms of real relatives in the tree, not in terms of rule rows and exception tables.
+    - The current tree is a readback surface only, so the most intuitive place to act on a relative cannot yet be used to edit that relative.
+  - UI changes:
+    - Make relative cards on `/tree` clickable.
+    - Open a modal showing:
+      - the selected person's name and relationship badges
+      - current saved subscription/sharing readback
+      - person-level subscription control (`follow relationship default`, `always subscribe`, `do not subscribe`)
+      - person-level sharing control (`follow relationship default`, `share all`, `name only`, `custom scopes`)
+      - the matching relationship category/default context with a shortcut back to `/preferences` for broader relationship-wide editing
+    - Keep the modal person-first rather than exposing raw exception-table language.
+  - Runtime/API changes:
+    - Reuse existing Famailink defaults and person-exception routes:
+      - `/api/access/subscription/defaults`
+      - `/api/access/sharing/defaults`
+      - `/api/access/subscription/exceptions/people`
+      - `/api/access/sharing/exceptions/people`
+    - Save from the modal by updating the existing person-exception collections and reusing the current recompute-on-save behavior.
+    - Do not add new schema or new preference tables in this pass.
+  - Implementation notes:
+    - Keep tree counts, saved readback badges, and recompute summary intact.
+    - Refresh the tree after a modal save so the badges reflect the saved derived rows immediately.
+    - Keep the existing `/preferences` screen for full defaults/exceptions management until the tree-driven flow proves out.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Clicking a visible relative card opens the modal.
+    - Saving a person-level subscription or sharing choice updates the tree badges after refresh.
+    - The modal keeps the distinction clear between this-person exceptions and broader relationship defaults.
+  - Completion criteria:
+    - Famailink tree cards are directly actionable.
+    - A user can manage one relative's subscription/sharing from the tree without navigating into the table-heavy preferences screen.
+    - The existing defaults/exceptions model remains valid underneath the simpler tree-driven UI.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

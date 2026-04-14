@@ -7292,3 +7292,21 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change.
+
+## 2026-04-13 (Famailink tree-driven preference modal)
+
+- `Change`: Made Famailink tree cards directly actionable. Clicking a relative on `/tree` now opens a modal that shows that person's relationship context, current saved subscription/sharing readback, relationship-group defaults for that category, and person-only subscription/sharing overrides. The tree refreshes after save so the badges reflect the updated derived rows.
+- `Type`: UX, Preferences workflow, Tree interaction
+- `Why`: Root cause was a mismatch between the product mental model and the existing administration surface. Famailink preferences were table-first and abstract, even though users think in terms of real relatives in the tree rather than raw rule rows and exception lists.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/app/tree/page.tsx`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/app/globals.css`
+- `Data Changes`: None. Existing Famailink defaults and person-exception routes/tables are reused unchanged.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the approved tree-first person preference surface decision to `designchoices.md`.

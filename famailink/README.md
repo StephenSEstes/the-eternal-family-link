@@ -9,6 +9,7 @@ This is the clean Famailink MVP app track.
 - self-service local password reset
 - signed-cookie session
 - relationship-driven tree lab page
+- tree-card modal editing for one-relative subscription/sharing changes
 - authenticated preferences page
 - subscription defaults editor
 - subscription person exception editor

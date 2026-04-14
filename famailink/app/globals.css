@@ -36,7 +36,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -191,6 +192,12 @@ input {
   border-radius: 16px;
   background: var(--paper);
   border: 1px solid rgba(217, 205, 187, 0.9);
+}
+
+.person-card-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
 }
 
 .person-name {
@@ -532,6 +539,76 @@ input {
   line-height: 1.45;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(31, 26, 20, 0.38);
+}
+
+.modal-card {
+  width: min(860px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 250, 242, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 48px rgba(31, 26, 20, 0.22);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.modal-meta {
+  margin-top: 10px;
+}
+
+.modal-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.modal-section {
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--paper);
+  border: 1px solid rgba(217, 205, 187, 0.9);
+}
+
+.modal-section-head {
+  margin-bottom: 12px;
+}
+
+.modal-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.modal-scope-block,
+.modal-note {
+  grid-column: 1 / -1;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-error {
+  margin: 0 0 14px;
+}
+
 @media (max-width: 1080px) {
   .tree-layout {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -563,7 +640,16 @@ input {
 
   .scope-grid,
   .preview-grid,
-  .scope-results-grid {
+  .scope-results-grid,
+  .modal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modal-overlay {
+    padding: 16px;
+  }
+
+  .modal-head {
+    flex-direction: column;
   }
 }

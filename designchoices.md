@@ -473,3 +473,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep deny-by-absence runtime behavior; add presets instead of changing the default posture; hide rows to simplify the screen.
 - `Impact`: Subscription defaults synthesize broad coverage by relationship, sharing defaults synthesize broad baseline scope visibility, and the preferences UI should present exceptions as the normal way to exclude one person without narrowing a whole category.
 - `Follow-up`: Revisit whether some sharing scopes should become less broad by default only if real usage shows the current MVP default is too open.
+
+- `Area`: Famailink preference administration surface
+- `Decision`: The Famailink tree is the primary person-first preference surface for one-relative-at-a-time changes. Clicking a relative on the tree opens a modal for relationship-default context plus person-level subscription/sharing overrides, while `/preferences` remains the full-table editor for broader management.
+- `Reason`: Users think in terms of real relatives and family structure more naturally than raw rule rows. A tree-driven modal keeps the existing rules model intact while making the most common edits more intuitive.
+- `Alternatives Considered`: Keep preferences table-first only; replace the full preferences screen entirely with a tree-only editor in the MVP.
+- `Impact`: `/tree` is no longer readback-only. It now supports direct preference editing for a selected relative without changing the underlying defaults/exceptions storage model.
+- `Follow-up`: If the tree-driven flow proves out, revisit how much of the table-heavy preferences screen still needs to remain first-class.
