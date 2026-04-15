@@ -615,6 +615,10 @@ select {
   margin-top: 18px;
 }
 
+.rules-tree-draft-note {
+  margin: 10px 0 0;
+}
+
 .rules-tree-level {
   position: relative;
   display: grid;
@@ -640,16 +644,47 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
+}
+
+.rules-tree-row-center {
+  align-items: stretch;
 }
 
 .rules-node {
-  width: min(270px, 100%);
-  padding: 14px;
+  width: min(210px, 100%);
+  min-height: 150px;
+  padding: 14px 13px;
   border-radius: 18px;
   background: rgba(255, 250, 242, 0.95);
   border: 1px solid rgba(217, 205, 187, 0.9);
   box-shadow: 0 10px 24px rgba(61, 47, 35, 0.08);
+}
+
+.rules-node-button {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rules-node-button:disabled {
+  cursor: default;
+}
+
+.rules-node-kicker {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rules-node-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .rules-node-anchor,
@@ -669,12 +704,18 @@ select {
   background: rgba(246, 241, 232, 0.86);
 }
 
+.rules-node-anchor .person-name,
+.rules-node-placeholder .person-name {
+  text-align: center;
+}
+
 .rules-node-section + .rules-node-section {
   margin-top: 12px;
 }
 
 .rules-node-note {
-  margin: 8px 0 0;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .rules-scope-grid {
@@ -693,6 +734,10 @@ select {
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(217, 205, 187, 0.8);
   font-size: 14px;
+}
+
+.rules-modal-card {
+  width: min(620px, 100%);
 }
 
 @media (max-width: 1080px) {
@@ -738,5 +783,9 @@ select {
 
   .modal-head {
     flex-direction: column;
+  }
+
+  .rules-node {
+    width: min(100%, 220px);
   }
 }

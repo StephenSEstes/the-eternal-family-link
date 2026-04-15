@@ -34,6 +34,12 @@ type ShareDefaultDraft = Pick<
   | "shareConversations"
 >;
 
+type RuleEditorState = {
+  category: RelationshipCategory;
+  subscription: SubscriptionDefaultDraft;
+  share: ShareDefaultDraft;
+};
+
 type RuleNode =
   | { kind: "anchor"; id: string; label: string; detail: string }
   | { kind: "placeholder"; id: string; label: string; detail: string }
@@ -62,14 +68,9 @@ const RULE_TREE_LEVELS: Array<{ title: string; nodes: RuleNode[] }> = [
   {
     title: "Center",
     nodes: [
-      { kind: "anchor", id: "self", label: "You", detail: "Anchor for the relationship rules tree" },
-      { kind: "relationship", category: "spouse" },
-    ],
-  },
-  {
-    title: "Peers",
-    nodes: [
       { kind: "relationship", category: "siblings" },
+      { kind: "anchor", id: "self", label: "You", detail: "Family rules center" },
+      { kind: "relationship", category: "spouse" },
       { kind: "relationship", category: "siblings_in_law" },
     ],
   },
@@ -94,6 +95,15 @@ const RULE_TREE_LEVELS: Array<{ title: string; nodes: RuleNode[] }> = [
     ],
   },
 ];
+
+const SHARE_SCOPE_FIELDS = ["shareVitals", "shareStories", "shareMedia", "shareConversations"] as const;
+
+const SHARE_SCOPE_LABELS: Record<(typeof SHARE_SCOPE_FIELDS)[number], string> = {
+  shareVitals: "Vitals",
+  shareStories: "Stories",
+  shareMedia: "Media",
+  shareConversations: "Conversations",
+};
 
 function ruleKey(relationshipCategory: RelationshipCategory) {
   return relationshipCategory;
@@ -135,6 +145,39 @@ function buildShareDefaults(rows: ShareDefaultRule[]): ShareDefaultDraft[] {
   });
 }
 
+function enabledScopeLabels(row: ShareDefaultDraft) {
+  return SHARE_SCOPE_FIELDS.filter((field) => row[field]).map((field) => SHARE_SCOPE_LABELS[field]);
+}
+
+function sharingSummary(row: ShareDefaultDraft) {
+  if (row.lineageSelection === "none") {
+    return {
+      headline: "No sharing",
+      detail: "Name and relationship only",
+    };
+  }
+
+  const labels = enabledScopeLabels(row);
+  if (labels.length === 0) {
+    return {
+      headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
+      detail: "Name and relationship only",
+    };
+  }
+
+  if (labels.length === SHARE_SCOPE_FIELDS.length) {
+    return {
+      headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
+      detail: "All content",
+    };
+  }
+
+  return {
+    headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
+    detail: labels.join(", "),
+  };
+}
+
 async function fetchJson(url: string, init?: RequestInit) {
   const response = await fetch(url, {
     ...init,
@@ -154,8 +197,11 @@ async function fetchJson(url: string, init?: RequestInit) {
 export function RulesTreeClient({ session }: { session: SessionInfo }) {
   const [subscriptionDefaults, setSubscriptionDefaults] = useState<SubscriptionDefaultDraft[]>(buildSubscriptionDefaults([]));
   const [shareDefaults, setShareDefaults] = useState<ShareDefaultDraft[]>(buildShareDefaults([]));
+  const [editor, setEditor] = useState<RuleEditorState | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [hasDraftChanges, setHasDraftChanges] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -163,7 +209,7 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
     let isActive = true;
 
     void (async () => {
-      setBusy(true);
+      setLoading(true);
       setError("");
       try {
         const [subscriptionPayload, sharingPayload] = await Promise.all([
@@ -176,13 +222,15 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           buildSubscriptionDefaults((subscriptionPayload.rows as SubscriptionDefaultRule[] | undefined) ?? []),
         );
         setShareDefaults(buildShareDefaults((sharingPayload.rows as ShareDefaultRule[] | undefined) ?? []));
+        setEditor(null);
+        setHasDraftChanges(false);
       } catch (loadError) {
         if (isActive) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load rules tree.");
         }
       } finally {
         if (isActive) {
-          setBusy(false);
+          setLoading(false);
         }
       }
     })();
@@ -192,8 +240,44 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
     };
   }, [loadVersion]);
 
+  function subscriptionRowFor(category: RelationshipCategory) {
+    return subscriptionDefaults.find((row) => row.relationshipCategory === category) ?? null;
+  }
+
+  function shareRowFor(category: RelationshipCategory) {
+    return shareDefaults.find((row) => row.relationshipCategory === category) ?? null;
+  }
+
+  function openEditor(category: RelationshipCategory) {
+    const subscription = subscriptionRowFor(category);
+    const share = shareRowFor(category);
+    if (!subscription || !share) return;
+
+    setEditor({
+      category,
+      subscription: { ...subscription },
+      share: { ...share },
+    });
+  }
+
+  function applyEditorChanges() {
+    if (!editor) return;
+
+    setSubscriptionDefaults((current) =>
+      current.map((row) =>
+        row.relationshipCategory === editor.category ? { ...row, ...editor.subscription } : row,
+      ),
+    );
+    setShareDefaults((current) =>
+      current.map((row) => (row.relationshipCategory === editor.category ? { ...row, ...editor.share } : row)),
+    );
+    setHasDraftChanges(true);
+    setMessage("");
+    setEditor(null);
+  }
+
   async function saveAllDefaults() {
-    setBusy(true);
+    setSaving(true);
     setError("");
     setMessage("");
     try {
@@ -208,19 +292,12 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
         }),
       ]);
       setMessage("Relationship defaults saved and applied.");
+      setHasDraftChanges(false);
       setLoadVersion((current) => current + 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save relationship defaults.");
-      setBusy(false);
+      setSaving(false);
     }
-  }
-
-  function subscriptionRowFor(category: RelationshipCategory) {
-    return subscriptionDefaults.find((row) => row.relationshipCategory === category) ?? null;
-  }
-
-  function shareRowFor(category: RelationshipCategory) {
-    return shareDefaults.find((row) => row.relationshipCategory === category) ?? null;
   }
 
   return (
@@ -230,12 +307,13 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           <p className="eyebrow">Famailink</p>
           <h1 className="title">Rules Tree</h1>
           <p className="lead">
-            This is the generic relationship rules tree for broad defaults. Use it to decide how whole relationship
-            groups should be subscribed and shared before you narrow anything at the person level.
+            Use this relationship tree for broad defaults. Tap a relationship group to adjust subscription and sharing,
+            then save when the whole tree looks right.
           </p>
           <p className="muted">
             Signed in as <strong>{session.username}</strong> on <code>{session.personId}</code>.
           </p>
+          {hasDraftChanges ? <p className="muted rules-tree-draft-note">Draft changes are ready to save.</p> : null}
         </div>
         <div className="masthead-actions">
           <Link className="secondary-button" href="/tree">
@@ -248,12 +326,12 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
             className="secondary-button"
             type="button"
             onClick={() => setLoadVersion((current) => current + 1)}
-            disabled={busy}
+            disabled={loading || saving}
           >
             Reload
           </button>
-          <button className="primary-button" type="button" onClick={() => void saveAllDefaults()} disabled={busy}>
-            {busy ? "Saving..." : "Save Defaults"}
+          <button className="primary-button" type="button" onClick={() => void saveAllDefaults()} disabled={loading || saving}>
+            {saving ? "Saving..." : "Save Defaults"}
           </button>
         </div>
       </header>
@@ -264,12 +342,12 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
       <section className="panel">
         <h2>How To Use This View</h2>
         <p className="muted">
-          This route edits relationship defaults only. It is the broad-rules surface. Use the person tree when one
-          specific relative needs to be handled differently.
+          This route is for broad relationship defaults only. Open a relationship group, adjust its rule in the popout,
+          and save when you are ready to apply the current draft.
         </p>
         <p className="muted">
-          Unsupported future categories are shown only as placeholders. For example, <strong>Grandparents-In-Law</strong>
-          is not editable yet because it is not modeled in Famailink today.
+          Unsupported future categories stay visible only as placeholders. <strong>Grandparents-In-Law</strong> is shown
+          for structure, but it is not modeled or editable yet.
         </p>
       </section>
 
@@ -278,7 +356,7 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           <div key={level.title} className="rules-tree-level">
             {levelIndex > 0 ? <div className="rules-tree-connector" aria-hidden="true" /> : null}
             <p className="rules-tree-title">{level.title}</p>
-            <div className="rules-tree-row">
+            <div className={`rules-tree-row${level.title === "Center" ? " rules-tree-row-center" : ""}`}>
               {level.nodes.map((node) => {
                 if (node.kind === "anchor") {
                   return (
@@ -302,96 +380,168 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                 const shareRow = shareRowFor(node.category);
                 if (!subscriptionRow || !shareRow) return null;
 
+                const sharing = sharingSummary(shareRow);
+
                 return (
-                  <article key={node.category} className="rules-node">
-                    <p className="person-name">{RELATIONSHIP_LABELS[node.category]}</p>
-                    <div className="rules-node-section">
-                      <label className="field">
-                        <span className="field-label">Subscription</span>
-                        <select
-                          className="input"
-                          value={subscriptionRow.lineageSelection}
-                          onChange={(event) =>
-                            setSubscriptionDefaults((current) =>
-                              current.map((row) =>
-                                row.relationshipCategory === node.category
-                                  ? { ...row, lineageSelection: event.target.value as DefaultLineageSelection }
-                                  : row,
-                              ),
-                            )
-                          }
-                        >
-                          {lineageSelectionOptions(node.category).map((option) => (
-                            <option key={option} value={option}>
-                              {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="rules-node-section">
-                      <label className="field">
-                        <span className="field-label">Sharing Side</span>
-                        <select
-                          className="input"
-                          value={shareRow.lineageSelection}
-                          onChange={(event) =>
-                            setShareDefaults((current) =>
-                              current.map((row) =>
-                                row.relationshipCategory === node.category
-                                  ? {
-                                      ...row,
-                                      lineageSelection: event.target.value as DefaultLineageSelection,
-                                      ...(event.target.value === "none"
-                                        ? {
-                                            shareVitals: false,
-                                            shareStories: false,
-                                            shareMedia: false,
-                                            shareConversations: false,
-                                          }
-                                        : {}),
-                                    }
-                                  : row,
-                              ),
-                            )
-                          }
-                        >
-                          {lineageSelectionOptions(node.category).map((option) => (
-                            <option key={option} value={option}>
-                              {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="rules-scope-grid">
-                        {(["shareVitals", "shareStories", "shareMedia", "shareConversations"] as const).map((field) => (
-                          <label key={field} className="rules-scope-pill">
-                            <input
-                              type="checkbox"
-                              checked={shareRow[field]}
-                              disabled={shareRow.lineageSelection === "none"}
-                              onChange={(event) =>
-                                setShareDefaults((current) =>
-                                  current.map((row) =>
-                                    row.relationshipCategory === node.category
-                                      ? { ...row, [field]: event.target.checked }
-                                      : row,
-                                  ),
-                                )
-                              }
-                            />
-                            {field.replace("share", "")}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </article>
+                  <button
+                    key={node.category}
+                    type="button"
+                    className="rules-node rules-node-button"
+                    onClick={() => openEditor(node.category)}
+                    disabled={loading || saving}
+                  >
+                    <span className="rules-node-kicker">Tap to edit</span>
+                    <span className="person-name">{RELATIONSHIP_LABELS[node.category]}</span>
+                    <span className="rules-node-summary">
+                      <span className="badge state subscribed">
+                        Subscribe: {DEFAULT_LINEAGE_SELECTION_LABELS[subscriptionRow.lineageSelection]}
+                      </span>
+                      <span className="badge state shared">Share: {sharing.headline}</span>
+                    </span>
+                    <span className="muted rules-node-note">{sharing.detail}</span>
+                  </button>
                 );
               })}
             </div>
           </div>
         ))}
       </section>
+
+      {editor ? (
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-card rules-modal-card" role="dialog" aria-modal="true" aria-labelledby="rules-editor-title">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Relationship Default</p>
+                <h2 id="rules-editor-title">{RELATIONSHIP_LABELS[editor.category]}</h2>
+                <p className="muted">
+                  Change the broad default for this relationship group. Person-by-person exceptions still belong on the
+                  person tree.
+                </p>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setEditor(null)} disabled={saving}>
+                Cancel
+              </button>
+            </div>
+
+            <div className="modal-sections">
+              <section className="modal-section">
+                <div className="modal-section-head">
+                  <h3>Subscription</h3>
+                  <p className="muted">This controls whether you subscribe to updates from this relationship group.</p>
+                </div>
+                <label className="field">
+                  <span className="field-label">Default subscription</span>
+                  <select
+                    className="input"
+                    value={editor.subscription.lineageSelection}
+                    onChange={(event) =>
+                      setEditor((current) =>
+                        current
+                          ? {
+                              ...current,
+                              subscription: {
+                                ...current.subscription,
+                                lineageSelection: event.target.value as DefaultLineageSelection,
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {lineageSelectionOptions(editor.category).map((option) => (
+                      <option key={option} value={option}>
+                        {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </section>
+
+              <section className="modal-section">
+                <div className="modal-section-head">
+                  <h3>Sharing</h3>
+                  <p className="muted">This controls what content is broadly shared with this relationship group.</p>
+                </div>
+                <div className="modal-grid">
+                  <label className="field">
+                    <span className="field-label">Sharing side</span>
+                    <select
+                      className="input"
+                      value={editor.share.lineageSelection}
+                      onChange={(event) =>
+                        setEditor((current) =>
+                          current
+                            ? {
+                                ...current,
+                                share: {
+                                  ...current.share,
+                                  lineageSelection: event.target.value as DefaultLineageSelection,
+                                  ...(event.target.value === "none"
+                                    ? {
+                                        shareVitals: false,
+                                        shareStories: false,
+                                        shareMedia: false,
+                                        shareConversations: false,
+                                      }
+                                    : {}),
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      {lineageSelectionOptions(editor.category).map((option) => (
+                        <option key={option} value={option}>
+                          {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="modal-scope-block">
+                    <p className="field-label">Shared content</p>
+                    <div className="rules-scope-grid">
+                      {SHARE_SCOPE_FIELDS.map((field) => (
+                        <label key={field} className="rules-scope-pill">
+                          <input
+                            type="checkbox"
+                            checked={editor.share[field]}
+                            disabled={editor.share.lineageSelection === "none"}
+                            onChange={(event) =>
+                              setEditor((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      share: {
+                                        ...current.share,
+                                        [field]: event.target.checked,
+                                      },
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                          {SHARE_SCOPE_LABELS[field]}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="modal-actions">
+              <button className="secondary-button" type="button" onClick={() => setEditor(null)} disabled={saving}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={applyEditorChanges} disabled={saving}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-14: Refined Famailink `/rules-tree` into a compact defaults surface with small summary nodes, a center row that keeps siblings alongside `You` and `Spouse`, and click-to-edit modal popouts instead of inline editors on every relationship card. See `docs/change-summary.md`.
 - 2026-04-14: Tightened Famailink tree/preferences wording so graph-wide counts are explicit, pending derived states are named clearly, and the MVP reads less like an internal diagnostic surface. See `docs/change-summary.md`.
 - 2026-04-13: Fixed Famailink OCI family reads so valid `people` and `relationships` rows load again; tree/catalog no longer drop all relatives because of Oracle empty-string filter semantics. See `docs/change-summary.md`.
 - 2026-04-13: Famailink preference saves now run recompute immediately, so `/tree` reflects saved subscription/share changes without a separate manual recompute step. Also clarified the sharing-side labels. See `docs/change-summary.md`.

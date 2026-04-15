@@ -245,6 +245,45 @@ I will update this list as we add, complete, or remove work.
     - Famailink has a relationship-first graphical defaults surface.
     - Broad subscription/sharing rules can be tested without using the defaults tables directly.
     - The existing defaults model remains unchanged underneath the new UI.
+  Agreed implementation plan 2026-04-14 (Famailink compact rules-tree modal UX):
+  - Scope:
+    - Refine `/rules-tree` so the main relationship tree is a compact navigation surface rather than an always-open editor.
+    - Keep the existing Famailink defaults APIs and storage model unchanged.
+    - Preserve `/tree` for person-level overrides and `/preferences` as the full table fallback.
+  - Root cause:
+    - The current `/rules-tree` renders full selectors and sharing toggles inline on every relationship node.
+    - That makes the screen too tall and dense, especially on mobile, and weakens the intended tree-navigation mental model.
+    - Peer relationships (`Siblings`, `Siblings-In-Law`) are visually separated from `You` / `Spouse`, which makes the center of the family structure harder to scan quickly.
+  - UI changes:
+    - Convert supported relationship nodes on `/rules-tree` into compact summary cards/buttons.
+    - Move peer relationships onto the same center row as `You` and `Spouse`.
+    - Keep placeholders non-editable and clearly marked.
+    - Clicking an editable relationship node opens a small modal popout that contains:
+      - subscription default selector
+      - sharing side selector
+      - sharing scope toggles
+      - concise relationship guidance
+    - Keep a route-level `Save Defaults` action for persisting the current draft across multiple node edits.
+  - Runtime/API changes:
+    - Reuse:
+      - `/api/access/subscription/defaults`
+      - `/api/access/sharing/defaults`
+    - Continue saving the same one-row-per-relationship default model; no schema or API contract changes.
+  - Implementation notes:
+    - The compact node should summarize current defaults clearly enough that users can scan the tree without opening every modal.
+    - Modal editing should update local draft state; route-level save should remain the persistence action in this pass.
+    - Mobile layout should favor fewer controls on the main surface and a narrower modal footprint.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/rules-tree` shows compact, non-inline-editable relationship nodes.
+    - `Siblings` and `Siblings-In-Law` render on the same center row as `You` and `Spouse`.
+    - Clicking an editable node opens the modal and updates draft defaults correctly.
+    - Saving still persists changes that survive reload and remain reflected on `/preferences`.
+  - Completion criteria:
+    - The rules tree is easier to scan on desktop and mobile.
+    - Editing is focused into a small modal instead of inline controls on every node.
+    - The defaults model stays unchanged underneath the refined interaction.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.
