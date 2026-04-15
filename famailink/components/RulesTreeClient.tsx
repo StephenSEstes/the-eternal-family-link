@@ -57,13 +57,7 @@ const RULE_TREE_GENERATIONS: Array<{ id: string; label: string; description: str
     description: "Oldest generation in the default tree",
     nodes: [
       { kind: "relationship", category: "grandparents", orb: "GP" },
-      {
-        kind: "placeholder",
-        id: "grandparents-in-law",
-        label: "Grandparents-In-Law",
-        detail: "Not yet modeled",
-        orb: "GI",
-      },
+      { kind: "relationship", category: "grandparents_in_law", orb: "GI" },
     ],
   },
   {
@@ -362,8 +356,8 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           generation in the middle, younger relatives below. Person-specific exceptions still belong on the person tree.
         </p>
         <p className="muted">
-          Unsupported future categories stay visible only as placeholders. <strong>Grandparents-In-Law</strong> is shown
-          for structure, but it is not modeled or editable yet.
+          This route now supports spouse-side grandparents as a real default category too, so the top generation stays
+          symmetrical on both sides of the tree.
         </p>
       </section>
 

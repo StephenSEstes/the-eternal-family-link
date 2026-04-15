@@ -30,6 +30,23 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this change to restore the earlier compact bucket-style rules-tree layout.
 - `Design Decision Change`: No design decision change.
 
+## 2026-04-14 (Famailink grandparents-in-law support)
+
+- `Date`: 2026-04-14
+- `Change`: Added `grandparents_in_law` as a real supported Famailink relationship category instead of leaving `Grandparents-In-Law` as a visual placeholder. The new category now participates in family-graph derivation, defaults, preview/readback, the generational rules tree, and the tree grouping surfaces.
+- `Type`: UI | API
+- `Why`: Root cause was a model/UI mismatch. The rules tree showed `Grandparents-In-Law` only for symmetry, but the supported category list and derivation logic stopped at `parents_in_law`, so users could see the concept without actually configuring or deriving it.
+- `Files`: `TODO.md`, `designchoices.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/lib/model/relationships.ts`, `famailink/lib/access/defaults.ts`, `famailink/lib/family/store.ts`, `famailink/components/RulesTreeClient.tsx`, `famailink/components/TreeClient.tsx`
+- `Data Changes`: No schema or data change. Existing defaults/exceptions tables are reused with the expanded relationship category set.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `Grandparents-In-Law` now appears as an editable default category instead of a placeholder.
+  - Derivation includes `grandparents_in_law` when the viewer has a spouse-grandparent path.
+  - Saving and reloading defaults preserves the `grandparents_in_law` rule.
+- `Rollback Notes`: Revert this change to restore `Grandparents-In-Law` as an unsupported placeholder.
+- `Design Decision Change`: Yes. Expanded the approved explicit in-law category set in `designchoices.md` to include `grandparents_in_law`.
+
 ## 2026-04-14 (Famailink UX clarity pass for tree and preferences)
 
 - `Date`: 2026-04-14

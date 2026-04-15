@@ -327,6 +327,38 @@ I will update this list as we add, complete, or remove work.
     - The rules tree feels like a generic family tree rather than a categorized settings page.
     - Generational relationships are visually clearer and easier to navigate.
     - The EFL tree structure and visual language are meaningfully reflected without changing the Famailink rules model.
+  Agreed implementation plan 2026-04-14 (Famailink grandparents-in-law support):
+  - Scope:
+    - Promote `Grandparents-In-Law` from a visual placeholder to a real supported Famailink relationship category.
+    - Keep the current one-hop in-law model otherwise unchanged.
+    - Reuse the existing defaults/exceptions storage and API shape; no schema changes in this pass.
+  - Root cause:
+    - The current rules tree shows `Grandparents-In-Law` only as a placeholder for visual symmetry.
+    - The supported relationship category list, default builders, and family-graph derivation do not currently include a `grandparents_in_law` category.
+    - That mismatch leaves the UI visually suggestive but functionally incomplete.
+  - Relationship-model changes:
+    - Add explicit `grandparents_in_law` to the supported Famailink relationship categories and labels.
+    - Derive `grandparents_in_law` as spouse parents' parents, limited to that explicit generation only.
+    - Keep `grandparents_in_law` non-side-specific in v1.
+  - Runtime/API changes:
+    - Extend relationship validation/default builders and any category-order helpers to include `grandparents_in_law`.
+    - Update family-graph hit derivation so a viewer with a spouse can receive `grandparents_in_law` hits for the spouse's grandparents.
+    - Ensure preview, recompute, defaults persistence, and tree/rules-tree surfaces treat `grandparents_in_law` as a first-class category without new tables.
+  - UI changes:
+    - Replace the current `Grandparents-In-Law` placeholder in `/rules-tree` with a real editable relationship node.
+    - Ensure the category also appears anywhere else editable relationship defaults are surfaced, including `/preferences`.
+    - Keep the generational placement with the grandparents row for symmetry and easier scanning.
+  - Design decision updates:
+    - Update `designchoices.md` to expand the approved explicit in-law category set so it now includes `grandparents_in_law`.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `Grandparents-In-Law` appears as a real editable category in `/rules-tree` and `/preferences`.
+    - Saving a default for `grandparents_in_law` survives reload.
+    - Derived relationship hits include `grandparents_in_law` when the viewer has a spouse-grandparent path.
+  - Completion criteria:
+    - `Grandparents-In-Law` is no longer a placeholder.
+    - Famailink supports the new in-law category consistently across derivation, defaults, preview/readback, and the rules tree.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

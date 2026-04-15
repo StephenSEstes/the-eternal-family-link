@@ -20,6 +20,7 @@ export const EDITABLE_CATEGORIES: RelationshipCategory[] = [
   "parents",
   "parents_in_law",
   "grandparents",
+  "grandparents_in_law",
   "children",
   "children_in_law",
   "grandchildren",

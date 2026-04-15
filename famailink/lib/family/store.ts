@@ -167,6 +167,9 @@ export function computeRelativeHitsForViewer(viewerPersonId: string, graph: Fami
   for (const spouseId of viewerSpouseIds) {
     for (const parentId of graph.parentsByChild.get(spouseId) ?? []) {
       addHit(hits, parentId, "parents_in_law", "not_applicable");
+      for (const grandparentId of graph.parentsByChild.get(parentId) ?? []) {
+        addHit(hits, grandparentId, "grandparents_in_law", "not_applicable");
+      }
     }
   }
 
@@ -303,6 +306,7 @@ function emptyBuckets(): Record<RelationshipCategory, FamilyBucketPerson[]> {
     parents: [],
     parents_in_law: [],
     grandparents: [],
+    grandparents_in_law: [],
     children: [],
     children_in_law: [],
     grandchildren: [],

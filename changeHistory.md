@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-14: Added `Grandparents-In-Law` as a real supported Famailink relationship category across derivation, defaults, the rules tree, and tree grouping, replacing the earlier placeholder-only treatment. See `docs/change-summary.md`.
 - 2026-04-14: Reworked Famailink `/rules-tree` into a more EFL-like generational tree, with grandparents above parents, children above grandchildren, your generation centered, cooler tree-style visuals, and modal editing retained for each relationship group. See `docs/change-summary.md`.
 - 2026-04-14: Tightened Famailink tree/preferences wording so graph-wide counts are explicit, pending derived states are named clearly, and the MVP reads less like an internal diagnostic surface. See `docs/change-summary.md`.
 - 2026-04-13: Fixed Famailink OCI family reads so valid `people` and `relationships` rows load again; tree/catalog no longer drop all relatives because of Oracle empty-string filter semantics. See `docs/change-summary.md`.

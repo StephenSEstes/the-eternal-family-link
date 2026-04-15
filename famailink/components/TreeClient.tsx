@@ -26,6 +26,7 @@ const TREE_COLUMNS: Array<{ title: string; categories: RelationshipCategory[] }>
   {
     title: "In-Laws",
     categories: [
+      "grandparents_in_law",
       "parents_in_law",
       "siblings_in_law",
       "children_in_law",
