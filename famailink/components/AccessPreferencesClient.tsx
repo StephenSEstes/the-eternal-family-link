@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { FamailinkChrome } from "@/components/FamailinkChrome";
 import {
   EDITABLE_CATEGORIES,
   defaultInclusiveLineageSelectionForCategory,
@@ -392,9 +393,10 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
 
   return (
     <main className="shell">
+      <FamailinkChrome active="administration" username={session.username} personId={session.personId} />
       <header className="masthead">
         <div>
-          <p className="eyebrow">Famailink</p>
+          <p className="eyebrow">Administration</p>
           <h1 className="title">Preferences</h1>
           <p className="lead">
             Use this page to control update subscriptions and profile sharing by relationship without changing who
@@ -405,8 +407,8 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           </p>
         </div>
         <div className="masthead-actions">
-          <Link className="secondary-button" href="/tree">
-            Back to Tree
+          <Link className="secondary-button" href="/administration">
+            Administration
           </Link>
           <Link className="secondary-button" href="/rules-tree">
             Rules Tree

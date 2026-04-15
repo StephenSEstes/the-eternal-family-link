@@ -27,6 +27,55 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink now defaults broadly inclusive in the MVP, with synthesized broad defaults and person exceptions positioned as the primary narrowing tool.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Agreed implementation plan 2026-04-14 (Famailink administration tab + EFL-style tree shell):
+  - Scope:
+    - Add a top-level `Administration` tab/surface for Famailink management tools.
+    - Move the Rules Tree into Administration navigation instead of presenting it as a peer to the main family tree.
+    - Keep `/rules-tree` and `/preferences` routes for now, but position them as administration options.
+    - Make `/rules-tree` more compact by preventing relationship-name wrapping, removing repeated instructional text from tiles, and making each generation collapsible.
+    - Rework the main `/tree` surface toward the EFL family-tree mental model: person cards, selection/navigation, and a person detail modal.
+    - Add an `Inclusion Rules` tab inside the person detail modal so the existing subscription/sharing default and person override controls live with the person details.
+    - Add EFL/Famailink branding to the login screen and add a user-circle account menu with app/build version details.
+  - Root cause:
+    - Famailink evolved as an MVP test harness, so `/preferences`, `/rules-tree`, and `/tree` all became visible user-facing peers even though two of them administer the same defaults model.
+    - The current `/tree` still renders relationship buckets rather than an EFL-like family relationship map with selection and person details.
+    - The current person-edit modal mixes relationship-default and person-only controls directly into a settings modal instead of treating inclusion/exclusion as a tab on a person detail view.
+    - Login and app shell branding/version affordances lag behind the main EFL app.
+  - Navigation/admin changes:
+    - Add a reusable Famailink app header with:
+      - primary `Family Tree` tab
+      - `Administration` tab
+      - user-circle account menu with username, person ID, app version/build marker, and sign-out
+    - Add `/administration` as the management landing page with options for Rules Tree and Full Preferences.
+    - Update `/tree`, `/rules-tree`, and `/preferences` to use the app header and avoid duplicate ad hoc header actions.
+  - Rules-tree changes:
+    - Keep relationship nodes clickable for modal editing.
+    - Prevent relationship labels from wrapping on tiles.
+    - Remove repeated "Tap to edit this default" tile text.
+    - Add collapse/expand behavior per generation row.
+  - Main tree/person modal changes:
+    - Replace the bucket-column readback layout with an EFL-inspired tree shell using generational rows and person cards.
+    - Add person selection state and lightweight focus/navigation controls for parents, spouse, siblings, children, and current relationship peers where available from the current Famailink graph.
+    - Add a person detail modal with tabs:
+      - Details: person name, relationship badges, saved subscription/share readback
+      - Inclusion Rules: existing relationship-default and person-only subscription/sharing controls
+    - Reuse the existing Famailink defaults/exceptions APIs and recompute-on-save behavior; no schema changes.
+  - Branding/version changes:
+    - Add the EFL/Famailink logo treatment to the login screen.
+    - Add an app/build version string to the user account menu using package version and current release marker.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/tree` loads with the new family-tree shell and person modal.
+    - `/administration` links to Rules Tree and Full Preferences.
+    - `/rules-tree` generation rows collapse/expand, relationship names do not wrap, and tiles no longer repeat edit instructions.
+    - Person modal Inclusion Rules saves defaults/person overrides through the existing routes and refreshes readback.
+    - Login screen shows the logo/brand and signed-in pages expose version/build details in the user menu.
+  - Completion criteria:
+    - Normal users primarily use `/tree`.
+    - Broad rule/default tools live under Administration.
+    - Person-specific inclusion/exclusion is managed from the person detail modal instead of a separate settings-looking modal.
+    - The MVP keeps its isolated Famailink implementation while visually aligning more closely with EFL.
   Agreed implementation plan 2026-04-14 (Famailink rules-tree compaction + narrowed in-law defaults):
   - Scope:
     - Narrow the Famailink default relationship model by removing `aunts_uncles_in_law` and `cousins_in_law` from supported categories.

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { BrandMark } from "@/components/FamailinkChrome";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -36,7 +37,13 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-card">
-        <p className="eyebrow">Famailink</p>
+        <div className="login-brand">
+          <BrandMark />
+          <span>
+            <strong>Eternal Family Link</strong>
+            <small>Famailink MVP</small>
+          </span>
+        </div>
         <h1 className="title">Local Sign In</h1>
         <p className="lead">
           Use your username and password to sign in to your Famailink tree and preferences.

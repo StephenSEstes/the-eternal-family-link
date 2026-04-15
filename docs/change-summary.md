@@ -7387,3 +7387,26 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Updated `designchoices.md` to narrow the supported in-law default categories and define the compact rules-tree shorthand behavior.
+
+## 2026-04-14 (Famailink Administration tab and EFL-style tree shell)
+
+- `Change`: Added a reusable Famailink app header with `Family Tree` and `Administration` tabs plus a user-circle account/build menu, added `/administration` as the management landing page, moved Rules Tree and Full Preferences into the Administration flow, added EFL/Famailink branding to login, made rules-tree generations collapsible, removed repeated edit instructions from rules-tree tiles, prevented rules-tree relationship-name wrapping, and reworked `/tree` into an EFL-inspired person-selection tree with a person detail modal. The person modal now has `Details` and `Inclusion Rules` tabs, with the existing subscription/sharing default and person-override controls under `Inclusion Rules`.
+- `Type`: UX architecture, Navigation, Tree interaction, Branding
+- `Why`: Root cause was surface sprawl from the MVP test harness. `/tree`, `/rules-tree`, and `/preferences` were all visible peers even though only `/tree` should be the main user experience and the other two are administration/diagnostic tools. The old tree also rendered relationship buckets rather than a person-first EFL-style tree with detail navigation.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/app/administration/page.tsx`
+  - `famailink/app/login/page.tsx`
+  - `famailink/app/tree/page.tsx`
+  - `famailink/components/FamailinkChrome.tsx`
+  - `famailink/components/AccessPreferencesClient.tsx`
+  - `famailink/components/RulesTreeClient.tsx`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/app/globals.css`
+- `Data Changes`: None. Existing Famailink defaults, person exceptions, and recompute/readback tables are reused unchanged.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the Administration/person-detail surface decision to `designchoices.md`.

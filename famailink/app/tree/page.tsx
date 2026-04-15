@@ -18,6 +18,10 @@ export default async function TreePage() {
 
   return (
     <TreeClient
+      session={{
+        username: session.username,
+        personId: session.personId,
+      }}
       snapshot={snapshot}
       recomputeStatus={recomputeStatus}
       visibilityRows={visibilityRows}

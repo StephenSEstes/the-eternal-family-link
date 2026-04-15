@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { FamailinkChrome } from "@/components/FamailinkChrome";
 import {
   EDITABLE_CATEGORIES,
   defaultInclusiveLineageSelectionForCategory,
@@ -192,6 +193,7 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
   const [subscriptionDefaults, setSubscriptionDefaults] = useState<SubscriptionDefaultDraft[]>(buildSubscriptionDefaults([]));
   const [shareDefaults, setShareDefaults] = useState<ShareDefaultDraft[]>(buildShareDefaults([]));
   const [editor, setEditor] = useState<RuleEditorState | null>(null);
+  const [collapsedGenerations, setCollapsedGenerations] = useState<Set<string>>(new Set());
   const [loadVersion, setLoadVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -254,6 +256,18 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
     });
   }
 
+  function toggleGeneration(generationId: string) {
+    setCollapsedGenerations((current) => {
+      const next = new Set(current);
+      if (next.has(generationId)) {
+        next.delete(generationId);
+      } else {
+        next.add(generationId);
+      }
+      return next;
+    });
+  }
+
   function applyEditorChanges() {
     if (!editor) return;
 
@@ -296,22 +310,20 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
 
   return (
     <main className="shell rules-tree-shell">
+      <FamailinkChrome active="administration" username={session.username} personId={session.personId} />
       <header className="masthead">
         <div>
-          <p className="eyebrow">Famailink</p>
+          <p className="eyebrow">Administration</p>
           <h1 className="title">Rules Tree</h1>
           <p className="lead">
             This is the compact defaults tree. Each card is a relationship group. Keep the broad rules simple here,
             then use the real family tree for one-person exceptions and edge cases.
           </p>
-          <p className="muted">
-            Signed in as <strong>{session.username}</strong> on <code>{session.personId}</code>.
-          </p>
           {hasDraftChanges ? <p className="muted rules-tree-draft-note">Draft changes are ready to save.</p> : null}
         </div>
         <div className="masthead-actions">
-          <Link className="secondary-button" href="/tree">
-            Person Tree
+          <Link className="secondary-button" href="/administration">
+            Administration
           </Link>
           <Link className="secondary-button" href="/preferences">
             Full Preferences
@@ -351,10 +363,18 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           {RULE_TREE_GENERATIONS.map((generation, generationIndex) => (
             <div key={generation.id} className="rules-generation">
               <div className="rules-generation-header">
-                <p className="rules-generation-label">{generation.label}</p>
+                <button
+                  type="button"
+                  className="rules-generation-toggle"
+                  onClick={() => toggleGeneration(generation.id)}
+                  aria-expanded={!collapsedGenerations.has(generation.id)}
+                >
+                  <span>{generation.label}</span>
+                  <span>{collapsedGenerations.has(generation.id) ? "+" : "-"}</span>
+                </button>
                 <p className="rules-generation-note">{generation.description}</p>
               </div>
-              <div className="rules-generation-row">
+              {!collapsedGenerations.has(generation.id) ? <div className="rules-generation-row">
                 {generation.nodes.map((node) => {
                   if (node.kind === "anchor") {
                     return (
@@ -386,12 +406,13 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                         <strong>{subscriptionCode(subscriptionRow.lineageSelection)}</strong>
                         <strong>{shareScopeCode(shareRow)}</strong>
                       </span>
-                      <span className="muted rules-node-note">Tap to edit this default.</span>
                     </button>
                   );
                 })}
-              </div>
-              {generationIndex < RULE_TREE_GENERATIONS.length - 1 ? <div className="rules-generation-link" /> : null}
+              </div> : null}
+              {generationIndex < RULE_TREE_GENERATIONS.length - 1 && !collapsedGenerations.has(generation.id) ? (
+                <div className="rules-generation-link" />
+              ) : null}
             </div>
           ))}
         </div>

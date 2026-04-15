@@ -503,3 +503,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep verbose node summaries; keep inline editing on the tree; rely on responsive CSS only without changing the summary model.
 - `Impact`: `/rules-tree` is now a compact navigation-and-summary surface. Users can scan broad defaults quickly, while detailed or exceptional handling remains in the modal or on the person tree.
 - `Follow-up`: Keep testing whether the compact tree removes enough need for the table-based defaults screen before reducing that screen further.
+
+- `Area`: Famailink navigation and person detail administration
+- `Decision`: Famailink should present `Family Tree` as the main user surface and `Administration` as the home for broad defaults and diagnostics. The Rules Tree remains the graphical default-rule editor under Administration, while the real person tree owns person selection, person detail, and person-specific inclusion/exclusion controls through a person detail modal tab.
+- `Reason`: `/rules-tree` and `/preferences` were becoming redundant peer destinations even though both administer defaults. Users should primarily think in terms of people on the tree, while defaults and diagnostics belong under an explicit administration surface.
+- `Alternatives Considered`: Keep Tree, Rules Tree, and Preferences as top-level peers; remove `/preferences` immediately; import the legacy EFL tree/modal components directly into Famailink.
+- `Impact`: Famailink now has an app header with `Family Tree` and `Administration`, a management landing page, a more EFL-like tree presentation, and inclusion/exclusion controls moved into a person detail tab. The isolated Famailink implementation still does not import legacy EFL runtime components.
+- `Follow-up`: Continue tightening the Famailink tree toward the full EFL tree behavior only after validating this isolated implementation against live Famailink data.
