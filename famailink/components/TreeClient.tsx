@@ -281,9 +281,14 @@ function RelativeModal({
                     be treated the same way.
                   </p>
                 </div>
-                <Link className="secondary-button" href="/preferences">
-                  Open Full Preferences
-                </Link>
+                <div className="row-actions">
+                  <Link className="secondary-button" href="/rules-tree">
+                    Open Rules Tree
+                  </Link>
+                  <Link className="secondary-button" href="/preferences">
+                    Open Full Preferences
+                  </Link>
+                </div>
               </div>
 
               {canEditRelationshipDefaults ? (
@@ -828,6 +833,9 @@ export function TreeClient({
           </p>
         </div>
         <div className="masthead-actions">
+          <Link className="secondary-button" href="/rules-tree">
+            Rules Tree
+          </Link>
           <Link className="secondary-button" href="/preferences">
             Preferences
           </Link>

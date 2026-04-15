@@ -7310,3 +7310,24 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the approved tree-first person preference surface decision to `designchoices.md`.
+
+## 2026-04-14 (Famailink generic relationship rules tree)
+
+- `Change`: Added a new authenticated Famailink route, `/rules-tree`, that renders broad subscription and sharing defaults in a generic relationship-tree layout inspired by the main EFL tree structure. The new surface edits the existing defaults model through the current defaults APIs and links cleanly with the person-tree and table-based preferences screens.
+- `Type`: UX, Defaults workflow, Relationship-first administration
+- `Why`: Root cause was that broad defaults were still administered primarily through tables even after the person tree became intuitive for exceptions. Defaults are about relationship groups, so they are easier to understand and test in a generic relationship tree than in a spreadsheet-style editor.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/app/rules-tree/page.tsx`
+  - `famailink/components/RulesTreeClient.tsx`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/components/AccessPreferencesClient.tsx`
+  - `famailink/app/globals.css`
+  - `famailink/README.md`
+- `Data Changes`: None. Existing Famailink defaults routes/tables are reused without schema changes.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the approved generic relationship rules tree decision to `designchoices.md`.

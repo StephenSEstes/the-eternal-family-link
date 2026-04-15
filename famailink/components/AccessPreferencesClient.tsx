@@ -408,6 +408,9 @@ export function AccessPreferencesClient({ session }: { session: SessionInfo }) {
           <Link className="secondary-button" href="/tree">
             Back to Tree
           </Link>
+          <Link className="secondary-button" href="/rules-tree">
+            Rules Tree
+          </Link>
           <button
             className="secondary-button"
             type="button"

@@ -208,6 +208,43 @@ I will update this list as we add, complete, or remove work.
     - Famailink tree cards are directly actionable.
     - A user can manage one relative's subscription/sharing from the tree without navigating into the table-heavy preferences screen.
     - The existing defaults/exceptions model remains valid underneath the simpler tree-driven UI.
+  Agreed implementation plan 2026-04-14 (Famailink generic relationship rules tree):
+  - Scope:
+    - Add a separate generic relationship-tree defaults surface for Famailink so broad sharing/subscription rules can be managed by relationship structure instead of tables.
+    - Keep the current person-tree modal for person-level exceptions and keep `/preferences` available as the table fallback.
+    - Reuse the existing defaults APIs and storage model; no schema changes in this pass.
+  - Root cause:
+    - The current person-tree modal is good for one-person overrides, but defaults are still easier to understand as relationship buckets than as table rows.
+    - Users want to see broad rules in a generic family-structure layout closer to the main EFL tree presentation, not only in spreadsheet-style tables.
+  - UI changes:
+    - Add a new authenticated route `/rules-tree`.
+    - Render relationship nodes in a generic tree-like layout centered on `You` / `Spouse`, with surrounding relationship groups such as `Parents`, `Parents-In-Law`, `Grandparents`, `Siblings`, `Siblings-In-Law`, `Children`, `Children-In-Law`, and other supported Famailink categories.
+    - Show unsupported future categories only as clearly marked placeholders if needed for visual completeness; do not make them editable in this pass.
+    - Each supported relationship node should expose:
+      - subscription default selector
+      - sharing lineage selector
+      - sharing scope toggles
+    - Add save actions for subscription defaults and sharing defaults on this route.
+  - Runtime/API changes:
+    - Reuse:
+      - `/api/access/subscription/defaults`
+      - `/api/access/sharing/defaults`
+    - Use the existing one-row-per-relationship defaults model underneath the graphical presentation.
+    - Do not add new preference tables or new rules APIs in this pass.
+  - Implementation notes:
+    - Prefer visual hierarchy inspired by the EFL tree presentation, but keep the content generic and relationship-based rather than person-based.
+    - Keep `/preferences` as the fallback for full recompute controls, preview, and exception tables until the rules tree proves out.
+    - Add navigation links between `/tree`, `/rules-tree`, and `/preferences`.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/rules-tree` loads for an authenticated user.
+    - Editing and saving defaults on `/rules-tree` persists correctly and survives reload.
+    - Saved defaults edited on `/rules-tree` are reflected on `/preferences` and vice versa.
+  - Completion criteria:
+    - Famailink has a relationship-first graphical defaults surface.
+    - Broad subscription/sharing rules can be tested without using the defaults tables directly.
+    - The existing defaults model remains unchanged underneath the new UI.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

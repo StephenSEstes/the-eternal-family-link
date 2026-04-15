@@ -10,6 +10,7 @@ This is the clean Famailink MVP app track.
 - signed-cookie session
 - relationship-driven tree lab page
 - tree-card modal editing for one-relative subscription/sharing changes
+- generic relationship rules tree for broad defaults
 - authenticated preferences page
 - subscription defaults editor
 - subscription person exception editor
@@ -70,6 +71,7 @@ Use [docs/deploy-runbook.md](C:/Users/steph/the-eternal-family-link/docs/deploy-
 
 - `/login`
 - `/tree`
+- `/rules-tree`
 - `/preferences`
 - `/forgot-password`
 - `/reset-password/[token]`

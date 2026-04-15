@@ -480,3 +480,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep preferences table-first only; replace the full preferences screen entirely with a tree-only editor in the MVP.
 - `Impact`: `/tree` is no longer readback-only. It now supports direct preference editing for a selected relative without changing the underlying defaults/exceptions storage model.
 - `Follow-up`: If the tree-driven flow proves out, revisit how much of the table-heavy preferences screen still needs to remain first-class.
+
+- `Area`: Famailink defaults administration surface
+- `Decision`: Broad Famailink defaults should be administered in a generic relationship rules tree, while person-specific overrides stay on the real person tree. `/rules-tree` is the relationship-first defaults surface; `/tree` is the person-first override surface; `/preferences` remains the table fallback.
+- `Reason`: Defaults are about relationship buckets, not one specific relative. A generic relationship tree matches how users think about broad family groups better than a spreadsheet-style table.
+- `Alternatives Considered`: Keep defaults table-first only; move all editing onto the real person tree; remove the table screen immediately.
+- `Impact`: Famailink now has separate conceptual surfaces for defaults and exceptions without changing the underlying defaults/exceptions storage model.
+- `Follow-up`: Revisit whether the table-based defaults editor still needs to remain visible once the rules tree has been tested in practice.
