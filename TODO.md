@@ -284,6 +284,49 @@ I will update this list as we add, complete, or remove work.
     - The rules tree is easier to scan on desktop and mobile.
     - Editing is focused into a small modal instead of inline controls on every node.
     - The defaults model stays unchanged underneath the refined interaction.
+  Agreed implementation plan 2026-04-14 (Famailink rules-tree EFL-style generational redesign):
+  - Scope:
+    - Rework `/rules-tree` so the defaults surface looks and reads more like the main EFL family tree instead of stacked relationship buckets.
+    - Keep the existing modal editing model from the latest Famailink rules-tree pass.
+    - Preserve the existing defaults APIs and one-row-per-relationship storage model.
+  - Root cause:
+    - The current `/rules-tree` is still category-bucket driven rather than visually generational.
+    - Its node layout does not mirror the EFL tree structure, so it fails the visual test even though it exposes the right concepts.
+    - The current warm palette and legacy font choices do not align with the cooler, cleaner visual language of the main EFL tree.
+  - UI changes:
+    - Replace the current stacked level layout with a graph-style generational canvas inspired by the EFL tree.
+    - Use generation rows rather than category buckets:
+      - grandparents generation
+      - parents generation
+      - self/peer generation
+      - children generation
+      - grandchildren generation
+    - Place side-categories in the generation where they naturally belong:
+      - `aunts_uncles` and `aunts_uncles_in_law` with the parents generation
+      - `cousins` and `cousins_in_law` with the self/peer generation
+      - `nieces_nephews` and `nieces_nephews_in_law` with the children generation
+      - `cousins_children` with the grandchildren generation
+    - Keep `You`, `Spouse`, `Siblings`, and `Siblings-In-Law` on the center generation row.
+    - Render compact node cards styled closer to EFL tree cards, with clearer relationship summaries and click-to-edit behavior.
+    - Keep unsupported future categories like `Grandparents-In-Law` visibly marked as placeholders but integrated into the generational structure.
+  - Visual/style changes:
+    - Move the rules-tree surface away from the warm parchment palette on this route and toward the cooler EFL tree visual language.
+    - Replace the current Trebuchet/Georgia-heavy feel on this route with a cleaner sans-forward typographic treatment that better matches the main app tree.
+    - Use connector lines and spacing that make the generations readable on desktop while still collapsing acceptably on mobile.
+  - Runtime/API changes:
+    - None beyond the existing `/api/access/subscription/defaults` and `/api/access/sharing/defaults` usage.
+    - Modal editing and route-level save continue to use the current draft/persist flow.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/rules-tree` now presents the relationship defaults in generational rows rather than stacked category buckets.
+    - The center generation visually matches the expected self/spouse/peer structure.
+    - Editing still happens through the modal and persists correctly after save/reload.
+    - The route’s visual treatment is visibly closer to the EFL tree surface than the prior parchment-style rules tree.
+  - Completion criteria:
+    - The rules tree feels like a generic family tree rather than a categorized settings page.
+    - Generational relationships are visually clearer and easier to navigate.
+    - The EFL tree structure and visual language are meaningfully reflected without changing the Famailink rules model.
   Agreed implementation plan 2026-04-14 (Famailink UX clarity pass):
   - Scope:
     - Improve the Famailink tree/preferences wording so the MVP remains explicit without sounding like internal-only diagnostics.

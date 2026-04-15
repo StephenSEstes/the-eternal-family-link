@@ -13,21 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
-## 2026-04-14 (Famailink compact rules-tree modal UX)
+## 2026-04-14 (Famailink EFL-style generational rules tree)
 
 - `Date`: 2026-04-14
-- `Change`: Refined `/rules-tree` into a compact relationship-defaults surface. Relationship groups now render as small summary nodes instead of inline editors, `Siblings` / `Siblings-In-Law` now sit on the same center row as `You` and `Spouse`, and clicking a supported relationship opens a small modal for editing subscription and sharing defaults.
+- `Change`: Reworked `/rules-tree` into a generational relationship tree that more closely follows the structure and visual language of the main EFL family tree. Relationship groups now render by generation instead of bucket sections, including `Grandparents` above `Parents`, your generation in the middle, `Children` below, and `Grandchildren` below children. The route also moved to a cooler EFL-style visual treatment while keeping click-to-edit modal behavior.
 - `Type`: UI
-- `Why`: Root cause was that the first `/rules-tree` pass exposed full selectors and sharing toggles directly on every node. That made the page too tall and dense, especially on mobile, and weakened the relationship-tree navigation model by separating peers from the center family row.
+- `Why`: Root cause was that the prior `/rules-tree` was still category-bucket driven and visually disconnected from the main EFL tree. Even after moving editing into modals, the surface still did not read as a true family-tree structure because grandchildren were not clearly below children, peer generation layout still felt artificial, and the warm parchment styling drifted away from the established EFL tree language.
 - `Files`: `TODO.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/components/RulesTreeClient.tsx`, `famailink/app/globals.css`
 - `Data Changes`: No schema or data change. Existing Famailink defaults APIs and one-row-per-relationship storage are reused unchanged.
 - `Verify`:
   - `npm run lint --prefix famailink` passes.
   - `npm run build --prefix famailink` passes.
-  - `/rules-tree` shows compact summary nodes instead of inline selectors on every relationship card.
-  - `Siblings`, `You`, `Spouse`, and `Siblings-In-Law` render on the same center row.
+  - `/rules-tree` now renders relationship defaults in generational rows rather than stacked relationship buckets.
+  - `Grandchildren` render below `Children`, and the center generation keeps `You`, `Spouse`, and peer relationships together.
   - Clicking a supported relationship opens a modal editor, and saving defaults still persists changes that survive reload.
-- `Rollback Notes`: Revert this change to restore the original inline-editing rules-tree layout.
+- `Rollback Notes`: Revert this change to restore the earlier compact bucket-style rules-tree layout.
 - `Design Decision Change`: No design decision change.
 
 ## 2026-04-14 (Famailink UX clarity pass for tree and preferences)

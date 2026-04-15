@@ -41,57 +41,73 @@ type RuleEditorState = {
 };
 
 type RuleNode =
-  | { kind: "anchor"; id: string; label: string; detail: string }
-  | { kind: "placeholder"; id: string; label: string; detail: string }
-  | { kind: "relationship"; category: RelationshipCategory };
+  | { kind: "anchor"; id: string; label: string; detail: string; orb: string }
+  | { kind: "placeholder"; id: string; label: string; detail: string; orb: string }
+  | { kind: "relationship"; category: RelationshipCategory; orb: string };
 
 const RULE_TEMPLATES = EDITABLE_CATEGORIES.map((relationshipCategory) => ({
   relationshipCategory,
   lineageSelection: defaultInclusiveLineageSelectionForCategory(relationshipCategory),
 }));
 
-const RULE_TREE_LEVELS: Array<{ title: string; nodes: RuleNode[] }> = [
+const RULE_TREE_GENERATIONS: Array<{ id: string; label: string; description: string; nodes: RuleNode[] }> = [
   {
-    title: "Grandparents",
+    id: "grandparents",
+    label: "Grandparents",
+    description: "Oldest generation in the default tree",
     nodes: [
-      { kind: "relationship", category: "grandparents" },
-      { kind: "placeholder", id: "grandparents-in-law", label: "Grandparents-In-Law", detail: "Not yet modeled" },
+      { kind: "relationship", category: "grandparents", orb: "GP" },
+      {
+        kind: "placeholder",
+        id: "grandparents-in-law",
+        label: "Grandparents-In-Law",
+        detail: "Not yet modeled",
+        orb: "GI",
+      },
     ],
   },
   {
-    title: "Parents",
+    id: "parents",
+    label: "Parents Generation",
+    description: "Parents and same-generation branches above you",
     nodes: [
-      { kind: "relationship", category: "parents" },
-      { kind: "relationship", category: "parents_in_law" },
+      { kind: "relationship", category: "aunts_uncles", orb: "AU" },
+      { kind: "relationship", category: "parents", orb: "P" },
+      { kind: "relationship", category: "parents_in_law", orb: "PI" },
+      { kind: "relationship", category: "aunts_uncles_in_law", orb: "AI" },
     ],
   },
   {
-    title: "Center",
+    id: "self",
+    label: "Your Generation",
+    description: "You, spouse, siblings, and cousins",
     nodes: [
-      { kind: "relationship", category: "siblings" },
-      { kind: "anchor", id: "self", label: "You", detail: "Family rules center" },
-      { kind: "relationship", category: "spouse" },
-      { kind: "relationship", category: "siblings_in_law" },
+      { kind: "relationship", category: "cousins", orb: "C" },
+      { kind: "relationship", category: "siblings", orb: "S" },
+      { kind: "anchor", id: "self", label: "You", detail: "Center of the rules tree", orb: "Y" },
+      { kind: "relationship", category: "spouse", orb: "SP" },
+      { kind: "relationship", category: "siblings_in_law", orb: "SI" },
+      { kind: "relationship", category: "cousins_in_law", orb: "CI" },
     ],
   },
   {
-    title: "Descendants",
+    id: "children",
+    label: "Children Generation",
+    description: "Children and same-generation branches below you",
     nodes: [
-      { kind: "relationship", category: "children" },
-      { kind: "relationship", category: "children_in_law" },
-      { kind: "relationship", category: "grandchildren" },
+      { kind: "relationship", category: "nieces_nephews", orb: "NN" },
+      { kind: "relationship", category: "children", orb: "CH" },
+      { kind: "relationship", category: "children_in_law", orb: "CL" },
+      { kind: "relationship", category: "nieces_nephews_in_law", orb: "NI" },
     ],
   },
   {
-    title: "Extended Family",
+    id: "grandchildren",
+    label: "Grandchildren",
+    description: "Youngest generation in the current model",
     nodes: [
-      { kind: "relationship", category: "aunts_uncles" },
-      { kind: "relationship", category: "aunts_uncles_in_law" },
-      { kind: "relationship", category: "cousins" },
-      { kind: "relationship", category: "cousins_in_law" },
-      { kind: "relationship", category: "nieces_nephews" },
-      { kind: "relationship", category: "nieces_nephews_in_law" },
-      { kind: "relationship", category: "cousins_children" },
+      { kind: "relationship", category: "cousins_children", orb: "CC" },
+      { kind: "relationship", category: "grandchildren", orb: "GC" },
     ],
   },
 ];
@@ -301,14 +317,14 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
   }
 
   return (
-    <main className="shell">
+    <main className="shell rules-tree-shell">
       <header className="masthead">
         <div>
           <p className="eyebrow">Famailink</p>
           <h1 className="title">Rules Tree</h1>
           <p className="lead">
-            Use this relationship tree for broad defaults. Tap a relationship group to adjust subscription and sharing,
-            then save when the whole tree looks right.
+            This is the generic family-structure view for broad defaults. Each card is a relationship group at its
+            generation level. Tap a card to edit the rule, then save when the whole tree looks right.
           </p>
           <p className="muted">
             Signed in as <strong>{session.username}</strong> on <code>{session.personId}</code>.
@@ -339,11 +355,11 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
       {error ? <section className="panel error-panel">{error}</section> : null}
       {message ? <section className="panel ok-panel">{message}</section> : null}
 
-      <section className="panel">
+      <section className="panel rules-tree-panel">
         <h2>How To Use This View</h2>
         <p className="muted">
-          This route is for broad relationship defaults only. Open a relationship group, adjust its rule in the popout,
-          and save when you are ready to apply the current draft.
+          This route is for broad relationship defaults only. The layout is generational: older relatives above, your
+          generation in the middle, younger relatives below. Person-specific exceptions still belong on the person tree.
         </p>
         <p className="muted">
           Unsupported future categories stay visible only as placeholders. <strong>Grandparents-In-Law</strong> is shown
@@ -351,60 +367,70 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
         </p>
       </section>
 
-      <section className="rules-tree">
-        {RULE_TREE_LEVELS.map((level, levelIndex) => (
-          <div key={level.title} className="rules-tree-level">
-            {levelIndex > 0 ? <div className="rules-tree-connector" aria-hidden="true" /> : null}
-            <p className="rules-tree-title">{level.title}</p>
-            <div className={`rules-tree-row${level.title === "Center" ? " rules-tree-row-center" : ""}`}>
-              {level.nodes.map((node) => {
-                if (node.kind === "anchor") {
+      <section className="rules-tree-graph-wrap">
+        <div className="rules-tree-cloud-overlay" />
+        <div className="rules-tree-graph">
+          {RULE_TREE_GENERATIONS.map((generation, generationIndex) => (
+            <div key={generation.id} className="rules-generation">
+              <div className="rules-generation-header">
+                <p className="rules-generation-label">{generation.label}</p>
+                <p className="rules-generation-note">{generation.description}</p>
+              </div>
+              <div className="rules-generation-row">
+                {generation.nodes.map((node) => {
+                  if (node.kind === "anchor") {
+                    return (
+                      <article key={node.id} className="rules-node rules-node-anchor">
+                        <span className="rules-node-orb">{node.orb}</span>
+                        <p className="person-name">{node.label}</p>
+                        <p className="muted rules-node-note">{node.detail}</p>
+                      </article>
+                    );
+                  }
+
+                  if (node.kind === "placeholder") {
+                    return (
+                      <article key={node.id} className="rules-node rules-node-placeholder">
+                        <span className="rules-node-orb">{node.orb}</span>
+                        <p className="person-name">{node.label}</p>
+                        <p className="muted rules-node-note">{node.detail}</p>
+                      </article>
+                    );
+                  }
+
+                  const subscriptionRow = subscriptionRowFor(node.category);
+                  const shareRow = shareRowFor(node.category);
+                  if (!subscriptionRow || !shareRow) return null;
+
+                  const sharing = sharingSummary(shareRow);
+
                   return (
-                    <article key={node.id} className="rules-node rules-node-anchor">
-                      <p className="person-name">{node.label}</p>
-                      <p className="muted rules-node-note">{node.detail}</p>
-                    </article>
-                  );
-                }
-
-                if (node.kind === "placeholder") {
-                  return (
-                    <article key={node.id} className="rules-node rules-node-placeholder">
-                      <p className="person-name">{node.label}</p>
-                      <p className="muted rules-node-note">{node.detail}</p>
-                    </article>
-                  );
-                }
-
-                const subscriptionRow = subscriptionRowFor(node.category);
-                const shareRow = shareRowFor(node.category);
-                if (!subscriptionRow || !shareRow) return null;
-
-                const sharing = sharingSummary(shareRow);
-
-                return (
-                  <button
-                    key={node.category}
-                    type="button"
-                    className="rules-node rules-node-button"
-                    onClick={() => openEditor(node.category)}
-                    disabled={loading || saving}
-                  >
-                    <span className="rules-node-kicker">Tap to edit</span>
-                    <span className="person-name">{RELATIONSHIP_LABELS[node.category]}</span>
-                    <span className="rules-node-summary">
-                      <span className="badge state subscribed">
-                        Subscribe: {DEFAULT_LINEAGE_SELECTION_LABELS[subscriptionRow.lineageSelection]}
+                    <button
+                      key={node.category}
+                      type="button"
+                      className={`rules-node rules-node-button${node.category === "spouse" ? " rules-node-spouse" : ""}`}
+                      onClick={() => openEditor(node.category)}
+                      disabled={loading || saving}
+                    >
+                      <span className="rules-node-orb">{node.orb}</span>
+                      <span className="person-name">{RELATIONSHIP_LABELS[node.category]}</span>
+                      <span className="rules-node-metric">
+                        <span className="rules-node-metric-label">Subscribe</span>
+                        <strong>{DEFAULT_LINEAGE_SELECTION_LABELS[subscriptionRow.lineageSelection]}</strong>
                       </span>
-                      <span className="badge state shared">Share: {sharing.headline}</span>
-                    </span>
-                    <span className="muted rules-node-note">{sharing.detail}</span>
-                  </button>
-                );
-              })}
+                      <span className="rules-node-metric">
+                        <span className="rules-node-metric-label">Share</span>
+                        <strong>{sharing.headline}</strong>
+                      </span>
+                      <span className="muted rules-node-note">{sharing.detail}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {generationIndex < RULE_TREE_GENERATIONS.length - 1 ? <div className="rules-generation-link" /> : null}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </section>
 
       {editor ? (
