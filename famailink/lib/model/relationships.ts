@@ -11,11 +11,9 @@ export const RELATIONSHIP_CATEGORIES = [
   "siblings",
   "siblings_in_law",
   "aunts_uncles",
-  "aunts_uncles_in_law",
   "nieces_nephews",
   "nieces_nephews_in_law",
   "cousins",
-  "cousins_in_law",
   "cousins_children",
 ] as const;
 
@@ -34,11 +32,9 @@ export const RELATIONSHIP_LABELS: Record<RelationshipCategory, string> = {
   siblings: "Siblings",
   siblings_in_law: "Siblings-In-Law",
   aunts_uncles: "Aunts / Uncles",
-  aunts_uncles_in_law: "Aunts / Uncles-In-Law",
   nieces_nephews: "Nieces / Nephews",
   nieces_nephews_in_law: "Nieces / Nephews-In-Law",
   cousins: "Cousins",
-  cousins_in_law: "Cousins-In-Law",
   cousins_children: "Cousins' Children",
 };
 

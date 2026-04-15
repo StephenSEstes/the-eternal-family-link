@@ -7365,3 +7365,25 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the approved generic relationship rules tree decision to `designchoices.md`.
+
+## 2026-04-14 (Famailink compact rules tree + narrowed in-law defaults)
+
+- `Change`: Narrowed the supported Famailink in-law default model by removing `aunts_uncles_in_law` and `cousins_in_law` from the active relationship/default/tree surfaces, kept the remaining one-hop in-law groups, and compacted `/rules-tree` into a denser summary-first editor. Rules-tree nodes no longer use the decorative relationship orb, `Subs` and `Share` now render on the same row, subscriptions summarize as `B` / `M` / `P` / `-`, and sharing summarizes as `V` / `S` / `M` / `C` scope letters or `-`.
+- `Type`: UX, Relationship-model refinement, Mobile compactness
+- `Why`: Root cause was a mismatch between the approved MVP defaults surface and the actual rules-tree implementation. The tree still carried low-value in-law categories and used tall, verbose cards with decorative chrome, which made the screen harder to scan and navigate on mobile.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/lib/model/relationships.ts`
+  - `famailink/lib/access/defaults.ts`
+  - `famailink/lib/access/store.ts`
+  - `famailink/lib/family/store.ts`
+  - `famailink/components/RulesTreeClient.tsx`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/app/globals.css`
+- `Data Changes`: None. Existing Famailink OCI defaults/exception tables and derived-map tables are unchanged. Old saved rows for removed categories are simply no longer surfaced by the active defaults/tree model.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Updated `designchoices.md` to narrow the supported in-law default categories and define the compact rules-tree shorthand behavior.

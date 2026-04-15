@@ -87,6 +87,10 @@ function normalizeStoredLineageSelection(
   if (!isSideSpecificCategory(relationshipCategory)) {
     return normalized === "none" ? "none" : "not_applicable";
   }
+  // Preserve older broad rows from before some in-law categories became side-aware.
+  if (normalized === "not_applicable") {
+    return "both";
+  }
   if (normalized === "both" || normalized === "maternal" || normalized === "paternal") {
     return normalized;
   }

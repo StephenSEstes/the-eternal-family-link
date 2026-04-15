@@ -27,6 +27,62 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink now defaults broadly inclusive in the MVP, with synthesized broad defaults and person exceptions positioned as the primary narrowing tool.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Agreed implementation plan 2026-04-14 (Famailink rules-tree compaction + narrowed in-law defaults):
+  - Scope:
+    - Narrow the Famailink default relationship model by removing `aunts_uncles_in_law` and `cousins_in_law` from supported categories.
+    - Make the `/rules-tree` default nodes substantially more compact and mobile-friendly.
+    - Keep person-level edge cases and exceptions on the real person tree/modal rather than expanding the default category tree.
+  - Root cause:
+    - The current rules tree is still reflecting a broader in-law model than the desired MVP, so the screen is spending space on low-value relationship buckets.
+    - The current node UI uses decorative icon circles plus verbose summary labels, which wastes vertical space and weakens scanability on mobile.
+    - The current in-law default model still treats the remaining in-law categories too generically for the compact branch-side shorthand the product now wants.
+  - Relationship-model changes:
+    - Remove these supported default/tree categories from Famailink:
+      - `aunts_uncles_in_law`
+      - `cousins_in_law`
+    - Keep these supported one-hop in-law categories:
+      - `parents_in_law`
+      - `grandparents_in_law`
+      - `siblings_in_law`
+      - `children_in_law`
+      - `nieces_nephews_in_law`
+    - Extend side-specific handling to the in-law categories that have a stable family-side meaning in the current graph:
+      - `parents_in_law`
+      - `grandparents_in_law`
+      - `siblings_in_law`
+      - `nieces_nephews_in_law`
+    - Keep `children_in_law` broad/non-branch-specific in the current MVP because there is no stable maternal/paternal branch meaning for that relationship in the existing graph model.
+  - Runtime/data changes:
+    - Remove the dropped in-law categories from the active Famailink relationship constants, editable defaults list, empty tree buckets, derivation logic, and tree grouping surfaces.
+    - Derive lineage sides for the remaining branchable in-law categories from the existing blood-relative path they come through, rather than inventing new schema.
+    - Keep existing OCI rule tables unchanged.
+    - Continue tolerating old saved rows for removed categories by ignoring them in the active defaults surfaces rather than adding a migration in this pass.
+  - Rules-tree UI changes:
+    - Remove the relationship icon/orb circle from every node.
+    - Render compact summary headings with `Subs` and `Share` on the same row.
+    - Show the subscription branch shorthand on the next row:
+      - `B`
+      - `M`
+      - `P`
+      - `-` when disabled
+    - Show sharing scopes as compact content letters:
+      - `V`
+      - `S`
+      - `M`
+      - `C`
+      - `-` when nothing is shared
+    - Keep editing in the modal popout rather than inline on the tree.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/rules-tree` no longer renders `Aunts / Uncles-In-Law` or `Cousins-In-Law`.
+    - The remaining rules-tree nodes are visibly more compact and the summaries use the new shorthand.
+    - Saved defaults edited on `/rules-tree` still survive reload and remain aligned with `/preferences`.
+    - Remaining in-law categories that keep branch-side behavior match correctly in preview/recompute.
+  - Completion criteria:
+    - The default rules tree reflects only the supported MVP in-law groups.
+    - The main rules-tree surface is compact enough to scan and navigate on mobile.
+    - Broad defaults stay relationship-level, while exceptions and edge cases remain person-level.
   Agreed implementation plan 2026-04-13 (Famailink in-law category expansion) [Completed]:
   - Scope:
     - Extend the Famailink relationship model to include explicit one-hop in-law categories in the tree, catalog, preview, defaults, and recompute/readback surfaces.

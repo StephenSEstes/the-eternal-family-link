@@ -722,7 +722,7 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .rules-generation-link {
@@ -737,10 +737,10 @@ select {
 }
 
 .rules-node {
-  width: min(156px, 100%);
-  min-height: 172px;
-  padding: 12px 12px 14px;
-  border-radius: 18px;
+  width: min(144px, 100%);
+  min-height: 116px;
+  padding: 10px 10px 11px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(184, 210, 226, 0.94);
   box-shadow: 0 8px 18px rgba(18, 72, 100, 0.12);
@@ -749,9 +749,8 @@ select {
 .rules-node-button {
   display: grid;
   align-content: start;
-  justify-items: center;
-  gap: 7px;
-  text-align: center;
+  gap: 8px;
+  text-align: left;
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
@@ -766,33 +765,6 @@ select {
   cursor: default;
 }
 
-.rules-node-orb {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, rgba(216, 231, 255, 0.9), rgba(255, 255, 255, 0.98));
-  color: #0c6088;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  border: 1px solid rgba(174, 203, 223, 0.92);
-}
-
-.rules-node-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-}
-
-.rules-node-metric strong {
-  color: #18384a;
-  font-size: 0.86rem;
-  line-height: 1.2;
-}
-
 .rules-node-metric-label {
   color: #6a7f8d;
   font-size: 0.69rem;
@@ -801,18 +773,34 @@ select {
   text-transform: uppercase;
 }
 
+.rules-node-summary-head,
+.rules-node-summary-values {
+  display: grid;
+  grid-template-columns: minmax(0, 52px) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.rules-node-summary-values strong {
+  color: #18384a;
+  font-size: 0.84rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+
 .rules-node-spouse {
   border-color: rgba(18, 116, 165, 0.48);
   box-shadow: 0 10px 22px rgba(18, 116, 165, 0.14);
 }
 
-.rules-node-anchor,
-.rules-node-placeholder {
+.rules-node-anchor {
   display: grid;
-  place-items: center;
+  align-content: center;
+  justify-items: center;
   text-align: center;
-  gap: 8px;
-  min-height: 172px;
+  gap: 6px;
+  min-height: 116px;
 }
 
 .rules-node-anchor {
@@ -820,13 +808,7 @@ select {
   border-color: rgba(18, 116, 165, 0.42);
 }
 
-.rules-node-placeholder {
-  border-style: dashed;
-  background: rgba(242, 247, 251, 0.9);
-}
-
-.rules-node-anchor .person-name,
-.rules-node-placeholder .person-name {
+.rules-node-anchor .person-name {
   text-align: center;
 }
 
@@ -834,7 +816,7 @@ select {
   margin: 0;
   line-height: 1.35;
   color: #5d7383;
-  font-size: 0.77rem;
+  font-size: 0.74rem;
 }
 
 .rules-scope-grid {
@@ -914,13 +896,8 @@ select {
   }
 
   .rules-node {
-    width: min(148px, calc(50% - 8px));
-    min-height: 160px;
-  }
-
-  .rules-node-orb {
-    width: 42px;
-    height: 42px;
+    width: min(146px, calc(50% - 8px));
+    min-height: 108px;
   }
 
   .rules-generation-note {

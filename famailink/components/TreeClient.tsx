@@ -30,9 +30,7 @@ const TREE_COLUMNS: Array<{ title: string; categories: RelationshipCategory[] }>
       "parents_in_law",
       "siblings_in_law",
       "children_in_law",
-      "aunts_uncles_in_law",
       "nieces_nephews_in_law",
-      "cousins_in_law",
     ],
   },
 ];

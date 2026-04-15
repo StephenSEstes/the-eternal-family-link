@@ -487,3 +487,19 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep defaults table-first only; move all editing onto the real person tree; remove the table screen immediately.
 - `Impact`: Famailink now has separate conceptual surfaces for defaults and exceptions without changing the underlying defaults/exceptions storage model.
 - `Follow-up`: Revisit whether the table-based defaults editor still needs to remain visible once the rules tree has been tested in practice.
+
+## 2026-04-14
+
+- `Area`: Famailink in-law default scope
+- `Decision`: Narrow the Famailink broad-default in-law categories to `parents_in_law`, `grandparents_in_law`, `siblings_in_law`, `children_in_law`, and `nieces_nephews_in_law`. Remove `aunts_uncles_in_law` and `cousins_in_law` from the supported defaults/tree model. Keep edge cases and unusual relative handling at the person-exception level rather than continuing to expand low-value default categories.
+- `Reason`: The broader in-law set made the rules tree denser without enough product value. The desired MVP posture is broad, simple defaults with exceptions for unusual cases, not an ever-expanding relationship grid.
+- `Alternatives Considered`: Keep all one-hop in-law categories in the defaults tree; hide the extra categories visually but keep them active in the model.
+- `Impact`: Famailink relationship constants, derived buckets, rules-tree layout, and tree grouping exclude `aunts_uncles_in_law` and `cousins_in_law` as supported broad-default categories. Remaining in-law defaults stay limited to one marriage hop.
+- `Follow-up`: Reintroduce removed in-law categories only with explicit product approval and a clear user value case.
+
+- `Area`: Famailink rules-tree summary density
+- `Decision`: Keep `/rules-tree` compact and summary-first. Relationship nodes should not use decorative icon circles. Broad defaults are summarized with a two-column shorthand row: `Subs` shows `B` / `M` / `P` / `-`, and `Share` shows active content scope letters `V` / `S` / `M` / `C` or `-`. Editing remains in a small modal popout instead of inline on the tree.
+- `Reason`: The earlier rules-tree cards spent too much space on decoration and verbose labels, which reduced mobile scanability and made the surface feel more like settings cards than a compact family-structure editor.
+- `Alternatives Considered`: Keep verbose node summaries; keep inline editing on the tree; rely on responsive CSS only without changing the summary model.
+- `Impact`: `/rules-tree` is now a compact navigation-and-summary surface. Users can scan broad defaults quickly, while detailed or exceptional handling remains in the modal or on the person tree.
+- `Follow-up`: Keep testing whether the compact tree removes enough need for the table-based defaults screen before reducing that screen further.

@@ -7,10 +7,14 @@ import type { RelationshipCategory } from "@/lib/model/relationships";
 
 export const SIDE_SPECIFIC_CATEGORIES = new Set<RelationshipCategory>([
   "parents",
+  "parents_in_law",
   "grandparents",
+  "grandparents_in_law",
   "siblings",
+  "siblings_in_law",
   "aunts_uncles",
   "nieces_nephews",
+  "nieces_nephews_in_law",
   "cousins",
   "cousins_children",
 ]);
@@ -27,11 +31,9 @@ export const EDITABLE_CATEGORIES: RelationshipCategory[] = [
   "siblings",
   "siblings_in_law",
   "aunts_uncles",
-  "aunts_uncles_in_law",
   "nieces_nephews",
   "nieces_nephews_in_law",
   "cousins",
-  "cousins_in_law",
   "cousins_children",
 ];
 

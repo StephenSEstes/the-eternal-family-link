@@ -41,8 +41,7 @@ type RuleEditorState = {
 };
 
 type RuleNode =
-  | { kind: "anchor"; id: string; label: string; detail: string; orb: string }
-  | { kind: "placeholder"; id: string; label: string; detail: string; orb: string }
+  | { kind: "anchor"; id: string; label: string; detail: string }
   | { kind: "relationship"; category: RelationshipCategory; orb: string };
 
 const RULE_TEMPLATES = EDITABLE_CATEGORIES.map((relationshipCategory) => ({
@@ -68,7 +67,6 @@ const RULE_TREE_GENERATIONS: Array<{ id: string; label: string; description: str
       { kind: "relationship", category: "aunts_uncles", orb: "AU" },
       { kind: "relationship", category: "parents", orb: "P" },
       { kind: "relationship", category: "parents_in_law", orb: "PI" },
-      { kind: "relationship", category: "aunts_uncles_in_law", orb: "AI" },
     ],
   },
   {
@@ -78,10 +76,9 @@ const RULE_TREE_GENERATIONS: Array<{ id: string; label: string; description: str
     nodes: [
       { kind: "relationship", category: "cousins", orb: "C" },
       { kind: "relationship", category: "siblings", orb: "S" },
-      { kind: "anchor", id: "self", label: "You", detail: "Center of the rules tree", orb: "Y" },
+      { kind: "anchor", id: "self", label: "You", detail: "Exceptions stay on the real family tree." },
       { kind: "relationship", category: "spouse", orb: "SP" },
       { kind: "relationship", category: "siblings_in_law", orb: "SI" },
-      { kind: "relationship", category: "cousins_in_law", orb: "CI" },
     ],
   },
   {
@@ -155,37 +152,24 @@ function buildShareDefaults(rows: ShareDefaultRule[]): ShareDefaultDraft[] {
   });
 }
 
-function enabledScopeLabels(row: ShareDefaultDraft) {
-  return SHARE_SCOPE_FIELDS.filter((field) => row[field]).map((field) => SHARE_SCOPE_LABELS[field]);
+function subscriptionCode(selection: DefaultLineageSelection) {
+  if (selection === "none") return "-";
+  if (selection === "maternal") return "M";
+  if (selection === "paternal") return "P";
+  return "B";
 }
 
-function sharingSummary(row: ShareDefaultDraft) {
-  if (row.lineageSelection === "none") {
-    return {
-      headline: "No sharing",
-      detail: "Name and relationship only",
-    };
-  }
+function shareScopeCode(row: ShareDefaultDraft) {
+  if (row.lineageSelection === "none") return "-";
 
-  const labels = enabledScopeLabels(row);
-  if (labels.length === 0) {
-    return {
-      headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
-      detail: "Name and relationship only",
-    };
-  }
+  const codes = [
+    row.shareVitals ? "V" : "",
+    row.shareStories ? "S" : "",
+    row.shareMedia ? "M" : "",
+    row.shareConversations ? "C" : "",
+  ].filter(Boolean);
 
-  if (labels.length === SHARE_SCOPE_FIELDS.length) {
-    return {
-      headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
-      detail: "All content",
-    };
-  }
-
-  return {
-    headline: DEFAULT_LINEAGE_SELECTION_LABELS[row.lineageSelection],
-    detail: labels.join(", "),
-  };
+  return codes.length ? codes.join(" ") : "-";
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -317,8 +301,8 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
           <p className="eyebrow">Famailink</p>
           <h1 className="title">Rules Tree</h1>
           <p className="lead">
-            This is the generic family-structure view for broad defaults. Each card is a relationship group at its
-            generation level. Tap a card to edit the rule, then save when the whole tree looks right.
+            This is the compact defaults tree. Each card is a relationship group. Keep the broad rules simple here,
+            then use the real family tree for one-person exceptions and edge cases.
           </p>
           <p className="muted">
             Signed in as <strong>{session.username}</strong> on <code>{session.personId}</code>.
@@ -352,12 +336,12 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
       <section className="panel rules-tree-panel">
         <h2>How To Use This View</h2>
         <p className="muted">
-          This route is for broad relationship defaults only. The layout is generational: older relatives above, your
-          generation in the middle, younger relatives below. Person-specific exceptions still belong on the person tree.
+          This route is for broad relationship defaults only. It is organized by generation so the older branches stay
+          above you, peers stay in the center, and younger branches stay below.
         </p>
         <p className="muted">
-          This route now supports spouse-side grandparents as a real default category too, so the top generation stays
-          symmetrical on both sides of the tree.
+          `Subs` shows the branch shorthand for subscriptions. `Share` shows the content scope letters. Person-specific
+          exceptions still belong on the real family tree.
         </p>
       </section>
 
@@ -375,17 +359,6 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                   if (node.kind === "anchor") {
                     return (
                       <article key={node.id} className="rules-node rules-node-anchor">
-                        <span className="rules-node-orb">{node.orb}</span>
-                        <p className="person-name">{node.label}</p>
-                        <p className="muted rules-node-note">{node.detail}</p>
-                      </article>
-                    );
-                  }
-
-                  if (node.kind === "placeholder") {
-                    return (
-                      <article key={node.id} className="rules-node rules-node-placeholder">
-                        <span className="rules-node-orb">{node.orb}</span>
                         <p className="person-name">{node.label}</p>
                         <p className="muted rules-node-note">{node.detail}</p>
                       </article>
@@ -396,8 +369,6 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                   const shareRow = shareRowFor(node.category);
                   if (!subscriptionRow || !shareRow) return null;
 
-                  const sharing = sharingSummary(shareRow);
-
                   return (
                     <button
                       key={node.category}
@@ -406,17 +377,16 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                       onClick={() => openEditor(node.category)}
                       disabled={loading || saving}
                     >
-                      <span className="rules-node-orb">{node.orb}</span>
                       <span className="person-name">{RELATIONSHIP_LABELS[node.category]}</span>
-                      <span className="rules-node-metric">
-                        <span className="rules-node-metric-label">Subscribe</span>
-                        <strong>{DEFAULT_LINEAGE_SELECTION_LABELS[subscriptionRow.lineageSelection]}</strong>
-                      </span>
-                      <span className="rules-node-metric">
+                      <span className="rules-node-summary-head">
+                        <span className="rules-node-metric-label">Subs</span>
                         <span className="rules-node-metric-label">Share</span>
-                        <strong>{sharing.headline}</strong>
                       </span>
-                      <span className="muted rules-node-note">{sharing.detail}</span>
+                      <span className="rules-node-summary-values">
+                        <strong>{subscriptionCode(subscriptionRow.lineageSelection)}</strong>
+                        <strong>{shareScopeCode(shareRow)}</strong>
+                      </span>
+                      <span className="muted rules-node-note">Tap to edit this default.</span>
                     </button>
                   );
                 })}
@@ -451,7 +421,7 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                   <p className="muted">This controls whether you subscribe to updates from this relationship group.</p>
                 </div>
                 <label className="field">
-                  <span className="field-label">Default subscription</span>
+                  <span className="field-label">Default subscription branch</span>
                   <select
                     className="input"
                     value={editor.subscription.lineageSelection}
@@ -485,7 +455,7 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
                 </div>
                 <div className="modal-grid">
                   <label className="field">
-                    <span className="field-label">Sharing side</span>
+                    <span className="field-label">Sharing branch</span>
                     <select
                       className="input"
                       value={editor.share.lineageSelection}
