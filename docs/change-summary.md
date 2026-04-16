@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-16 (Famailink EFL visual alignment and in-law tree switch)
+
+- `Date`: 2026-04-16
+- `Change`: Updated the isolated Famailink app to use EFL visual branding on the main tree experience, including EFL colors, Inter-based typography, EFL logo/favicon assets, the cloud-backed tree viewport, tighter EFL-style person cards, and a more compact toolbar-first `/tree` layout. Added an `In-laws` switch that includes or hides existing `*_in_law` relatives by rebuilding the client graph from the current derived relationship categories.
+- `Type`: UI
+- `Why`: Root cause was a code/design mismatch. The Famailink household graph behavior existed, but the tree still carried Famailink lab chrome, serif headings, extra stats/header panels, a CSS-drawn logo, and no by-marriage view control. That made `/tree` look and behave differently from the EFL reference even though the structural graph model was close.
+- `Files`: `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/app/layout.tsx`, `famailink/components/FamailinkChrome.tsx`, `famailink/components/TreeClient.tsx`, `famailink/public/apple-touch-icon.png`, `famailink/public/favicon-16x16.png`, `famailink/public/favicon-32x32.png`, `famailink/public/favicon.ico`, `famailink/public/brand/clouds-bg.png`, `famailink/public/brand/logo-arch-tree.png`
+- `Data Changes`: None. The in-law switch filters the already-derived client tree categories and does not alter OCI data, schema, defaults, exceptions, or recompute maps.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/tree` shows the EFL logo treatment, EFL color/font styling, cloud tree viewport, compact search/zoom controls, and the right-side focused person panel.
+  - Turning `In-laws` off hides existing in-law-category relatives from the tree graph without changing saved data.
+- `Rollback Notes`: Revert this change to restore the previous Famailink visual styling and always-included in-law tree view.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-15 (Famailink household tree parity pass)
 
 - `Date`: 2026-04-15

@@ -1,16 +1,24 @@
 :root {
   color-scheme: light;
-  --ink: #1f1a14;
-  --muted: #645b52;
-  --paper: #f6f1e8;
-  --paper-strong: #fffaf2;
-  --line: #d9cdbb;
-  --accent: #0f766e;
-  --accent-soft: #dff2ef;
-  --berry: #8b3a3a;
-  --berry-soft: #f4e3e3;
-  --sun: #f1c76b;
-  --shadow: rgba(61, 47, 35, 0.08);
+  --bg: #f3f8fb;
+  --surface: #ffffff;
+  --surface-soft: #e9f2f4;
+  --text: #163244;
+  --text-muted: #4b6575;
+  --line: #d5e3ea;
+  --accent: #179eaa;
+  --accent-strong: #0f7883;
+  --accent-soft: #dff3f5;
+  --ok: #0f7c3b;
+  --warn: #9f2b1d;
+  --ink: var(--text);
+  --muted: var(--text-muted);
+  --paper: var(--surface-soft);
+  --paper-strong: var(--surface);
+  --berry: var(--warn);
+  --berry-soft: #f8e4df;
+  --sun: #f6c86e;
+  --shadow: rgba(18, 72, 100, 0.12);
 }
 
 * {
@@ -19,15 +27,15 @@
 
 html {
   background:
-    radial-gradient(circle at top left, rgba(241, 199, 107, 0.22), transparent 30%),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 32%),
-    linear-gradient(180deg, #f9f5ec 0%, #f2ecdf 100%);
+    radial-gradient(circle at 0% 0%, #e8f8fb 0%, transparent 38%),
+    radial-gradient(circle at 100% 0%, #edf6ff 0%, transparent 34%),
+    linear-gradient(180deg, #f8fcff 0%, #eef4f8 100%);
 }
 
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "Trebuchet MS", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+  font-family: var(--font-body), "Segoe UI", sans-serif;
   min-height: 100vh;
 }
 
@@ -42,22 +50,23 @@ select {
 }
 
 .shell {
-  max-width: 1280px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 28px 18px 52px;
+  padding: 18px 18px 42px;
 }
 
 .app-chrome {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) auto auto;
-  gap: 18px;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 16px;
   align-items: center;
-  margin-bottom: 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: rgba(255, 250, 242, 0.92);
-  box-shadow: 0 14px 34px var(--shadow);
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--line) 75%, #fff 25%);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface) 92%, #eff8fb 8%);
+  box-shadow: 0 12px 28px color-mix(in oklab, #184f69 9%, transparent 91%);
+  backdrop-filter: blur(10px);
 }
 
 .app-brand {
@@ -71,6 +80,7 @@ select {
 .login-brand strong {
   display: block;
   line-height: 1.1;
+  font-weight: 800;
 }
 
 .app-brand small,
@@ -81,34 +91,19 @@ select {
 }
 
 .brand-mark {
-  width: 46px;
-  height: 46px;
-  display: grid;
-  place-items: center;
-  position: relative;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fefaf1, #e9f4f1);
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  width: 42px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   overflow: hidden;
 }
 
-.brand-arch {
-  position: absolute;
-  inset: 8px 7px auto;
-  height: 22px;
-  border: 3px solid var(--accent);
-  border-bottom: 0;
-  border-radius: 999px 999px 0 0;
-}
-
-.brand-tree {
-  position: relative;
-  z-index: 1;
-  margin-top: 14px;
-  color: var(--berry);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
+.brand-logo-image {
+  width: 40px;
+  height: auto;
+  display: block;
 }
 
 .app-tabs {
@@ -116,8 +111,8 @@ select {
   gap: 8px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(246, 241, 232, 0.9);
-  border: 1px solid rgba(217, 205, 187, 0.8);
+  background: color-mix(in oklab, var(--surface-soft) 82%, #fff 18%);
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
 }
 
 .app-tab {
@@ -131,7 +126,7 @@ select {
 
 .app-tab.is-active {
   color: #fff;
-  background: var(--accent);
+  background: color-mix(in oklab, var(--accent) 82%, #fff 18%);
 }
 
 .account-menu {
@@ -143,8 +138,8 @@ select {
   width: 42px;
   height: 42px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  background: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 28%, #fff 72%);
+  background: color-mix(in oklab, var(--accent) 86%, #0f172a 14%);
   color: #fff;
   font-weight: 900;
   cursor: pointer;
@@ -157,7 +152,7 @@ select {
   z-index: 20;
   width: min(320px, 86vw);
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--paper-strong);
   border: 1px solid var(--line);
   box-shadow: 0 18px 44px rgba(31, 26, 20, 0.18);
@@ -199,10 +194,10 @@ select {
 .login-card,
 .bucket,
 .summary-strip {
-  background: rgba(255, 250, 242, 0.9);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  box-shadow: 0 18px 48px var(--shadow);
+  background: color-mix(in oklab, var(--surface) 93%, #eef8fb 7%);
+  border: 1px solid color-mix(in oklab, var(--line) 86%, #fff 14%);
+  border-radius: 16px;
+  box-shadow: 0 16px 34px color-mix(in oklab, #124866 12%, transparent 88%);
   backdrop-filter: blur(8px);
 }
 
@@ -232,9 +227,10 @@ select {
 
 .title {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-body), "Segoe UI", sans-serif;
   font-size: clamp(2.1rem, 4vw, 3.2rem);
   line-height: 1;
+  font-weight: 800;
 }
 
 .lead,
@@ -261,9 +257,9 @@ select {
 
 .stat-card {
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 12px;
   background: var(--paper-strong);
-  border: 1px solid rgba(217, 205, 187, 0.8);
+  border: 1px solid color-mix(in oklab, var(--line) 86%, #fff 14%);
 }
 
 .stat-label {
@@ -276,8 +272,8 @@ select {
 
 .stat-value {
   margin: 8px 0 0;
-  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.6rem;
+  font-weight: 800;
 }
 
 .recompute-value {
@@ -301,8 +297,7 @@ select {
 .tree-column-title {
   margin: 0;
   padding-left: 6px;
-  color: var(--berry);
-  font-family: Georgia, "Times New Roman", serif;
+  color: var(--accent-strong);
   font-size: 1.1rem;
 }
 
@@ -320,8 +315,8 @@ select {
 
 .bucket-title {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .bucket-count {
@@ -424,12 +419,10 @@ select {
 
 .panel h2 {
   margin: 0 0 10px;
-  font-family: Georgia, "Times New Roman", serif;
 }
 
 .panel h3 {
   margin: 0 0 10px;
-  font-family: Georgia, "Times New Roman", serif;
 }
 
 .preferences-grid {
@@ -622,15 +615,15 @@ select {
 }
 
 .primary-button {
-  background: var(--accent);
+  background: color-mix(in oklab, var(--accent) 86%, #0f172a 14%);
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18);
+  box-shadow: 0 8px 18px color-mix(in oklab, var(--accent) 22%, transparent 78%);
 }
 
 .secondary-button {
   background: var(--paper-strong);
   color: var(--ink);
-  border-color: var(--line);
+  border-color: color-mix(in oklab, var(--line) 82%, #fff 18%);
 }
 
 .primary-button:hover,
@@ -676,9 +669,10 @@ select {
 .input {
   width: 100%;
   padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
 }
 
 .error-text {
@@ -963,13 +957,14 @@ select {
 }
 
 .tree-focus-action-chip {
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
   border-radius: 999px;
-  background: var(--paper-strong);
+  background: #fff;
   padding: 7px 10px;
   cursor: pointer;
-  color: var(--muted);
+  color: var(--text);
   font-size: 13px;
+  font-weight: 700;
 }
 
 .tree-focus-action-chip:disabled {
@@ -979,26 +974,26 @@ select {
 
 .tree-focus-action-chip.is-active {
   color: #fff;
-  border-color: rgba(15, 118, 110, 0.78);
-  background: var(--accent);
+  border-color: transparent;
+  background: color-mix(in oklab, var(--accent) 82%, #fff 18%);
 }
 
 .family-tree-shell {
   display: grid;
   gap: 14px;
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .family-tree-toolbar {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) minmax(180px, 1fr) auto;
   gap: 14px;
-  align-items: start;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: rgba(255, 250, 242, 0.92);
-  box-shadow: 0 10px 26px rgba(61, 47, 35, 0.08);
+  align-items: end;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--line) 86%, #fff 14%);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface) 93%, #eef8fb 7%);
+  box-shadow: 0 12px 28px color-mix(in oklab, #124866 10%, transparent 90%);
 }
 
 .family-tree-search {
@@ -1017,7 +1012,7 @@ select {
   display: grid;
   gap: 4px;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
   border-radius: 14px;
   background: var(--paper-strong);
   box-shadow: 0 14px 30px var(--shadow);
@@ -1035,7 +1030,81 @@ select {
 }
 
 .family-tree-search-results button:hover {
-  background: rgba(15, 118, 110, 0.08);
+  background: color-mix(in oklab, var(--accent) 10%, #fff 90%);
+}
+
+.tree-view-switch {
+  position: relative;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-view-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tree-view-switch-track {
+  width: 42px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--line) 70%, #fff 30%);
+  transition: background 160ms ease;
+}
+
+.tree-view-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px color-mix(in oklab, #124866 24%, transparent 76%);
+  transition: transform 160ms ease;
+}
+
+.tree-view-switch input:checked + .tree-view-switch-track {
+  background: color-mix(in oklab, var(--accent) 80%, #fff 20%);
+}
+
+.tree-view-switch input:checked + .tree-view-switch-track .tree-view-switch-thumb {
+  transform: translateX(18px);
+}
+
+.tree-view-switch input:focus-visible + .tree-view-switch-track {
+  outline: 2px solid color-mix(in oklab, var(--accent) 68%, #fff 32%);
+  outline-offset: 3px;
+}
+
+.tree-view-switch strong,
+.tree-view-switch small {
+  display: block;
+  line-height: 1.1;
+}
+
+.tree-view-switch strong {
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.tree-view-switch small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
 }
 
 .family-tree-controls {
@@ -1046,19 +1115,24 @@ select {
 }
 
 .tree-control-btn {
-  min-width: 42px;
+  min-width: 38px;
   height: 38px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
   border-radius: 999px;
-  background: var(--paper-strong);
-  color: var(--ink);
+  background: color-mix(in oklab, #ffffff 94%, #ddf3ff 6%);
+  color: color-mix(in oklab, var(--text) 84%, var(--accent) 16%);
   cursor: pointer;
   font-weight: 900;
+  box-shadow: 0 8px 18px color-mix(in oklab, #154864 12%, transparent 88%);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
 .tree-control-btn:hover {
-  border-color: rgba(15, 118, 110, 0.55);
-  color: var(--accent);
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent) 48%, #fff 52%);
+  background: #fff;
+  color: var(--accent-strong);
+  box-shadow: 0 12px 24px color-mix(in oklab, #154864 18%, transparent 82%);
 }
 
 .family-tree-main {
@@ -1071,13 +1145,15 @@ select {
 .family-tree-viewport {
   min-height: 680px;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 26px;
-  background:
-    radial-gradient(circle at 14% 12%, rgba(15, 118, 110, 0.08), transparent 24%),
-    radial-gradient(circle at 78% 20%, rgba(151, 89, 58, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(255, 250, 242, 0.98), rgba(246, 241, 232, 0.94));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48), 0 20px 48px var(--shadow);
+  border: 1px solid color-mix(in oklab, var(--line) 85%, #fff 15%);
+  border-radius: 16px;
+  background-image:
+    linear-gradient(color-mix(in oklab, #ffffff 72%, transparent 28%), color-mix(in oklab, #ffffff 72%, transparent 28%)),
+    url("/brand/clouds-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 18px 42px color-mix(in oklab, #184f69 10%, transparent 90%);
 }
 
 .family-tree-board {
@@ -1131,15 +1207,17 @@ select {
   justify-items: center;
   gap: 9px;
   padding: 10px 12px 12px;
-  border: 2px solid rgba(15, 118, 110, 0.18);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 12px 26px rgba(61, 47, 35, 0.08);
+  border: 2px solid color-mix(in oklab, var(--accent) 26%, #fff 74%);
+  border-radius: 20px;
+  background: color-mix(in oklab, #ffffff 90%, #eef8fb 10%);
+  box-shadow: 0 12px 26px color-mix(in oklab, #124866 12%, transparent 88%);
 }
 
 .family-household-unit.is-focused .family-household-frame {
-  border-color: rgba(15, 118, 110, 0.64);
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12), 0 16px 30px rgba(61, 47, 35, 0.12);
+  border-color: color-mix(in oklab, var(--accent) 72%, #fff 28%);
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--accent) 20%, transparent 80%),
+    0 16px 30px color-mix(in oklab, #124866 16%, transparent 84%);
 }
 
 .family-household-label {
@@ -1153,6 +1231,7 @@ select {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
+  font-family: "Courier New", monospace;
 }
 
 .family-household-parents,
@@ -1179,7 +1258,7 @@ select {
   height: 100%;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.38);
+  background: color-mix(in oklab, var(--accent) 48%, #fff 52%);
 }
 
 .family-household-children,
@@ -1199,7 +1278,7 @@ select {
   right: 18%;
   height: 2px;
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.34);
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
 }
 
 .family-child-slot,
@@ -1218,40 +1297,48 @@ select {
   width: 2px;
   height: 16px;
   transform: translateX(-50%);
-  background: rgba(15, 118, 110, 0.34);
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
 }
 
 .family-person-card {
-  width: 126px;
-  min-height: 138px;
+  width: 118px;
+  min-height: 132px;
   display: grid;
   justify-items: center;
   align-content: start;
   gap: 7px;
   padding: 10px 8px;
-  border: 1px solid rgba(217, 205, 187, 0.9);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 18px rgba(61, 47, 35, 0.08);
+  border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
+  border-radius: 16px;
+  background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
+  box-shadow: 0 8px 18px color-mix(in oklab, #124564 12%, transparent 88%);
   color: var(--ink);
   cursor: pointer;
   text-align: center;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.family-person-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 24px color-mix(in oklab, #0e4664 17%, transparent 83%);
 }
 
 .family-person-card.is-focused {
-  border-color: rgba(151, 89, 58, 0.7);
-  box-shadow: 0 0 0 3px rgba(151, 89, 58, 0.14), 0 12px 24px rgba(61, 47, 35, 0.12);
+  border: 2px solid color-mix(in oklab, var(--accent) 78%, #ffffff 22%);
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent 78%),
+    0 18px 30px color-mix(in oklab, #0e5a7f 20%, transparent 80%);
 }
 
 .family-person-avatar {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  background: linear-gradient(180deg, #dff2ef, #fffaf2);
-  color: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 24%, #fff 76%);
+  background: color-mix(in oklab, var(--accent-soft) 72%, #fff 28%);
+  color: var(--accent-strong);
   font-weight: 900;
 }
 
@@ -1268,16 +1355,20 @@ select {
 }
 
 .family-person-name {
-  max-width: 108px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 900;
+  color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .family-person-relation {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.69rem;
+  line-height: 1.15;
 }
 
 .family-person-state-row {
@@ -1289,7 +1380,7 @@ select {
 .family-state-pill {
   padding: 3px 6px;
   border-radius: 999px;
-  background: #f1ece3;
+  background: color-mix(in oklab, var(--surface-soft) 82%, #fff 18%);
   color: var(--muted);
   font-size: 0.62rem;
   font-weight: 900;
@@ -1297,8 +1388,8 @@ select {
 
 .family-state-pill.subscribed,
 .family-state-pill.shared {
-  background: rgba(15, 118, 110, 0.12);
-  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, #fff 88%);
+  color: var(--accent-strong);
 }
 
 .family-state-pill.pending {
@@ -1316,11 +1407,12 @@ select {
   top: 18px;
   display: grid;
   gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: rgba(255, 250, 242, 0.96);
-  box-shadow: 0 18px 48px var(--shadow);
+  padding: 14px;
+  border: 1px solid color-mix(in oklab, var(--line) 80%, #fff 20%);
+  border-radius: 16px;
+  background: color-mix(in oklab, #ffffff 89%, #ecf8ff 11%);
+  box-shadow: 0 16px 34px color-mix(in oklab, #124866 18%, transparent 82%);
+  backdrop-filter: blur(6px);
 }
 
 .family-focus-head {
@@ -1350,17 +1442,18 @@ select {
   align-items: center;
   gap: 7px;
   padding: 7px 9px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
   border-radius: 999px;
-  background: var(--paper-strong);
+  background: #fff;
   color: var(--ink);
   cursor: pointer;
   font-weight: 800;
 }
 
 .family-focus-chip-list button.is-selected {
-  border-color: rgba(15, 118, 110, 0.62);
-  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 72%, #fff 28%);
+  background: color-mix(in oklab, var(--accent) 10%, #fff 90%);
+  color: var(--accent-strong);
 }
 
 .family-mini-avatar {
@@ -1369,8 +1462,8 @@ select {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: #dff2ef;
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
   font-size: 0.68rem;
   font-weight: 900;
 }
@@ -1689,7 +1782,8 @@ select {
   }
 
   .family-tree-toolbar {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .family-tree-search {
@@ -1698,6 +1792,10 @@ select {
 
   .family-tree-controls {
     justify-content: flex-start;
+  }
+
+  .tree-view-switch {
+    justify-self: stretch;
   }
 
   .family-tree-viewport {

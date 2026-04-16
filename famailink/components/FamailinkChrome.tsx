@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -23,9 +24,15 @@ function initialsFromUsername(username: string) {
 
 export function BrandMark() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <span className="brand-arch" />
-      <span className="brand-tree">EFL</span>
+    <span className="brand-mark">
+      <Image
+        src="/brand/logo-arch-tree.png"
+        alt=""
+        width={3644}
+        height={5264}
+        className="brand-logo-image"
+        priority
+      />
     </span>
   );
 }
@@ -38,8 +45,8 @@ export function FamailinkChrome({ active, username, personId }: FamailinkChromeP
       <Link className="app-brand" href="/tree">
         <BrandMark />
         <span>
-          <strong>Famailink</strong>
-          <small>Eternal Family Link</small>
+          <strong>The Eternal Family Link</strong>
+          <small>Famailink MVP</small>
         </span>
       </Link>
 

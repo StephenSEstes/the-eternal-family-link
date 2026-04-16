@@ -107,6 +107,7 @@ type FocusGroup = "household" | "parents" | "spouses" | "siblings" | "children";
 type TreeGraphModel = {
   peopleById: Map<string, TreePerson>;
   relationByPersonId: Map<string, SelectedRelative>;
+  visiblePersonIds: Set<string>;
   parentsByChild: Map<string, Set<string>>;
   childrenByParent: Map<string, Set<string>>;
   spousesByPerson: Map<string, Set<string>>;
@@ -119,6 +120,9 @@ type TreeGraphModel = {
 
 type SharingOverrideMode = "follow_default" | "always_share" | "name_only" | "custom_scopes";
 type SubscriptionOverrideMode = "follow_default" | "always_subscribe" | "do_not_subscribe";
+type TreeGraphOptions = {
+  includeInLaws: boolean;
+};
 
 type ModalSettings = {
   subscriptionDefaults: SubscriptionDefaultRule[];
@@ -143,16 +147,6 @@ function readSideLabel(side: LineageSide) {
   if (side === "paternal") return "Paternal";
   if (side === "both") return "Both Sides";
   return "";
-}
-
-function formatTimestamp(value: string) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return "Not yet recomputed";
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Denver",
-  }).format(new Date(timestamp));
 }
 
 function shareSummary(row: ProfileVisibilityMapRow | undefined) {
@@ -316,6 +310,10 @@ function isSpouseRelationship(row: TreeRelationship) {
   return type === "spouse" || type === "family";
 }
 
+function isInLawCategory(category: RelationshipCategory) {
+  return category.endsWith("_in_law");
+}
+
 function initials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.slice(0, 1) ?? "";
@@ -343,7 +341,7 @@ function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePe
   return `${names.join(" & ")} Household`;
 }
 
-function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
+function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions): TreeGraphModel {
   const peopleById = new Map<string, TreePerson>();
   for (const person of snapshot.people) {
     if (!normalize(person.personId)) continue;
@@ -357,6 +355,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
 
   const relationByPersonId = new Map<string, SelectedRelative>();
   for (const category of RELATION_PRIORITY) {
+    if (!options.includeInLaws && isInLawCategory(category)) continue;
     for (const person of snapshot.buckets[category] ?? []) {
       if (!relationByPersonId.has(person.personId)) {
         relationByPersonId.set(person.personId, { person, category });
@@ -393,6 +392,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
     const toPersonId = normalize(relationship.toPersonId);
     if (!fromPersonId || !toPersonId) continue;
     if (!peopleById.has(fromPersonId) || !peopleById.has(toPersonId)) continue;
+    if (!visiblePersonIds.has(fromPersonId) || !visiblePersonIds.has(toPersonId)) continue;
 
     if (isParentRelationship(relationship)) {
       addSetValue(parentsByChild, toPersonId, fromPersonId);
@@ -597,6 +597,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
   return {
     peopleById,
     relationByPersonId,
+    visiblePersonIds,
     parentsByChild,
     childrenByParent,
     spousesByPerson,
@@ -1057,7 +1058,6 @@ function HouseholdTreeUnit({
 export function TreeClient({
   session,
   snapshot,
-  recomputeStatus,
   visibilityRows,
   subscriptionRows,
 }: {
@@ -1077,6 +1077,7 @@ export function TreeClient({
   const [modalError, setModalError] = useState("");
   const [treeSearch, setTreeSearch] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [showInLaws, setShowInLaws] = useState(true);
 
   const visibilityByTarget = useMemo(
     () => new Map(visibilityRows.map((row) => [row.targetPersonId, row])),
@@ -1086,13 +1087,18 @@ export function TreeClient({
     () => new Map(subscriptionRows.map((row) => [row.targetPersonId, row])),
     [subscriptionRows],
   );
-  const graph = useMemo(() => buildTreeGraphModel(snapshot), [snapshot]);
-  const hasPersistedMaps = Boolean(recomputeStatus.summary);
-  const focusedPerson = graph.peopleById.get(focusedPersonId) ?? graph.peopleById.get(snapshot.viewer.personId) ?? null;
+  const graph = useMemo(() => buildTreeGraphModel(snapshot, { includeInLaws: showInLaws }), [showInLaws, snapshot]);
+  const effectiveFocusedPersonId = graph.visiblePersonIds.has(focusedPersonId) ? focusedPersonId : snapshot.viewer.personId;
+  const focusedPerson =
+    graph.peopleById.get(effectiveFocusedPersonId) ?? graph.peopleById.get(snapshot.viewer.personId) ?? null;
   const focusedRelation = focusedPerson ? graph.relationByPersonId.get(focusedPerson.personId) : undefined;
   const activeHouseholdIds = focusedPerson ? graph.householdIdsByPerson.get(focusedPerson.personId) ?? [] : [];
   const activeHouseholdId = activeHouseholdIds[0] ?? "";
   const activeHousehold = graph.units.find((unit) => unit.householdId === activeHouseholdId) ?? null;
+  const inLawRelativeCount = RELATION_PRIORITY.filter(isInLawCategory).reduce(
+    (count, category) => count + (snapshot.buckets[category]?.length ?? 0),
+    0,
+  );
 
   const focusNavigation = useMemo(() => {
     if (!focusedPerson) {
@@ -1165,6 +1171,7 @@ export function TreeClient({
   }
 
   function selectPerson(personId: string) {
+    if (!graph.visiblePersonIds.has(personId)) return;
     const next = selectedRelativeForPerson(personId);
     if (!next) return;
     if (focusedPersonId === personId) {
@@ -1403,45 +1410,6 @@ export function TreeClient({
   return (
     <main className="shell">
       <FamailinkChrome active="tree" username={session.username} personId={session.personId} />
-      <header className="masthead">
-        <div>
-          <p className="eyebrow">Famailink</p>
-          <h1 className="title">Family Tree</h1>
-          <p className="lead">
-            Select a person to navigate the family relationship map. Open details to view saved sharing/subscription
-            readback and manage inclusion rules for that relative.
-          </p>
-        </div>
-      </header>
-
-      <section className="summary-strip">
-        <div className="stat-grid">
-          <article className="stat-card">
-            <p className="stat-label">Signed In Person</p>
-            <p className="stat-value">{snapshot.viewer.displayName}</p>
-          </article>
-          <article className="stat-card">
-            <p className="stat-label">People Loaded</p>
-            <p className="stat-value">{snapshot.peopleCount}</p>
-          </article>
-          <article className="stat-card">
-            <p className="stat-label">Graph Relationship Rows</p>
-            <p className="stat-value">{snapshot.relationshipCount}</p>
-          </article>
-          <article className="stat-card">
-            <p className="stat-label">Relatives In Your Tree</p>
-            <p className="stat-value">{snapshot.relatedCount}</p>
-          </article>
-          <article className="stat-card">
-            <p className="stat-label">Saved Readback</p>
-            <p className="stat-value">{hasPersistedMaps ? "Ready" : "Pending"}</p>
-          </article>
-          <article className="stat-card">
-            <p className="stat-label">Last Recompute</p>
-            <p className="stat-value recompute-value">{formatTimestamp(recomputeStatus.summary?.lastComputedAt ?? "")}</p>
-          </article>
-        </div>
-      </section>
 
       <section className="family-tree-shell">
         <div className="family-tree-toolbar">
@@ -1467,6 +1435,25 @@ export function TreeClient({
               </div>
             ) : null}
           </div>
+
+          <label className="tree-view-switch">
+            <input
+              type="checkbox"
+              checked={showInLaws}
+              onChange={(event) => {
+                setShowInLaws(event.target.checked);
+                setTreeSearch("");
+                setFocusGroup("household");
+              }}
+            />
+            <span className="tree-view-switch-track" aria-hidden="true">
+              <span className="tree-view-switch-thumb" />
+            </span>
+            <span>
+              <strong>In-laws</strong>
+              <small>{showInLaws ? `${inLawRelativeCount} shown` : `${inLawRelativeCount} hidden`}</small>
+            </span>
+          </label>
 
           <div className="family-tree-controls" aria-label="Tree navigation controls">
             <button type="button" className="tree-control-btn" onClick={() => setZoom((current) => Math.min(1.45, current + 0.1))} aria-label="Zoom in">
@@ -1501,7 +1488,7 @@ export function TreeClient({
                     key={unit.householdId}
                     unit={unit}
                     graph={graph}
-                    focusedPersonId={focusedPersonId}
+                    focusedPersonId={effectiveFocusedPersonId}
                     visibilityByTarget={visibilityByTarget}
                     subscriptionByTarget={subscriptionByTarget}
                     onSelect={selectPerson}
@@ -1570,7 +1557,7 @@ export function TreeClient({
                     <button
                       key={`${focusGroup}:${person.personId}`}
                       type="button"
-                      className={person.personId === focusedPersonId ? "is-selected" : ""}
+                      className={person.personId === effectiveFocusedPersonId ? "is-selected" : ""}
                       onClick={() => selectPerson(person.personId)}
                     >
                       <span className="family-mini-avatar" aria-hidden="true">
