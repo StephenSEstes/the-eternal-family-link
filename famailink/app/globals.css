@@ -1088,6 +1088,14 @@ select {
   transition: transform 180ms ease;
 }
 
+.family-household-forest {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 26px;
+  min-width: max-content;
+}
+
 .family-generation-row {
   display: grid;
   gap: 14px;
@@ -1148,7 +1156,8 @@ select {
 }
 
 .family-household-parents,
-.family-household-children {
+.family-household-children,
+.family-household-descendants {
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -1173,14 +1182,16 @@ select {
   background: rgba(15, 118, 110, 0.38);
 }
 
-.family-household-children {
+.family-household-children,
+.family-household-descendants {
   position: relative;
   flex-wrap: wrap;
-  max-width: 520px;
+  max-width: 760px;
   padding-top: 16px;
 }
 
-.family-household-children::before {
+.family-household-children::before,
+.family-household-descendants::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1191,11 +1202,15 @@ select {
   background: rgba(15, 118, 110, 0.34);
 }
 
-.family-child-slot {
+.family-child-slot,
+.family-child-household-slot,
+.family-child-person-slot {
   position: relative;
 }
 
-.family-child-slot::before {
+.family-child-slot::before,
+.family-child-household-slot::before,
+.family-child-person-slot::before {
   content: "";
   position: absolute;
   left: 50%;

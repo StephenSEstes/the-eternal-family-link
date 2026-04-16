@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-15: Fixed the Famailink household tree model so duplicate source/synthetic household identities collapse to one visual household and children with their own households nest under parent households instead of rendering as loose duplicate child cards. See `docs/change-summary.md`.
 - 2026-04-15: Reworked Famailink `/tree` into a household-first graph prototype with household rows, centered children, household-to-child connector lines, search/focus/zoom navigation, and default-collapsed `/rules-tree` generations. See `docs/change-summary.md`.
 - 2026-04-14: Added `Grandparents-In-Law` as a real supported Famailink relationship category across derivation, defaults, the rules tree, and tree grouping, replacing the earlier placeholder-only treatment. See `docs/change-summary.md`.
 - 2026-04-14: Reworked Famailink `/rules-tree` into a more EFL-like generational tree, with grandparents above parents, children above grandchildren, your generation centered, cooler tree-style visuals, and modal editing retained for each relationship group. See `docs/change-summary.md`.

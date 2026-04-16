@@ -27,6 +27,8 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink now defaults broadly inclusive in the MVP, with synthesized broad defaults and person exceptions positioned as the primary narrowing tool.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Progress 2026-04-15:
+  - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
   Agreed implementation plan 2026-04-15 (Famailink EFL-style household tree parity pass):
   - Scope:
     - Default all `/rules-tree` generation sections to collapsed on first load.

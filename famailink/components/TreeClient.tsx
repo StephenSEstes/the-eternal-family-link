@@ -95,6 +95,9 @@ type HouseholdUnit = {
   label: string;
   parentIds: string[];
   childIds: string[];
+  childPersonIds: string[];
+  childHouseholdIds: string[];
+  parentUnitIds: string[];
   generation: number;
   isSynthetic: boolean;
 };
@@ -109,6 +112,7 @@ type TreeGraphModel = {
   spousesByPerson: Map<string, Set<string>>;
   householdIdsByPerson: Map<string, string[]>;
   units: HouseholdUnit[];
+  unitsById: Map<string, HouseholdUnit>;
   rows: Array<{ generation: number; label: string; units: HouseholdUnit[] }>;
   visiblePeople: TreePerson[];
 };
@@ -434,21 +438,36 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
   const units = new Map<string, HouseholdUnit>();
   const householdIdsByPerson = new Map<string, string[]>();
   const unitIdByPairKey = new Map<string, string>();
+  const unitIdByCanonicalKey = new Map<string, string>();
   const unitIdsByParentId = new Map<string, string[]>();
 
   function registerUnit(input: { householdId: string; parentIds: string[]; label: string; isSynthetic: boolean }) {
     const parentIds = uniqueStrings(input.parentIds).filter((personId) => visiblePersonIds.has(personId));
-    if (parentIds.length === 0 || units.has(input.householdId)) return;
+    if (parentIds.length === 0 || units.has(input.householdId)) return "";
+    const canonicalKey = parentIds.length >= 2 ? `pair:${pairKey(parentIds[0], parentIds[1])}` : `single:${parentIds[0]}`;
+    const existingUnitId = unitIdByCanonicalKey.get(canonicalKey) ?? "";
+    if (existingUnitId) {
+      const existing = units.get(existingUnitId);
+      if (existing && !input.isSynthetic && existing.isSynthetic) {
+        existing.label = input.label || existing.label;
+        existing.isSynthetic = false;
+      }
+      return existingUnitId;
+    }
     const absoluteGeneration = Math.min(...parentIds.map((personId) => levels.get(personId) ?? viewerLevel));
     const unit: HouseholdUnit = {
       householdId: input.householdId,
       label: input.label || buildHouseholdLabel(parentIds, peopleById, input.householdId),
       parentIds,
       childIds: [],
+      childPersonIds: [],
+      childHouseholdIds: [],
+      parentUnitIds: [],
       generation: absoluteGeneration - viewerLevel,
       isSynthetic: input.isSynthetic,
     };
     units.set(unit.householdId, unit);
+    unitIdByCanonicalKey.set(canonicalKey, unit.householdId);
     for (const parentId of parentIds) {
       addMapArrayValue(householdIdsByPerson, parentId, unit.householdId);
       addMapArrayValue(unitIdsByParentId, parentId, unit.householdId);
@@ -456,6 +475,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
     if (parentIds.length >= 2) {
       unitIdByPairKey.set(pairKey(parentIds[0], parentIds[1]), unit.householdId);
     }
+    return unit.householdId;
   }
 
   for (const household of snapshot.households) {
@@ -514,9 +534,25 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
     if (!unit.childIds.includes(childId)) unit.childIds.push(childId);
   }
 
+  for (const unit of units.values()) {
+    for (const childId of unit.childIds) {
+      const childHouseholdId =
+        (householdIdsByPerson.get(childId) ?? []).find((householdId) => householdId !== unit.householdId) ?? "";
+      if (childHouseholdId) {
+        if (!unit.childHouseholdIds.includes(childHouseholdId)) unit.childHouseholdIds.push(childHouseholdId);
+        const childUnit = units.get(childHouseholdId);
+        if (childUnit && !childUnit.parentUnitIds.includes(unit.householdId)) {
+          childUnit.parentUnitIds.push(unit.householdId);
+        }
+      } else if (!unit.childPersonIds.includes(childId)) {
+        unit.childPersonIds.push(childId);
+      }
+    }
+  }
+
   for (const personId of visiblePersonIds) {
     const isParent = Array.from(units.values()).some((unit) => unit.parentIds.includes(personId));
-    const isChild = Array.from(units.values()).some((unit) => unit.childIds.includes(personId));
+    const isChild = Array.from(units.values()).some((unit) => unit.childPersonIds.includes(personId));
     if (isParent || isChild) continue;
     registerUnit({
       householdId: `person-unit-${personId}`,
@@ -529,6 +565,14 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
   for (const unit of units.values()) {
     unit.parentIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
     unit.childIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
+    unit.childPersonIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
+    unit.childHouseholdIds.sort((left, right) => {
+      const leftUnit = units.get(left);
+      const rightUnit = units.get(right);
+      const leftName = peopleById.get(leftUnit?.parentIds[0] ?? "")?.displayName ?? leftUnit?.label ?? left;
+      const rightName = peopleById.get(rightUnit?.parentIds[0] ?? "")?.displayName ?? rightUnit?.label ?? right;
+      return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
+    });
   }
 
   const rowMap = new Map<number, HouseholdUnit[]>();
@@ -558,6 +602,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
     spousesByPerson,
     householdIdsByPerson,
     units: Array.from(units.values()),
+    unitsById: units,
     rows,
     visiblePeople: Array.from(visiblePersonIds)
       .map((personId) => peopleById.get(personId))
@@ -918,6 +963,97 @@ function PersonTreeCard({
   );
 }
 
+function HouseholdTreeUnit({
+  unit,
+  graph,
+  focusedPersonId,
+  visibilityByTarget,
+  subscriptionByTarget,
+  onSelect,
+  visited,
+}: {
+  unit: HouseholdUnit;
+  graph: TreeGraphModel;
+  focusedPersonId: string;
+  visibilityByTarget: Map<string, ProfileVisibilityMapRow>;
+  subscriptionByTarget: Map<string, ProfileSubscriptionMapRow>;
+  onSelect: (personId: string) => void;
+  visited: Set<string>;
+}) {
+  if (visited.has(unit.householdId)) return null;
+  const nextVisited = new Set(visited);
+  nextVisited.add(unit.householdId);
+  const childUnits = unit.childHouseholdIds
+    .map((householdId) => graph.unitsById.get(householdId))
+    .filter((childUnit): childUnit is HouseholdUnit => Boolean(childUnit));
+  const hasDescendants = childUnits.length > 0 || unit.childPersonIds.length > 0;
+  const isFocusedHousehold =
+    unit.parentIds.includes(focusedPersonId) ||
+    unit.childPersonIds.includes(focusedPersonId) ||
+    unit.childIds.includes(focusedPersonId);
+
+  return (
+    <article className={`family-household-unit${isFocusedHousehold ? " is-focused" : ""}`}>
+      <div className="family-household-frame">
+        <p className="family-household-label">{unit.label}</p>
+        <div className="family-household-parents">
+          {unit.parentIds.map((personId) => {
+            const person = graph.peopleById.get(personId);
+            if (!person) return null;
+            return (
+              <PersonTreeCard
+                key={`${unit.householdId}:${personId}`}
+                person={person}
+                relation={graph.relationByPersonId.get(personId)}
+                isFocused={personId === focusedPersonId}
+                visibilityRow={visibilityByTarget.get(personId)}
+                subscriptionRow={subscriptionByTarget.get(personId)}
+                onSelect={onSelect}
+              />
+            );
+          })}
+        </div>
+      </div>
+      {hasDescendants ? (
+        <>
+          <div className="family-child-connector" aria-hidden="true" />
+          <div className="family-household-descendants">
+            {childUnits.map((childUnit) => (
+              <div key={`${unit.householdId}:child-household:${childUnit.householdId}`} className="family-child-household-slot">
+                <HouseholdTreeUnit
+                  unit={childUnit}
+                  graph={graph}
+                  focusedPersonId={focusedPersonId}
+                  visibilityByTarget={visibilityByTarget}
+                  subscriptionByTarget={subscriptionByTarget}
+                  onSelect={onSelect}
+                  visited={nextVisited}
+                />
+              </div>
+            ))}
+            {unit.childPersonIds.map((personId) => {
+              const person = graph.peopleById.get(personId);
+              if (!person) return null;
+              return (
+                <div key={`${unit.householdId}:child-person:${personId}`} className="family-child-person-slot">
+                  <PersonTreeCard
+                    person={person}
+                    relation={graph.relationByPersonId.get(personId)}
+                    isFocused={personId === focusedPersonId}
+                    visibilityRow={visibilityByTarget.get(personId)}
+                    subscriptionRow={subscriptionByTarget.get(personId)}
+                    onSelect={onSelect}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </article>
+  );
+}
+
 export function TreeClient({
   session,
   snapshot,
@@ -1004,6 +1140,17 @@ export function TreeClient({
     if (!query) return [];
     return graph.visiblePeople.filter((person) => person.displayName.toLowerCase().includes(query)).slice(0, 8);
   }, [graph.visiblePeople, treeSearch]);
+  const rootUnits = useMemo(
+    () =>
+      graph.units
+        .filter((unit) => unit.parentUnitIds.length === 0)
+        .sort((left, right) => {
+          const leftName = graph.peopleById.get(left.parentIds[0])?.displayName ?? left.label;
+          const rightName = graph.peopleById.get(right.parentIds[0])?.displayName ?? right.label;
+          return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
+        }),
+    [graph.peopleById, graph.units],
+  );
 
   const focusPeople = focusNavigation[focusGroup];
 
@@ -1348,69 +1495,20 @@ export function TreeClient({
         <div className="family-tree-main">
           <div className="family-tree-viewport">
             <div className="family-tree-board" style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
-              {graph.rows.map((row) => (
-                <section key={row.generation} className="family-generation-row">
-                  <p className="family-generation-label">{row.label}</p>
-                  <div className="family-household-row">
-                    {row.units.map((unit) => {
-                      const isFocusedHousehold =
-                        unit.householdId === activeHouseholdId ||
-                        unit.parentIds.includes(focusedPersonId) ||
-                        unit.childIds.includes(focusedPersonId);
-                      return (
-                        <article
-                          key={unit.householdId}
-                          className={`family-household-unit${isFocusedHousehold ? " is-focused" : ""}`}
-                        >
-                          <div className="family-household-frame">
-                            <p className="family-household-label">{unit.label}</p>
-                            <div className="family-household-parents">
-                              {unit.parentIds.map((personId) => {
-                                const person = graph.peopleById.get(personId);
-                                if (!person) return null;
-                                return (
-                                  <PersonTreeCard
-                                    key={`${unit.householdId}:${personId}`}
-                                    person={person}
-                                    relation={graph.relationByPersonId.get(personId)}
-                                    isFocused={personId === focusedPersonId}
-                                    visibilityRow={visibilityByTarget.get(personId)}
-                                    subscriptionRow={subscriptionByTarget.get(personId)}
-                                    onSelect={selectPerson}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                          {unit.childIds.length > 0 ? (
-                            <>
-                              <div className="family-child-connector" aria-hidden="true" />
-                              <div className="family-household-children">
-                                {unit.childIds.map((personId) => {
-                                  const person = graph.peopleById.get(personId);
-                                  if (!person) return null;
-                                  return (
-                                    <div key={`${unit.householdId}:child:${personId}`} className="family-child-slot">
-                                      <PersonTreeCard
-                                        person={person}
-                                        relation={graph.relationByPersonId.get(personId)}
-                                        isFocused={personId === focusedPersonId}
-                                        visibilityRow={visibilityByTarget.get(personId)}
-                                        subscriptionRow={subscriptionByTarget.get(personId)}
-                                        onSelect={selectPerson}
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </>
-                          ) : null}
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
+              <div className="family-household-forest">
+                {rootUnits.map((unit) => (
+                  <HouseholdTreeUnit
+                    key={unit.householdId}
+                    unit={unit}
+                    graph={graph}
+                    focusedPersonId={focusedPersonId}
+                    visibilityByTarget={visibilityByTarget}
+                    subscriptionByTarget={subscriptionByTarget}
+                    onSelect={selectPerson}
+                    visited={new Set()}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 

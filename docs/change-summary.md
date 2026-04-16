@@ -31,6 +31,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Rollback Notes`: Revert this change to restore the previous relationship-generation tree and expanded-by-default rules tree.
 - `Design Decision Change`: Yes. Added the 2026-04-15 Famailink household tree behavior decision to `designchoices.md`.
 
+## 2026-04-15 (Famailink household tree duplicate fix)
+
+- `Date`: 2026-04-15
+- `Change`: Corrected the Famailink household graph so the same couple/person household is canonicalized once and child households nest under parent households instead of rendering as duplicate peer household cards plus loose child person cards.
+- `Type`: UI
+- `Why`: Root cause was in the client tree model. `TreeClient` deduped household units by `household_id` only, so multiple source rows or synthesized units for the same couple could render repeatedly. It also rendered `childIds` as person cards beneath a household even when that child already had their own household unit, which made the output diverge from EFL's parent-household-to-child-household graph.
+- `Files`: `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: No schema or data change. Existing household/person/relationship rows are interpreted more strictly in the UI model.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Repeated source/synthetic household identities collapse to one visual household unit.
+  - Children with their own household render as child household units under their parents, not as duplicated loose child cards.
+- `Rollback Notes`: Revert this change to restore the previous flat household row rendering.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-14 (Famailink EFL-style generational rules tree)
 
 - `Date`: 2026-04-14
