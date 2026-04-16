@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-15 (Famailink household tree parity pass)
+
+- `Date`: 2026-04-15
+- `Change`: Reworked Famailink `/tree` from a derived relationship-generation list into a household-first graph prototype. The tree snapshot now includes direct people, relationship rows, and household rows; the client builds household units, centers children beneath parent households, draws household-to-child connector lines, and adds compact search, zoom/reset, return-to-me, and focus navigation controls. `/rules-tree` now starts with all generation sections collapsed.
+- `Type`: UI | API
+- `Why`: Root cause was a code/design mismatch. Famailink had been rendering relationship buckets from derived rule categories, while EFL behavior depends on direct parent/spouse/household structure. Because `buildTreeLabSnapshot()` did not expose households or direct graph rows to the client, `/tree` could not display households, centered child rows, household connectors, or relationship navigation even though the underlying data existed.
+- `Files`: `TODO.md`, `designchoices.md`, `changeHistory.md`, `docs/change-summary.md`, `famailink/lib/family/store.ts`, `famailink/components/TreeClient.tsx`, `famailink/components/RulesTreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: No schema or data migration. The new household query reads existing `households` rows and falls back to synthesized household units from direct spouse/parent relationships when needed.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/rules-tree` first load starts collapsed by generation.
+  - `/tree` renders household units with parent cards, centered child cards, and connector lines from household to children.
+  - Person search, zoom/reset, return-to-me, and focus chips for parents/spouse/siblings/children are available.
+  - Opening a selected person still uses the existing person detail modal and Inclusion Rules save/recompute routes.
+- `Rollback Notes`: Revert this change to restore the previous relationship-generation tree and expanded-by-default rules tree.
+- `Design Decision Change`: Yes. Added the 2026-04-15 Famailink household tree behavior decision to `designchoices.md`.
+
 ## 2026-04-14 (Famailink EFL-style generational rules tree)
 
 - `Date`: 2026-04-14

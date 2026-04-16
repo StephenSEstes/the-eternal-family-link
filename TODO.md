@@ -27,6 +27,46 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink now defaults broadly inclusive in the MVP, with synthesized broad defaults and person exceptions positioned as the primary narrowing tool.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
+  Agreed implementation plan 2026-04-15 (Famailink EFL-style household tree parity pass):
+  - Scope:
+    - Default all `/rules-tree` generation sections to collapsed on first load.
+    - Replace the current `/tree` relationship-bucket/generation rendering with a household-first graph layout that uses direct parent/spouse structure.
+    - Display household units, center children under their parent household, and draw visible household-to-child connector lines.
+    - Add compact EFL-style navigation controls to the tree: person search, zoom/reset controls, clear focus, and focus chips for parents, spouse, siblings, and children.
+    - Keep the existing person detail modal and Inclusion Rules tab; do not change the defaults/exceptions schema or save APIs.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Observe that the page renders derived relationship rows by generation instead of household units.
+    - Select a person and compare the behavior to the legacy EFL tree: households are not shown as parent units, children are not centered beneath parents, connector lines do not run from households to children, and graph navigation controls are missing.
+    - Open `/rules-tree` and observe that generation sections are expanded by default.
+  - Failing data/query/code path:
+    - `buildTreeLabSnapshot()` returns only `viewer`, derived relationship `buckets`, and counts; it does not expose direct people, direct relationship rows, or household rows to the client.
+    - `TreeClient` maps `snapshot.buckets` into `TREE_GENERATIONS`, so the UI cannot render real household structure even when direct parent/spouse data exists.
+    - `RulesTreeClient` initializes `collapsedGenerations` to an empty set, so every rules generation starts expanded.
+  - Root cause:
+    - The Famailink `/tree` was still an MVP readback surface organized around derived rule categories, not the EFL household graph model.
+    - The client had no household input and no household-to-child layout stage, so it could not show the structural tree behavior Steve expects.
+    - The rules tree collapse state default was set for editing convenience, not compact review.
+  - Implementation:
+    - Extend the Famailink family snapshot with direct `people`, direct `relationships`, and lightweight `households`.
+    - Query household rows from OCI using the app's shared connection pattern and normalize them to `householdId`, parent person IDs, and label.
+    - In `TreeClient`, build parent/child/spouse/household maps from the snapshot and render household units grouped by generation around the signed-in viewer.
+    - Use household rows where available and synthesize spouse/one-parent household units from direct graph rows when household metadata is absent.
+    - Render person cards inside household frames, child cards centered below parent frames, and connector lines from the household frame to the child row.
+    - Add search/focus/zoom controls without importing legacy EFL components, preserving the isolated Famailink implementation decision.
+    - Initialize `/rules-tree` with all generation IDs collapsed.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `/rules-tree` first load shows all generation rows collapsed.
+    - `/tree` renders household units instead of category buckets.
+    - Children render centered below their parent household unit with connector lines from household to child row.
+    - Person selection/focus navigation can move to parents, spouse, siblings, and children when those graph relationships exist.
+    - Opening a selected person still shows the person detail modal and Inclusion Rules tab using the existing save/recompute routes.
+  - Completion criteria:
+    - Famailink `/tree` behaves as a household graph prototype rather than a relationship bucket list.
+    - The tree remains isolated from legacy EFL runtime imports while matching the key EFL concepts: households, parent-child connectors, centered children, and navigation.
+    - No schema or data migration is required.
   Agreed implementation plan 2026-04-14 (Famailink administration tab + EFL-style tree shell):
   - Scope:
     - Add a top-level `Administration` tab/surface for Famailink management tools.

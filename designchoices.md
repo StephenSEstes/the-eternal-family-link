@@ -510,3 +510,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep Tree, Rules Tree, and Preferences as top-level peers; remove `/preferences` immediately; import the legacy EFL tree/modal components directly into Famailink.
 - `Impact`: Famailink now has an app header with `Family Tree` and `Administration`, a management landing page, a more EFL-like tree presentation, and inclusion/exclusion controls moved into a person detail tab. The isolated Famailink implementation still does not import legacy EFL runtime components.
 - `Follow-up`: Continue tightening the Famailink tree toward the full EFL tree behavior only after validating this isolated implementation against live Famailink data.
+
+## 2026-04-15
+
+- `Area`: Famailink household tree behavior
+- `Decision`: Famailink `/tree` should render from direct household/parent/spouse structure rather than derived relationship buckets. The isolated Famailink tree should expose household units, household-to-child connector lines, centered child rows, person focus, search, zoom/reset controls, and relationship navigation chips while continuing to use the existing person detail modal for inclusion/exclusion rules.
+- `Reason`: The derived-bucket tree did not match the EFL mental model. Users expect a family tree to show households and children under parents, not rows of relationship categories.
+- `Alternatives Considered`: Keep the bucket tree and improve styling only; import the legacy EFL `TreeGraph` component directly; defer household rendering until the full app port.
+- `Impact`: `buildTreeLabSnapshot()` now exposes direct people, relationships, and lightweight household rows to the Famailink client. `/tree` builds an isolated household graph from those inputs and keeps existing defaults/exceptions save APIs unchanged.
+- `Follow-up`: Validate against live family data and decide whether to add true pan/drag canvas behavior or deeper legacy EFL parity after the household prototype is tested.

@@ -104,6 +104,8 @@ const RULE_TREE_GENERATIONS: Array<{ id: string; label: string; description: str
   },
 ];
 
+const DEFAULT_COLLAPSED_GENERATIONS = new Set(RULE_TREE_GENERATIONS.map((generation) => generation.id));
+
 const SHARE_SCOPE_FIELDS = ["shareVitals", "shareStories", "shareMedia", "shareConversations"] as const;
 
 const SHARE_SCOPE_LABELS: Record<(typeof SHARE_SCOPE_FIELDS)[number], string> = {
@@ -193,7 +195,9 @@ export function RulesTreeClient({ session }: { session: SessionInfo }) {
   const [subscriptionDefaults, setSubscriptionDefaults] = useState<SubscriptionDefaultDraft[]>(buildSubscriptionDefaults([]));
   const [shareDefaults, setShareDefaults] = useState<ShareDefaultDraft[]>(buildShareDefaults([]));
   const [editor, setEditor] = useState<RuleEditorState | null>(null);
-  const [collapsedGenerations, setCollapsedGenerations] = useState<Set<string>>(new Set());
+  const [collapsedGenerations, setCollapsedGenerations] = useState<Set<string>>(
+    () => new Set(DEFAULT_COLLAPSED_GENERATIONS),
+  );
   const [loadVersion, setLoadVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);

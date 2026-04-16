@@ -18,29 +18,23 @@ import type {
 import type { LineageSide, RelationshipCategory } from "@/lib/model/relationships";
 import { RELATIONSHIP_LABELS } from "@/lib/model/relationships";
 
-const TREE_COLUMNS: Array<{ title: string; categories: RelationshipCategory[] }> = [
-  { title: "Roots", categories: ["grandparents", "parents"] },
-  { title: "Center", categories: ["siblings", "self", "spouse"] },
-  { title: "Branches", categories: ["children", "grandchildren"] },
-  { title: "Extended", categories: ["aunts_uncles", "cousins", "cousins_children", "nieces_nephews"] },
-  {
-    title: "In-Laws",
-    categories: [
-      "grandparents_in_law",
-      "parents_in_law",
-      "siblings_in_law",
-      "children_in_law",
-      "nieces_nephews_in_law",
-    ],
-  },
-];
-
-const TREE_GENERATIONS: Array<{ id: string; label: string; categories: RelationshipCategory[] }> = [
-  { id: "grandparents", label: "Grandparents", categories: ["grandparents", "grandparents_in_law"] },
-  { id: "parents", label: "Parents", categories: ["aunts_uncles", "parents", "parents_in_law"] },
-  { id: "center", label: "Your Generation", categories: ["cousins", "siblings", "self", "spouse", "siblings_in_law"] },
-  { id: "children", label: "Children", categories: ["nieces_nephews", "children", "children_in_law", "nieces_nephews_in_law"] },
-  { id: "grandchildren", label: "Grandchildren", categories: ["cousins_children", "grandchildren"] },
+const RELATION_PRIORITY: RelationshipCategory[] = [
+  "self",
+  "spouse",
+  "parents",
+  "parents_in_law",
+  "grandparents",
+  "grandparents_in_law",
+  "children",
+  "children_in_law",
+  "grandchildren",
+  "siblings",
+  "siblings_in_law",
+  "aunts_uncles",
+  "nieces_nephews",
+  "nieces_nephews_in_law",
+  "cousins",
+  "cousins_children",
 ];
 
 type SessionInfo = {
@@ -58,18 +52,65 @@ type SelectedRelative = {
 type TreeBucketPerson = {
   personId: string;
   displayName: string;
+  gender?: string;
   lineageSides: LineageSide[];
+};
+
+type TreePerson = {
+  personId: string;
+  displayName: string;
+  gender: string;
+};
+
+type TreeRelationship = {
+  fromPersonId: string;
+  toPersonId: string;
+  relType: string;
+};
+
+type TreeHousehold = {
+  householdId: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  label: string;
 };
 
 type TreeSnapshot = {
   viewer: {
     personId: string;
     displayName: string;
+    gender?: string;
   };
   buckets: Record<RelationshipCategory, TreeBucketPerson[]>;
+  people: TreePerson[];
+  relationships: TreeRelationship[];
+  households: TreeHousehold[];
   peopleCount: number;
   relationshipCount: number;
   relatedCount: number;
+};
+
+type HouseholdUnit = {
+  householdId: string;
+  label: string;
+  parentIds: string[];
+  childIds: string[];
+  generation: number;
+  isSynthetic: boolean;
+};
+
+type FocusGroup = "household" | "parents" | "spouses" | "siblings" | "children";
+
+type TreeGraphModel = {
+  peopleById: Map<string, TreePerson>;
+  relationByPersonId: Map<string, SelectedRelative>;
+  parentsByChild: Map<string, Set<string>>;
+  childrenByParent: Map<string, Set<string>>;
+  spousesByPerson: Map<string, Set<string>>;
+  householdIdsByPerson: Map<string, string[]>;
+  units: HouseholdUnit[];
+  rows: Array<{ generation: number; label: string; units: HouseholdUnit[] }>;
+  visiblePeople: TreePerson[];
 };
 
 type SharingOverrideMode = "follow_default" | "always_share" | "name_only" | "custom_scopes";
@@ -217,6 +258,312 @@ async function fetchJson(url: string, init?: RequestInit) {
     throw new Error(String(payload.error ?? payload.message ?? `Request failed (${response.status}).`));
   }
   return payload;
+}
+
+function normalize(value?: string) {
+  return String(value ?? "").trim();
+}
+
+function normalizeLower(value?: string) {
+  return normalize(value).toLowerCase();
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = normalize(value);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function addSetValue(map: Map<string, Set<string>>, key: string, value: string) {
+  const normalizedKey = normalize(key);
+  const normalizedValue = normalize(value);
+  if (!normalizedKey || !normalizedValue) return;
+  const current = map.get(normalizedKey);
+  if (current) {
+    current.add(normalizedValue);
+    return;
+  }
+  map.set(normalizedKey, new Set([normalizedValue]));
+}
+
+function addMapArrayValue(map: Map<string, string[]>, key: string, value: string) {
+  const normalizedKey = normalize(key);
+  const normalizedValue = normalize(value);
+  if (!normalizedKey || !normalizedValue) return;
+  const current = map.get(normalizedKey) ?? [];
+  if (!current.includes(normalizedValue)) current.push(normalizedValue);
+  map.set(normalizedKey, current);
+}
+
+function pairKey(leftId: string, rightId: string) {
+  return [leftId, rightId].sort().join("::");
+}
+
+function isParentRelationship(row: TreeRelationship) {
+  return normalizeLower(row.relType) === "parent";
+}
+
+function isSpouseRelationship(row: TreeRelationship) {
+  const type = normalizeLower(row.relType);
+  return type === "spouse" || type === "family";
+}
+
+function initials(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.slice(0, 1) ?? "";
+  const second = parts.length > 1 ? parts[parts.length - 1]?.slice(0, 1) ?? "" : "";
+  return `${first}${second}`.toUpperCase() || "?";
+}
+
+function generationLabel(generation: number) {
+  if (generation <= -2) return "Grandparents";
+  if (generation === -1) return "Parents";
+  if (generation === 0) return "Your Generation";
+  if (generation === 1) return "Children";
+  if (generation === 2) return "Grandchildren";
+  return generation < 0 ? `Older Generation ${Math.abs(generation)}` : `Younger Generation ${generation}`;
+}
+
+function compareTreePeople(left: TreePerson, right: TreePerson) {
+  return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
+}
+
+function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePerson>, fallback: string) {
+  const names = parentIds.map((personId) => peopleById.get(personId)?.displayName ?? "").filter(Boolean);
+  if (names.length === 0) return fallback;
+  if (names.length === 1) return `${names[0]} Household`;
+  return `${names.join(" & ")} Household`;
+}
+
+function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
+  const peopleById = new Map<string, TreePerson>();
+  for (const person of snapshot.people) {
+    if (!normalize(person.personId)) continue;
+    peopleById.set(person.personId, person);
+  }
+  peopleById.set(snapshot.viewer.personId, {
+    personId: snapshot.viewer.personId,
+    displayName: snapshot.viewer.displayName,
+    gender: normalize(snapshot.viewer.gender),
+  });
+
+  const relationByPersonId = new Map<string, SelectedRelative>();
+  for (const category of RELATION_PRIORITY) {
+    for (const person of snapshot.buckets[category] ?? []) {
+      if (!relationByPersonId.has(person.personId)) {
+        relationByPersonId.set(person.personId, { person, category });
+      }
+      if (!peopleById.has(person.personId)) {
+        peopleById.set(person.personId, {
+          personId: person.personId,
+          displayName: person.displayName,
+          gender: normalize(person.gender),
+        });
+      }
+    }
+  }
+
+  if (!relationByPersonId.has(snapshot.viewer.personId)) {
+    relationByPersonId.set(snapshot.viewer.personId, {
+      person: {
+        personId: snapshot.viewer.personId,
+        displayName: snapshot.viewer.displayName,
+        gender: snapshot.viewer.gender,
+        lineageSides: ["not_applicable"],
+      },
+      category: "self",
+    });
+  }
+
+  const visiblePersonIds = new Set(relationByPersonId.keys());
+  const parentsByChild = new Map<string, Set<string>>();
+  const childrenByParent = new Map<string, Set<string>>();
+  const spousesByPerson = new Map<string, Set<string>>();
+
+  for (const relationship of snapshot.relationships) {
+    const fromPersonId = normalize(relationship.fromPersonId);
+    const toPersonId = normalize(relationship.toPersonId);
+    if (!fromPersonId || !toPersonId) continue;
+    if (!peopleById.has(fromPersonId) || !peopleById.has(toPersonId)) continue;
+
+    if (isParentRelationship(relationship)) {
+      addSetValue(parentsByChild, toPersonId, fromPersonId);
+      addSetValue(childrenByParent, fromPersonId, toPersonId);
+      continue;
+    }
+    if (isSpouseRelationship(relationship)) {
+      addSetValue(spousesByPerson, fromPersonId, toPersonId);
+      addSetValue(spousesByPerson, toPersonId, fromPersonId);
+    }
+  }
+
+  const levels = new Map<string, number>();
+  for (const personId of visiblePersonIds) levels.set(personId, 0);
+  const roots = Array.from(visiblePersonIds).filter((personId) => {
+    const visibleParents = Array.from(parentsByChild.get(personId) ?? []).filter((parentId) => visiblePersonIds.has(parentId));
+    return visibleParents.length === 0;
+  });
+  const queue = roots.length ? [...roots] : [snapshot.viewer.personId];
+  const seen = new Set<string>();
+  while (queue.length) {
+    const currentId = queue.shift();
+    if (!currentId || seen.has(currentId)) continue;
+    seen.add(currentId);
+    const currentLevel = levels.get(currentId) ?? 0;
+    for (const childId of childrenByParent.get(currentId) ?? []) {
+      if (!visiblePersonIds.has(childId)) continue;
+      levels.set(childId, Math.max(levels.get(childId) ?? 0, currentLevel + 1));
+      queue.push(childId);
+    }
+  }
+  for (let pass = 0; pass < visiblePersonIds.size; pass += 1) {
+    for (const [childId, parentIds] of parentsByChild.entries()) {
+      if (!visiblePersonIds.has(childId)) continue;
+      for (const parentId of parentIds) {
+        if (!visiblePersonIds.has(parentId)) continue;
+        levels.set(childId, Math.max(levels.get(childId) ?? 0, (levels.get(parentId) ?? 0) + 1));
+      }
+    }
+  }
+
+  const viewerLevel = levels.get(snapshot.viewer.personId) ?? 0;
+  const units = new Map<string, HouseholdUnit>();
+  const householdIdsByPerson = new Map<string, string[]>();
+  const unitIdByPairKey = new Map<string, string>();
+  const unitIdsByParentId = new Map<string, string[]>();
+
+  function registerUnit(input: { householdId: string; parentIds: string[]; label: string; isSynthetic: boolean }) {
+    const parentIds = uniqueStrings(input.parentIds).filter((personId) => visiblePersonIds.has(personId));
+    if (parentIds.length === 0 || units.has(input.householdId)) return;
+    const absoluteGeneration = Math.min(...parentIds.map((personId) => levels.get(personId) ?? viewerLevel));
+    const unit: HouseholdUnit = {
+      householdId: input.householdId,
+      label: input.label || buildHouseholdLabel(parentIds, peopleById, input.householdId),
+      parentIds,
+      childIds: [],
+      generation: absoluteGeneration - viewerLevel,
+      isSynthetic: input.isSynthetic,
+    };
+    units.set(unit.householdId, unit);
+    for (const parentId of parentIds) {
+      addMapArrayValue(householdIdsByPerson, parentId, unit.householdId);
+      addMapArrayValue(unitIdsByParentId, parentId, unit.householdId);
+    }
+    if (parentIds.length >= 2) {
+      unitIdByPairKey.set(pairKey(parentIds[0], parentIds[1]), unit.householdId);
+    }
+  }
+
+  for (const household of snapshot.households) {
+    registerUnit({
+      householdId: household.householdId,
+      parentIds: uniqueStrings([household.husbandPersonId, household.wifePersonId]),
+      label: household.label,
+      isSynthetic: false,
+    });
+  }
+
+  for (const [personId, spouseIds] of spousesByPerson.entries()) {
+    if (!visiblePersonIds.has(personId)) continue;
+    for (const spouseId of spouseIds) {
+      if (!visiblePersonIds.has(spouseId)) continue;
+      const key = pairKey(personId, spouseId);
+      if (unitIdByPairKey.has(key)) continue;
+      registerUnit({
+        householdId: `synthetic-household-${key}`,
+        parentIds: [personId, spouseId],
+        label: buildHouseholdLabel([personId, spouseId], peopleById, "Household"),
+        isSynthetic: true,
+      });
+    }
+  }
+
+  for (const [parentId, childIds] of childrenByParent.entries()) {
+    if (!visiblePersonIds.has(parentId)) continue;
+    const hasVisibleChildren = Array.from(childIds).some((childId) => visiblePersonIds.has(childId));
+    if (!hasVisibleChildren || (unitIdsByParentId.get(parentId) ?? []).length > 0) continue;
+    registerUnit({
+      householdId: `synthetic-household-${parentId}`,
+      parentIds: [parentId],
+      label: buildHouseholdLabel([parentId], peopleById, "Household"),
+      isSynthetic: true,
+    });
+  }
+
+  function bestParentUnitForChild(childId: string) {
+    const parentIds = Array.from(parentsByChild.get(childId) ?? []).filter((parentId) => visiblePersonIds.has(parentId));
+    let bestUnit: HouseholdUnit | null = null;
+    let bestScore = 0;
+    for (const unit of units.values()) {
+      const overlap = unit.parentIds.filter((parentId) => parentIds.includes(parentId)).length;
+      if (overlap > bestScore) {
+        bestScore = overlap;
+        bestUnit = unit;
+      }
+    }
+    return bestScore > 0 ? bestUnit : null;
+  }
+
+  for (const childId of visiblePersonIds) {
+    const unit = bestParentUnitForChild(childId);
+    if (!unit || unit.parentIds.includes(childId)) continue;
+    if (!unit.childIds.includes(childId)) unit.childIds.push(childId);
+  }
+
+  for (const personId of visiblePersonIds) {
+    const isParent = Array.from(units.values()).some((unit) => unit.parentIds.includes(personId));
+    const isChild = Array.from(units.values()).some((unit) => unit.childIds.includes(personId));
+    if (isParent || isChild) continue;
+    registerUnit({
+      householdId: `person-unit-${personId}`,
+      parentIds: [personId],
+      label: buildHouseholdLabel([personId], peopleById, "Household"),
+      isSynthetic: true,
+    });
+  }
+
+  for (const unit of units.values()) {
+    unit.parentIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
+    unit.childIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
+  }
+
+  const rowMap = new Map<number, HouseholdUnit[]>();
+  for (const unit of units.values()) {
+    const current = rowMap.get(unit.generation) ?? [];
+    current.push(unit);
+    rowMap.set(unit.generation, current);
+  }
+
+  const rows = Array.from(rowMap.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([generation, rowUnits]) => ({
+      generation,
+      label: generationLabel(generation),
+      units: rowUnits.sort((left, right) => {
+        const leftName = peopleById.get(left.parentIds[0])?.displayName ?? left.label;
+        const rightName = peopleById.get(right.parentIds[0])?.displayName ?? right.label;
+        return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
+      }),
+    }));
+
+  return {
+    peopleById,
+    relationByPersonId,
+    parentsByChild,
+    childrenByParent,
+    spousesByPerson,
+    householdIdsByPerson,
+    units: Array.from(units.values()),
+    rows,
+    visiblePeople: Array.from(visiblePersonIds)
+      .map((personId) => peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeople),
+  };
 }
 
 function RelativeModal({
@@ -530,95 +877,44 @@ function RelativeModal({
   );
 }
 
-function PersonCard({
+function PersonTreeCard({
   person,
-  category,
+  relation,
+  isFocused,
   visibilityRow,
   subscriptionRow,
   onSelect,
 }: {
-  person: TreeBucketPerson;
-  category: RelationshipCategory;
+  person: TreePerson;
+  relation: SelectedRelative | undefined;
+  isFocused: boolean;
   visibilityRow?: ProfileVisibilityMapRow;
   subscriptionRow?: ProfileSubscriptionMapRow;
-  onSelect: (selected: SelectedRelative) => void;
+  onSelect: (personId: string) => void;
 }) {
   const sharing = shareSummary(visibilityRow);
   const subscription = subscriptionSummary(subscriptionRow);
-  const scopes = scopeList(visibilityRow);
-  const clickable = category !== "self";
-
-  const content = (
-    <>
-      <p className="person-name">{person.displayName}</p>
-      <div className="person-meta">
-        <span className={`badge ${category === "self" ? "self" : "side"}`}>{RELATIONSHIP_LABELS[category]}</span>
-        {person.lineageSides
-          .filter((side) => side !== "not_applicable")
-          .map((side) => (
-            <span key={`${person.personId}:${side}`} className="badge side">
-              {readSideLabel(side)}
-            </span>
-          ))}
-        <span className={`badge state ${subscription.badgeClass}`}>{subscription.label}</span>
-        <span className={`badge state ${sharing.badgeClass}`}>{sharing.label}</span>
-      </div>
-      {scopes ? <p className="person-detail muted">Shared scopes: {scopes}</p> : null}
-      {clickable ? <p className="person-detail muted">Click to manage this relative.</p> : null}
-    </>
-  );
-
-  if (!clickable) {
-    return <article className="person-card">{content}</article>;
-  }
+  const relationshipLabel = relation ? RELATIONSHIP_LABELS[relation.category] : "Family";
 
   return (
     <button
-      className="person-card person-card-button"
       type="button"
-      onClick={() => onSelect({ person, category, visibilityRow, subscriptionRow })}
+      className={`family-person-card${isFocused ? " is-focused" : ""}`}
+      onClick={() => onSelect(person.personId)}
+      aria-label={`${person.displayName}, ${relationshipLabel}`}
     >
-      {content}
+      <span className="family-person-avatar" aria-hidden="true">
+        {initials(person.displayName)}
+      </span>
+      <span className="family-person-copy">
+        <span className="family-person-name">{person.displayName}</span>
+        <span className="family-person-relation">{relationshipLabel}</span>
+      </span>
+      <span className="family-person-state-row" aria-label={`${subscription.label}; ${sharing.label}`}>
+        <span className={`family-state-pill ${subscription.badgeClass}`}>Sub</span>
+        <span className={`family-state-pill ${sharing.badgeClass}`}>Share</span>
+      </span>
     </button>
-  );
-}
-
-function Bucket({
-  category,
-  people,
-  visibilityByTarget,
-  subscriptionByTarget,
-  onSelect,
-}: {
-  category: RelationshipCategory;
-  people: TreeBucketPerson[];
-  visibilityByTarget: Map<string, ProfileVisibilityMapRow>;
-  subscriptionByTarget: Map<string, ProfileSubscriptionMapRow>;
-  onSelect: (selected: SelectedRelative) => void;
-}) {
-  return (
-    <section className="bucket">
-      <div className="bucket-header">
-        <h2 className="bucket-title">{RELATIONSHIP_LABELS[category]}</h2>
-        <span className="bucket-count">{people.length}</span>
-      </div>
-      <div className="bucket-people">
-        {people.length ? (
-          people.map((person) => (
-            <PersonCard
-              key={`${category}:${person.personId}`}
-              person={person}
-              category={category}
-              visibilityRow={visibilityByTarget.get(person.personId)}
-              subscriptionRow={subscriptionByTarget.get(person.personId)}
-              onSelect={onSelect}
-            />
-          ))
-        ) : (
-          <p className="empty-state">No matched relatives in this bucket yet.</p>
-        )}
-      </div>
-    </section>
   );
 }
 
@@ -636,12 +932,15 @@ export function TreeClient({
   subscriptionRows: ProfileSubscriptionMapRow[];
 }) {
   const router = useRouter();
-  const [focused, setFocused] = useState<SelectedRelative | null>(null);
+  const [focusedPersonId, setFocusedPersonId] = useState(snapshot.viewer.personId);
+  const [focusGroup, setFocusGroup] = useState<FocusGroup>("household");
   const [selected, setSelected] = useState<SelectedRelative | null>(null);
   const [settings, setSettings] = useState<ModalSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [treeSearch, setTreeSearch] = useState("");
+  const [zoom, setZoom] = useState(1);
 
   const visibilityByTarget = useMemo(
     () => new Map(visibilityRows.map((row) => [row.targetPersonId, row])),
@@ -651,44 +950,83 @@ export function TreeClient({
     () => new Map(subscriptionRows.map((row) => [row.targetPersonId, row])),
     [subscriptionRows],
   );
+  const graph = useMemo(() => buildTreeGraphModel(snapshot), [snapshot]);
   const hasPersistedMaps = Boolean(recomputeStatus.summary);
+  const focusedPerson = graph.peopleById.get(focusedPersonId) ?? graph.peopleById.get(snapshot.viewer.personId) ?? null;
+  const focusedRelation = focusedPerson ? graph.relationByPersonId.get(focusedPerson.personId) : undefined;
+  const activeHouseholdIds = focusedPerson ? graph.householdIdsByPerson.get(focusedPerson.personId) ?? [] : [];
+  const activeHouseholdId = activeHouseholdIds[0] ?? "";
+  const activeHousehold = graph.units.find((unit) => unit.householdId === activeHouseholdId) ?? null;
 
-  const treeGenerations = useMemo(
-    () =>
-      TREE_GENERATIONS.map((generation) => ({
-        ...generation,
-        entries: generation.categories.flatMap((category) =>
-          (snapshot.buckets[category] ?? []).map((person) => ({
-            person,
-            category,
-            visibilityRow: visibilityByTarget.get(person.personId),
-            subscriptionRow: subscriptionByTarget.get(person.personId),
-          })),
-        ),
-      })),
-    [snapshot.buckets, subscriptionByTarget, visibilityByTarget],
-  );
-
-  function firstEntryFor(categories: RelationshipCategory[]) {
-    for (const category of categories) {
-      const person = snapshot.buckets[category]?.[0];
-      if (person) {
-        return {
-          person,
-          category,
-          visibilityRow: visibilityByTarget.get(person.personId),
-          subscriptionRow: subscriptionByTarget.get(person.personId),
-        };
+  const focusNavigation = useMemo(() => {
+    if (!focusedPerson) {
+      return {
+        household: [] as TreePerson[],
+        parents: [] as TreePerson[],
+        spouses: [] as TreePerson[],
+        siblings: [] as TreePerson[],
+        children: [] as TreePerson[],
+      };
+    }
+    const parents = Array.from(graph.parentsByChild.get(focusedPerson.personId) ?? [])
+      .map((personId) => graph.peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeople);
+    const spouses = Array.from(graph.spousesByPerson.get(focusedPerson.personId) ?? [])
+      .map((personId) => graph.peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeople);
+    const siblingIds = new Set<string>();
+    for (const parent of parents) {
+      for (const siblingId of graph.childrenByParent.get(parent.personId) ?? []) {
+        if (siblingId !== focusedPerson.personId) siblingIds.add(siblingId);
       }
     }
-    return null;
+    const siblings = Array.from(siblingIds)
+      .map((personId) => graph.peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeople);
+    const children = Array.from(graph.childrenByParent.get(focusedPerson.personId) ?? [])
+      .map((personId) => graph.peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeople);
+    const household = activeHousehold
+      ? activeHousehold.parentIds
+          .map((personId) => graph.peopleById.get(personId))
+          .filter((person): person is TreePerson => Boolean(person))
+          .sort(compareTreePeople)
+      : [focusedPerson];
+    return { household, parents, spouses, siblings, children };
+  }, [activeHousehold, focusedPerson, graph.childrenByParent, graph.parentsByChild, graph.peopleById, graph.spousesByPerson]);
+
+  const searchResults = useMemo(() => {
+    const query = treeSearch.trim().toLowerCase();
+    if (!query) return [];
+    return graph.visiblePeople.filter((person) => person.displayName.toLowerCase().includes(query)).slice(0, 8);
+  }, [graph.visiblePeople, treeSearch]);
+
+  const focusPeople = focusNavigation[focusGroup];
+
+  function selectedRelativeForPerson(personId: string): SelectedRelative | null {
+    const relation = graph.relationByPersonId.get(personId);
+    if (!relation) return null;
+    return {
+      ...relation,
+      visibilityRow: visibilityByTarget.get(personId),
+      subscriptionRow: subscriptionByTarget.get(personId),
+    };
   }
 
-  function focusFirst(categories: RelationshipCategory[]) {
-    const next = firstEntryFor(categories);
-    if (next) {
-      setFocused(next);
+  function selectPerson(personId: string) {
+    const next = selectedRelativeForPerson(personId);
+    if (!next) return;
+    if (focusedPersonId === personId) {
+      void openRelative(next);
+      return;
     }
+    setFocusedPersonId(personId);
+    setFocusGroup("household");
+    setTreeSearch("");
   }
 
   async function openRelative(selectedPerson: SelectedRelative) {
@@ -958,99 +1296,208 @@ export function TreeClient({
         </div>
       </section>
 
-      <section className="efl-tree-shell">
-        <div className="efl-tree-canvas">
-          {treeGenerations.map((generation) => (
-            <section key={generation.id} className="efl-tree-generation">
-              <p className="efl-tree-generation-label">{generation.label}</p>
-              <div className="efl-tree-row">
-                {generation.entries.length ? (
-                  generation.entries.map((entry) => {
-                    const sharing = shareSummary(entry.visibilityRow);
-                    const subscription = subscriptionSummary(entry.subscriptionRow);
-                    const isFocused =
-                      focused?.person.personId === entry.person.personId && focused.category === entry.category;
-
-                    return (
-                      <button
-                        key={`${entry.category}:${entry.person.personId}`}
-                        type="button"
-                        className={`efl-tree-person${isFocused ? " is-selected" : ""}`}
-                        onClick={() => setFocused(entry)}
-                        onDoubleClick={() => void openRelative(entry)}
-                      >
-                        <span className="efl-tree-avatar" aria-hidden="true">
-                          {entry.person.displayName.slice(0, 1).toUpperCase()}
-                        </span>
-                        <span className="efl-tree-person-copy">
-                          <span className="efl-tree-person-name">{entry.person.displayName}</span>
-                          <span className="efl-tree-person-relation">{RELATIONSHIP_LABELS[entry.category]}</span>
-                        </span>
-                        <span className="efl-tree-person-states">
-                          <span className={`badge state ${subscription.badgeClass}`}>{subscription.label}</span>
-                          <span className={`badge state ${sharing.badgeClass}`}>{sharing.label}</span>
-                        </span>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <p className="efl-tree-empty">No matched relatives.</p>
-                )}
+      <section className="family-tree-shell">
+        <div className="family-tree-toolbar">
+          <div className="family-tree-search">
+            <label className="field-label" htmlFor="family-tree-search">
+              Find a person
+            </label>
+            <input
+              id="family-tree-search"
+              className="input"
+              type="search"
+              value={treeSearch}
+              onChange={(event) => setTreeSearch(event.target.value)}
+              placeholder="Search this tree"
+            />
+            {searchResults.length > 0 ? (
+              <div className="family-tree-search-results">
+                {searchResults.map((person) => (
+                  <button key={person.personId} type="button" onClick={() => selectPerson(person.personId)}>
+                    {person.displayName}
+                  </button>
+                ))}
               </div>
-            </section>
-          ))}
+            ) : null}
+          </div>
+
+          <div className="family-tree-controls" aria-label="Tree navigation controls">
+            <button type="button" className="tree-control-btn" onClick={() => setZoom((current) => Math.min(1.45, current + 0.1))} aria-label="Zoom in">
+              +
+            </button>
+            <button type="button" className="tree-control-btn" onClick={() => setZoom((current) => Math.max(0.72, current - 0.1))} aria-label="Zoom out">
+              -
+            </button>
+            <button type="button" className="tree-control-btn" onClick={() => setZoom(1)} aria-label="Reset zoom">
+              Fit
+            </button>
+            <button
+              type="button"
+              className="tree-control-btn"
+              onClick={() => {
+                setFocusedPersonId(snapshot.viewer.personId);
+                setFocusGroup("household");
+              }}
+              aria-label="Return to me"
+            >
+              Me
+            </button>
+          </div>
         </div>
 
-        {focused ? (
-          <aside className="efl-focus-panel">
-            <div className="efl-focus-head">
-              <span className="efl-tree-avatar large" aria-hidden="true">
-                {focused.person.displayName.slice(0, 1).toUpperCase()}
-              </span>
-              <div>
-                <h2>{focused.person.displayName}</h2>
-                <p>{RELATIONSHIP_LABELS[focused.category]}</p>
+        <div className="family-tree-main">
+          <div className="family-tree-viewport">
+            <div className="family-tree-board" style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
+              {graph.rows.map((row) => (
+                <section key={row.generation} className="family-generation-row">
+                  <p className="family-generation-label">{row.label}</p>
+                  <div className="family-household-row">
+                    {row.units.map((unit) => {
+                      const isFocusedHousehold =
+                        unit.householdId === activeHouseholdId ||
+                        unit.parentIds.includes(focusedPersonId) ||
+                        unit.childIds.includes(focusedPersonId);
+                      return (
+                        <article
+                          key={unit.householdId}
+                          className={`family-household-unit${isFocusedHousehold ? " is-focused" : ""}`}
+                        >
+                          <div className="family-household-frame">
+                            <p className="family-household-label">{unit.label}</p>
+                            <div className="family-household-parents">
+                              {unit.parentIds.map((personId) => {
+                                const person = graph.peopleById.get(personId);
+                                if (!person) return null;
+                                return (
+                                  <PersonTreeCard
+                                    key={`${unit.householdId}:${personId}`}
+                                    person={person}
+                                    relation={graph.relationByPersonId.get(personId)}
+                                    isFocused={personId === focusedPersonId}
+                                    visibilityRow={visibilityByTarget.get(personId)}
+                                    subscriptionRow={subscriptionByTarget.get(personId)}
+                                    onSelect={selectPerson}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {unit.childIds.length > 0 ? (
+                            <>
+                              <div className="family-child-connector" aria-hidden="true" />
+                              <div className="family-household-children">
+                                {unit.childIds.map((personId) => {
+                                  const person = graph.peopleById.get(personId);
+                                  if (!person) return null;
+                                  return (
+                                    <div key={`${unit.householdId}:child:${personId}`} className="family-child-slot">
+                                      <PersonTreeCard
+                                        person={person}
+                                        relation={graph.relationByPersonId.get(personId)}
+                                        isFocused={personId === focusedPersonId}
+                                        visibilityRow={visibilityByTarget.get(personId)}
+                                        subscriptionRow={subscriptionByTarget.get(personId)}
+                                        onSelect={selectPerson}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+
+          {focusedPerson ? (
+            <aside className="family-focus-panel">
+              <div className="family-focus-head">
+                <span className="family-person-avatar large" aria-hidden="true">
+                  {initials(focusedPerson.displayName)}
+                </span>
+                <div>
+                  <h2>{focusedPerson.displayName}</h2>
+                  <p>{focusedRelation ? RELATIONSHIP_LABELS[focusedRelation.category] : "Family"}</p>
+                </div>
               </div>
-            </div>
-            <div className="efl-focus-actions">
+              <div className="family-focus-actions" aria-label="Focus navigation">
+                <button
+                  type="button"
+                  className={`tree-focus-action-chip${focusGroup === "household" ? " is-active" : ""}`}
+                  onClick={() => setFocusGroup("household")}
+                >
+                  Household
+                </button>
+                <button
+                  type="button"
+                  className={`tree-focus-action-chip${focusGroup === "parents" ? " is-active" : ""}`}
+                  disabled={focusNavigation.parents.length === 0}
+                  onClick={() => setFocusGroup("parents")}
+                >
+                  Parents {focusNavigation.parents.length || ""}
+                </button>
+                <button
+                  type="button"
+                  className={`tree-focus-action-chip${focusGroup === "spouses" ? " is-active" : ""}`}
+                  disabled={focusNavigation.spouses.length === 0}
+                  onClick={() => setFocusGroup("spouses")}
+                >
+                  Spouse {focusNavigation.spouses.length || ""}
+                </button>
+                <button
+                  type="button"
+                  className={`tree-focus-action-chip${focusGroup === "siblings" ? " is-active" : ""}`}
+                  disabled={focusNavigation.siblings.length === 0}
+                  onClick={() => setFocusGroup("siblings")}
+                >
+                  Siblings {focusNavigation.siblings.length || ""}
+                </button>
+                <button
+                  type="button"
+                  className={`tree-focus-action-chip${focusGroup === "children" ? " is-active" : ""}`}
+                  disabled={focusNavigation.children.length === 0}
+                  onClick={() => setFocusGroup("children")}
+                >
+                  Children {focusNavigation.children.length || ""}
+                </button>
+              </div>
+              <div className="family-focus-chip-list">
+                {focusPeople.length > 0 ? (
+                  focusPeople.map((person) => (
+                    <button
+                      key={`${focusGroup}:${person.personId}`}
+                      type="button"
+                      className={person.personId === focusedPersonId ? "is-selected" : ""}
+                      onClick={() => selectPerson(person.personId)}
+                    >
+                      <span className="family-mini-avatar" aria-hidden="true">
+                        {initials(person.displayName)}
+                      </span>
+                      <span>{person.displayName}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="muted">No people in this focus group.</p>
+                )}
+              </div>
               <button
+                className="primary-button"
                 type="button"
-                className="tree-focus-action-chip"
-                onClick={() => focusFirst(["parents", "parents_in_law", "grandparents"])}
-                disabled={!firstEntryFor(["parents", "parents_in_law", "grandparents"])}
+                onClick={() => {
+                  const next = selectedRelativeForPerson(focusedPerson.personId);
+                  if (next) void openRelative(next);
+                }}
               >
-                Parents
+                Open Person Details
               </button>
-              <button
-                type="button"
-                className="tree-focus-action-chip"
-                onClick={() => focusFirst(["spouse"])}
-                disabled={!firstEntryFor(["spouse"])}
-              >
-                Spouse
-              </button>
-              <button
-                type="button"
-                className="tree-focus-action-chip"
-                onClick={() => focusFirst(["siblings", "siblings_in_law"])}
-                disabled={!firstEntryFor(["siblings", "siblings_in_law"])}
-              >
-                Siblings
-              </button>
-              <button
-                type="button"
-                className="tree-focus-action-chip"
-                onClick={() => focusFirst(["children", "children_in_law", "grandchildren"])}
-                disabled={!firstEntryFor(["children", "children_in_law", "grandchildren"])}
-              >
-                Children
-              </button>
-            </div>
-            <button className="primary-button" type="button" onClick={() => void openRelative(focused)}>
-              Open Person Details
-            </button>
-          </aside>
-        ) : null}
+            </aside>
+          ) : null}
+        </div>
       </section>
 
       {selected ? (

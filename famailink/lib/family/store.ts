@@ -29,10 +29,17 @@ export type PersonLite = {
   gender: string;
 };
 
-type RelationshipLite = {
+export type RelationshipLite = {
   fromPersonId: string;
   toPersonId: string;
   relType: string;
+};
+
+export type HouseholdLite = {
+  householdId: string;
+  husbandPersonId: string;
+  wifePersonId: string;
+  label: string;
 };
 
 export type FamilyGraph = {
@@ -49,6 +56,9 @@ export type FamilyBucketPerson = PersonLite & {
 export type TreeLabSnapshot = {
   viewer: PersonLite;
   buckets: Record<RelationshipCategory, FamilyBucketPerson[]>;
+  people: PersonLite[];
+  relationships: RelationshipLite[];
+  households: HouseholdLite[];
   peopleCount: number;
   relationshipCount: number;
   relatedCount: number;
@@ -419,6 +429,29 @@ export async function listRelationshipsLite(): Promise<RelationshipLite[]> {
   });
 }
 
+export async function listHouseholdsLite(): Promise<HouseholdLite[]> {
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT household_id,
+              husband_person_id,
+              wife_person_id,
+              COALESCE(NULLIF(TRIM(label), ''), household_id) AS label
+         FROM households
+        WHERE TRIM(household_id) IS NOT NULL
+        ORDER BY household_id`,
+      {},
+      OUT_FORMAT,
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      householdId: getCell(row, "HOUSEHOLD_ID"),
+      husbandPersonId: getCell(row, "HUSBAND_PERSON_ID"),
+      wifePersonId: getCell(row, "WIFE_PERSON_ID"),
+      label: getCell(row, "LABEL"),
+    }));
+  });
+}
+
 export async function listRelatedFamilyPeople(viewerPersonId: string): Promise<RelatedFamilyPerson[]> {
   const [people, relationships] = await Promise.all([listPeopleLite(), listRelationshipsLite()]);
   const graph = buildFamilyGraph(people, relationships);
@@ -446,7 +479,11 @@ export async function listRelatedFamilyPeople(viewerPersonId: string): Promise<R
 }
 
 export async function buildTreeLabSnapshot(viewerPersonId: string): Promise<TreeLabSnapshot> {
-  const [people, relationships] = await Promise.all([listPeopleLite(), listRelationshipsLite()]);
+  const [people, relationships, households] = await Promise.all([
+    listPeopleLite(),
+    listRelationshipsLite(),
+    listHouseholdsLite(),
+  ]);
   const graph = buildFamilyGraph(people, relationships);
   const hits = computeRelativeHitsForViewer(viewerPersonId, graph);
   const buckets = emptyBuckets();
@@ -492,6 +529,9 @@ export async function buildTreeLabSnapshot(viewerPersonId: string): Promise<Tree
   return {
     viewer,
     buckets,
+    people,
+    relationships,
+    households,
     peopleCount: people.length,
     relationshipCount: relationships.length,
     relatedCount: relatedPeople.size,
