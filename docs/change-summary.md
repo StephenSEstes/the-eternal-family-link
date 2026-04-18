@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-18 (Famailink EFL-style focused tree motion)
+
+- `Date`: 2026-04-18
+- `Change`: Reworked the Famailink `/tree` pane into an EFL-inspired focused map using Famailink's own graph data. The tree now uses absolute-positioned person tiles, smooth viewport recentering when focus changes, touching spouse household pairs, first-name tree tiles, and SVG parent-to-child connector lines. The selected-person view stops at children/child households and no longer renders grandchildren.
+- `Type`: UI
+- `Why`: Root cause was a code/UI mismatch. Famailink had direct relationship and household data, but the active renderer was a static flex-row selected-person tree with CSS connector bars and grandchild branches. EFL's behavior comes from a client-side graph layout that positions tiles, computes focus bounds, and animates the viewport transform when focus changes.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None. No schema, OCI data, defaults, exceptions, or family-group/tenant behavior changed. The implementation uses the existing Famailink snapshot only.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Selecting people in `/tree` animates the map layer to center the selected tile in the tree pane.
+  - Spouse household tiles are adjacent/touching and wide enough for first names.
+  - Children and child households render below their parents in birth order without grandchild gaps.
+  - Famailink does not import or support EFL family-group routing.
+- `Rollback Notes`: Revert this change to restore the previous static selected-person flex tree with grandchild branches.
+- `Design Decision Change`: Yes. Updated the Famailink tree behavior decision for selected-person focus, EFL-style motion, and no grandchild rendering in the focused tree.
+
 ## 2026-04-18 (Famailink tree in-law switch removal)
 
 - `Date`: 2026-04-18

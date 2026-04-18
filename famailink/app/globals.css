@@ -1069,8 +1069,9 @@ select {
 }
 
 .family-tree-viewport {
+  position: relative;
   min-height: 680px;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid color-mix(in oklab, var(--line) 85%, #fff 15%);
   border-radius: 16px;
   background-image:
@@ -1080,127 +1081,83 @@ select {
   background-position: center;
   background-repeat: no-repeat;
   box-shadow: 0 18px 42px color-mix(in oklab, #184f69 10%, transparent 90%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.family-tree-viewport.is-panning {
+  cursor: grabbing;
 }
 
 .family-tree-board {
-  min-width: 720px;
-  display: grid;
-  justify-content: center;
-  align-content: start;
-  gap: 28px;
-  padding: 24px 22px 42px;
-  transition: transform 180ms ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+  z-index: 1;
 }
 
-.family-household-forest {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 18px;
-  min-width: max-content;
+.family-tree-board.is-animating {
+  transition: transform 280ms ease;
 }
 
-.family-selected-tree {
+.family-map-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.family-map-line {
+  stroke: color-mix(in oklab, var(--accent) 58%, #fff 42%);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.family-map-household-frame {
+  position: absolute;
+  z-index: 1;
   display: grid;
+  align-items: start;
   justify-items: center;
-  align-content: start;
-  gap: 0;
-  min-width: max-content;
+  padding-top: 7px;
+  border: 2px solid color-mix(in oklab, var(--accent) 28%, #fff 72%);
+  border-radius: 10px;
+  background: color-mix(in oklab, #ffffff 88%, #eef8fb 12%);
+  box-shadow: 0 12px 26px color-mix(in oklab, #124866 12%, transparent 88%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
-.family-selected-generation {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 16px;
-  min-width: max-content;
+.family-map-household-frame.is-focused {
+  border-color: color-mix(in oklab, var(--accent) 72%, #fff 28%);
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--accent) 20%, transparent 80%),
+    0 16px 30px color-mix(in oklab, #124866 16%, transparent 84%);
 }
 
-.family-selected-center {
-  position: relative;
-  padding: 2px 0;
+.family-map-household-frame span {
+  max-width: calc(100% - 18px);
+  overflow: hidden;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.family-selected-children {
-  position: relative;
-  align-items: flex-start;
-  max-width: 720px;
-  padding-top: 12px;
-  flex-wrap: wrap;
-}
-
-.family-selected-children::before {
-  content: "";
+.family-map-node {
   position: absolute;
-  top: 0;
-  left: 18%;
-  right: 18%;
-  height: 2px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
-}
-
-.family-generation-connector,
-.family-grandchild-connector {
-  position: relative;
-  width: 100%;
-  height: 24px;
-}
-
-.family-generation-connector::before,
-.family-grandchild-connector::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 2px;
-  height: 100%;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 48%, #fff 52%);
-}
-
-.family-child-branch {
-  position: relative;
-  display: grid;
-  justify-items: center;
-}
-
-.family-child-branch::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -12px;
-  width: 2px;
-  height: 12px;
-  transform: translateX(-50%);
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
-}
-
-.family-person-slot {
-  position: relative;
-}
-
-.family-grandchild-row {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 7px;
-  max-width: 360px;
-  padding-top: 12px;
-  flex-wrap: wrap;
-}
-
-.family-grandchild-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 18%;
-  right: 18%;
-  height: 2px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+  z-index: 2;
+  transform: translate(-50%, -50%);
 }
 
 .family-empty-tree-note {
@@ -1210,142 +1167,14 @@ select {
   font-weight: 800;
 }
 
-.family-generation-row {
-  display: grid;
-  gap: 14px;
-}
-
-.family-generation-label {
-  justify-self: center;
-  margin: 0;
-  color: var(--berry);
-  font-size: 0.74rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.family-household-row {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 24px;
-  min-width: max-content;
-}
-
-.family-household-unit {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  min-width: 150px;
-}
-
-.family-household-frame {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  padding: 7px 8px 8px;
-  border: 2px solid color-mix(in oklab, var(--accent) 26%, #fff 74%);
-  border-radius: 8px;
-  background: color-mix(in oklab, #ffffff 90%, #eef8fb 10%);
-  box-shadow: 0 12px 26px color-mix(in oklab, #124866 12%, transparent 88%);
-}
-
-.family-household-unit.is-focused .family-household-frame {
-  border-color: color-mix(in oklab, var(--accent) 72%, #fff 28%);
-  box-shadow:
-    0 0 0 4px color-mix(in oklab, var(--accent) 20%, transparent 80%),
-    0 16px 30px color-mix(in oklab, #124866 16%, transparent 84%);
-}
-
-.family-household-label {
-  max-width: 180px;
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.6rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-  font-family: "Courier New", monospace;
-}
-
-.family-household-parents,
-.family-household-children,
-.family-household-descendants {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 7px;
-}
-
-.family-child-connector {
-  position: relative;
-  width: 100%;
-  height: 24px;
-}
-
-.family-child-connector::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 2px;
-  height: 100%;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 48%, #fff 52%);
-}
-
-.family-household-children,
-.family-household-descendants {
-  position: relative;
-  flex-wrap: wrap;
-  max-width: 650px;
-  padding-top: 12px;
-}
-
-.family-household-children::before,
-.family-household-descendants::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 18%;
-  right: 18%;
-  height: 2px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
-}
-
-.family-child-slot,
-.family-child-household-slot,
-.family-child-person-slot {
-  position: relative;
-}
-
-.family-child-slot::before,
-.family-child-household-slot::before,
-.family-child-person-slot::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -12px;
-  width: 2px;
-  height: 12px;
-  transform: translateX(-50%);
-  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
-}
-
 .family-person-card {
-  width: 78px;
-  min-height: 86px;
+  width: 104px;
+  min-height: 104px;
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 4px;
-  padding: 5px 4px;
+  gap: 5px;
+  padding: 7px 6px 6px;
   border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
   border-radius: 8px;
   background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
@@ -1369,8 +1198,8 @@ select {
 }
 
 .family-person-avatar {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   display: block;
   border-radius: 6px;
   border: 1px solid color-mix(in oklab, var(--accent) 20%, #fff 80%);
@@ -1391,12 +1220,12 @@ select {
 }
 
 .family-person-name {
-  max-width: 70px;
+  max-width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
-  font-size: 0.66rem;
+  font-size: 0.76rem;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -1794,18 +1623,9 @@ select {
     min-height: 560px;
   }
 
-  .family-tree-board {
-    min-width: 640px;
-    padding: 20px 16px 36px;
-  }
-
-  .family-household-row {
-    gap: 16px;
-  }
-
   .family-person-card {
-    width: 78px;
-    min-height: 86px;
+    width: 96px;
+    min-height: 100px;
   }
 
   .tree-layout {

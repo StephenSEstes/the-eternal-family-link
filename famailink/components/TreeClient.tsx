@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import { isSideSpecificCategory } from "@/lib/access/defaults";
 import { DEFAULT_LINEAGE_SELECTION_LABELS } from "@/lib/access/types";
@@ -429,13 +429,6 @@ function childIdsForPerson(graph: TreeGraphModel, personId: string, householdUni
   const ids = new Set<string>();
   for (const childId of householdUnit?.childIds ?? []) ids.add(childId);
   for (const childId of graph.childrenByParent.get(personId) ?? []) ids.add(childId);
-  return sortedVisiblePersonIds(ids, graph.peopleById);
-}
-
-function grandchildIdsForChild(graph: TreeGraphModel, childId: string, childHouseholdUnit: HouseholdUnit | null) {
-  const ids = childHouseholdUnit?.childIds.length
-    ? childHouseholdUnit.childIds
-    : Array.from(graph.childrenByParent.get(childId) ?? []);
   return sortedVisiblePersonIds(ids, graph.peopleById);
 }
 
@@ -1027,6 +1020,318 @@ function RelativeModal({
   );
 }
 
+const TREE_CARD_WIDTH = 104;
+const TREE_CARD_HEIGHT = 104;
+const TREE_CARD_HALF_WIDTH = TREE_CARD_WIDTH / 2;
+const TREE_CARD_HALF_HEIGHT = TREE_CARD_HEIGHT / 2;
+const TREE_SPOUSE_GAP = -8;
+const TREE_UNIT_GAP = 44;
+const TREE_ROW_GAP = 178;
+const TREE_LAYOUT_PADDING = 86;
+
+type FocusedTreeNode = {
+  personId: string;
+  x: number;
+  y: number;
+  isFocused: boolean;
+};
+
+type FocusedTreeHousehold = {
+  key: string;
+  label: string;
+  parentIds: string[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isFocused: boolean;
+};
+
+type FocusedTreeLine = {
+  key: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+type FocusedTreeLayout = {
+  width: number;
+  height: number;
+  nodes: FocusedTreeNode[];
+  households: FocusedTreeHousehold[];
+  lines: FocusedTreeLine[];
+  anchor: { x: number; y: number; width: number; height: number };
+  key: string;
+};
+
+function firstNameForTree(person: TreePerson) {
+  return normalize(person.displayName).split(/\s+/)[0] || person.displayName;
+}
+
+function personNodeBounds(node: FocusedTreeNode) {
+  return {
+    minX: node.x - TREE_CARD_HALF_WIDTH,
+    maxX: node.x + TREE_CARD_HALF_WIDTH,
+    minY: node.y - TREE_CARD_HALF_HEIGHT,
+    maxY: node.y + TREE_CARD_HALF_HEIGHT,
+  };
+}
+
+function mapUnitWidth(personCount: number, gap: number) {
+  if (personCount <= 0) return 0;
+  return personCount * TREE_CARD_WIDTH + Math.max(0, personCount - 1) * gap;
+}
+
+function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, focusGroup: FocusGroup): FocusedTreeLayout | null {
+  const focusedPerson = graph.peopleById.get(focusedPersonId);
+  if (!focusedPerson) return null;
+
+  const nodes = new Map<string, FocusedTreeNode>();
+  const households: FocusedTreeHousehold[] = [];
+  const lines: FocusedTreeLine[] = [];
+  const parentUnit = findParentHouseholdUnit(graph, focusedPersonId);
+  const parentIds = parentIdsForPerson(graph, focusedPersonId, parentUnit);
+  const centerUnit = findPrimaryOwnHouseholdUnit(graph, focusedPersonId);
+  const hasSpouse = (graph.spousesByPerson.get(focusedPersonId)?.size ?? 0) > 0;
+  const centerPersonIds = centerUnit
+    ? centerUnit.parentIds
+    : !hasSpouse || focusGroup === "siblings"
+      ? siblingIdsForPerson(graph, focusedPersonId)
+      : [focusedPersonId];
+  const childIds = focusGroup === "siblings" ? [] : childIdsForPerson(graph, focusedPersonId, centerUnit);
+  const excludedHouseholdIds = new Set<string>(centerUnit ? [centerUnit.householdId] : []);
+  const hasParentRow = parentIds.length > 0;
+  const parentY = 0;
+  const centerY = hasParentRow ? TREE_ROW_GAP : 0;
+  const childY = centerY + TREE_ROW_GAP;
+
+  function addNode(personId: string, x: number, y: number) {
+    if (!graph.peopleById.has(personId)) return;
+    nodes.set(personId, {
+      personId,
+      x,
+      y,
+      isFocused: personId === focusedPersonId,
+    });
+  }
+
+  function addHousehold(input: {
+    key: string;
+    label: string;
+    parentIds: string[];
+    centerX: number;
+    centerY: number;
+    gap?: number;
+  }) {
+    const parentIdsForUnit = sortedVisiblePersonIds(input.parentIds, graph.peopleById);
+    if (!parentIdsForUnit.length) return;
+    const gap = input.gap ?? TREE_SPOUSE_GAP;
+    const width = Math.max(132, mapUnitWidth(parentIdsForUnit.length, gap) + 22);
+    const nodeRowWidth = mapUnitWidth(parentIdsForUnit.length, gap);
+    const firstX = input.centerX - nodeRowWidth / 2 + TREE_CARD_HALF_WIDTH;
+    parentIdsForUnit.forEach((personId, index) => {
+      addNode(personId, firstX + index * (TREE_CARD_WIDTH + gap), input.centerY);
+    });
+    households.push({
+      key: input.key,
+      label: input.label,
+      parentIds: parentIdsForUnit,
+      x: input.centerX,
+      y: input.centerY,
+      width,
+      height: TREE_CARD_HEIGHT + 32,
+      isFocused: parentIdsForUnit.includes(focusedPersonId),
+    });
+    if (parentIdsForUnit.length > 1) {
+      for (let index = 1; index < parentIdsForUnit.length; index += 1) {
+        const left = nodes.get(parentIdsForUnit[index - 1]);
+        const right = nodes.get(parentIdsForUnit[index]);
+        if (left && right) {
+          lines.push({
+            key: `spouse:${input.key}:${index}`,
+            x1: left.x + TREE_CARD_HALF_WIDTH - 3,
+            y1: left.y,
+            x2: right.x - TREE_CARD_HALF_WIDTH + 3,
+            y2: right.y,
+          });
+        }
+      }
+    }
+  }
+
+  function addStandaloneRow(personIds: string[], y: number) {
+    const visibleIds = sortedVisiblePersonIds(personIds, graph.peopleById);
+    const width = mapUnitWidth(visibleIds.length, TREE_UNIT_GAP);
+    const firstX = -width / 2 + TREE_CARD_HALF_WIDTH;
+    visibleIds.forEach((personId, index) => {
+      addNode(personId, firstX + index * (TREE_CARD_WIDTH + TREE_UNIT_GAP), y);
+    });
+  }
+
+  if (hasParentRow) {
+    addHousehold({
+      key: parentUnit?.householdId ?? `parents:${focusedPersonId}`,
+      label: parentUnit?.label ?? buildHouseholdLabel(parentIds, graph.peopleById, "Parents"),
+      parentIds,
+      centerX: 0,
+      centerY: parentY,
+    });
+  }
+
+  if (centerUnit) {
+    addHousehold({
+      key: centerUnit.householdId,
+      label: centerUnit.label,
+      parentIds: centerPersonIds,
+      centerX: 0,
+      centerY,
+    });
+  } else {
+    addStandaloneRow(centerPersonIds, centerY);
+  }
+
+  const childUnits = childIds.map((childId) => {
+    const childHouseholdUnit = findPrimaryOwnHouseholdUnit(graph, childId, excludedHouseholdIds);
+    const parentIdsForUnit = childHouseholdUnit ? childHouseholdUnit.parentIds : [childId];
+    return {
+      childId,
+      unit: childHouseholdUnit,
+      parentIds: parentIdsForUnit,
+      width: childHouseholdUnit
+        ? Math.max(132, mapUnitWidth(parentIdsForUnit.length, TREE_SPOUSE_GAP) + 22)
+        : TREE_CARD_WIDTH,
+    };
+  });
+
+  if (childUnits.length > 0) {
+    const totalChildWidth =
+      childUnits.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, childUnits.length - 1) * TREE_UNIT_GAP;
+    let cursorX = -totalChildWidth / 2;
+    childUnits.forEach((childUnit) => {
+      const centerX = cursorX + childUnit.width / 2;
+      if (childUnit.unit) {
+        addHousehold({
+          key: childUnit.unit.householdId,
+          label: childUnit.unit.label,
+          parentIds: childUnit.parentIds,
+          centerX,
+          centerY: childY,
+        });
+      } else {
+        addNode(childUnit.childId, centerX, childY);
+      }
+      cursorX += childUnit.width + TREE_UNIT_GAP;
+    });
+  }
+
+  if (hasParentRow) {
+    const target = nodes.get(focusedPersonId) ?? nodes.get(centerPersonIds[0] ?? "");
+    if (target) {
+      parentIds.forEach((parentId) => {
+        const parent = nodes.get(parentId);
+        if (!parent) return;
+        lines.push({
+          key: `parent:${parentId}:${focusedPersonId}`,
+          x1: parent.x,
+          y1: parent.y + TREE_CARD_HALF_HEIGHT,
+          x2: target.x,
+          y2: target.y - TREE_CARD_HALF_HEIGHT,
+        });
+      });
+    }
+  }
+
+  if (childUnits.length > 0) {
+    const sourceIds = centerUnit ? centerUnit.parentIds : [focusedPersonId];
+    childUnits.forEach((childUnit) => {
+      const childNode = nodes.get(childUnit.childId);
+      if (!childNode) return;
+      sourceIds.forEach((sourceId) => {
+        const parentNode = nodes.get(sourceId);
+        if (!parentNode) return;
+        lines.push({
+          key: `child:${sourceId}:${childUnit.childId}`,
+          x1: parentNode.x,
+          y1: parentNode.y + TREE_CARD_HALF_HEIGHT,
+          x2: childNode.x,
+          y2: childNode.y - TREE_CARD_HALF_HEIGHT,
+        });
+      });
+    });
+  }
+
+  const bounds = {
+    minX: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY,
+    minY: Number.POSITIVE_INFINITY,
+    maxY: Number.NEGATIVE_INFINITY,
+  };
+  function includeBounds(next: { minX: number; maxX: number; minY: number; maxY: number }) {
+    bounds.minX = Math.min(bounds.minX, next.minX);
+    bounds.maxX = Math.max(bounds.maxX, next.maxX);
+    bounds.minY = Math.min(bounds.minY, next.minY);
+    bounds.maxY = Math.max(bounds.maxY, next.maxY);
+  }
+
+  nodes.forEach((node) => {
+    includeBounds(personNodeBounds(node));
+  });
+  households.forEach((household) => {
+    includeBounds({
+      minX: household.x - household.width / 2,
+      maxX: household.x + household.width / 2,
+      minY: household.y - household.height / 2,
+      maxY: household.y + household.height / 2,
+    });
+  });
+  lines.forEach((line) => {
+    includeBounds({
+      minX: Math.min(line.x1, line.x2),
+      maxX: Math.max(line.x1, line.x2),
+      minY: Math.min(line.y1, line.y2),
+      maxY: Math.max(line.y1, line.y2),
+    });
+  });
+
+  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxY)) {
+    return null;
+  }
+  const shiftX = TREE_LAYOUT_PADDING - bounds.minX;
+  const shiftY = TREE_LAYOUT_PADDING - bounds.minY;
+  const shiftedNodes = Array.from(nodes.values()).map((node) => ({ ...node, x: node.x + shiftX, y: node.y + shiftY }));
+  const shiftedHouseholds = households.map((household) => ({ ...household, x: household.x + shiftX, y: household.y + shiftY }));
+  const shiftedLines = lines.map((line) => ({
+    ...line,
+    x1: line.x1 + shiftX,
+    y1: line.y1 + shiftY,
+    x2: line.x2 + shiftX,
+    y2: line.y2 + shiftY,
+  }));
+  const focusedNode = shiftedNodes.find((node) => node.personId === focusedPersonId);
+  const focusedHousehold = shiftedHouseholds.find((household) => household.parentIds.includes(focusedPersonId));
+  const anchor = focusedNode
+    ? { x: focusedNode.x - TREE_CARD_HALF_WIDTH, y: focusedNode.y - TREE_CARD_HALF_HEIGHT, width: TREE_CARD_WIDTH, height: TREE_CARD_HEIGHT }
+    : focusedHousehold
+      ? {
+          x: focusedHousehold.x - focusedHousehold.width / 2,
+          y: focusedHousehold.y - focusedHousehold.height / 2,
+          width: focusedHousehold.width,
+          height: focusedHousehold.height,
+        }
+      : { x: TREE_LAYOUT_PADDING, y: TREE_LAYOUT_PADDING, width: TREE_CARD_WIDTH, height: TREE_CARD_HEIGHT };
+
+  return {
+    width: Math.ceil(bounds.maxX - bounds.minX + TREE_LAYOUT_PADDING * 2),
+    height: Math.ceil(bounds.maxY - bounds.minY + TREE_LAYOUT_PADDING * 2),
+    nodes: shiftedNodes,
+    households: shiftedHouseholds,
+    lines: shiftedLines,
+    anchor,
+    key: `${focusedPersonId}:${focusGroup}:${childUnits.map((unit) => unit.childId).join(",")}`,
+  };
+}
+
 function PersonTreeCard({
   person,
   relation,
@@ -1044,219 +1349,214 @@ function PersonTreeCard({
     <button
       type="button"
       className={`family-person-card${isFocused ? " is-focused" : ""}`}
+      onPointerDown={(event) => event.stopPropagation()}
       onClick={() => onSelect(person.personId)}
       aria-label={`${person.displayName}, ${relationshipLabel}`}
+      title={person.displayName}
     >
-      <Image className="family-person-avatar" src={avatarUrlForPerson(person)} alt="" width={42} height={42} aria-hidden="true" />
+      <Image className="family-person-avatar" src={avatarUrlForPerson(person)} alt="" width={46} height={46} aria-hidden="true" />
       <span className="family-person-copy">
-        <span className="family-person-name">{person.displayName}</span>
+        <span className="family-person-name">{firstNameForTree(person)}</span>
       </span>
     </button>
   );
 }
 
-function HouseholdFrame({
-  unit,
-  personIds,
-  graph,
+function FocusedTreeMap({
   focusedPersonId,
+  focusGroup,
+  graph,
+  zoom,
+  fitNonce,
   onSelect,
-  label,
 }: {
-  unit: HouseholdUnit | null;
-  personIds: string[];
-  graph: TreeGraphModel;
   focusedPersonId: string;
+  focusGroup: FocusGroup;
+  graph: TreeGraphModel;
+  zoom: number;
+  fitNonce: number;
   onSelect: (personId: string) => void;
-  label?: string;
 }) {
-  const visiblePersonIds = sortedVisiblePersonIds(personIds, graph.peopleById);
-  if (!visiblePersonIds.length) return null;
-  const frameLabel = label ?? unit?.label ?? buildHouseholdLabel(visiblePersonIds, graph.peopleById, "Household");
-  const isFocusedHousehold = visiblePersonIds.includes(focusedPersonId);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const animationTimeoutRef = useRef<number | null>(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [animateViewport, setAnimateViewport] = useState(false);
+  const layout = useMemo(() => buildFocusedTreeLayout(graph, focusedPersonId, focusGroup), [focusGroup, focusedPersonId, graph]);
 
-  return (
-    <article className={`family-household-unit${isFocusedHousehold ? " is-focused" : ""}`}>
-      <div className="family-household-frame">
-        <p className="family-household-label">{frameLabel}</p>
-        <div className="family-household-parents">
-          {visiblePersonIds.map((personId) => {
-            const person = graph.peopleById.get(personId);
-            if (!person) return null;
-            return (
-              <PersonTreeCard
-                key={`${frameLabel}:${personId}`}
-                person={person}
-                relation={graph.relationByPersonId.get(personId)}
-                isFocused={personId === focusedPersonId}
-                onSelect={onSelect}
-              />
-            );
-          })}
-        </div>
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current !== null) {
+        window.clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const applyOffset = useCallback((nextOffset: { x: number; y: number }, animate = false) => {
+    offsetRef.current = nextOffset;
+    setOffset(nextOffset);
+    if (!animate) {
+      setAnimateViewport(false);
+      return;
+    }
+    setAnimateViewport(true);
+    if (animationTimeoutRef.current !== null) {
+      window.clearTimeout(animationTimeoutRef.current);
+    }
+    animationTimeoutRef.current = window.setTimeout(() => {
+      setAnimateViewport(false);
+      animationTimeoutRef.current = null;
+    }, 320);
+  }, []);
+
+  const centerOnAnchor = useCallback(
+    (animate = true) => {
+      const viewport = viewportRef.current;
+      if (!viewport || !layout) return;
+      const rect = viewport.getBoundingClientRect();
+      const anchorCenterX = layout.anchor.x + layout.anchor.width / 2;
+      const anchorCenterY = layout.anchor.y + layout.anchor.height / 2;
+      applyOffset(
+        {
+          x: rect.width / 2 - anchorCenterX * zoomRef.current,
+          y: rect.height * 0.46 - anchorCenterY * zoomRef.current,
+        },
+        animate,
+      );
+    },
+    [applyOffset, layout],
+  );
+
+  useEffect(() => {
+    centerOnAnchor(true);
+  }, [centerOnAnchor, fitNonce, layout?.key, zoom]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => centerOnAnchor(false));
+    });
+    observer.observe(viewport);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [centerOnAnchor]);
+
+  if (!layout) {
+    return (
+      <div ref={viewportRef} className="family-tree-viewport">
+        <p className="family-empty-tree-note">Select a person to view their family context.</p>
       </div>
-    </article>
-  );
-}
-
-function PersonCardSlot({
-  personId,
-  graph,
-  focusedPersonId,
-  onSelect,
-  slotClassName = "family-person-slot",
-}: {
-  personId: string;
-  graph: TreeGraphModel;
-  focusedPersonId: string;
-  onSelect: (personId: string) => void;
-  slotClassName?: string;
-}) {
-  const person = graph.peopleById.get(personId);
-  if (!person) return null;
-  return (
-    <div className={slotClassName}>
-      <PersonTreeCard
-        person={person}
-        relation={graph.relationByPersonId.get(personId)}
-        isFocused={personId === focusedPersonId}
-        onSelect={onSelect}
-      />
-    </div>
-  );
-}
-
-function ChildBranch({
-  childId,
-  graph,
-  focusedPersonId,
-  excludedHouseholdIds,
-  onSelect,
-}: {
-  childId: string;
-  graph: TreeGraphModel;
-  focusedPersonId: string;
-  excludedHouseholdIds: Set<string>;
-  onSelect: (personId: string) => void;
-}) {
-  const childHouseholdUnit = findPrimaryOwnHouseholdUnit(graph, childId, excludedHouseholdIds);
-  const grandchildIds = grandchildIdsForChild(graph, childId, childHouseholdUnit);
-
-  return (
-    <div className="family-child-branch">
-      {childHouseholdUnit ? (
-        <HouseholdFrame
-          unit={childHouseholdUnit}
-          personIds={childHouseholdUnit.parentIds}
-          graph={graph}
-          focusedPersonId={focusedPersonId}
-          onSelect={onSelect}
-        />
-      ) : (
-        <PersonCardSlot personId={childId} graph={graph} focusedPersonId={focusedPersonId} onSelect={onSelect} />
-      )}
-      {grandchildIds.length > 0 ? (
-        <>
-          <div className="family-grandchild-connector" aria-hidden="true" />
-          <div className="family-grandchild-row">
-            {grandchildIds.map((grandchildId) => (
-              <PersonCardSlot
-                key={`${childId}:grandchild:${grandchildId}`}
-                personId={grandchildId}
-                graph={graph}
-                focusedPersonId={focusedPersonId}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function SelectedPersonTree({
-  focusedPersonId,
-  graph,
-  onSelect,
-}: {
-  focusedPersonId: string;
-  graph: TreeGraphModel;
-  onSelect: (personId: string) => void;
-}) {
-  const focusedPerson = graph.peopleById.get(focusedPersonId);
-  if (!focusedPerson) {
-    return <p className="family-empty-tree-note">Select a person to view their family context.</p>;
+    );
   }
 
-  const parentUnit = findParentHouseholdUnit(graph, focusedPersonId);
-  const parentIds = parentIdsForPerson(graph, focusedPersonId, parentUnit);
-  const centerUnit = findPrimaryOwnHouseholdUnit(graph, focusedPersonId);
-  const hasSpouse = (graph.spousesByPerson.get(focusedPersonId)?.size ?? 0) > 0;
-  const centerPersonIds = centerUnit
-    ? centerUnit.parentIds
-    : !hasSpouse
-      ? siblingIdsForPerson(graph, focusedPersonId)
-      : [focusedPersonId];
-  const childIds = childIdsForPerson(graph, focusedPersonId, centerUnit);
-  const excludedHouseholdIds = new Set<string>(centerUnit ? [centerUnit.householdId] : []);
-
   return (
-    <div className="family-selected-tree">
-      {parentIds.length > 0 ? (
-        <>
-          <div className="family-selected-generation family-selected-parents">
-            <HouseholdFrame
-              unit={parentUnit}
-              personIds={parentIds}
-              graph={graph}
-              focusedPersonId={focusedPersonId}
-              onSelect={onSelect}
-            />
+    <div
+      ref={viewportRef}
+      className={`family-tree-viewport${isPanning ? " is-panning" : ""}`}
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch" && event.button !== 0) return;
+        if (event.target instanceof Element && event.target.closest(".family-person-card")) return;
+        setAnimateViewport(false);
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          originX: offsetRef.current.x,
+          originY: offsetRef.current.y,
+        };
+        setIsPanning(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+        applyOffset(
+          {
+            x: dragRef.current.originX + event.clientX - dragRef.current.startX,
+            y: dragRef.current.originY + event.clientY - dragRef.current.startY,
+          },
+          false,
+        );
+      }}
+      onPointerUp={(event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+        dragRef.current = null;
+        setIsPanning(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={(event) => {
+        dragRef.current = null;
+        setIsPanning(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+    >
+      <div
+        className={`family-tree-board${animateViewport ? " is-animating" : ""}`}
+        style={{
+          width: `${layout.width}px`,
+          height: `${layout.height}px`,
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+        }}
+      >
+        <svg
+          className="family-map-lines"
+          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          aria-hidden="true"
+          style={{ width: `${layout.width}px`, height: `${layout.height}px` }}
+        >
+          {layout.lines.map((line) => (
+            <line key={line.key} className="family-map-line" x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} />
+          ))}
+        </svg>
+        {layout.households.map((household) => (
+          <div
+            key={household.key}
+            className={`family-map-household-frame${household.isFocused ? " is-focused" : ""}`}
+            style={{
+              left: `${household.x}px`,
+              top: `${household.y}px`,
+              width: `${household.width}px`,
+              height: `${household.height}px`,
+            }}
+            aria-hidden="true"
+          >
+            <span>{household.label}</span>
           </div>
-          <div className="family-generation-connector" aria-hidden="true" />
-        </>
-      ) : null}
-
-      <div className="family-selected-generation family-selected-center">
-        {centerUnit ? (
-          <HouseholdFrame
-            unit={centerUnit}
-            personIds={centerPersonIds}
-            graph={graph}
-            focusedPersonId={focusedPersonId}
-            onSelect={onSelect}
-          />
-        ) : (
-          centerPersonIds.map((personId) => (
-            <PersonCardSlot
-              key={`center:${personId}`}
-              personId={personId}
-              graph={graph}
-              focusedPersonId={focusedPersonId}
-              onSelect={onSelect}
-            />
-          ))
-        )}
-      </div>
-
-      {childIds.length > 0 ? (
-        <>
-          <div className="family-generation-connector" aria-hidden="true" />
-          <div className="family-selected-generation family-selected-children">
-            {childIds.map((childId) => (
-              <ChildBranch
-                key={`child:${childId}`}
-                childId={childId}
-                graph={graph}
-                focusedPersonId={focusedPersonId}
-                excludedHouseholdIds={excludedHouseholdIds}
+        ))}
+        {layout.nodes.map((node) => {
+          const person = graph.peopleById.get(node.personId);
+          if (!person) return null;
+          return (
+            <div key={node.personId} className="family-map-node" style={{ left: `${node.x}px`, top: `${node.y}px` }}>
+              <PersonTreeCard
+                person={person}
+                relation={graph.relationByPersonId.get(node.personId)}
+                isFocused={node.isFocused}
                 onSelect={onSelect}
               />
-            ))}
-          </div>
-        </>
-      ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1283,6 +1583,7 @@ export function TreeClient({
   const [modalError, setModalError] = useState("");
   const [treeSearch, setTreeSearch] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [fitNonce, setFitNonce] = useState(0);
 
   const visibilityByTarget = useMemo(
     () => new Map(visibilityRows.map((row) => [row.targetPersonId, row])),
@@ -1635,7 +1936,15 @@ export function TreeClient({
             <button type="button" className="tree-control-btn" onClick={() => setZoom((current) => Math.max(0.72, current - 0.1))} aria-label="Zoom out">
               -
             </button>
-            <button type="button" className="tree-control-btn" onClick={() => setZoom(1)} aria-label="Reset zoom">
+            <button
+              type="button"
+              className="tree-control-btn"
+              onClick={() => {
+                setZoom(1);
+                setFitNonce((current) => current + 1);
+              }}
+              aria-label="Reset zoom"
+            >
               Fit
             </button>
             <button
@@ -1644,6 +1953,7 @@ export function TreeClient({
               onClick={() => {
                 setFocusedPersonId(snapshot.viewer.personId);
                 setFocusGroup("household");
+                setFitNonce((current) => current + 1);
               }}
               aria-label="Return to me"
             >
@@ -1653,13 +1963,14 @@ export function TreeClient({
         </div>
 
         <div className="family-tree-main">
-          <div className="family-tree-viewport">
-            <div className="family-tree-board" style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
-              <div className="family-household-forest">
-                <SelectedPersonTree focusedPersonId={effectiveFocusedPersonId} graph={graph} onSelect={selectPerson} />
-              </div>
-            </div>
-          </div>
+          <FocusedTreeMap
+            focusedPersonId={effectiveFocusedPersonId}
+            focusGroup={focusGroup}
+            graph={graph}
+            zoom={zoom}
+            fitNonce={fitNonce}
+            onSelect={selectPerson}
+          />
 
           {focusedPerson ? (
             <aside className="family-focus-panel">

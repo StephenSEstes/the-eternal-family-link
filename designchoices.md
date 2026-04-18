@@ -528,3 +528,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the In-laws switch as an advanced view filter; replace it with a separate in-law mode; expand in-laws recursively.
 - `Impact`: The `/tree` toolbar stays focused on search and navigation controls. `TreeClient` always loads supported relationship buckets into the graph, while relationship derivation remains limited to the approved one-hop in-law categories.
 - `Follow-up`: Continue validating spouse, parent-in-law, and sibling-in-law selected views against live data before deciding whether any additional in-law category expansion is needed.
+
+- `Area`: Famailink EFL-style focused tree behavior
+- `Decision`: Famailink `/tree` should resemble the EFL tree's focused navigation and motion while remaining independent from EFL family-group routing. The active focused tree should animate the positioned map layer to the selected person, show adjacent spouse household tiles, draw SVG parent-to-child connectors, center children under parents, and stop at the selected person's children/child households rather than rendering grandchildren.
+- `Reason`: The prior selected-person tree used static flex rows and grandchild branches, which did not match EFL's navigational feel and created visual gaps below child households. Famailink can match the interaction model by reusing the same client-side layout concepts against its existing graph snapshot.
+- `Alternatives Considered`: Keep the static selected-person layout; import the legacy EFL tree component directly; preserve grandchild rows in the focused view.
+- `Impact`: The tree pane is now motion/focus oriented. It does not add family-group support to Famailink and does not change relationship derivation, data storage, or preference APIs.
+- `Follow-up`: Validate the focused map against live spouse, parent-in-law, sibling-in-law, and child-household cases before deciding whether broader EFL map behaviors such as full pinch zoom parity are needed.

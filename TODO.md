@@ -29,6 +29,35 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-18 (Famailink EFL-style focused tree motion):
+  - Scope:
+    - Rework the Famailink `/tree` pane to resemble EFL tree navigation and motion without importing EFL family-group routing or tenant concepts.
+    - Keep Famailink data/session/query behavior isolated; use the existing Famailink tree snapshot and direct relationship/household graph.
+    - Remove selected-person grandchild rendering from the active tree view.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Select people from the focus panel/search/tree.
+    - Observe that the current tree is a static flex layout: selected rows replace each other without EFL-style viewport motion, spouse tiles have visible gaps, grandchildren create extra gaps under child households, and connector lines are CSS bars/stubs rather than graph lines from parents toward children.
+  - Failing data/query/code path:
+    - `TreeClient` renders `SelectedPersonTree` with DOM rows (`family-selected-generation`, `ChildBranch`, `family-grandchild-row`) rather than an absolute-positioned graph layer.
+    - Focus changes only replace the React subtree; no focus bounds or viewport transform is calculated.
+    - Child branches render grandchildren even though the desired EFL-style focused view should stop at selected person's children/child households.
+  - Root cause:
+    - Famailink has the correct underlying direct graph data, but the active tree pane does not use the EFL graph layout model. It lacks positioned person nodes, selected-focus bounds, animated transform changes, negative-gap spouse household units, and SVG parent/child connectors.
+  - Implementation:
+    - Add an EFL-inspired focused map renderer inside `TreeClient` using Famailink graph data only.
+    - Render parent household above, selected household/person centered, and children/child households below with no grandchildren.
+    - Use first-name tree tiles, touching spouse units, direct SVG lines from parent tiles toward child tiles, and smooth viewport recentering when focus changes.
+    - Keep the existing Famailink focus panel and person detail modal behavior.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Focus changes animate the tree layer to bring the selected tile/household to the center of the tree pane.
+    - Spouse tiles sit as a household pair with enough width for first names.
+    - Children and child households are centered below their parents in birth order.
+    - The selected-person tree does not render grandchildren.
+    - Famailink remains free of EFL family-group routing/tenant support.
   Agreed implementation plan 2026-04-18 (Famailink tree in-law switch removal):
   - Scope:
     - Remove the visible `/tree` In-laws switch.
