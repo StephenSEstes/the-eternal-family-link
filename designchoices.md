@@ -519,3 +519,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the bucket tree and improve styling only; import the legacy EFL `TreeGraph` component directly; defer household rendering until the full app port.
 - `Impact`: `buildTreeLabSnapshot()` now exposes direct people, relationships, and lightweight household rows to the Famailink client. `/tree` builds an isolated household graph from those inputs and keeps existing defaults/exceptions save APIs unchanged.
 - `Follow-up`: Validate against live family data and decide whether to add true pan/drag canvas behavior or deeper legacy EFL parity after the household prototype is tested.
+
+## 2026-04-18
+
+- `Area`: Famailink selected-person tree navigation
+- `Decision`: Famailink `/tree` should not expose a separate in-law display switch. The selected person and focus navigation should dictate the displayed tree context, while supported one-hop in-law categories remain available to the client graph by default.
+- `Reason`: The selected-person-centered tree requires spouse, parent-in-law, and sibling-in-law context to remain available when those people are selected. A separate hide/show switch can remove required graph members and make the tree disagree with the navigation panel.
+- `Alternatives Considered`: Keep the In-laws switch as an advanced view filter; replace it with a separate in-law mode; expand in-laws recursively.
+- `Impact`: The `/tree` toolbar stays focused on search and navigation controls. `TreeClient` always loads supported relationship buckets into the graph, while relationship derivation remains limited to the approved one-hop in-law categories.
+- `Follow-up`: Continue validating spouse, parent-in-law, and sibling-in-law selected views against live data before deciding whether any additional in-law category expansion is needed.

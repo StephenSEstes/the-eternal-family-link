@@ -29,6 +29,30 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-18 (Famailink tree in-law switch removal):
+  - Scope:
+    - Remove the visible `/tree` In-laws switch.
+    - Always include existing one-hop in-law categories in the family tree graph model.
+    - Keep relationship derivation unchanged; this is a UI/model-display cleanup, not a schema or data change.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Use the navigation/focus panel to select a spouse, parent-in-law, or sibling-in-law.
+    - Observe that tree context depends on the separate In-laws switch instead of only the selected person/focus navigation state.
+  - Failing data/query/code path:
+    - `TreeClient` stores `showInLaws` state and passes `{ includeInLaws: showInLaws }` into `buildTreeGraphModel()`.
+    - `buildTreeGraphModel()` skips `_in_law` relationship buckets when that option is false, which can remove people needed to render the selected focus person's household context.
+  - Root cause:
+    - The old optional in-law display mode now conflicts with the selected-person-centered tree behavior. The navigation panel should dictate the tree context; the renderer should not have a separate toggle that hides supported relationship categories.
+  - Implementation:
+    - Remove the `TreeGraphOptions`/`includeInLaws` path and always load all supported relationship buckets into the tree graph.
+    - Remove the visible In-laws switch, its state, and the in-law count.
+    - Remove unused switch CSS and adjust the toolbar layout for search plus navigation controls.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - The `/tree` toolbar no longer shows an In-laws switch.
+    - Selecting in-law relatives still has access to their supported tree context through the existing relationship buckets.
   Agreed implementation plan 2026-04-17 (Famailink sibling-in-law descendant household links):
   - Scope:
     - Fix selected sibling-in-law views where some child links and child-spouse household links are missing.

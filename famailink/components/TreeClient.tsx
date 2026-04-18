@@ -124,9 +124,6 @@ type TreeGraphModel = {
 
 type SharingOverrideMode = "follow_default" | "always_share" | "name_only" | "custom_scopes";
 type SubscriptionOverrideMode = "follow_default" | "always_subscribe" | "do_not_subscribe";
-type TreeGraphOptions = {
-  includeInLaws: boolean;
-};
 
 type ModalSettings = {
   subscriptionDefaults: SubscriptionDefaultRule[];
@@ -314,10 +311,6 @@ function isSpouseRelationship(row: TreeRelationship) {
   return type === "spouse" || type === "family";
 }
 
-function isInLawCategory(category: RelationshipCategory) {
-  return category.endsWith("_in_law");
-}
-
 function generationLabel(generation: number) {
   if (generation <= -2) return "Grandparents";
   if (generation === -1) return "Parents";
@@ -453,7 +446,7 @@ function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePe
   return `${names.join(" & ")} Household`;
 }
 
-function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions): TreeGraphModel {
+function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
   const peopleById = new Map<string, TreePerson>();
   for (const person of snapshot.people) {
     if (!normalize(person.personId)) continue;
@@ -468,7 +461,6 @@ function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions):
 
   const relationByPersonId = new Map<string, SelectedRelative>();
   for (const category of RELATION_PRIORITY) {
-    if (!options.includeInLaws && isInLawCategory(category)) continue;
     for (const person of snapshot.buckets[category] ?? []) {
       if (!relationByPersonId.has(person.personId)) {
         relationByPersonId.set(person.personId, { person, category });
@@ -1291,7 +1283,6 @@ export function TreeClient({
   const [modalError, setModalError] = useState("");
   const [treeSearch, setTreeSearch] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [showInLaws, setShowInLaws] = useState(true);
 
   const visibilityByTarget = useMemo(
     () => new Map(visibilityRows.map((row) => [row.targetPersonId, row])),
@@ -1301,7 +1292,7 @@ export function TreeClient({
     () => new Map(subscriptionRows.map((row) => [row.targetPersonId, row])),
     [subscriptionRows],
   );
-  const graph = useMemo(() => buildTreeGraphModel(snapshot, { includeInLaws: showInLaws }), [showInLaws, snapshot]);
+  const graph = useMemo(() => buildTreeGraphModel(snapshot), [snapshot]);
   const effectiveFocusedPersonId = graph.visiblePersonIds.has(focusedPersonId) ? focusedPersonId : snapshot.viewer.personId;
   const focusedPerson =
     graph.peopleById.get(effectiveFocusedPersonId) ?? graph.peopleById.get(snapshot.viewer.personId) ?? null;
@@ -1312,11 +1303,6 @@ export function TreeClient({
   );
   const activeHouseholdId = activeHouseholdIds[0] ?? "";
   const activeHousehold = graph.units.find((unit) => unit.householdId === activeHouseholdId) ?? null;
-  const inLawRelativeCount = RELATION_PRIORITY.filter(isInLawCategory).reduce(
-    (count, category) => count + (snapshot.buckets[category]?.length ?? 0),
-    0,
-  );
-
   const focusNavigation = useMemo(() => {
     if (!focusedPerson) {
       return {
@@ -1641,25 +1627,6 @@ export function TreeClient({
               </div>
             ) : null}
           </div>
-
-          <label className="tree-view-switch">
-            <input
-              type="checkbox"
-              checked={showInLaws}
-              onChange={(event) => {
-                setShowInLaws(event.target.checked);
-                setTreeSearch("");
-                setFocusGroup("household");
-              }}
-            />
-            <span className="tree-view-switch-track" aria-hidden="true">
-              <span className="tree-view-switch-thumb" />
-            </span>
-            <span>
-              <strong>In-laws</strong>
-              <small>{showInLaws ? `${inLawRelativeCount} shown` : `${inLawRelativeCount} hidden`}</small>
-            </span>
-          </label>
 
           <div className="family-tree-controls" aria-label="Tree navigation controls">
             <button type="button" className="tree-control-btn" onClick={() => setZoom((current) => Math.min(1.45, current + 0.1))} aria-label="Zoom in">

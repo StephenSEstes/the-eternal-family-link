@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-18 (Famailink tree in-law switch removal)
+
+- `Date`: 2026-04-18
+- `Change`: Removed the visible Famailink `/tree` In-laws switch and made the client tree graph always include the existing supported one-hop in-law relationship buckets. The tree toolbar now contains search and navigation controls only, so the selected person/focus panel is the single visible control for tree context.
+- `Type`: UI
+- `Why`: Root cause was a code/UI mismatch. `TreeClient` still kept `showInLaws` state and passed `{ includeInLaws }` into `buildTreeGraphModel()`, which skipped `_in_law` buckets when false. That old optional display mode conflicts with the selected-person-centered tree, because focusing a spouse, parent-in-law, or sibling-in-law can require those supported in-law people to remain in the graph.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None. No schema, OCI data, defaults, exceptions, or relationship derivation changed.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/tree` no longer shows an In-laws switch.
+  - Selecting in-law relatives still has access to supported tree context through the existing relationship buckets.
+- `Rollback Notes`: Revert this change to restore the visible In-laws switch and optional client-side filtering of `_in_law` relationship buckets.
+- `Design Decision Change`: Yes. Added the 2026-04-18 Famailink selected-person tree navigation decision to `designchoices.md`.
+
 ## 2026-04-17 (Famailink sibling-in-law descendant links)
 
 - `Date`: 2026-04-17

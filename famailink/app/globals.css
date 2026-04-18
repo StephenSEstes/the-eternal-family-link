@@ -986,7 +986,7 @@ select {
 
 .family-tree-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 360px) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(220px, 360px) 1fr;
   gap: 14px;
   align-items: end;
   padding: 12px 14px;
@@ -1031,80 +1031,6 @@ select {
 
 .family-tree-search-results button:hover {
   background: color-mix(in oklab, var(--accent) 10%, #fff 90%);
-}
-
-.tree-view-switch {
-  position: relative;
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in oklab, var(--line) 82%, #fff 18%);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-}
-
-.tree-view-switch input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.tree-view-switch-track {
-  width: 42px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  padding: 3px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--line) 70%, #fff 30%);
-  transition: background 160ms ease;
-}
-
-.tree-view-switch-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 2px 6px color-mix(in oklab, #124866 24%, transparent 76%);
-  transition: transform 160ms ease;
-}
-
-.tree-view-switch input:checked + .tree-view-switch-track {
-  background: color-mix(in oklab, var(--accent) 80%, #fff 20%);
-}
-
-.tree-view-switch input:checked + .tree-view-switch-track .tree-view-switch-thumb {
-  transform: translateX(18px);
-}
-
-.tree-view-switch input:focus-visible + .tree-view-switch-track {
-  outline: 2px solid color-mix(in oklab, var(--accent) 68%, #fff 32%);
-  outline-offset: 3px;
-}
-
-.tree-view-switch strong,
-.tree-view-switch small {
-  display: block;
-  line-height: 1.1;
-}
-
-.tree-view-switch strong {
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
-.tree-view-switch small {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
 }
 
 .family-tree-controls {
@@ -1862,10 +1788,6 @@ select {
 
   .family-tree-controls {
     justify-content: flex-start;
-  }
-
-  .tree-view-switch {
-    justify-self: stretch;
   }
 
   .family-tree-viewport {
