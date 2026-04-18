@@ -29,6 +29,31 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-17 (Famailink sibling-in-law descendant household links):
+  - Scope:
+    - Fix selected sibling-in-law views where some child links and child-spouse household links are missing.
+    - Keep the change in the existing `siblings_in_law` and `nieces_nephews_in_law` buckets; do not add schema or new broad default categories.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Select a brother-in-law/sibling-in-law.
+    - Observe that some children may be absent when the direct parent-child row is attached to the sibling-in-law's spouse, and child spouses are absent from child household tiles.
+  - Failing data/query/code path:
+    - `computeRelativeHitsForViewer()` adds spouse-side sibling-in-law spouses and children, but child derivation only checks `childrenByParent` for the original sibling-in-law ID.
+    - It also does not add spouses of those niece/nephew-in-law children, so `TreeClient` cannot build child household tiles with spouse cards.
+  - Root cause:
+    - The visible relationship hit set is still too narrow for sibling-in-law household rendering. The tree renderer can render child households, but only if both child and child spouse are present in `visiblePersonIds`.
+  - Implementation:
+    - For each spouse-side sibling-in-law, derive household parent IDs from the sibling-in-law plus visible spouses.
+    - Add children from any of those household parent IDs as `nieces_nephews_in_law`.
+    - Add spouses of those children as `nieces_nephews_in_law` so child household tiles can render spouse links.
+    - Stop there; do not add deeper descendants.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Selecting a sibling-in-law can show children linked through either parent in that sibling-in-law household.
+    - Those children can show spouse tiles when direct spouse rows exist.
+    - Missing rows after this point indicate data remediation, not renderer/derivation gaps.
   Agreed implementation plan 2026-04-17 (Famailink spouse-side sibling household visibility):
   - Scope:
     - Fix the selected parent-in-law tree context so spouse-side siblings-in-law can show their spouses and children.

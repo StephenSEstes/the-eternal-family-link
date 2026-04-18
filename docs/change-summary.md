@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-17 (Famailink sibling-in-law descendant links)
+
+- `Date`: 2026-04-17
+- `Change`: Expanded Famailink sibling-in-law household derivation so selecting a brother-in-law/sibling-in-law can show children linked through either spouse in that household, and can show spouses of those children in child household tiles when direct spouse rows exist.
+- `Type`: UI | API
+- `Why`: Root cause was a remaining derivation gap. The previous sibling-in-law fix added spouse-side sibling-in-law spouses and children, but child derivation only checked children directly attached to the original sibling-in-law ID. It also did not add spouses of those children, so `TreeClient` could not build complete child household links even though the renderer supports them.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/lib/family/store.ts`
+- `Data Changes`: No schema or data repair. Existing direct spouse and parent-child `relationships` rows are used; missing direct rows still require data remediation.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Selecting a sibling-in-law can show children linked through either parent in that sibling-in-law household.
+  - Those children can show spouse tiles when direct spouse rows exist.
+- `Rollback Notes`: Revert this change to restore the prior derivation that only considered children directly attached to the original sibling-in-law and omitted child spouses.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-17 (Famailink sibling-in-law household visibility)
 
 - `Date`: 2026-04-17
