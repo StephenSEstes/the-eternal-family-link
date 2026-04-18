@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-17 (Famailink selected-person-centered tree)
+
+- `Date`: 2026-04-17
+- `Change`: Updated Famailink `/tree` so selecting a person recenters the tree around that person's generation instead of rendering a generic recursive subtree. The tree now renders the selected person's parents above, the selected person's generation in the center, children and child households below, and grandchildren below children with no deeper descendants. Siblings are omitted unless the selected person has no visible spouse/household context.
+- `Type`: UI
+- `Why`: Root cause was a renderer mismatch. The previous pass made the right navigation choose a subtree, but it still reused the generic recursive `HouseholdTreeUnit` renderer. That code path could not enforce the requested fixed generation contract: selected person central, parents above, children below, grandchildren only, and no sibling/in-law clutter except for single selected people.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None. Existing person, parent/child, spouse, and household rows are interpreted in a selected-person view model only.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Selecting a person from the focus panel recenters the tree around that person.
+  - Parents render above the selected person when available, including spouse-as-selected parent/in-law context when visible.
+  - Children and their households render below the selected generation, grandchildren render below children, and deeper descendants do not render.
+  - Siblings are omitted unless the selected person is single.
+- `Rollback Notes`: Revert this change to restore the previous focus-group subtree rendering.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-17 (Famailink compact image-based tree context)
 
 - `Date`: 2026-04-17

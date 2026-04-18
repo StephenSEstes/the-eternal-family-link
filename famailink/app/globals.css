@@ -1174,6 +1174,116 @@ select {
   min-width: max-content;
 }
 
+.family-selected-tree {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0;
+  min-width: max-content;
+}
+
+.family-selected-generation {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: max-content;
+}
+
+.family-selected-center {
+  position: relative;
+  padding: 2px 0;
+}
+
+.family-selected-children {
+  position: relative;
+  align-items: flex-start;
+  max-width: 720px;
+  padding-top: 12px;
+  flex-wrap: wrap;
+}
+
+.family-selected-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+}
+
+.family-generation-connector,
+.family-grandchild-connector {
+  position: relative;
+  width: 100%;
+  height: 24px;
+}
+
+.family-generation-connector::before,
+.family-grandchild-connector::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 48%, #fff 52%);
+}
+
+.family-child-branch {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.family-child-branch::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  width: 2px;
+  height: 12px;
+  transform: translateX(-50%);
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+}
+
+.family-person-slot {
+  position: relative;
+}
+
+.family-grandchild-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 7px;
+  max-width: 360px;
+  padding-top: 12px;
+  flex-wrap: wrap;
+}
+
+.family-grandchild-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
+}
+
+.family-empty-tree-note {
+  margin: 0;
+  padding: 18px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .family-generation-row {
   display: grid;
   gap: 14px;

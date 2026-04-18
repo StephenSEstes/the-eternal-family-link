@@ -29,6 +29,37 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-17 (Famailink selected-person-centered tree):
+  - Scope:
+    - Update only Famailink `/tree` client layout behavior; preserve current auth, access rules, data schema, and save APIs.
+    - Keep EFL-style image tiles and compact tile styling from the previous pass.
+  - Reproduction path:
+    - Open Famailink `/tree` after login and select a person from the right focus/navigation panel.
+    - Observe that the displayed tree is rooted by the current focus group/household subtree rather than always placing the selected person's generation as the central row.
+    - Selecting a spouse can center the spouse household without consistently showing that spouse's parents as the upper generation.
+    - Child household recursion can continue beyond grandchildren.
+  - Failing code path:
+    - `displayedRootUnits` chooses root household units from `focusGroup`, then `HouseholdTreeUnit` recursively renders the full child-household chain.
+    - The renderer has no selected-person-centered view model with explicit parent, center, child, and grandchild generations.
+  - Root cause:
+    - The previous tree pass made the right navigation dictate which subtree is shown, but it still reused the generic recursive household renderer.
+    - A generic subtree renderer cannot enforce the requested visual contract: selected person's generation central, selected person's parents above, children/child households below, grandchildren below, and no deeper descendants.
+  - Implementation:
+    - Build a selected-person tree context from existing parent/child/spouse/household maps.
+    - Render an upper parent household row for the selected person when parents exist.
+    - Render the selected person's generation in the center: selected household when partnered, or selected person plus siblings only when the selected person is single.
+    - Render children and their spouse/household tiles below the selected generation in birth order.
+    - Render grandchildren below those children in birth order, with no deeper descendants.
+    - Keep focus-panel person selection as the navigation action; focus chips may still select parents/spouse/siblings/children, but the tree pane recenters around the selected person after selection.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Signed-out deployed checks after deploy if Steve chooses to deploy.
+  - Completion criteria:
+    - Selecting any person recenters the tree around that person's generation.
+    - That person's parents render above them when available, including spouse-as-selected parent/in-law context.
+    - Children and child households render below the selected person, grandchildren render below children, and no further generations render.
+    - Siblings are omitted unless the selected person is single.
   Agreed implementation plan 2026-04-16 (Famailink compact image-based tree view):
   - Scope:
     - Update only the Famailink family tree view and its lightweight family graph snapshot data.

@@ -378,6 +378,74 @@ function avatarUrlForPerson(person: { gender?: string }) {
   return normalizeLower(person.gender) === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
 
+function sortedVisiblePersonIds(values: Iterable<string>, peopleById: Map<string, TreePerson>) {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const value of values) {
+    const personId = normalize(value);
+    if (!personId || seen.has(personId) || !peopleById.has(personId)) continue;
+    seen.add(personId);
+    ids.push(personId);
+  }
+  return ids.sort((left, right) => compareTreePersonIdsByBirth(left, right, peopleById));
+}
+
+function findOwnHouseholdUnits(graph: TreeGraphModel, personId: string) {
+  return (graph.householdIdsByPerson.get(personId) ?? [])
+    .map((householdId) => graph.unitsById.get(householdId))
+    .filter((unit): unit is HouseholdUnit => {
+      if (!unit) return false;
+      return unit.parentIds.includes(personId);
+    })
+    .sort((left, right) => compareHouseholdUnits(left, right, graph.peopleById));
+}
+
+function findPrimaryOwnHouseholdUnit(graph: TreeGraphModel, personId: string, excludedHouseholdIds = new Set<string>()) {
+  return findOwnHouseholdUnits(graph, personId).find((unit) => !excludedHouseholdIds.has(unit.householdId)) ?? null;
+}
+
+function findParentHouseholdUnit(graph: TreeGraphModel, personId: string) {
+  const parentIds = Array.from(graph.parentsByChild.get(personId) ?? []);
+  return (
+    graph.units
+      .filter((unit) => unit.childIds.includes(personId))
+      .sort((left, right) => {
+        const leftOverlap = left.parentIds.filter((parentId) => parentIds.includes(parentId)).length;
+        const rightOverlap = right.parentIds.filter((parentId) => parentIds.includes(parentId)).length;
+        if (leftOverlap !== rightOverlap) return rightOverlap - leftOverlap;
+        return compareHouseholdUnits(left, right, graph.peopleById);
+      })[0] ?? null
+  );
+}
+
+function parentIdsForPerson(graph: TreeGraphModel, personId: string, parentUnit: HouseholdUnit | null) {
+  return sortedVisiblePersonIds(parentUnit?.parentIds ?? graph.parentsByChild.get(personId) ?? [], graph.peopleById);
+}
+
+function siblingIdsForPerson(graph: TreeGraphModel, personId: string) {
+  const ids = new Set<string>([personId]);
+  for (const parentId of graph.parentsByChild.get(personId) ?? []) {
+    for (const siblingId of graph.childrenByParent.get(parentId) ?? []) {
+      ids.add(siblingId);
+    }
+  }
+  return sortedVisiblePersonIds(ids, graph.peopleById);
+}
+
+function childIdsForPerson(graph: TreeGraphModel, personId: string, householdUnit: HouseholdUnit | null) {
+  const ids = new Set<string>();
+  for (const childId of householdUnit?.childIds ?? []) ids.add(childId);
+  for (const childId of graph.childrenByParent.get(personId) ?? []) ids.add(childId);
+  return sortedVisiblePersonIds(ids, graph.peopleById);
+}
+
+function grandchildIdsForChild(graph: TreeGraphModel, childId: string, childHouseholdUnit: HouseholdUnit | null) {
+  const ids = childHouseholdUnit?.childIds.length
+    ? childHouseholdUnit.childIds
+    : Array.from(graph.childrenByParent.get(childId) ?? []);
+  return sortedVisiblePersonIds(ids, graph.peopleById);
+}
+
 function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePerson>, fallback: string) {
   const names = parentIds.map((personId) => peopleById.get(personId)?.displayName ?? "").filter(Boolean);
   if (names.length === 0) return fallback;
@@ -995,45 +1063,37 @@ function PersonTreeCard({
   );
 }
 
-function HouseholdTreeUnit({
+function HouseholdFrame({
   unit,
+  personIds,
   graph,
   focusedPersonId,
   onSelect,
-  visited,
+  label,
 }: {
-  unit: HouseholdUnit;
+  unit: HouseholdUnit | null;
+  personIds: string[];
   graph: TreeGraphModel;
   focusedPersonId: string;
   onSelect: (personId: string) => void;
-  visited: Set<string>;
+  label?: string;
 }) {
-  if (visited.has(unit.householdId)) return null;
-  const nextVisited = new Set(visited);
-  nextVisited.add(unit.householdId);
-  const childHouseholdByChildId = new Map<string, HouseholdUnit>();
-  for (const householdId of unit.childHouseholdIds) {
-    const childUnit = graph.unitsById.get(householdId);
-    const childId = unit.childIds.find((candidateId) => childUnit?.parentIds.includes(candidateId));
-    if (childUnit && childId) childHouseholdByChildId.set(childId, childUnit);
-  }
-  const hasDescendants = unit.childIds.length > 0;
-  const isFocusedHousehold =
-    unit.parentIds.includes(focusedPersonId) ||
-    unit.childPersonIds.includes(focusedPersonId) ||
-    unit.childIds.includes(focusedPersonId);
+  const visiblePersonIds = sortedVisiblePersonIds(personIds, graph.peopleById);
+  if (!visiblePersonIds.length) return null;
+  const frameLabel = label ?? unit?.label ?? buildHouseholdLabel(visiblePersonIds, graph.peopleById, "Household");
+  const isFocusedHousehold = visiblePersonIds.includes(focusedPersonId);
 
   return (
     <article className={`family-household-unit${isFocusedHousehold ? " is-focused" : ""}`}>
       <div className="family-household-frame">
-        <p className="family-household-label">{unit.label}</p>
+        <p className="family-household-label">{frameLabel}</p>
         <div className="family-household-parents">
-          {unit.parentIds.map((personId) => {
+          {visiblePersonIds.map((personId) => {
             const person = graph.peopleById.get(personId);
             if (!person) return null;
             return (
               <PersonTreeCard
-                key={`${unit.householdId}:${personId}`}
+                key={`${frameLabel}:${personId}`}
                 person={person}
                 relation={graph.relationByPersonId.get(personId)}
                 isFocused={personId === focusedPersonId}
@@ -1043,42 +1103,169 @@ function HouseholdTreeUnit({
           })}
         </div>
       </div>
-      {hasDescendants ? (
+    </article>
+  );
+}
+
+function PersonCardSlot({
+  personId,
+  graph,
+  focusedPersonId,
+  onSelect,
+  slotClassName = "family-person-slot",
+}: {
+  personId: string;
+  graph: TreeGraphModel;
+  focusedPersonId: string;
+  onSelect: (personId: string) => void;
+  slotClassName?: string;
+}) {
+  const person = graph.peopleById.get(personId);
+  if (!person) return null;
+  return (
+    <div className={slotClassName}>
+      <PersonTreeCard
+        person={person}
+        relation={graph.relationByPersonId.get(personId)}
+        isFocused={personId === focusedPersonId}
+        onSelect={onSelect}
+      />
+    </div>
+  );
+}
+
+function ChildBranch({
+  childId,
+  graph,
+  focusedPersonId,
+  excludedHouseholdIds,
+  onSelect,
+}: {
+  childId: string;
+  graph: TreeGraphModel;
+  focusedPersonId: string;
+  excludedHouseholdIds: Set<string>;
+  onSelect: (personId: string) => void;
+}) {
+  const childHouseholdUnit = findPrimaryOwnHouseholdUnit(graph, childId, excludedHouseholdIds);
+  const grandchildIds = grandchildIdsForChild(graph, childId, childHouseholdUnit);
+
+  return (
+    <div className="family-child-branch">
+      {childHouseholdUnit ? (
+        <HouseholdFrame
+          unit={childHouseholdUnit}
+          personIds={childHouseholdUnit.parentIds}
+          graph={graph}
+          focusedPersonId={focusedPersonId}
+          onSelect={onSelect}
+        />
+      ) : (
+        <PersonCardSlot personId={childId} graph={graph} focusedPersonId={focusedPersonId} onSelect={onSelect} />
+      )}
+      {grandchildIds.length > 0 ? (
         <>
-          <div className="family-child-connector" aria-hidden="true" />
-          <div className="family-household-descendants">
-            {unit.childIds.map((personId) => {
-              const childUnit = childHouseholdByChildId.get(personId);
-              if (childUnit) {
-                return (
-                  <div key={`${unit.householdId}:child-household:${childUnit.householdId}`} className="family-child-household-slot">
-                    <HouseholdTreeUnit
-                      unit={childUnit}
-                      graph={graph}
-                      focusedPersonId={focusedPersonId}
-                      onSelect={onSelect}
-                      visited={nextVisited}
-                    />
-                  </div>
-                );
-              }
-              const person = graph.peopleById.get(personId);
-              if (!person) return null;
-              return (
-                <div key={`${unit.householdId}:child-person:${personId}`} className="family-child-person-slot">
-                  <PersonTreeCard
-                    person={person}
-                    relation={graph.relationByPersonId.get(personId)}
-                    isFocused={personId === focusedPersonId}
-                    onSelect={onSelect}
-                  />
-                </div>
-              );
-            })}
+          <div className="family-grandchild-connector" aria-hidden="true" />
+          <div className="family-grandchild-row">
+            {grandchildIds.map((grandchildId) => (
+              <PersonCardSlot
+                key={`${childId}:grandchild:${grandchildId}`}
+                personId={grandchildId}
+                graph={graph}
+                focusedPersonId={focusedPersonId}
+                onSelect={onSelect}
+              />
+            ))}
           </div>
         </>
       ) : null}
-    </article>
+    </div>
+  );
+}
+
+function SelectedPersonTree({
+  focusedPersonId,
+  graph,
+  onSelect,
+}: {
+  focusedPersonId: string;
+  graph: TreeGraphModel;
+  onSelect: (personId: string) => void;
+}) {
+  const focusedPerson = graph.peopleById.get(focusedPersonId);
+  if (!focusedPerson) {
+    return <p className="family-empty-tree-note">Select a person to view their family context.</p>;
+  }
+
+  const parentUnit = findParentHouseholdUnit(graph, focusedPersonId);
+  const parentIds = parentIdsForPerson(graph, focusedPersonId, parentUnit);
+  const centerUnit = findPrimaryOwnHouseholdUnit(graph, focusedPersonId);
+  const hasSpouse = (graph.spousesByPerson.get(focusedPersonId)?.size ?? 0) > 0;
+  const centerPersonIds = centerUnit
+    ? centerUnit.parentIds
+    : !hasSpouse
+      ? siblingIdsForPerson(graph, focusedPersonId)
+      : [focusedPersonId];
+  const childIds = childIdsForPerson(graph, focusedPersonId, centerUnit);
+  const excludedHouseholdIds = new Set<string>(centerUnit ? [centerUnit.householdId] : []);
+
+  return (
+    <div className="family-selected-tree">
+      {parentIds.length > 0 ? (
+        <>
+          <div className="family-selected-generation family-selected-parents">
+            <HouseholdFrame
+              unit={parentUnit}
+              personIds={parentIds}
+              graph={graph}
+              focusedPersonId={focusedPersonId}
+              onSelect={onSelect}
+            />
+          </div>
+          <div className="family-generation-connector" aria-hidden="true" />
+        </>
+      ) : null}
+
+      <div className="family-selected-generation family-selected-center">
+        {centerUnit ? (
+          <HouseholdFrame
+            unit={centerUnit}
+            personIds={centerPersonIds}
+            graph={graph}
+            focusedPersonId={focusedPersonId}
+            onSelect={onSelect}
+          />
+        ) : (
+          centerPersonIds.map((personId) => (
+            <PersonCardSlot
+              key={`center:${personId}`}
+              personId={personId}
+              graph={graph}
+              focusedPersonId={focusedPersonId}
+              onSelect={onSelect}
+            />
+          ))
+        )}
+      </div>
+
+      {childIds.length > 0 ? (
+        <>
+          <div className="family-generation-connector" aria-hidden="true" />
+          <div className="family-selected-generation family-selected-children">
+            {childIds.map((childId) => (
+              <ChildBranch
+                key={`child:${childId}`}
+                childId={childId}
+                graph={graph}
+                focusedPersonId={focusedPersonId}
+                excludedHouseholdIds={excludedHouseholdIds}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -1176,40 +1363,6 @@ export function TreeClient({
     if (!query) return [];
     return graph.visiblePeople.filter((person) => person.displayName.toLowerCase().includes(query)).slice(0, 8);
   }, [graph.visiblePeople, treeSearch]);
-  const displayedRootUnits = useMemo(() => {
-    const focusedId = focusedPerson?.personId ?? "";
-    const rootUnits = graph.units.filter((unit) => unit.parentUnitIds.length === 0);
-    const ownHouseholdUnits = activeHouseholdIds
-      .map((householdId) => graph.unitsById.get(householdId))
-      .filter((unit): unit is HouseholdUnit => {
-        if (!unit) return false;
-        return unit.parentIds.includes(focusedId);
-      });
-    const parentHouseholdUnits = graph.units.filter((unit) => unit.childIds.includes(focusedId));
-    const personUnits = graph.units.filter((unit) => unit.parentIds.length === 1 && unit.parentIds.includes(focusedId));
-    const preferredUnits =
-      focusGroup === "parents" || focusGroup === "siblings"
-        ? parentHouseholdUnits
-        : focusGroup === "spouses" || focusGroup === "children"
-          ? ownHouseholdUnits
-          : ownHouseholdUnits.length > 0
-            ? ownHouseholdUnits
-            : parentHouseholdUnits;
-    const candidates = preferredUnits.length > 0 ? preferredUnits : personUnits.length > 0 ? personUnits : rootUnits;
-    const seen = new Set<string>();
-    return candidates
-      .filter((unit) => {
-        if (seen.has(unit.householdId)) return false;
-        seen.add(unit.householdId);
-        return true;
-      })
-      .sort((left, right) => {
-        const leftHasFocus = left.parentIds.includes(focusedId) || left.childIds.includes(focusedId);
-        const rightHasFocus = right.parentIds.includes(focusedId) || right.childIds.includes(focusedId);
-        if (leftHasFocus !== rightHasFocus) return leftHasFocus ? -1 : 1;
-        return compareHouseholdUnits(left, right, graph.peopleById);
-      });
-  }, [activeHouseholdIds, focusGroup, focusedPerson?.personId, graph.peopleById, graph.units, graph.unitsById]);
 
   const focusPeople = focusNavigation[focusGroup];
 
@@ -1536,16 +1689,7 @@ export function TreeClient({
           <div className="family-tree-viewport">
             <div className="family-tree-board" style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
               <div className="family-household-forest">
-                {displayedRootUnits.map((unit) => (
-                  <HouseholdTreeUnit
-                    key={unit.householdId}
-                    unit={unit}
-                    graph={graph}
-                    focusedPersonId={effectiveFocusedPersonId}
-                    onSelect={selectPerson}
-                    visited={new Set()}
-                  />
-                ))}
+                <SelectedPersonTree focusedPersonId={effectiveFocusedPersonId} graph={graph} onSelect={selectPerson} />
               </div>
             </div>
           </div>
