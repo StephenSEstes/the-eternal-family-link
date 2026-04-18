@@ -1168,8 +1168,8 @@ select {
 }
 
 .family-person-card {
-  width: 104px;
-  min-height: 104px;
+  width: 96px;
+  height: 96px;
   display: grid;
   justify-items: center;
   align-content: start;
@@ -1198,8 +1198,8 @@ select {
 }
 
 .family-person-avatar {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   display: block;
   border-radius: 6px;
   border: 1px solid color-mix(in oklab, var(--accent) 20%, #fff 80%);
@@ -1220,12 +1220,12 @@ select {
 }
 
 .family-person-name {
-  max-width: 92px;
+  max-width: 84px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -1625,7 +1625,7 @@ select {
 
   .family-person-card {
     width: 96px;
-    min-height: 100px;
+    height: 96px;
   }
 
   .tree-layout {

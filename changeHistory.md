@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-18: Tightened Famailink `/tree` focused map layout with smaller tiles, adaptive child/sibling spacing, and automatic fit scaling so wider child rows are more likely to fit in the pane. See `docs/change-summary.md`.
 - 2026-04-18: Reworked Famailink `/tree` toward EFL-style focused navigation with animated recentering, touching spouse household tiles, SVG parent-child lines, and no selected-person grandchild rendering. See `docs/change-summary.md`.
 - 2026-04-18: Removed the Famailink `/tree` In-laws switch so selected-person navigation owns tree context while supported one-hop in-law buckets remain available by default. See `docs/change-summary.md`.
 - 2026-04-17: Expanded Famailink sibling-in-law descendant derivation so sibling-in-law views can show children linked through either spouse and child-spouse household links when direct rows exist. See `docs/change-summary.md`.

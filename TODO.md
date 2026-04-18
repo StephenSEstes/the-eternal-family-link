@@ -29,6 +29,30 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-18 (Famailink compact child-row fit):
+  - Scope:
+    - Tighten the current Famailink `/tree` focused display so child rows are more likely to fit inside the tree pane.
+    - Preserve the current deployed tree behavior otherwise; do not revisit connector semantics or add EFL family-group/tenant concepts.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Select a person/household with several children or child households.
+    - Observe that fixed card sizes, fixed sibling gaps, and fixed zoom can push children outside the visible pane.
+  - Failing data/query/code path:
+    - `buildFocusedTreeLayout()` uses fixed tree constants for card size, unit gaps, row gaps, and padding.
+    - `FocusedTreeMap.centerOnAnchor()` recenters using the toolbar `zoom` only, without an automatic fit scale based on focused layout width/height.
+  - Root cause:
+    - The renderer does not adapt to child-count or viewport size. It lays out every focused context at the same density and then centers the selected anchor, which can leave wide child rows clipped.
+  - Implementation:
+    - Reduce default tree card, row, unit-gap, and padding constants while preserving readable first-name tiles.
+    - Add adaptive sibling/child-row gaps that tighten as row count grows.
+    - Add an internal fit scale that attempts to keep the focused layout inside the tree pane, with toolbar zoom still acting as a multiplier.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Child rows are closer together by default.
+    - Wider child rows scale down automatically to fit the visible tree pane when possible.
+    - The change remains a display-only adjustment with no data/schema/query changes.
   Agreed implementation plan 2026-04-18 (Famailink EFL-style focused tree motion):
   - Scope:
     - Rework the Famailink `/tree` pane to resemble EFL tree navigation and motion without importing EFL family-group routing or tenant concepts.

@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-18 (Famailink compact focused tree fit)
+
+- `Date`: 2026-04-18
+- `Change`: Tightened the Famailink `/tree` focused map layout so child and sibling rows use smaller tiles, closer adaptive gaps, and an automatic fit scale that attempts to keep the full focused family context visible in the tree pane while toolbar zoom remains a multiplier.
+- `Type`: UI
+- `Why`: Root cause was fixed layout density. The focused map used fixed card, gap, row, and padding constants and centered at toolbar zoom only, so wider child rows could clip outside the pane.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None. No schema, OCI data, relationship derivation, connector semantics, or family-group/tenant behavior changed.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Child and sibling rows tighten as row count grows.
+  - Default focus view scales down when needed to fit the selected context inside the pane where possible.
+- `Rollback Notes`: Revert this change to restore the previous fixed-density focused map sizing.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-18 (Famailink EFL-style focused tree motion)
 
 - `Date`: 2026-04-18

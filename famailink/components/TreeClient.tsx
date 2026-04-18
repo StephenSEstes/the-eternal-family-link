@@ -1020,14 +1020,15 @@ function RelativeModal({
   );
 }
 
-const TREE_CARD_WIDTH = 104;
-const TREE_CARD_HEIGHT = 104;
+const TREE_CARD_WIDTH = 96;
+const TREE_CARD_HEIGHT = 96;
 const TREE_CARD_HALF_WIDTH = TREE_CARD_WIDTH / 2;
 const TREE_CARD_HALF_HEIGHT = TREE_CARD_HEIGHT / 2;
-const TREE_SPOUSE_GAP = -8;
-const TREE_UNIT_GAP = 44;
-const TREE_ROW_GAP = 178;
-const TREE_LAYOUT_PADDING = 86;
+const TREE_SPOUSE_GAP = -18;
+const TREE_UNIT_GAP = 26;
+const TREE_ROW_GAP = 154;
+const TREE_LAYOUT_PADDING = 54;
+const TREE_MIN_FIT_SCALE = 0.42;
 
 type FocusedTreeNode = {
   personId: string;
@@ -1081,6 +1082,13 @@ function personNodeBounds(node: FocusedTreeNode) {
 function mapUnitWidth(personCount: number, gap: number) {
   if (personCount <= 0) return 0;
   return personCount * TREE_CARD_WIDTH + Math.max(0, personCount - 1) * gap;
+}
+
+function compactGapForCount(count: number) {
+  if (count >= 8) return 8;
+  if (count >= 6) return 12;
+  if (count >= 4) return 18;
+  return TREE_UNIT_GAP;
 }
 
 function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, focusGroup: FocusGroup): FocusedTreeLayout | null {
@@ -1162,10 +1170,11 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
 
   function addStandaloneRow(personIds: string[], y: number) {
     const visibleIds = sortedVisiblePersonIds(personIds, graph.peopleById);
-    const width = mapUnitWidth(visibleIds.length, TREE_UNIT_GAP);
+    const gap = compactGapForCount(visibleIds.length);
+    const width = mapUnitWidth(visibleIds.length, gap);
     const firstX = -width / 2 + TREE_CARD_HALF_WIDTH;
     visibleIds.forEach((personId, index) => {
-      addNode(personId, firstX + index * (TREE_CARD_WIDTH + TREE_UNIT_GAP), y);
+      addNode(personId, firstX + index * (TREE_CARD_WIDTH + gap), y);
     });
   }
 
@@ -1205,8 +1214,9 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
   });
 
   if (childUnits.length > 0) {
+    const childGap = compactGapForCount(childUnits.length);
     const totalChildWidth =
-      childUnits.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, childUnits.length - 1) * TREE_UNIT_GAP;
+      childUnits.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, childUnits.length - 1) * childGap;
     let cursorX = -totalChildWidth / 2;
     childUnits.forEach((childUnit) => {
       const centerX = cursorX + childUnit.width / 2;
@@ -1221,7 +1231,7 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
       } else {
         addNode(childUnit.childId, centerX, childY);
       }
-      cursorX += childUnit.width + TREE_UNIT_GAP;
+      cursorX += childUnit.width + childGap;
     });
   }
 
@@ -1354,7 +1364,7 @@ function PersonTreeCard({
       aria-label={`${person.displayName}, ${relationshipLabel}`}
       title={person.displayName}
     >
-      <Image className="family-person-avatar" src={avatarUrlForPerson(person)} alt="" width={46} height={46} aria-hidden="true" />
+      <Image className="family-person-avatar" src={avatarUrlForPerson(person)} alt="" width={42} height={42} aria-hidden="true" />
       <span className="family-person-copy">
         <span className="family-person-name">{firstNameForTree(person)}</span>
       </span>
@@ -1382,7 +1392,9 @@ function FocusedTreeMap({
   const animationTimeoutRef = useRef<number | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(zoom);
+  const fitScaleRef = useRef(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [fitScale, setFitScale] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const [animateViewport, setAnimateViewport] = useState(false);
   const layout = useMemo(() => buildFocusedTreeLayout(graph, focusedPersonId, focusGroup), [focusGroup, focusedPersonId, graph]);
@@ -1394,6 +1406,10 @@ function FocusedTreeMap({
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
+
+  useEffect(() => {
+    fitScaleRef.current = fitScale;
+  }, [fitScale]);
 
   useEffect(() => {
     return () => {
@@ -1425,12 +1441,34 @@ function FocusedTreeMap({
       const viewport = viewportRef.current;
       if (!viewport || !layout) return;
       const rect = viewport.getBoundingClientRect();
+      const viewportPadding = Math.min(34, Math.max(18, rect.width * 0.04));
+      const availableWidth = Math.max(160, rect.width - viewportPadding * 2);
+      const availableHeight = Math.max(180, rect.height - viewportPadding * 2);
+      const nextFitScale = Math.min(
+        1,
+        Math.max(TREE_MIN_FIT_SCALE, Math.min(availableWidth / layout.width, availableHeight / layout.height)),
+      );
+      const nextScale = nextFitScale * zoomRef.current;
+      const scaledWidth = layout.width * nextScale;
+      const scaledHeight = layout.height * nextScale;
       const anchorCenterX = layout.anchor.x + layout.anchor.width / 2;
       const anchorCenterY = layout.anchor.y + layout.anchor.height / 2;
+      const desiredX = rect.width / 2 - anchorCenterX * nextScale;
+      const desiredY = rect.height * 0.46 - anchorCenterY * nextScale;
+      const clampOffset = (desired: number, viewportSize: number, scaledSize: number) => {
+        if (scaledSize <= viewportSize - viewportPadding * 2) {
+          return (viewportSize - scaledSize) / 2;
+        }
+        const min = viewportSize - viewportPadding - scaledSize;
+        const max = viewportPadding;
+        return Math.min(max, Math.max(min, desired));
+      };
+      fitScaleRef.current = nextFitScale;
+      setFitScale(nextFitScale);
       applyOffset(
         {
-          x: rect.width / 2 - anchorCenterX * zoomRef.current,
-          y: rect.height * 0.46 - anchorCenterY * zoomRef.current,
+          x: clampOffset(desiredX, rect.width, scaledWidth),
+          y: clampOffset(desiredY, rect.height, scaledHeight),
         },
         animate,
       );
@@ -1514,7 +1552,7 @@ function FocusedTreeMap({
         style={{
           width: `${layout.width}px`,
           height: `${layout.height}px`,
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${fitScale * zoom})`,
         }}
       >
         <svg
