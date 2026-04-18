@@ -13,6 +13,24 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-17 (Famailink compact image-based tree context)
+
+- `Date`: 2026-04-17
+- `Change`: Updated Famailink `/tree` so person tiles use EFL-style image avatars instead of initials, tree tiles omit relationship/status text, and the tree card/houshold spacing is much more compact. The right focus panel now determines which household context is rendered, and child rows render from one birth-date-sorted list so all children stay below parents in birth order.
+- `Type`: UI | API
+- `Why`: Root cause was a code/UI mismatch. Famailink's tree component still rendered MVP rule/status tiles with initials, relationship labels, and `Sub`/`Share` pills. It also rendered all root households regardless of the selected focus group, and the tree snapshot did not include `birth_date`, so child ordering could only fall back to names. Married-child household slots were rendered separately from loose child tiles, which could also break the requested child order.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/lib/family/store.ts`, `famailink/components/TreeClient.tsx`, `famailink/app/globals.css`, `famailink/public/placeholders/avatar-female.png`, `famailink/public/placeholders/avatar-male.png`
+- `Data Changes`: No schema or data repair. The Famailink snapshot now reads the existing `people.birth_date` column for UI sorting only.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `/tree` shows image avatars instead of initials on tree cards and focus chips.
+  - Tree tiles are compact and do not show relationship labels or `Sub`/`Share` pills.
+  - Focus-panel groups change the displayed tree context.
+  - Children render below parents in birth order, with name fallback when no birth date exists.
+- `Rollback Notes`: Revert this change to restore initials-based larger tree tiles, full-root tree rendering, and name-only child ordering.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-16 (Famailink EFL visual alignment and in-law tree switch)
 
 - `Date`: 2026-04-16

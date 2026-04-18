@@ -27,6 +27,7 @@ export type PersonLite = {
   personId: string;
   displayName: string;
   gender: string;
+  birthDate: string;
 };
 
 export type RelationshipLite = {
@@ -393,7 +394,8 @@ export async function listPeopleLite(): Promise<PersonLite[]> {
     const result = await connection.execute(
       `SELECT person_id,
               COALESCE(NULLIF(TRIM(display_name), ''), TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), person_id) AS display_name,
-              LOWER(TRIM(NVL(gender, ''))) AS gender
+              LOWER(TRIM(NVL(gender, ''))) AS gender,
+              TRIM(NVL(birth_date, '')) AS birth_date
          FROM people
         WHERE TRIM(person_id) IS NOT NULL
         ORDER BY display_name`,
@@ -405,6 +407,7 @@ export async function listPeopleLite(): Promise<PersonLite[]> {
       personId: getCell(row, "PERSON_ID"),
       displayName: getCell(row, "DISPLAY_NAME"),
       gender: getCell(row, "GENDER"),
+      birthDate: getCell(row, "BIRTH_DATE"),
     }));
   });
 }
@@ -467,6 +470,7 @@ export async function listRelatedFamilyPeople(viewerPersonId: string): Promise<R
         personId,
         displayName: personId,
         gender: "",
+        birthDate: "",
       } satisfies PersonLite);
 
     out.push({
@@ -493,6 +497,7 @@ export async function buildTreeLabSnapshot(viewerPersonId: string): Promise<Tree
       personId: normalize(viewerPersonId),
       displayName: normalize(viewerPersonId),
       gender: "",
+      birthDate: "",
     } satisfies PersonLite);
 
   for (const [personId, categories] of hits.entries()) {
@@ -502,6 +507,7 @@ export async function buildTreeLabSnapshot(viewerPersonId: string): Promise<Tree
         personId,
         displayName: personId,
         gender: "",
+        birthDate: "",
       } satisfies PersonLite);
 
     for (const category of CATEGORY_ORDER) {

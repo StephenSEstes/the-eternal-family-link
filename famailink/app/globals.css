@@ -1157,10 +1157,12 @@ select {
 }
 
 .family-tree-board {
-  min-width: 980px;
+  min-width: 720px;
   display: grid;
-  gap: 42px;
-  padding: 26px 28px 46px;
+  justify-content: center;
+  align-content: start;
+  gap: 28px;
+  padding: 24px 22px 42px;
   transition: transform 180ms ease;
 }
 
@@ -1168,7 +1170,7 @@ select {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 26px;
+  gap: 18px;
   min-width: max-content;
 }
 
@@ -1199,16 +1201,16 @@ select {
   position: relative;
   display: grid;
   justify-items: center;
-  min-width: 210px;
+  min-width: 150px;
 }
 
 .family-household-frame {
   display: grid;
   justify-items: center;
-  gap: 9px;
-  padding: 10px 12px 12px;
+  gap: 6px;
+  padding: 7px 8px 8px;
   border: 2px solid color-mix(in oklab, var(--accent) 26%, #fff 74%);
-  border-radius: 20px;
+  border-radius: 8px;
   background: color-mix(in oklab, #ffffff 90%, #eef8fb 10%);
   box-shadow: 0 12px 26px color-mix(in oklab, #124866 12%, transparent 88%);
 }
@@ -1221,11 +1223,11 @@ select {
 }
 
 .family-household-label {
-  max-width: 240px;
+  max-width: 180px;
   margin: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
@@ -1240,13 +1242,13 @@ select {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 10px;
+  gap: 7px;
 }
 
 .family-child-connector {
   position: relative;
   width: 100%;
-  height: 34px;
+  height: 24px;
 }
 
 .family-child-connector::before {
@@ -1265,8 +1267,8 @@ select {
 .family-household-descendants {
   position: relative;
   flex-wrap: wrap;
-  max-width: 760px;
-  padding-top: 16px;
+  max-width: 650px;
+  padding-top: 12px;
 }
 
 .family-household-children::before,
@@ -1293,25 +1295,25 @@ select {
   content: "";
   position: absolute;
   left: 50%;
-  top: -16px;
+  top: -12px;
   width: 2px;
-  height: 16px;
+  height: 12px;
   transform: translateX(-50%);
   background: color-mix(in oklab, var(--accent) 42%, #fff 58%);
 }
 
 .family-person-card {
-  width: 118px;
-  min-height: 132px;
+  width: 78px;
+  min-height: 86px;
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 7px;
-  padding: 10px 8px;
+  gap: 4px;
+  padding: 5px 4px;
   border: 1px solid color-mix(in oklab, var(--line) 84%, #fff 16%);
-  border-radius: 16px;
+  border-radius: 8px;
   background: color-mix(in oklab, #ffffff 92%, #e9f6ff 8%);
-  box-shadow: 0 8px 18px color-mix(in oklab, #124564 12%, transparent 88%);
+  box-shadow: 0 6px 14px color-mix(in oklab, #124564 10%, transparent 90%);
   color: var(--ink);
   cursor: pointer;
   text-align: center;
@@ -1320,32 +1322,30 @@ select {
 
 .family-person-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 13px 24px color-mix(in oklab, #0e4664 17%, transparent 83%);
+  box-shadow: 0 10px 18px color-mix(in oklab, #0e4664 15%, transparent 85%);
 }
 
 .family-person-card.is-focused {
-  border: 2px solid color-mix(in oklab, var(--accent) 78%, #ffffff 22%);
+  border-color: color-mix(in oklab, var(--accent) 78%, #ffffff 22%);
   box-shadow:
-    0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent 78%),
-    0 18px 30px color-mix(in oklab, #0e5a7f 20%, transparent 80%);
+    0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent 78%),
+    0 12px 22px color-mix(in oklab, #0e5a7f 18%, transparent 82%);
 }
 
 .family-person-avatar {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--accent) 24%, #fff 76%);
-  background: color-mix(in oklab, var(--accent-soft) 72%, #fff 28%);
-  color: var(--accent-strong);
-  font-weight: 900;
+  width: 42px;
+  height: 42px;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklab, var(--accent) 20%, #fff 80%);
+  background: #fff;
+  object-fit: cover;
 }
 
 .family-person-avatar.large {
-  width: 58px;
-  height: 58px;
-  font-size: 1.1rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
 }
 
 .family-person-copy {
@@ -1355,51 +1355,14 @@ select {
 }
 
 .family-person-name {
-  max-width: 100px;
+  max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: color-mix(in oklab, var(--text) 92%, #0b7285 8%);
-  font-size: 0.78rem;
+  font-size: 0.66rem;
   font-weight: 800;
-  line-height: 1.2;
-}
-
-.family-person-relation {
-  color: var(--muted);
-  font-size: 0.69rem;
-  line-height: 1.15;
-}
-
-.family-person-state-row {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-}
-
-.family-state-pill {
-  padding: 3px 6px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--surface-soft) 82%, #fff 18%);
-  color: var(--muted);
-  font-size: 0.62rem;
-  font-weight: 900;
-}
-
-.family-state-pill.subscribed,
-.family-state-pill.shared {
-  background: color-mix(in oklab, var(--accent) 12%, #fff 88%);
-  color: var(--accent-strong);
-}
-
-.family-state-pill.pending {
-  background: rgba(184, 125, 51, 0.14);
-  color: #8a5b16;
-}
-
-.family-state-pill.closed {
-  background: rgba(123, 53, 71, 0.1);
-  color: var(--berry);
+  line-height: 1.1;
 }
 
 .family-focus-panel {
@@ -1459,13 +1422,10 @@ select {
 .family-mini-avatar {
   width: 24px;
   height: 24px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 0.68rem;
-  font-weight: 900;
+  display: block;
+  border-radius: 4px;
+  background: #fff;
+  object-fit: cover;
 }
 
 .rules-tree-shell {
@@ -1803,7 +1763,7 @@ select {
   }
 
   .family-tree-board {
-    min-width: 760px;
+    min-width: 640px;
     padding: 20px 16px 36px;
   }
 
@@ -1812,8 +1772,8 @@ select {
   }
 
   .family-person-card {
-    width: 112px;
-    min-height: 132px;
+    width: 78px;
+    min-height: 86px;
   }
 
   .tree-layout {

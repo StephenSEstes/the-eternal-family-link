@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
@@ -53,6 +54,7 @@ type TreeBucketPerson = {
   personId: string;
   displayName: string;
   gender?: string;
+  birthDate?: string;
   lineageSides: LineageSide[];
 };
 
@@ -60,6 +62,7 @@ type TreePerson = {
   personId: string;
   displayName: string;
   gender: string;
+  birthDate?: string;
 };
 
 type TreeRelationship = {
@@ -80,6 +83,7 @@ type TreeSnapshot = {
     personId: string;
     displayName: string;
     gender?: string;
+    birthDate?: string;
   };
   buckets: Record<RelationshipCategory, TreeBucketPerson[]>;
   people: TreePerson[];
@@ -314,13 +318,6 @@ function isInLawCategory(category: RelationshipCategory) {
   return category.endsWith("_in_law");
 }
 
-function initials(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0]?.slice(0, 1) ?? "";
-  const second = parts.length > 1 ? parts[parts.length - 1]?.slice(0, 1) ?? "" : "";
-  return `${first}${second}`.toUpperCase() || "?";
-}
-
 function generationLabel(generation: number) {
   if (generation <= -2) return "Grandparents";
   if (generation === -1) return "Parents";
@@ -332,6 +329,53 @@ function generationLabel(generation: number) {
 
 function compareTreePeople(left: TreePerson, right: TreePerson) {
   return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
+}
+
+function parseBirthSortValue(value?: string) {
+  const raw = normalize(value);
+  if (!raw) return Number.NaN;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function compareTreePeopleByBirth(left: TreePerson, right: TreePerson) {
+  const leftBirth = parseBirthSortValue(left.birthDate);
+  const rightBirth = parseBirthSortValue(right.birthDate);
+  if (Number.isFinite(leftBirth) && Number.isFinite(rightBirth) && leftBirth !== rightBirth) {
+    return leftBirth - rightBirth;
+  }
+  if (Number.isFinite(leftBirth) !== Number.isFinite(rightBirth)) {
+    return Number.isFinite(leftBirth) ? -1 : 1;
+  }
+  return compareTreePeople(left, right);
+}
+
+function compareTreePersonIdsByBirth(leftId: string, rightId: string, peopleById: Map<string, TreePerson>) {
+  const left = peopleById.get(leftId);
+  const right = peopleById.get(rightId);
+  if (left && right) return compareTreePeopleByBirth(left, right);
+  return leftId.localeCompare(rightId, undefined, { sensitivity: "base" });
+}
+
+function sortPersonForHousehold(unit: HouseholdUnit | undefined, peopleById: Map<string, TreePerson>) {
+  if (!unit) return null;
+  return (
+    unit.parentIds
+      .map((personId) => peopleById.get(personId))
+      .filter((person): person is TreePerson => Boolean(person))
+      .sort(compareTreePeopleByBirth)[0] ?? null
+  );
+}
+
+function compareHouseholdUnits(left: HouseholdUnit, right: HouseholdUnit, peopleById: Map<string, TreePerson>) {
+  const leftPerson = sortPersonForHousehold(left, peopleById);
+  const rightPerson = sortPersonForHousehold(right, peopleById);
+  if (leftPerson && rightPerson) return compareTreePeopleByBirth(leftPerson, rightPerson);
+  return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
+}
+
+function avatarUrlForPerson(person: { gender?: string }) {
+  return normalizeLower(person.gender) === "female" ? "/placeholders/avatar-female.png" : "/placeholders/avatar-male.png";
 }
 
 function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePerson>, fallback: string) {
@@ -351,6 +395,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions):
     personId: snapshot.viewer.personId,
     displayName: snapshot.viewer.displayName,
     gender: normalize(snapshot.viewer.gender),
+    birthDate: normalize(snapshot.viewer.birthDate),
   });
 
   const relationByPersonId = new Map<string, SelectedRelative>();
@@ -365,6 +410,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions):
           personId: person.personId,
           displayName: person.displayName,
           gender: normalize(person.gender),
+          birthDate: normalize(person.birthDate),
         });
       }
     }
@@ -564,14 +610,16 @@ function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions):
 
   for (const unit of units.values()) {
     unit.parentIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
-    unit.childIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
-    unit.childPersonIds.sort((left, right) => compareTreePeople(peopleById.get(left)!, peopleById.get(right)!));
+    unit.childIds.sort((left, right) => compareTreePersonIdsByBirth(left, right, peopleById));
+    unit.childPersonIds.sort((left, right) => compareTreePersonIdsByBirth(left, right, peopleById));
     unit.childHouseholdIds.sort((left, right) => {
       const leftUnit = units.get(left);
       const rightUnit = units.get(right);
-      const leftName = peopleById.get(leftUnit?.parentIds[0] ?? "")?.displayName ?? leftUnit?.label ?? left;
-      const rightName = peopleById.get(rightUnit?.parentIds[0] ?? "")?.displayName ?? rightUnit?.label ?? right;
-      return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
+      const leftChildId = unit.childIds.find((childId) => leftUnit?.parentIds.includes(childId)) ?? leftUnit?.parentIds[0] ?? left;
+      const rightChildId = unit.childIds.find((childId) => rightUnit?.parentIds.includes(childId)) ?? rightUnit?.parentIds[0] ?? right;
+      const byChildBirth = compareTreePersonIdsByBirth(leftChildId, rightChildId, peopleById);
+      if (byChildBirth !== 0) return byChildBirth;
+      return (leftUnit?.label ?? left).localeCompare(rightUnit?.label ?? right, undefined, { sensitivity: "base" });
     });
   }
 
@@ -587,11 +635,7 @@ function buildTreeGraphModel(snapshot: TreeSnapshot, options: TreeGraphOptions):
     .map(([generation, rowUnits]) => ({
       generation,
       label: generationLabel(generation),
-      units: rowUnits.sort((left, right) => {
-        const leftName = peopleById.get(left.parentIds[0])?.displayName ?? left.label;
-        const rightName = peopleById.get(right.parentIds[0])?.displayName ?? right.label;
-        return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
-      }),
+      units: rowUnits.sort((left, right) => compareHouseholdUnits(left, right, peopleById)),
     }));
 
   return {
@@ -927,19 +971,13 @@ function PersonTreeCard({
   person,
   relation,
   isFocused,
-  visibilityRow,
-  subscriptionRow,
   onSelect,
 }: {
   person: TreePerson;
   relation: SelectedRelative | undefined;
   isFocused: boolean;
-  visibilityRow?: ProfileVisibilityMapRow;
-  subscriptionRow?: ProfileSubscriptionMapRow;
   onSelect: (personId: string) => void;
 }) {
-  const sharing = shareSummary(visibilityRow);
-  const subscription = subscriptionSummary(subscriptionRow);
   const relationshipLabel = relation ? RELATIONSHIP_LABELS[relation.category] : "Family";
 
   return (
@@ -949,16 +987,9 @@ function PersonTreeCard({
       onClick={() => onSelect(person.personId)}
       aria-label={`${person.displayName}, ${relationshipLabel}`}
     >
-      <span className="family-person-avatar" aria-hidden="true">
-        {initials(person.displayName)}
-      </span>
+      <Image className="family-person-avatar" src={avatarUrlForPerson(person)} alt="" width={42} height={42} aria-hidden="true" />
       <span className="family-person-copy">
         <span className="family-person-name">{person.displayName}</span>
-        <span className="family-person-relation">{relationshipLabel}</span>
-      </span>
-      <span className="family-person-state-row" aria-label={`${subscription.label}; ${sharing.label}`}>
-        <span className={`family-state-pill ${subscription.badgeClass}`}>Sub</span>
-        <span className={`family-state-pill ${sharing.badgeClass}`}>Share</span>
       </span>
     </button>
   );
@@ -968,26 +999,25 @@ function HouseholdTreeUnit({
   unit,
   graph,
   focusedPersonId,
-  visibilityByTarget,
-  subscriptionByTarget,
   onSelect,
   visited,
 }: {
   unit: HouseholdUnit;
   graph: TreeGraphModel;
   focusedPersonId: string;
-  visibilityByTarget: Map<string, ProfileVisibilityMapRow>;
-  subscriptionByTarget: Map<string, ProfileSubscriptionMapRow>;
   onSelect: (personId: string) => void;
   visited: Set<string>;
 }) {
   if (visited.has(unit.householdId)) return null;
   const nextVisited = new Set(visited);
   nextVisited.add(unit.householdId);
-  const childUnits = unit.childHouseholdIds
-    .map((householdId) => graph.unitsById.get(householdId))
-    .filter((childUnit): childUnit is HouseholdUnit => Boolean(childUnit));
-  const hasDescendants = childUnits.length > 0 || unit.childPersonIds.length > 0;
+  const childHouseholdByChildId = new Map<string, HouseholdUnit>();
+  for (const householdId of unit.childHouseholdIds) {
+    const childUnit = graph.unitsById.get(householdId);
+    const childId = unit.childIds.find((candidateId) => childUnit?.parentIds.includes(candidateId));
+    if (childUnit && childId) childHouseholdByChildId.set(childId, childUnit);
+  }
+  const hasDescendants = unit.childIds.length > 0;
   const isFocusedHousehold =
     unit.parentIds.includes(focusedPersonId) ||
     unit.childPersonIds.includes(focusedPersonId) ||
@@ -1007,8 +1037,6 @@ function HouseholdTreeUnit({
                 person={person}
                 relation={graph.relationByPersonId.get(personId)}
                 isFocused={personId === focusedPersonId}
-                visibilityRow={visibilityByTarget.get(personId)}
-                subscriptionRow={subscriptionByTarget.get(personId)}
                 onSelect={onSelect}
               />
             );
@@ -1019,20 +1047,21 @@ function HouseholdTreeUnit({
         <>
           <div className="family-child-connector" aria-hidden="true" />
           <div className="family-household-descendants">
-            {childUnits.map((childUnit) => (
-              <div key={`${unit.householdId}:child-household:${childUnit.householdId}`} className="family-child-household-slot">
-                <HouseholdTreeUnit
-                  unit={childUnit}
-                  graph={graph}
-                  focusedPersonId={focusedPersonId}
-                  visibilityByTarget={visibilityByTarget}
-                  subscriptionByTarget={subscriptionByTarget}
-                  onSelect={onSelect}
-                  visited={nextVisited}
-                />
-              </div>
-            ))}
-            {unit.childPersonIds.map((personId) => {
+            {unit.childIds.map((personId) => {
+              const childUnit = childHouseholdByChildId.get(personId);
+              if (childUnit) {
+                return (
+                  <div key={`${unit.householdId}:child-household:${childUnit.householdId}`} className="family-child-household-slot">
+                    <HouseholdTreeUnit
+                      unit={childUnit}
+                      graph={graph}
+                      focusedPersonId={focusedPersonId}
+                      onSelect={onSelect}
+                      visited={nextVisited}
+                    />
+                  </div>
+                );
+              }
               const person = graph.peopleById.get(personId);
               if (!person) return null;
               return (
@@ -1041,8 +1070,6 @@ function HouseholdTreeUnit({
                     person={person}
                     relation={graph.relationByPersonId.get(personId)}
                     isFocused={personId === focusedPersonId}
-                    visibilityRow={visibilityByTarget.get(personId)}
-                    subscriptionRow={subscriptionByTarget.get(personId)}
                     onSelect={onSelect}
                   />
                 </div>
@@ -1092,7 +1119,10 @@ export function TreeClient({
   const focusedPerson =
     graph.peopleById.get(effectiveFocusedPersonId) ?? graph.peopleById.get(snapshot.viewer.personId) ?? null;
   const focusedRelation = focusedPerson ? graph.relationByPersonId.get(focusedPerson.personId) : undefined;
-  const activeHouseholdIds = focusedPerson ? graph.householdIdsByPerson.get(focusedPerson.personId) ?? [] : [];
+  const activeHouseholdIds = useMemo(
+    () => graph.householdIdsByPerson.get(effectiveFocusedPersonId) ?? [],
+    [effectiveFocusedPersonId, graph.householdIdsByPerson],
+  );
   const activeHouseholdId = activeHouseholdIds[0] ?? "";
   const activeHousehold = graph.units.find((unit) => unit.householdId === activeHouseholdId) ?? null;
   const inLawRelativeCount = RELATION_PRIORITY.filter(isInLawCategory).reduce(
@@ -1113,11 +1143,11 @@ export function TreeClient({
     const parents = Array.from(graph.parentsByChild.get(focusedPerson.personId) ?? [])
       .map((personId) => graph.peopleById.get(personId))
       .filter((person): person is TreePerson => Boolean(person))
-      .sort(compareTreePeople);
+      .sort(compareTreePeopleByBirth);
     const spouses = Array.from(graph.spousesByPerson.get(focusedPerson.personId) ?? [])
       .map((personId) => graph.peopleById.get(personId))
       .filter((person): person is TreePerson => Boolean(person))
-      .sort(compareTreePeople);
+      .sort(compareTreePeopleByBirth);
     const siblingIds = new Set<string>();
     for (const parent of parents) {
       for (const siblingId of graph.childrenByParent.get(parent.personId) ?? []) {
@@ -1127,16 +1157,16 @@ export function TreeClient({
     const siblings = Array.from(siblingIds)
       .map((personId) => graph.peopleById.get(personId))
       .filter((person): person is TreePerson => Boolean(person))
-      .sort(compareTreePeople);
+      .sort(compareTreePeopleByBirth);
     const children = Array.from(graph.childrenByParent.get(focusedPerson.personId) ?? [])
       .map((personId) => graph.peopleById.get(personId))
       .filter((person): person is TreePerson => Boolean(person))
-      .sort(compareTreePeople);
+      .sort(compareTreePeopleByBirth);
     const household = activeHousehold
       ? activeHousehold.parentIds
           .map((personId) => graph.peopleById.get(personId))
           .filter((person): person is TreePerson => Boolean(person))
-          .sort(compareTreePeople)
+          .sort(compareTreePeopleByBirth)
       : [focusedPerson];
     return { household, parents, spouses, siblings, children };
   }, [activeHousehold, focusedPerson, graph.childrenByParent, graph.parentsByChild, graph.peopleById, graph.spousesByPerson]);
@@ -1146,17 +1176,40 @@ export function TreeClient({
     if (!query) return [];
     return graph.visiblePeople.filter((person) => person.displayName.toLowerCase().includes(query)).slice(0, 8);
   }, [graph.visiblePeople, treeSearch]);
-  const rootUnits = useMemo(
-    () =>
-      graph.units
-        .filter((unit) => unit.parentUnitIds.length === 0)
-        .sort((left, right) => {
-          const leftName = graph.peopleById.get(left.parentIds[0])?.displayName ?? left.label;
-          const rightName = graph.peopleById.get(right.parentIds[0])?.displayName ?? right.label;
-          return leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
-        }),
-    [graph.peopleById, graph.units],
-  );
+  const displayedRootUnits = useMemo(() => {
+    const focusedId = focusedPerson?.personId ?? "";
+    const rootUnits = graph.units.filter((unit) => unit.parentUnitIds.length === 0);
+    const ownHouseholdUnits = activeHouseholdIds
+      .map((householdId) => graph.unitsById.get(householdId))
+      .filter((unit): unit is HouseholdUnit => {
+        if (!unit) return false;
+        return unit.parentIds.includes(focusedId);
+      });
+    const parentHouseholdUnits = graph.units.filter((unit) => unit.childIds.includes(focusedId));
+    const personUnits = graph.units.filter((unit) => unit.parentIds.length === 1 && unit.parentIds.includes(focusedId));
+    const preferredUnits =
+      focusGroup === "parents" || focusGroup === "siblings"
+        ? parentHouseholdUnits
+        : focusGroup === "spouses" || focusGroup === "children"
+          ? ownHouseholdUnits
+          : ownHouseholdUnits.length > 0
+            ? ownHouseholdUnits
+            : parentHouseholdUnits;
+    const candidates = preferredUnits.length > 0 ? preferredUnits : personUnits.length > 0 ? personUnits : rootUnits;
+    const seen = new Set<string>();
+    return candidates
+      .filter((unit) => {
+        if (seen.has(unit.householdId)) return false;
+        seen.add(unit.householdId);
+        return true;
+      })
+      .sort((left, right) => {
+        const leftHasFocus = left.parentIds.includes(focusedId) || left.childIds.includes(focusedId);
+        const rightHasFocus = right.parentIds.includes(focusedId) || right.childIds.includes(focusedId);
+        if (leftHasFocus !== rightHasFocus) return leftHasFocus ? -1 : 1;
+        return compareHouseholdUnits(left, right, graph.peopleById);
+      });
+  }, [activeHouseholdIds, focusGroup, focusedPerson?.personId, graph.peopleById, graph.units, graph.unitsById]);
 
   const focusPeople = focusNavigation[focusGroup];
 
@@ -1483,14 +1536,12 @@ export function TreeClient({
           <div className="family-tree-viewport">
             <div className="family-tree-board" style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}>
               <div className="family-household-forest">
-                {rootUnits.map((unit) => (
+                {displayedRootUnits.map((unit) => (
                   <HouseholdTreeUnit
                     key={unit.householdId}
                     unit={unit}
                     graph={graph}
                     focusedPersonId={effectiveFocusedPersonId}
-                    visibilityByTarget={visibilityByTarget}
-                    subscriptionByTarget={subscriptionByTarget}
                     onSelect={selectPerson}
                     visited={new Set()}
                   />
@@ -1502,9 +1553,14 @@ export function TreeClient({
           {focusedPerson ? (
             <aside className="family-focus-panel">
               <div className="family-focus-head">
-                <span className="family-person-avatar large" aria-hidden="true">
-                  {initials(focusedPerson.displayName)}
-                </span>
+                <Image
+                  className="family-person-avatar large"
+                  src={avatarUrlForPerson(focusedPerson)}
+                  alt=""
+                  width={56}
+                  height={56}
+                  aria-hidden="true"
+                />
                 <div>
                   <h2>{focusedPerson.displayName}</h2>
                   <p>{focusedRelation ? RELATIONSHIP_LABELS[focusedRelation.category] : "Family"}</p>
@@ -1560,9 +1616,14 @@ export function TreeClient({
                       className={person.personId === effectiveFocusedPersonId ? "is-selected" : ""}
                       onClick={() => selectPerson(person.personId)}
                     >
-                      <span className="family-mini-avatar" aria-hidden="true">
-                        {initials(person.displayName)}
-                      </span>
+                      <Image
+                        className="family-mini-avatar"
+                        src={avatarUrlForPerson(person)}
+                        alt=""
+                        width={24}
+                        height={24}
+                        aria-hidden="true"
+                      />
                       <span>{person.displayName}</span>
                     </button>
                   ))

@@ -29,6 +29,29 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-16 (Famailink compact image-based tree view):
+  - Scope:
+    - Update only the Famailink family tree view and its lightweight family graph snapshot data.
+    - Preserve existing auth/access behavior, sharing/subscription save APIs, and OCI schema.
+  - UI phases:
+    - Replace initials circles with EFL-style placeholder avatar images.
+    - Remove relationship labels and `Sub`/`Share` status pills from tree tiles.
+    - Shrink tree person tiles and household spacing so the tree reads closer to the EFL reference.
+    - Keep the right focus panel as the control surface for household, parents, spouse, siblings, and children views.
+  - Data/layout phases:
+    - Include existing person birth dates in the tree snapshot.
+    - Sort child rows by birth date with name fallback when birth dates are absent.
+    - Derive the displayed root household units from the selected focus-panel group so the selected person context is centered in the tree pane.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - If Steve chooses deploy, commit/push/deploy and validate the deployed `/tree`.
+  - Completion criteria:
+    - Tree nodes use image avatars instead of initials.
+    - Tiles are compact and omit relationship/sub/share tile text.
+    - Children render below parents in birth order.
+    - Focus-panel navigation changes the tree context.
+    - Selecting a person recenters the displayed tree around that person or that person's selected relationship context.
   Agreed implementation plan 2026-04-15 (Famailink EFL-style household tree parity pass):
   - Scope:
     - Default all `/rules-tree` generation sections to collapsed on first load.
