@@ -175,6 +175,7 @@ export function computeRelativeHitsForViewer(viewerPersonId: string, graph: Fami
     addHit(hits, spouseId, "spouse", "not_applicable");
   }
 
+  const spouseSideSiblingSideMap = new Map<string, Set<LineageSide>>();
   for (const spouseId of viewerSpouseIds) {
     for (const parentId of graph.parentsByChild.get(spouseId) ?? []) {
       const side = parentLineageSide(graph.peopleById.get(parentId) ?? null);
@@ -185,7 +186,21 @@ export function computeRelativeHitsForViewer(viewerPersonId: string, graph: Fami
       for (const siblingInLawId of graph.childrenByParent.get(parentId) ?? []) {
         if (siblingInLawId === spouseId || siblingInLawId === viewerId) continue;
         addHit(hits, siblingInLawId, "siblings_in_law", side);
+        const sides = spouseSideSiblingSideMap.get(siblingInLawId) ?? new Set<LineageSide>();
+        sides.add(side);
+        spouseSideSiblingSideMap.set(siblingInLawId, sides);
       }
+    }
+  }
+
+  for (const [siblingInLawId, sides] of spouseSideSiblingSideMap.entries()) {
+    for (const siblingInLawSpouseId of graph.spousesByPerson.get(siblingInLawId) ?? []) {
+      if (siblingInLawSpouseId === viewerId || viewerSpouseIds.has(siblingInLawSpouseId)) continue;
+      for (const side of sides) addHit(hits, siblingInLawSpouseId, "siblings_in_law", side);
+    }
+    for (const nieceNephewInLawId of graph.childrenByParent.get(siblingInLawId) ?? []) {
+      if (nieceNephewInLawId === viewerId || viewerSpouseIds.has(nieceNephewInLawId)) continue;
+      for (const side of sides) addHit(hits, nieceNephewInLawId, "nieces_nephews_in_law", side);
     }
   }
 

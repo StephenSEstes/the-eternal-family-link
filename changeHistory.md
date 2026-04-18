@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-17: Expanded Famailink sibling-in-law derivation so selecting a parent-in-law can show sibling-in-law spouses and children when direct relationship rows exist. See `docs/change-summary.md`.
 - 2026-04-17: Updated Famailink `/tree` selection behavior so the selected person's generation is centered, parents render above, children/child households render below, and grandchildren stop at one generation. See `docs/change-summary.md`.
 - 2026-04-17: Updated Famailink `/tree` to use EFL-style image avatars, smaller person tiles, focus-panel-driven tree contexts, and birth-date child ordering. See `docs/change-summary.md`.
 - 2026-04-15: Fixed the Famailink household tree model so duplicate source/synthetic household identities collapse to one visual household and children with their own households nest under parent households instead of rendering as loose duplicate child cards. See `docs/change-summary.md`.

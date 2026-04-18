@@ -29,6 +29,31 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-17 (Famailink spouse-side sibling household visibility):
+  - Scope:
+    - Fix the selected parent-in-law tree context so spouse-side siblings-in-law can show their spouses and children.
+    - Keep the change within existing supported Famailink categories (`siblings_in_law` and `nieces_nephews_in_law`); do not add schema, new relationship categories, or recursive deeper in-law expansion.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Select a parent-in-law from the navigation/focus panel.
+    - Observe that the parent-in-law's children appear as siblings-in-law, but those children's spouses and children do not render in the child household/grandchild rows.
+  - Failing data/query/code path:
+    - `computeRelativeHitsForViewer()` adds spouse-side siblings as `siblings_in_law`, but does not add those siblings' spouses or children to the relationship hit map.
+    - `TreeClient.buildTreeGraphModel()` filters relationship edges to `visiblePersonIds` from the hit map, so spouse/child edges for those siblings-in-law are dropped before layout.
+  - Root cause:
+    - The relationship derivation is too narrow for the selected parent-in-law view. The tree layout can render child households and grandchildren, but the needed people are absent from the derived visible set.
+  - Implementation:
+    - While deriving spouse-side siblings-in-law, collect those sibling IDs and their lineage side.
+    - Add each sibling-in-law's spouse as `siblings_in_law` using the same side.
+    - Add each sibling-in-law household child as `nieces_nephews_in_law` using the same side.
+    - Stop there so grandchildren of siblings-in-law and other recursive in-law branches are not added.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Selecting a parent-in-law can render each visible child household with spouse tiles when spouse rows exist.
+    - Those sibling-in-law households can render their children as the selected parent-in-law's grandchildren/nieces-nephews-in-law.
+    - No new schema or broad recursive in-law category is introduced.
   Agreed implementation plan 2026-04-17 (Famailink selected-person-centered tree):
   - Scope:
     - Update only Famailink `/tree` client layout behavior; preserve current auth, access rules, data schema, and save APIs.

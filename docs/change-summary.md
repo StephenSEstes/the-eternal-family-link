@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-17 (Famailink sibling-in-law household visibility)
+
+- `Date`: 2026-04-17
+- `Change`: Expanded the Famailink relationship derivation so spouse-side siblings-in-law bring their spouse and children into the visible tree graph. Selecting a parent-in-law can now show sibling-in-law child households with spouse tiles and their children below, when the underlying direct spouse and parent/child rows exist.
+- `Type`: UI | API
+- `Why`: Root cause was a derivation gap. `computeRelativeHitsForViewer()` added a spouse's siblings as `siblings_in_law`, but did not add those siblings' spouses or children to the relationship hit map. `TreeClient` correctly filters graph edges to visible people, so the spouse/child edges for those sibling-in-law households were dropped before rendering.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/lib/family/store.ts`
+- `Data Changes`: No schema or data repair. Existing direct `relationships` rows are used; the change only expands derived Famailink visibility within existing supported categories.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Selecting a parent-in-law can render visible sibling-in-law spouses and children when direct rows exist.
+  - No deeper recursive in-law expansion is introduced.
+- `Rollback Notes`: Revert this change to restore the previous derivation where spouse-side siblings-in-law appeared without their spouse/child household context.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-17 (Famailink selected-person-centered tree)
 
 - `Date`: 2026-04-17
