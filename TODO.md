@@ -29,6 +29,33 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-18 (Famailink production validation script and runbook):
+  - Scope:
+    - Add a repeatable production smoke/regression script for the deployed Famailink MVP flow.
+    - Add a short runbook explaining when to run it, required inputs, read-only vs write/restore modes, and pass/fail expectations.
+    - Keep the script independent from local app servers; it validates the deployed production URL.
+  - Reproduction path:
+    - After a Famailink deploy, validation is currently manual: route checks, authenticated catalog/preview/recompute checks, and reversible exception checks are run by ad hoc commands.
+    - Manual commands are easy to run inconsistently and easy to forget after small UI/API changes.
+  - Failing data/query/code path:
+    - There is no committed Famailink-specific production validation entry point in `scripts/`.
+    - Existing `scripts/post-deploy-check.cjs` validates the main EFL app's signed-out API surface, not the isolated Famailink MVP flow.
+  - Root cause:
+    - Famailink has reached a cross-layer MVP shape, but its release gate is still conversational/manual. That makes regressions in auth, catalog, preview, recompute, and exception restore behavior harder to catch consistently.
+  - Implementation:
+    - Add `scripts/validate-famailink-production.cjs` with read-only route/API checks by default.
+    - Support an explicit `--write-restore` mode that adds temporary exceptions, verifies preview changes, and restores the original exception rows.
+    - Add a root package script alias for the validation command.
+    - Document the runbook in `famailink/README.md`.
+  - Validation checks:
+    - Run the script in read-only mode against `https://famailink-mvp.vercel.app`.
+    - Run the script in `--write-restore` mode and verify original exception rows are restored.
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - A single command can validate core deployed Famailink health.
+    - The write-path check is opt-in and restores the original person exception rows.
+    - The runbook clearly states required env/session inputs and residual risks.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
   Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:

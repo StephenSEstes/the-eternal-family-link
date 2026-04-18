@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-18: Added a repeatable Famailink production validation command plus runbook coverage for route health, authenticated catalog/preview/recompute checks, and optional reversible exception write/restore validation. See `docs/change-summary.md`.
 - 2026-04-18: Fixed Famailink `/tree` focus chips so `Siblings` changes the tree pane to the sibling generation and `Parents` centers the parent household generation instead of only filtering the side list. See `docs/change-summary.md`.
 - 2026-04-18: Tightened Famailink `/tree` focused map layout with smaller tiles, adaptive child/sibling spacing, and automatic fit scaling so wider child rows are more likely to fit in the pane. See `docs/change-summary.md`.
 - 2026-04-18: Reworked Famailink `/tree` toward EFL-style focused navigation with animated recentering, touching spouse household tiles, SVG parent-child lines, and no selected-person grandchild rendering. See `docs/change-summary.md`.

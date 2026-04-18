@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-18 (Famailink production validation script)
+
+- `Date`: 2026-04-18
+- `Change`: Added a repeatable Famailink production validation command that checks deployed route health, authenticated access APIs, catalog/preview/recompute readback, defaults/exceptions API shape, and optional reversible person-exception write/restore behavior.
+- `Type`: Infra
+- `Why`: Root cause was release-process drift. Famailink's core MVP flow now crosses auth, tree pages, access catalog, preview, recompute, defaults, and exceptions, but validation after deploy was still manual and ad hoc.
+- `Files`: `TODO.md`, `package.json`, `docs/deploy-runbook.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/README.md`, `scripts/validate-famailink-production.cjs`
+- `Data Changes`: None by default. The optional `--write-restore` validation mode temporarily writes person exception rows and restores the original rows; it still creates normal production recompute job/run history.
+- `Verify`:
+  - `npm run famailink:validate:prod` passes against `https://famailink-mvp.vercel.app`.
+  - `npm run famailink:validate:prod -- --write-restore` passes and restores original exception rows.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert this change to remove the Famailink production validation command and runbook documentation.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-18 (Famailink focus-chip tree generation behavior)
 
 - `Date`: 2026-04-18

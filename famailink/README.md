@@ -56,6 +56,22 @@ npm run lint --prefix famailink
 npm run build --prefix famailink
 ```
 
+## Production Validation
+
+After a production deploy, run the Famailink validation script from the repo root:
+
+```powershell
+npm run famailink:validate:prod
+```
+
+Use the write/restore mode only when the release touches preference save or recompute behavior:
+
+```powershell
+npm run famailink:validate:prod -- --write-restore
+```
+
+See [docs/deploy-runbook.md](C:/Users/steph/the-eternal-family-link/docs/deploy-runbook.md) for required session-secret inputs and pass/fail expectations.
+
 ## Production Deploy
 
 - Vercel project: `famailink-mvp`

@@ -65,6 +65,37 @@ Expected result:
   - save one preference
   - confirm `/tree` readback reflects the saved state
 
+### Automated Production Validation
+
+Run the Famailink production validation script from the repo root after each Famailink production deploy:
+
+```powershell
+npm run famailink:validate:prod
+```
+
+The script validates `https://famailink-mvp.vercel.app` by default. It uses a short-lived signed Famailink session cookie, so it requires `FAMAILINK_SESSION_SECRET` or `UNIT1_SESSION_SECRET` in the environment. On Steve's local machine, the script can also read the session secret from `famailink/.env.vercel-prod.tmp` when that file exists. Override the target URL or person with:
+
+```powershell
+npm run famailink:validate:prod -- --base-url https://famailink-mvp.vercel.app --person-id p-ae4081ae
+```
+
+Read-only mode checks:
+
+- signed-out `/login` and `/tree` behavior
+- authenticated `/tree`, `/administration`, `/preferences`, and `/rules-tree`
+- access catalog relationship coverage
+- access preview calculation
+- recompute status and persisted map summary
+- defaults and person-exception API shapes
+
+For releases touching save/recompute behavior, run the explicit write/restore validation:
+
+```powershell
+npm run famailink:validate:prod -- --write-restore
+```
+
+`--write-restore` temporarily writes person exception rows, verifies preview changes, then restores the original exception rows. It is intentionally opt-in because it creates normal production recompute job/run history even when restoration succeeds.
+
 ### Rollback
 
 Option A (preferred):

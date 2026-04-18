@@ -10,6 +10,7 @@
     "test:tenant-guards": "node --experimental-strip-types --test src/lib/tenant/guard.test.ts",
     "test:media": "node --experimental-strip-types --test src/lib/media/upload.test.ts",
     "db:preflight": "node scripts/oci-db-preflight.cjs",
+    "famailink:validate:prod": "node scripts/validate-famailink-production.cjs",
     "vision:direct:test": "node scripts/oci-vision-direct-test.cjs",
     "media:migrate:backfill": "node scripts/oci-media-backfill.cjs",
     "media:migrate:parity": "node scripts/oci-media-parity.cjs",
