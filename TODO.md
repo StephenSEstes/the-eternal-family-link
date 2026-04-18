@@ -30,6 +30,7 @@ I will update this list as we add, complete, or remove work.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
+  Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:
     - Fix `/tree` focus navigation chips so Siblings and Parents change the tree pane, not only the right-side person list.
     - Preserve the existing selected-person state, modal behavior, data APIs, and relationship derivation.
@@ -55,6 +56,7 @@ I will update this list as we add, complete, or remove work.
     - The Parents chip shifts the tree's central generation to the selected person's parents.
     - Selecting an individual person still focuses that person and resets to the household view.
   Agreed implementation plan 2026-04-18 (Famailink compact child-row fit):
+  Status: Completed/deployed 2026-04-18 (`0f795cd`).
   - Scope:
     - Tighten the current Famailink `/tree` focused display so child rows are more likely to fit inside the tree pane.
     - Preserve the current deployed tree behavior otherwise; do not revisit connector semantics or add EFL family-group/tenant concepts.
@@ -79,6 +81,7 @@ I will update this list as we add, complete, or remove work.
     - Wider child rows scale down automatically to fit the visible tree pane when possible.
     - The change remains a display-only adjustment with no data/schema/query changes.
   Agreed implementation plan 2026-04-18 (Famailink EFL-style focused tree motion):
+  Status: Completed/deployed 2026-04-18 (`c89fa42`).
   - Scope:
     - Rework the Famailink `/tree` pane to resemble EFL tree navigation and motion without importing EFL family-group routing or tenant concepts.
     - Keep Famailink data/session/query behavior isolated; use the existing Famailink tree snapshot and direct relationship/household graph.
@@ -108,6 +111,7 @@ I will update this list as we add, complete, or remove work.
     - The selected-person tree does not render grandchildren.
     - Famailink remains free of EFL family-group routing/tenant support.
   Agreed implementation plan 2026-04-18 (Famailink tree in-law switch removal):
+  Status: Completed/deployed 2026-04-18 (`19cadf4`).
   - Scope:
     - Remove the visible `/tree` In-laws switch.
     - Always include existing one-hop in-law categories in the family tree graph model.
@@ -132,6 +136,7 @@ I will update this list as we add, complete, or remove work.
     - The `/tree` toolbar no longer shows an In-laws switch.
     - Selecting in-law relatives still has access to their supported tree context through the existing relationship buckets.
   Agreed implementation plan 2026-04-17 (Famailink sibling-in-law descendant household links):
+  Status: Completed/deployed 2026-04-17 (`10ca608`).
   - Scope:
     - Fix selected sibling-in-law views where some child links and child-spouse household links are missing.
     - Keep the change in the existing `siblings_in_law` and `nieces_nephews_in_law` buckets; do not add schema or new broad default categories.
@@ -157,6 +162,7 @@ I will update this list as we add, complete, or remove work.
     - Those children can show spouse tiles when direct spouse rows exist.
     - Missing rows after this point indicate data remediation, not renderer/derivation gaps.
   Agreed implementation plan 2026-04-17 (Famailink spouse-side sibling household visibility):
+  Status: Completed/deployed 2026-04-17 (`351bfcd`).
   - Scope:
     - Fix the selected parent-in-law tree context so spouse-side siblings-in-law can show their spouses and children.
     - Keep the change within existing supported Famailink categories (`siblings_in_law` and `nieces_nephews_in_law`); do not add schema, new relationship categories, or recursive deeper in-law expansion.
