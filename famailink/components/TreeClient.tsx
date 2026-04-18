@@ -432,6 +432,15 @@ function childIdsForPerson(graph: TreeGraphModel, personId: string, householdUni
   return sortedVisiblePersonIds(ids, graph.peopleById);
 }
 
+function childIdsForParents(graph: TreeGraphModel, parentIds: string[], parentUnit: HouseholdUnit | null) {
+  const ids = new Set<string>();
+  for (const childId of parentUnit?.childIds ?? []) ids.add(childId);
+  for (const parentId of parentIds) {
+    for (const childId of graph.childrenByParent.get(parentId) ?? []) ids.add(childId);
+  }
+  return sortedVisiblePersonIds(ids, graph.peopleById);
+}
+
 function buildHouseholdLabel(parentIds: string[], peopleById: Map<string, TreePerson>, fallback: string) {
   const names = parentIds.map((personId) => peopleById.get(personId)?.displayName ?? "").filter(Boolean);
   if (names.length === 0) return fallback;
@@ -1098,17 +1107,30 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
   const nodes = new Map<string, FocusedTreeNode>();
   const households: FocusedTreeHousehold[] = [];
   const lines: FocusedTreeLine[] = [];
-  const parentUnit = findParentHouseholdUnit(graph, focusedPersonId);
-  const parentIds = parentIdsForPerson(graph, focusedPersonId, parentUnit);
-  const centerUnit = findPrimaryOwnHouseholdUnit(graph, focusedPersonId);
+  const focusedParentUnit = findParentHouseholdUnit(graph, focusedPersonId);
+  const focusedParentIds = parentIdsForPerson(graph, focusedPersonId, focusedParentUnit);
+  const ownHouseholdUnit = findPrimaryOwnHouseholdUnit(graph, focusedPersonId);
   const hasSpouse = (graph.spousesByPerson.get(focusedPersonId)?.size ?? 0) > 0;
-  const centerPersonIds = centerUnit
-    ? centerUnit.parentIds
-    : !hasSpouse || focusGroup === "siblings"
+  const shouldCenterParents = focusGroup === "parents" && focusedParentIds.length > 0;
+  const shouldShowSiblingGeneration = focusGroup === "siblings";
+  const parentIds = shouldCenterParents ? [] : focusedParentIds;
+  const centerUnit = shouldCenterParents ? focusedParentUnit : shouldShowSiblingGeneration ? null : ownHouseholdUnit;
+  const centerPersonIds = shouldCenterParents
+    ? focusedParentIds
+    : shouldShowSiblingGeneration
       ? siblingIdsForPerson(graph, focusedPersonId)
-      : [focusedPersonId];
-  const childIds = focusGroup === "siblings" ? [] : childIdsForPerson(graph, focusedPersonId, centerUnit);
+      : ownHouseholdUnit
+        ? ownHouseholdUnit.parentIds
+        : !hasSpouse
+          ? siblingIdsForPerson(graph, focusedPersonId)
+          : [focusedPersonId];
+  const childIds = shouldCenterParents
+    ? childIdsForParents(graph, focusedParentIds, focusedParentUnit)
+    : shouldShowSiblingGeneration
+      ? []
+      : childIdsForPerson(graph, focusedPersonId, ownHouseholdUnit);
   const excludedHouseholdIds = new Set<string>(centerUnit ? [centerUnit.householdId] : []);
+  const centerHouseholdKey = centerUnit?.householdId ?? (shouldCenterParents ? `parents-focus:${focusedPersonId}` : "");
   const hasParentRow = parentIds.length > 0;
   const parentY = 0;
   const centerY = hasParentRow ? TREE_ROW_GAP : 0;
@@ -1180,18 +1202,18 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
 
   if (hasParentRow) {
     addHousehold({
-      key: parentUnit?.householdId ?? `parents:${focusedPersonId}`,
-      label: parentUnit?.label ?? buildHouseholdLabel(parentIds, graph.peopleById, "Parents"),
+      key: focusedParentUnit?.householdId ?? `parents:${focusedPersonId}`,
+      label: focusedParentUnit?.label ?? buildHouseholdLabel(parentIds, graph.peopleById, "Parents"),
       parentIds,
       centerX: 0,
       centerY: parentY,
     });
   }
 
-  if (centerUnit) {
+  if (centerUnit || shouldCenterParents) {
     addHousehold({
-      key: centerUnit.householdId,
-      label: centerUnit.label,
+      key: centerHouseholdKey,
+      label: centerUnit?.label ?? buildHouseholdLabel(centerPersonIds, graph.peopleById, "Parents"),
       parentIds: centerPersonIds,
       centerX: 0,
       centerY,
@@ -1236,20 +1258,22 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
   }
 
   if (hasParentRow) {
-    const target = nodes.get(focusedPersonId) ?? nodes.get(centerPersonIds[0] ?? "");
-    if (target) {
+    const targetIds = shouldShowSiblingGeneration ? centerPersonIds : [focusedPersonId];
+    targetIds.forEach((targetId) => {
+      const target = nodes.get(targetId);
+      if (!target) return;
       parentIds.forEach((parentId) => {
         const parent = nodes.get(parentId);
         if (!parent) return;
         lines.push({
-          key: `parent:${parentId}:${focusedPersonId}`,
+          key: `parent:${parentId}:${targetId}`,
           x1: parent.x,
           y1: parent.y + TREE_CARD_HALF_HEIGHT,
           x2: target.x,
           y2: target.y - TREE_CARD_HALF_HEIGHT,
         });
       });
-    }
+    });
   }
 
   if (childUnits.length > 0) {
@@ -1319,8 +1343,17 @@ function buildFocusedTreeLayout(graph: TreeGraphModel, focusedPersonId: string, 
     y2: line.y2 + shiftY,
   }));
   const focusedNode = shiftedNodes.find((node) => node.personId === focusedPersonId);
-  const focusedHousehold = shiftedHouseholds.find((household) => household.parentIds.includes(focusedPersonId));
-  const anchor = focusedNode
+  const focusedHousehold = shouldCenterParents
+    ? shiftedHouseholds.find((household) => household.key === centerHouseholdKey)
+    : shiftedHouseholds.find((household) => household.parentIds.includes(focusedPersonId));
+  const anchor = shouldCenterParents && focusedHousehold
+    ? {
+        x: focusedHousehold.x - focusedHousehold.width / 2,
+        y: focusedHousehold.y - focusedHousehold.height / 2,
+        width: focusedHousehold.width,
+        height: focusedHousehold.height,
+      }
+    : focusedNode
     ? { x: focusedNode.x - TREE_CARD_HALF_WIDTH, y: focusedNode.y - TREE_CARD_HALF_HEIGHT, width: TREE_CARD_WIDTH, height: TREE_CARD_HEIGHT }
     : focusedHousehold
       ? {

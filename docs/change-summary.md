@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-18 (Famailink focus-chip tree generation behavior)
+
+- `Date`: 2026-04-18
+- `Change`: Updated the Famailink `/tree` focus navigation so the `Siblings` and `Parents` chips affect the tree pane, not only the right-side person list. `Siblings` now renders the selected person's sibling generation in the tree, and `Parents` centers the selected person's parent household generation with their children below.
+- `Type`: UI
+- `Why`: Root cause was a code/UI mismatch. `TreeClient` computed parents and siblings correctly for the focus panel, but `buildFocusedTreeLayout()` gave the selected person's own household priority over the active focus group, so married/household-selected people could stay in household view after choosing `Siblings` or `Parents`.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/components/TreeClient.tsx`
+- `Data Changes`: None. No schema, OCI data, relationship derivation, defaults, exceptions, or API behavior changed.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - With the signed-in viewer selected, `Siblings` shows the sibling generation in the tree pane.
+  - With the signed-in viewer selected, `Parents` shifts the tree focus to the parents' generation.
+- `Rollback Notes`: Revert this change to restore the previous behavior where focus chips could update the side list without changing the active tree generation.
+- `Design Decision Change`: No design decision change. This implements the existing selected-person/focus-navigation tree decision.
+
 ## 2026-04-18 (Famailink compact focused tree fit)
 
 - `Date`: 2026-04-18

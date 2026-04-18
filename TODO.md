@@ -29,6 +29,31 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
+  - Scope:
+    - Fix `/tree` focus navigation chips so Siblings and Parents change the tree pane, not only the right-side person list.
+    - Preserve the existing selected-person state, modal behavior, data APIs, and relationship derivation.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Keep the signed-in viewer selected in the focus panel.
+    - Select `Siblings`; the panel lists siblings, but the tree can continue showing the viewer household and omit sibling tiles.
+    - Select `Parents`; the panel lists parents, but the tree does not shift the central generation to the parent household.
+  - Failing data/query/code path:
+    - `TreeClient` updates `focusGroup`, and `focusNavigation` correctly computes parents/siblings for the side panel.
+    - `buildFocusedTreeLayout()` gives `centerUnit` priority over `focusGroup`, so a selected person with a spouse/household keeps rendering their own household for sibling/parent focus modes.
+  - Root cause:
+    - The navigation model and tree layout model are out of sync. Focus chips are treated as side-panel filters, while the tree layout still anchors primarily on the selected person's own household.
+  - Implementation:
+    - Make `Siblings` render the selected person's sibling generation in the tree pane.
+    - Make `Parents` center the parent household generation and render that household's children below it.
+    - Keep this as a display-only code change with no data/schema/defaults changes.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Siblings listed in the focus panel are also represented in the tree when the Siblings chip is active.
+    - The Parents chip shifts the tree's central generation to the selected person's parents.
+    - Selecting an individual person still focuses that person and resets to the household view.
   Agreed implementation plan 2026-04-18 (Famailink compact child-row fit):
   - Scope:
     - Tighten the current Famailink `/tree` focused display so child rows are more likely to fit inside the tree pane.
