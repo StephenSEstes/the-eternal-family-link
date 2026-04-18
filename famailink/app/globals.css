@@ -666,6 +666,12 @@ select {
   font-weight: 700;
 }
 
+.field-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .input {
   width: 100%;
   padding: 12px 14px;

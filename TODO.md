@@ -56,6 +56,38 @@ I will update this list as we add, complete, or remove work.
     - A single command can validate core deployed Famailink health.
     - The write-path check is opt-in and restores the original person exception rows.
     - The runbook clearly states required env/session inputs and residual risks.
+  Agreed implementation plan 2026-04-18 (Famailink person modal simplification):
+  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  - Scope:
+    - Simplify the `/tree` person modal so it supports person-specific subscription and sharing exceptions only.
+    - Remove broad relationship-default editing from the individual person tile/modal.
+    - Preserve existing defaults/exceptions APIs, auth behavior, recompute behavior, and tree navigation.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Select a person and open the person detail modal.
+    - Open `Inclusion Rules`.
+    - Observe that the modal includes relationship-wide settings such as `Subscription Default`, `Sharing Default`, `Default Shared Content`, and side labels such as `Both Sides`.
+  - Failing data/query/code path:
+    - `TreeClient` loads subscription/sharing defaults plus person exceptions for every opened person modal.
+    - `RelativeModal` renders a `This Relationship Group` editor under the individual person's tile.
+    - `saveSelectedRelative()` can write to `/api/access/subscription/defaults` and `/api/access/sharing/defaults` from the person modal.
+  - Root cause:
+    - Earlier MVP work used the person tree modal as a convenient place to expose both broad defaults and individual overrides.
+    - Later product design moved broad defaults to Administration/Rules Tree, but the person modal still retained the older broad-default editing UI and save path.
+  - Implementation:
+    - Remove relationship-default fields from the person modal UI.
+    - Stop fetching defaults in the modal unless needed for read-only effective context.
+    - Save only person exception rows from the modal.
+    - Add concise read-only effective subscription/sharing context so users can understand current outcomes without configuring relationship defaults there.
+    - Keep the self card read-only.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Confirm the modal no longer references relationship-default controls such as `Both Sides` or `Default Shared Content`.
+  - Completion criteria:
+    - A person modal cannot modify broad relationship defaults.
+    - Person-specific subscription and sharing overrides remain available and understandable.
+    - Broad defaults remain administered from Administration/Rules Tree or the full preferences fallback.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
   Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:

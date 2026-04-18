@@ -4,16 +4,11 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
-import { isSideSpecificCategory } from "@/lib/access/defaults";
-import { DEFAULT_LINEAGE_SELECTION_LABELS } from "@/lib/access/types";
 import type {
   AccessRecomputeStatus,
-  DefaultLineageSelection,
   ProfileSubscriptionMapRow,
   ProfileVisibilityMapRow,
-  ShareDefaultRule,
   SharePersonException,
-  SubscriptionDefaultRule,
   SubscriptionPersonException,
 } from "@/lib/access/types";
 import type { LineageSide, RelationshipCategory } from "@/lib/model/relationships";
@@ -126,18 +121,8 @@ type SharingOverrideMode = "follow_default" | "always_share" | "name_only" | "cu
 type SubscriptionOverrideMode = "follow_default" | "always_subscribe" | "do_not_subscribe";
 
 type ModalSettings = {
-  subscriptionDefaults: SubscriptionDefaultRule[];
-  shareDefaults: ShareDefaultRule[];
   subscriptionExceptions: SubscriptionPersonException[];
   shareExceptions: SharePersonException[];
-  subscriptionDefaultLineage: DefaultLineageSelection;
-  shareDefaultLineage: DefaultLineageSelection;
-  shareDefaultScopes: {
-    shareVitals: boolean;
-    shareStories: boolean;
-    shareMedia: boolean;
-    shareConversations: boolean;
-  };
   subscriptionOverride: SubscriptionOverrideMode;
   sharingOverride: SharingOverrideMode;
   customSharingSummary: string;
@@ -146,7 +131,7 @@ type ModalSettings = {
 function readSideLabel(side: LineageSide) {
   if (side === "maternal") return "Maternal";
   if (side === "paternal") return "Paternal";
-  if (side === "both") return "Both Sides";
+  if (side === "both") return "Maternal & Paternal";
   return "";
 }
 
@@ -177,12 +162,6 @@ function scopeList(row: ProfileVisibilityMapRow | undefined) {
   return allowed.join(", ");
 }
 
-function lineageSelectionOptions(relationshipCategory: RelationshipCategory): DefaultLineageSelection[] {
-  return isSideSpecificCategory(relationshipCategory)
-    ? ["none", "both", "maternal", "paternal"]
-    : ["none", "not_applicable"];
-}
-
 function buildSharePayloadRows(rows: SharePersonException[]) {
   return rows
     .map((row) => ({
@@ -203,28 +182,6 @@ function buildSubscriptionExceptionPayloadRows(rows: SubscriptionPersonException
       effect: row.effect,
     }))
     .sort((left, right) => left.targetPersonId.localeCompare(right.targetPersonId));
-}
-
-function buildSubscriptionDefaultPayloadRows(rows: SubscriptionDefaultRule[]) {
-  return rows
-    .map((row) => ({
-      relationshipCategory: row.relationshipCategory,
-      lineageSelection: row.lineageSelection,
-    }))
-    .sort((left, right) => left.relationshipCategory.localeCompare(right.relationshipCategory));
-}
-
-function buildShareDefaultPayloadRows(rows: ShareDefaultRule[]) {
-  return rows
-    .map((row) => ({
-      relationshipCategory: row.relationshipCategory,
-      lineageSelection: row.lineageSelection,
-      shareVitals: row.shareVitals,
-      shareStories: row.shareStories,
-      shareMedia: row.shareMedia,
-      shareConversations: row.shareConversations,
-    }))
-    .sort((left, right) => left.relationshipCategory.localeCompare(right.relationshipCategory));
 }
 
 function buildCustomSharingSummary(row: SharePersonException | undefined) {
@@ -737,11 +694,13 @@ function RelativeModal({
   modalError: string;
   setSettings: Dispatch<SetStateAction<ModalSettings | null>>;
 }) {
-  const [activeTab, setActiveTab] = useState<"details" | "rules">("details");
+  const [activeTab, setActiveTab] = useState<"overview" | "rules">("overview");
   const sharing = shareSummary(selected.visibilityRow);
   const subscription = subscriptionSummary(selected.subscriptionRow);
   const scopes = scopeList(selected.visibilityRow);
-  const canEditRelationshipDefaults = selected.category !== "self";
+  const canEditPersonRules = selected.category !== "self";
+  const relationshipLabel = RELATIONSHIP_LABELS[selected.category];
+  const sharingResult = scopes ? `${sharing.label}: ${scopes}` : sharing.label;
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
@@ -754,13 +713,13 @@ function RelativeModal({
       >
         <div className="modal-head">
           <div>
-            <p className="eyebrow">Tree Preferences</p>
+            <p className="eyebrow">Person Details</p>
             <h2 id="relative-settings-title" className="bucket-title">
               {selected.person.displayName}
             </h2>
             <div className="person-meta modal-meta">
               <span className={`badge ${selected.category === "self" ? "self" : "side"}`}>
-                {RELATIONSHIP_LABELS[selected.category]}
+                {relationshipLabel}
               </span>
               {selected.person.lineageSides
                 .filter((side) => side !== "not_applicable")
@@ -780,33 +739,32 @@ function RelativeModal({
         </div>
 
         {modalError ? <p className="error-text modal-error">{modalError}</p> : null}
-        {settingsLoading ? <p className="muted">Loading relationship and person settings...</p> : null}
+        {settingsLoading ? <p className="muted">Loading person settings...</p> : null}
 
         {!settingsLoading && settings ? (
           <>
             <div className="person-detail-tabs" role="tablist" aria-label="Person detail tabs">
               <button
                 type="button"
-                className={`person-detail-tab${activeTab === "details" ? " is-active" : ""}`}
-                onClick={() => setActiveTab("details")}
+                className={`person-detail-tab${activeTab === "overview" ? " is-active" : ""}`}
+                onClick={() => setActiveTab("overview")}
               >
-                Details
+                Overview
               </button>
               <button
                 type="button"
                 className={`person-detail-tab${activeTab === "rules" ? " is-active" : ""}`}
                 onClick={() => setActiveTab("rules")}
               >
-                Inclusion Rules
+                Updates & Sharing
               </button>
             </div>
 
-            {activeTab === "details" ? (
+            {activeTab === "overview" ? (
               <div className="modal-sections">
                 <section className="modal-section">
                   <div className="modal-section-head">
-                    <h3>Person Details</h3>
-                    <p className="muted">This MVP detail view shows the identity and saved access readback available in Famailink.</p>
+                    <h3>Overview</h3>
                   </div>
                   <div className="person-detail-grid">
                     <article className="stat-card">
@@ -815,15 +773,15 @@ function RelativeModal({
                     </article>
                     <article className="stat-card">
                       <p className="stat-label">Relationship</p>
-                      <p className="stat-value recompute-value">{RELATIONSHIP_LABELS[selected.category]}</p>
+                      <p className="stat-value recompute-value">{relationshipLabel}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">Subscription</p>
+                      <p className="stat-label">Updates</p>
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
                       <p className="stat-label">Sharing</p>
-                      <p className="stat-value recompute-value">{sharing.label}</p>
+                      <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
                 </section>
@@ -831,196 +789,101 @@ function RelativeModal({
             ) : (
               <div className="modal-sections">
                 <section className="modal-section">
-              <div className="section-head modal-section-head">
-                <div>
-                  <h3>This Relationship Group</h3>
-                  <p className="muted">
-                    Use these defaults when you want all <strong>{RELATIONSHIP_LABELS[selected.category]}</strong> to
-                    be treated the same way.
-                  </p>
-                </div>
-              </div>
+                  <div className="modal-section-head">
+                    <h3>Current Result</h3>
+                  </div>
+                  <div className="person-detail-grid">
+                    <article className="stat-card">
+                      <p className="stat-label">Updates</p>
+                      <p className="stat-value recompute-value">{subscription.label}</p>
+                    </article>
+                    <article className="stat-card">
+                      <p className="stat-label">Sharing</p>
+                      <p className="stat-value recompute-value">{sharingResult}</p>
+                    </article>
+                  </div>
+                </section>
 
-              {canEditRelationshipDefaults ? (
-                <div className="modal-grid">
-                  <label className="field">
-                    <span className="field-label">Subscription Default</span>
-                    <select
-                      className="input"
-                      value={settings.subscriptionDefaultLineage}
-                      onChange={(event) =>
-                        setSettings((current) =>
-                          current
-                            ? {
-                                ...current,
-                                subscriptionDefaultLineage: event.target.value as DefaultLineageSelection,
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      {lineageSelectionOptions(selected.category).map((option) => (
-                        <option key={option} value={option}>
-                          {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <section className="modal-section">
+                  <div className="modal-section-head">
+                    <h3>This Person</h3>
+                    <p className="muted">Changes here affect only {selected.person.displayName}.</p>
+                  </div>
 
-                  <label className="field">
-                    <span className="field-label">Sharing Default</span>
-                    <select
-                      className="input"
-                      value={settings.shareDefaultLineage}
-                      onChange={(event) =>
-                        setSettings((current) =>
-                          current
-                            ? {
-                                ...current,
-                                shareDefaultLineage: event.target.value as DefaultLineageSelection,
-                                shareDefaultScopes:
-                                  event.target.value === "none"
-                                    ? {
-                                        shareVitals: false,
-                                        shareStories: false,
-                                        shareMedia: false,
-                                        shareConversations: false,
-                                      }
-                                    : current.shareDefaultScopes,
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      {lineageSelectionOptions(selected.category).map((option) => (
-                        <option key={option} value={option}>
-                          {DEFAULT_LINEAGE_SELECTION_LABELS[option]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {canEditPersonRules ? (
+                    <div className="modal-grid">
+                      <label className="field">
+                        <span className="field-label">Updates About This Person</span>
+                        <select
+                          className="input"
+                          value={settings.subscriptionOverride}
+                          onChange={(event) =>
+                            setSettings((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    subscriptionOverride: event.target.value as SubscriptionOverrideMode,
+                                  }
+                                : current,
+                            )
+                          }
+                        >
+                          <option value="follow_default">Use relationship default</option>
+                          <option value="always_subscribe">Always get updates</option>
+                          <option value="do_not_subscribe">Do not get updates</option>
+                        </select>
+                        <span className="field-hint">Current result: {subscription.label}</span>
+                      </label>
 
-                  <div className="modal-scope-block">
-                    <p className="field-label">Default Shared Content</p>
-                    <div className="scope-grid">
-                      {(["shareVitals", "shareStories", "shareMedia", "shareConversations"] as const).map((field) => (
-                        <label key={field} className="scope-option">
-                          <input
-                            type="checkbox"
-                            checked={settings.shareDefaultScopes[field]}
-                            disabled={settings.shareDefaultLineage === "none"}
-                            onChange={(event) =>
-                              setSettings((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      shareDefaultScopes: {
-                                        ...current.shareDefaultScopes,
-                                        [field]: event.target.checked,
-                                      },
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                          {field.replace("share", "")}
-                        </label>
-                      ))}
+                      <label className="field">
+                        <span className="field-label">Sharing With This Person</span>
+                        <select
+                          className="input"
+                          value={settings.sharingOverride}
+                          onChange={(event) =>
+                            setSettings((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    sharingOverride: event.target.value as SharingOverrideMode,
+                                  }
+                                : current,
+                            )
+                          }
+                        >
+                          <option value="follow_default">Use relationship default</option>
+                          <option value="always_share">Share vitals, stories, media, conversations</option>
+                          <option value="name_only">Name only</option>
+                          {settings.sharingOverride === "custom_scopes" ? (
+                            <option value="custom_scopes">Keep custom scope rule</option>
+                          ) : null}
+                        </select>
+                        <span className="field-hint">Current result: {sharingResult}</span>
+                      </label>
+
+                      <div className="modal-note">
+                        {settings.sharingOverride === "custom_scopes" ? (
+                          <p className="muted">{settings.customSharingSummary}</p>
+                        ) : null}
+                        <p className="muted">Relationship defaults are managed in Administration.</p>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="muted">
-                  Your own card is shown here for readback only. Relationship-wide defaults start with your relatives,
-                  not with <strong>You</strong>.
-                </p>
-              )}
-            </section>
+                  ) : (
+                    <p className="muted">Your own profile is always visible and available to you.</p>
+                  )}
+                </section>
 
-            <section className="modal-section">
-              <div className="section-head modal-section-head">
-                <div>
-                  <h3>This Person Only</h3>
-                  <p className="muted">
-                    Use this when one relative should be treated differently without changing the whole relationship
-                    group.
-                  </p>
+                <div className="modal-actions">
+                  <button className="secondary-button" type="button" onClick={onClose} disabled={saveBusy}>
+                    {canEditPersonRules ? "Cancel" : "Close"}
+                  </button>
+                  {canEditPersonRules ? (
+                    <button className="primary-button" type="button" onClick={() => void onSave()} disabled={saveBusy}>
+                      {saveBusy ? "Saving..." : "Save and Apply"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
-
-              {selected.category === "self" ? (
-                <p className="muted">Self is always visible and always available to you.</p>
-              ) : (
-                <div className="modal-grid">
-                  <label className="field">
-                    <span className="field-label">Subscription Override</span>
-                    <select
-                      className="input"
-                      value={settings.subscriptionOverride}
-                      onChange={(event) =>
-                        setSettings((current) =>
-                          current
-                            ? {
-                                ...current,
-                                subscriptionOverride: event.target.value as SubscriptionOverrideMode,
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      <option value="follow_default">Follow relationship default</option>
-                      <option value="always_subscribe">Always subscribe</option>
-                      <option value="do_not_subscribe">Do not subscribe</option>
-                    </select>
-                  </label>
-
-                  <label className="field">
-                    <span className="field-label">Sharing Override</span>
-                    <select
-                      className="input"
-                      value={settings.sharingOverride}
-                      onChange={(event) =>
-                        setSettings((current) =>
-                          current
-                            ? {
-                                ...current,
-                                sharingOverride: event.target.value as SharingOverrideMode,
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      <option value="follow_default">Follow relationship default</option>
-                      <option value="always_share">Share all content</option>
-                      <option value="name_only">Name only</option>
-                      {settings.sharingOverride === "custom_scopes" ? (
-                        <option value="custom_scopes">Custom scopes (existing)</option>
-                      ) : null}
-                    </select>
-                  </label>
-
-                  <div className="modal-note">
-                    <p className="muted">
-                      Person overrides are the simple path here. Use relationship defaults above when you want the same
-                      rule to apply to future relatives in this group too.
-                    </p>
-                    {settings.sharingOverride === "custom_scopes" ? (
-                      <p className="muted">{settings.customSharingSummary}</p>
-                    ) : null}
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <div className="modal-actions">
-              <button className="secondary-button" type="button" onClick={onClose} disabled={saveBusy}>
-                Cancel
-              </button>
-              <button className="primary-button" type="button" onClick={() => void onSave()} disabled={saveBusy}>
-                {saveBusy ? "Saving..." : "Save and Apply"}
-              </button>
-            </div>
-          </div>
             )}
           </>
         ) : null}
@@ -1754,40 +1617,22 @@ export function TreeClient({
     setSettingsLoading(true);
 
     try {
-      const [subscriptionDefaultsPayload, shareDefaultsPayload, subscriptionExceptionsPayload, shareExceptionsPayload] =
-        await Promise.all([
-          fetchJson("/api/access/subscription/defaults"),
-          fetchJson("/api/access/sharing/defaults"),
-          fetchJson("/api/access/subscription/exceptions/people"),
-          fetchJson("/api/access/sharing/exceptions/people"),
-        ]);
+      const [subscriptionExceptionsPayload, shareExceptionsPayload] = await Promise.all([
+        fetchJson("/api/access/subscription/exceptions/people"),
+        fetchJson("/api/access/sharing/exceptions/people"),
+      ]);
 
-      const subscriptionDefaults = (subscriptionDefaultsPayload.rows as SubscriptionDefaultRule[] | undefined) ?? [];
-      const shareDefaults = (shareDefaultsPayload.rows as ShareDefaultRule[] | undefined) ?? [];
       const subscriptionExceptions =
         (subscriptionExceptionsPayload.rows as SubscriptionPersonException[] | undefined) ?? [];
       const shareExceptions = (shareExceptionsPayload.rows as SharePersonException[] | undefined) ?? [];
 
-      const subscriptionDefaultRow =
-        subscriptionDefaults.find((row) => row.relationshipCategory === selectedPerson.category) ?? null;
-      const shareDefaultRow = shareDefaults.find((row) => row.relationshipCategory === selectedPerson.category) ?? null;
       const subscriptionException =
         subscriptionExceptions.find((row) => row.targetPersonId === selectedPerson.person.personId) ?? null;
       const shareException = shareExceptions.find((row) => row.targetPersonId === selectedPerson.person.personId) ?? null;
 
       setSettings({
-        subscriptionDefaults,
-        shareDefaults,
         subscriptionExceptions,
         shareExceptions,
-        subscriptionDefaultLineage: subscriptionDefaultRow?.lineageSelection ?? "none",
-        shareDefaultLineage: shareDefaultRow?.lineageSelection ?? "none",
-        shareDefaultScopes: {
-          shareVitals: shareDefaultRow?.shareVitals ?? false,
-          shareStories: shareDefaultRow?.shareStories ?? false,
-          shareMedia: shareDefaultRow?.shareMedia ?? false,
-          shareConversations: shareDefaultRow?.shareConversations ?? false,
-        },
         subscriptionOverride:
           subscriptionException?.effect === "allow"
             ? "always_subscribe"
@@ -1818,25 +1663,6 @@ export function TreeClient({
     if (!selected || !settings) return;
 
     const targetPersonId = selected.person.personId;
-
-    const nextSubscriptionDefaults = settings.subscriptionDefaults.map((row) =>
-      row.relationshipCategory === selected.category
-        ? { ...row, lineageSelection: settings.subscriptionDefaultLineage }
-        : row,
-    );
-
-    const nextShareDefaults = settings.shareDefaults.map((row) =>
-      row.relationshipCategory === selected.category
-        ? {
-            ...row,
-            lineageSelection: settings.shareDefaultLineage,
-            shareVitals: settings.shareDefaultScopes.shareVitals,
-            shareStories: settings.shareDefaultScopes.shareStories,
-            shareMedia: settings.shareDefaultScopes.shareMedia,
-            shareConversations: settings.shareDefaultScopes.shareConversations,
-          }
-        : row,
-    );
 
     const nextSubscriptionExceptions = settings.subscriptionExceptions
       .filter((row) => row.targetPersonId !== targetPersonId)
@@ -1905,32 +1731,12 @@ export function TreeClient({
               : [],
       );
 
-    const originalSubscriptionDefaultsPayload = buildSubscriptionDefaultPayloadRows(settings.subscriptionDefaults);
-    const nextSubscriptionDefaultsPayload = buildSubscriptionDefaultPayloadRows(nextSubscriptionDefaults);
-    const originalShareDefaultsPayload = buildShareDefaultPayloadRows(settings.shareDefaults);
-    const nextShareDefaultsPayload = buildShareDefaultPayloadRows(nextShareDefaults);
     const originalSubscriptionExceptionsPayload = buildSubscriptionExceptionPayloadRows(settings.subscriptionExceptions);
     const nextSubscriptionExceptionsPayload = buildSubscriptionExceptionPayloadRows(nextSubscriptionExceptions);
     const originalShareExceptionsPayload = buildSharePayloadRows(settings.shareExceptions);
     const nextShareExceptionsPayload = buildSharePayloadRows(nextShareExceptions);
 
     const requests: Array<Promise<unknown>> = [];
-    if (JSON.stringify(originalSubscriptionDefaultsPayload) !== JSON.stringify(nextSubscriptionDefaultsPayload)) {
-      requests.push(
-        fetchJson("/api/access/subscription/defaults", {
-          method: "PUT",
-          body: JSON.stringify(nextSubscriptionDefaultsPayload),
-        }),
-      );
-    }
-    if (JSON.stringify(originalShareDefaultsPayload) !== JSON.stringify(nextShareDefaultsPayload)) {
-      requests.push(
-        fetchJson("/api/access/sharing/defaults", {
-          method: "PUT",
-          body: JSON.stringify(nextShareDefaultsPayload),
-        }),
-      );
-    }
     if (
       JSON.stringify(originalSubscriptionExceptionsPayload) !== JSON.stringify(nextSubscriptionExceptionsPayload)
     ) {

@@ -7610,3 +7610,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the Administration/person-detail surface decision to `designchoices.md`.
+
+## 2026-04-18 (Famailink person modal simplification)
+
+- `Change`: Simplified the `/tree` person modal so the individual person tile edits only person-specific subscription and sharing exceptions. The modal no longer fetches or saves broad relationship defaults, removes default-rule controls such as subscription defaults, sharing defaults, default shared content, and side-default selectors, and now presents a compact Overview plus Updates & Sharing readback/edit flow.
+- `Type`: UX, Preferences workflow, Tree interaction
+- `Why`: Root cause was a stale control-plane mismatch. Earlier MVP work exposed broad relationship defaults and individual overrides in the same person modal, but later design moved broad defaults to Administration/Rules Tree while the modal still retained the older default editor and save paths.
+- `Files`:
+  - `TODO.md`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/app/globals.css`
+- `Data Changes`: None. Existing subscription/sharing defaults, person-exception rows, recompute output, and auth behavior are unchanged.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Confirmed `TreeClient` no longer references relationship-default modal controls or writes to the defaults APIs from the person modal.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: No design decision change. This aligns the person modal with the existing Administration/Rules Tree decision for broad defaults.
