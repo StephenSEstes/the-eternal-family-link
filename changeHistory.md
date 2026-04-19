@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-19: Clarified Famailink person modal sharing readback so it describes what you share with the selected person, not what they share with you. See `docs/change-summary.md`.
 - 2026-04-19: Optimized Famailink `/tree` person modal settings so opening and saving a person uses targeted person-settings rows, updates local readback, and avoids a full tree route refresh. See `docs/change-summary.md`.
 - 2026-04-19: Clarified Famailink person modal Default/Custom settings with a single segmented control per row and changed modal saves to use one request/recompute when both update and sharing settings change. See `docs/change-summary.md`.
 - 2026-04-18: Added a repeatable Famailink production validation command plus runbook coverage for route health, authenticated catalog/preview/recompute checks, and optional reversible exception write/restore validation. See `docs/change-summary.md`.

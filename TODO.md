@@ -28,9 +28,9 @@ I will update this list as we add, complete, or remove work.
   Progress 2026-04-14:
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
-  - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  - Completed/deployed 2026-04-19: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Steve visually confirmed after deployment.
   Agreed implementation plan 2026-04-19 (Famailink person modal performance):
-  Status: Completed locally 2026-04-19; pending Steve deploy decision.
+  Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
     - Make the `/tree` person modal load only the selected person's subscription/sharing exception settings.
     - Make person modal saves update only the selected target person's exception rows instead of replacing the signed-in viewer's full exception lists.
@@ -94,7 +94,7 @@ I will update this list as we add, complete, or remove work.
     - The write-path check is opt-in and restores the original person exception rows.
     - The runbook clearly states required env/session inputs and residual risks.
   Agreed implementation plan 2026-04-18 (Famailink person modal simplification):
-  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
     - Simplify the `/tree` person modal so it supports person-specific subscription and sharing exceptions only.
     - Remove broad relationship-default editing from the individual person tile/modal.
@@ -126,7 +126,7 @@ I will update this list as we add, complete, or remove work.
     - Person-specific subscription and sharing overrides remain available and understandable.
     - Broad defaults remain administered from Administration/Rules Tree or the full preferences fallback.
   Agreed implementation plan 2026-04-18 (Famailink person checkbox controls):
-  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
     - Replace the person modal's subscription/sharing dropdowns with checkbox-first controls.
     - Keep broad relationship defaults in Administration/Rules Tree.
@@ -157,7 +157,7 @@ I will update this list as we add, complete, or remove work.
     - Users can select individual sharing scopes for one person without entering Administration.
     - Relationship-wide defaults remain unavailable from the person tile.
   Agreed implementation plan 2026-04-18 (Famailink stable compact person modal):
-  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
     - Tighten the `/tree` person modal so it follows the tree/login visual system and no longer jumps between tabs.
     - Reduce settings real estate by replacing full `Use relationship default` checkbox rows with compact `Customize` / `Reset` actions.
@@ -187,7 +187,7 @@ I will update this list as we add, complete, or remove work.
     - The modal visually matches the tree/login surface family.
     - Person-specific update/sharing changes remain available without relationship-default controls dominating the screen.
   Agreed implementation plan 2026-04-19 (Famailink clear person modal modes and save path):
-  Status: Completed locally 2026-04-19; pending Steve deploy decision.
+  Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
     - Replace the separate `Default`/`Custom` status chip plus `Customize`/`Reset` actions with one compact mode control per person setting.
     - Keep person-specific exception editing in the `/tree` modal and keep broad default administration out of this modal.

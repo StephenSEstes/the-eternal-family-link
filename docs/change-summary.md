@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-19 (Famailink outbound sharing copy)
+
+- `Date`: 2026-04-19
+- `Change`: Updated the Famailink `/tree` person modal sharing readback so the person detail cards say `You Share With Them` and summarize `You share: ...` scopes. The edit row now says it follows `your default sharing` or uses `Custom sharing to this person`.
+- `Type`: UI
+- `Why`: Root cause was a UX wording issue. The person modal edits the signed-in viewer's outbound sharing settings for the selected person, but the overview label said `Shared With You`, which implied inbound access and could reveal that another person was not sharing content. The chosen fix keeps the readback scoped to what the signed-in viewer shares outward.
+- `Files`: `.gitignore`, `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/.gitignore`, `famailink/components/TreeClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Source no longer renders `Shared With You` in the Famailink person modal.
+- `Rollback Notes`: Revert this change to restore the previous sharing readback wording.
+- `Design Decision Change`: No design decision change. This aligns with the existing person-specific sharing decision that the modal controls what the signed-in user shares with that person.
+
 ## 2026-04-19 (Famailink targeted person modal settings)
 
 - `Date`: 2026-04-19

@@ -200,9 +200,9 @@ function shareSummary(row: ProfileVisibilityMapRow | undefined) {
   if (!row) return { label: "Sharing Pending", badgeClass: "pending" };
   if (row.placeholderOnly) return { label: "Name Only", badgeClass: "placeholder" };
   if (row.canVitals || row.canStories || row.canMedia || row.canConversations) {
-    return { label: "Shared", badgeClass: "shared" };
+    return { label: "You Share", badgeClass: "shared" };
   }
-  return { label: "No Content", badgeClass: "closed" };
+  return { label: "Name Only", badgeClass: "closed" };
 }
 
 function subscriptionSummary(row: ProfileSubscriptionMapRow | undefined) {
@@ -221,6 +221,13 @@ function scopeList(row: ProfileVisibilityMapRow | undefined) {
     row.canConversations ? "Conversations" : "",
   ].filter(Boolean);
   return allowed.join(", ");
+}
+
+function outboundSharingResult(row: ProfileVisibilityMapRow | undefined) {
+  if (!row) return "Sharing pending";
+  const scopes = scopeList(row);
+  if (scopes) return `You share: ${scopes}`;
+  return "You share: name and relationship only";
 }
 
 function sharingScopesFromException(row: SharePersonException | undefined): SharingScopeSettings {
@@ -781,10 +788,9 @@ function RelativeModal({
   const [activeTab, setActiveTab] = useState<"overview" | "rules">("overview");
   const sharing = shareSummary(selected.visibilityRow);
   const subscription = subscriptionSummary(selected.subscriptionRow);
-  const scopes = scopeList(selected.visibilityRow);
   const canEditPersonRules = selected.category !== "self";
   const relationshipLabel = RELATIONSHIP_LABELS[selected.category];
-  const sharingResult = scopes ? `${sharing.label}: ${scopes}` : sharing.label;
+  const sharingResult = outboundSharingResult(selected.visibilityRow);
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
@@ -861,7 +867,7 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">Shared With You</p>
+                      <p className="stat-label">You Share With Them</p>
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
@@ -874,7 +880,7 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">Shared With You</p>
+                      <p className="stat-label">You Share With Them</p>
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
@@ -935,8 +941,8 @@ function RelativeModal({
                             <span className="preference-title">You Share With This Person</span>
                             <span className="preference-detail">
                               {settings.sharingUseDefault
-                                ? "Following default sharing"
-                                : "Custom scopes for this person"}
+                                ? "Following your default sharing"
+                                : "Custom sharing to this person"}
                             </span>
                           </div>
                           <div className="preference-controls share-controls">

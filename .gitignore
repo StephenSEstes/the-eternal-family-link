@@ -43,14 +43,15 @@ handoff/
 .env*
 
 # vercel
-.vercel
+.vercel/
+.vercel-global/
+.vercel-project-patch.json
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
 .secrets.local.ps1
-.vercel
 
 # local OCI Object Storage config scaffold
 /lib/ociConfig.ts
