@@ -7627,3 +7627,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - Confirmed `TreeClient` no longer references relationship-default modal controls or writes to the defaults APIs from the person modal.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: No design decision change. This aligns the person modal with the existing Administration/Rules Tree decision for broad defaults.
+
+## 2026-04-18 (Famailink person checkbox controls)
+
+- `Change`: Replaced the `/tree` person modal's subscription and sharing dropdowns with checkbox-first person controls. The modal now has a `Use relationship default` checkbox for updates, a direct updates checkbox for the selected person, a `Use relationship default` checkbox for sharing, and Vitals/Stories/Media/Conversations checkboxes for what the signed-in user shares with that person. Scoped sharing exception booleans now evaluate as exact per-scope outcomes, and the production validation script checks a reversible scoped sharing write.
+- `Type`: UX, Preferences workflow, Access evaluation
+- `Why`: Root cause was that the person modal still reflected exception storage vocabulary instead of the simple product action. Users should be able to make person-specific subscription/sharing changes without choosing abstract override modes.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/lib/access/preview.ts`
+  - `famailink/app/globals.css`
+  - `scripts/validate-famailink-production.cjs`
+- `Data Changes`: None. Existing exception rows remain valid; scoped sharing rows are now interpreted as exact checked/unchecked scope outcomes.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the checkbox-first person-specific subscription/sharing control decision to `designchoices.md`.

@@ -99,9 +99,13 @@ function readExceptionScope(row: SharePersonException, scope: PreviewScopeKey) {
   return row.shareConversations;
 }
 
-function appliesToScope(row: SharePersonException, scope: PreviewScopeKey) {
-  const value = readExceptionScope(row, scope);
-  return value === null || value === true;
+function hasScopedShareException(row: SharePersonException) {
+  return (
+    row.shareVitals !== null ||
+    row.shareStories !== null ||
+    row.shareMedia !== null ||
+    row.shareConversations !== null
+  );
 }
 
 function evaluateShareDefaultScope(
@@ -151,17 +155,27 @@ function evaluateSharingScopes(input: {
   const scopes: PreviewScopeKey[] = ["vitals", "stories", "media", "conversations"];
   const out = {} as Record<PreviewScopeKey, PreviewScopeResult>;
   for (const scope of scopes) {
-    const denied = personExceptions.some((row) => row.effect === "deny" && appliesToScope(row, scope));
+    const scopedException = personExceptions.find((row) => readExceptionScope(row, scope) !== null);
+    if (scopedException) {
+      const allowed = readExceptionScope(scopedException, scope) === true;
+      out[scope] = {
+        allowed,
+        source: allowed ? "share_person_exception_allow" : "share_person_exception_deny",
+      };
+      continue;
+    }
+
+    const denied = personExceptions.some((row) => row.effect === "deny" && !hasScopedShareException(row));
     if (denied) {
       out[scope] = { allowed: false, source: "share_person_exception_deny" };
       continue;
     }
 
-    const allowed = personExceptions.some((row) => row.effect === "allow" && appliesToScope(row, scope));
+    const allowed = personExceptions.some((row) => row.effect === "allow" && !hasScopedShareException(row));
     if (allowed) {
-        out[scope] = { allowed: true, source: "share_person_exception_allow" };
-        continue;
-      }
+      out[scope] = { allowed: true, source: "share_person_exception_allow" };
+      continue;
+    }
 
     out[scope] = evaluateShareDefaultScope(effectiveOwnerDefaults, input.viewerHitsFromOwner, scope);
   }

@@ -535,3 +535,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the static selected-person layout; import the legacy EFL tree component directly; preserve grandchild rows in the focused view.
 - `Impact`: The tree pane is now motion/focus oriented. It does not add family-group support to Famailink and does not change relationship derivation, data storage, or preference APIs.
 - `Follow-up`: Validate the focused map against live spouse, parent-in-law, sibling-in-law, and child-household cases before deciding whether broader EFL map behaviors such as full pinch zoom parity are needed.
+
+- `Area`: Famailink person-specific subscription and sharing controls
+- `Decision`: The real person tree modal should use checkbox-first controls for person-specific exceptions: one default checkbox plus one updates checkbox for subscriptions, and one default checkbox plus Vitals/Stories/Media/Conversations checkboxes for what the signed-in user shares with that person. Broad relationship defaults remain under Administration/Rules Tree.
+- `Reason`: Users need to make simple per-person choices without seeing storage terms such as allow/deny exceptions or broad relationship-default selectors. Scope checkboxes match the actual sharing model better than dropdown modes.
+- `Alternatives Considered`: Keep dropdown override modes; expose all relationship defaults in the person modal; require the full preferences table for scope-level person exceptions.
+- `Impact`: Scoped sharing exception booleans are treated as exact per-scope outcomes for that person: checked scopes are allowed, unchecked scopes are hidden, and no person exception means the relationship default applies.
+- `Follow-up`: Carry the same checkbox-first model into the fuller person view when Vitals, Stories, Media, and Conversations tabs are added.

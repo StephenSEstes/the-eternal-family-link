@@ -753,6 +753,63 @@ select {
   grid-column: 1 / -1;
 }
 
+.modal-rule-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.modal-rule-group {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-checkbox {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(217, 205, 187, 0.9);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.settings-checkbox.compact {
+  align-items: center;
+}
+
+.settings-checkbox.is-disabled,
+.sharing-checkbox-grid.is-disabled {
+  opacity: 0.62;
+}
+
+.settings-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.settings-checkbox > span {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-checkbox strong {
+  font-size: 14px;
+}
+
+.settings-checkbox span span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.sharing-checkbox-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -1647,6 +1704,7 @@ select {
   .preview-grid,
   .scope-results-grid,
   .modal-grid,
+  .sharing-checkbox-grid,
   .rules-scope-grid {
     grid-template-columns: 1fr;
   }

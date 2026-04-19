@@ -117,16 +117,28 @@ type TreeGraphModel = {
   visiblePeople: TreePerson[];
 };
 
-type SharingOverrideMode = "follow_default" | "always_share" | "name_only" | "custom_scopes";
-type SubscriptionOverrideMode = "follow_default" | "always_subscribe" | "do_not_subscribe";
+type SharingScopeSettings = {
+  shareVitals: boolean;
+  shareStories: boolean;
+  shareMedia: boolean;
+  shareConversations: boolean;
+};
 
 type ModalSettings = {
   subscriptionExceptions: SubscriptionPersonException[];
   shareExceptions: SharePersonException[];
-  subscriptionOverride: SubscriptionOverrideMode;
-  sharingOverride: SharingOverrideMode;
-  customSharingSummary: string;
+  subscriptionUseDefault: boolean;
+  receiveUpdates: boolean;
+  sharingUseDefault: boolean;
+  sharingScopes: SharingScopeSettings;
 };
+
+const SHARING_SCOPE_OPTIONS: Array<{ field: keyof SharingScopeSettings; label: string }> = [
+  { field: "shareVitals", label: "Vitals" },
+  { field: "shareStories", label: "Stories" },
+  { field: "shareMedia", label: "Media" },
+  { field: "shareConversations", label: "Conversations" },
+];
 
 function readSideLabel(side: LineageSide) {
   if (side === "maternal") return "Maternal";
@@ -184,20 +196,38 @@ function buildSubscriptionExceptionPayloadRows(rows: SubscriptionPersonException
     .sort((left, right) => left.targetPersonId.localeCompare(right.targetPersonId));
 }
 
-function buildCustomSharingSummary(row: SharePersonException | undefined) {
-  if (!row) return "";
-  const activeScopes = [
-    row.shareVitals ? "Vitals" : "",
-    row.shareStories ? "Stories" : "",
-    row.shareMedia ? "Media" : "",
-    row.shareConversations ? "Conversations" : "",
-  ].filter(Boolean);
-  if (!activeScopes.length) {
-    return "A detailed sharing rule exists for this person. Use Preferences for scope-level editing.";
+function sharingScopesFromException(row: SharePersonException | undefined): SharingScopeSettings {
+  if (!row) {
+    return {
+      shareVitals: true,
+      shareStories: true,
+      shareMedia: true,
+      shareConversations: true,
+    };
   }
-  return row.effect === "deny"
-    ? `Currently hides: ${activeScopes.join(", ")}. Use Preferences for scope-level editing.`
-    : `Currently allows: ${activeScopes.join(", ")}. Use Preferences for scope-level editing.`;
+
+  const hasScopedValues =
+    row.shareVitals !== null ||
+    row.shareStories !== null ||
+    row.shareMedia !== null ||
+    row.shareConversations !== null;
+
+  if (!hasScopedValues) {
+    const shareAll = row.effect === "allow";
+    return {
+      shareVitals: shareAll,
+      shareStories: shareAll,
+      shareMedia: shareAll,
+      shareConversations: shareAll,
+    };
+  }
+
+  return {
+    shareVitals: row.shareVitals === true,
+    shareStories: row.shareStories === true,
+    shareMedia: row.shareMedia === true,
+    shareConversations: row.shareConversations === true,
+  };
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -780,7 +810,7 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">Sharing</p>
+                      <p className="stat-label">Shared With You</p>
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
@@ -798,7 +828,7 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">Sharing</p>
+                      <p className="stat-label">Shared With You</p>
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
@@ -811,61 +841,102 @@ function RelativeModal({
                   </div>
 
                   {canEditPersonRules ? (
-                    <div className="modal-grid">
-                      <label className="field">
-                        <span className="field-label">Updates About This Person</span>
-                        <select
-                          className="input"
-                          value={settings.subscriptionOverride}
-                          onChange={(event) =>
-                            setSettings((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    subscriptionOverride: event.target.value as SubscriptionOverrideMode,
-                                  }
-                                : current,
-                            )
-                          }
-                        >
-                          <option value="follow_default">Use relationship default</option>
-                          <option value="always_subscribe">Always get updates</option>
-                          <option value="do_not_subscribe">Do not get updates</option>
-                        </select>
-                        <span className="field-hint">Current result: {subscription.label}</span>
-                      </label>
+                    <div className="modal-rule-stack">
+                      <div className="modal-rule-group">
+                        <p className="field-label">Updates About This Person</p>
+                        <label className="settings-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={settings.subscriptionUseDefault}
+                            onChange={(event) =>
+                              setSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      subscriptionUseDefault: event.target.checked,
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>Use relationship default</strong>
+                            <span>Current result: {subscription.label}</span>
+                          </span>
+                        </label>
+                        <label className={`settings-checkbox${settings.subscriptionUseDefault ? " is-disabled" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={settings.receiveUpdates}
+                            disabled={settings.subscriptionUseDefault}
+                            onChange={(event) =>
+                              setSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      receiveUpdates: event.target.checked,
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>Get updates about {selected.person.displayName}</strong>
+                            <span>{settings.receiveUpdates ? "Updates enabled" : "Updates muted"}</span>
+                          </span>
+                        </label>
+                      </div>
 
-                      <label className="field">
-                        <span className="field-label">Sharing With This Person</span>
-                        <select
-                          className="input"
-                          value={settings.sharingOverride}
-                          onChange={(event) =>
-                            setSettings((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    sharingOverride: event.target.value as SharingOverrideMode,
-                                  }
-                                : current,
-                            )
-                          }
-                        >
-                          <option value="follow_default">Use relationship default</option>
-                          <option value="always_share">Share vitals, stories, media, conversations</option>
-                          <option value="name_only">Name only</option>
-                          {settings.sharingOverride === "custom_scopes" ? (
-                            <option value="custom_scopes">Keep custom scope rule</option>
-                          ) : null}
-                        </select>
-                        <span className="field-hint">Current result: {sharingResult}</span>
-                      </label>
+                      <div className="modal-rule-group">
+                        <p className="field-label">You Share With This Person</p>
+                        <label className="settings-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={settings.sharingUseDefault}
+                            onChange={(event) =>
+                              setSettings((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      sharingUseDefault: event.target.checked,
+                                    }
+                                  : current,
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>Use relationship default</strong>
+                            <span>Default sharing rules are managed in Administration.</span>
+                          </span>
+                        </label>
 
-                      <div className="modal-note">
-                        {settings.sharingOverride === "custom_scopes" ? (
-                          <p className="muted">{settings.customSharingSummary}</p>
-                        ) : null}
-                        <p className="muted">Relationship defaults are managed in Administration.</p>
+                        <div className={`sharing-checkbox-grid${settings.sharingUseDefault ? " is-disabled" : ""}`}>
+                          {SHARING_SCOPE_OPTIONS.map(({ field, label }) => (
+                            <label key={field} className="settings-checkbox compact">
+                              <input
+                                type="checkbox"
+                                checked={settings.sharingScopes[field]}
+                                disabled={settings.sharingUseDefault}
+                                onChange={(event) =>
+                                  setSettings((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          sharingScopes: {
+                                            ...current.sharingScopes,
+                                            [field]: event.target.checked,
+                                          },
+                                        }
+                                      : current,
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>{label}</strong>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1633,24 +1704,10 @@ export function TreeClient({
       setSettings({
         subscriptionExceptions,
         shareExceptions,
-        subscriptionOverride:
-          subscriptionException?.effect === "allow"
-            ? "always_subscribe"
-            : subscriptionException?.effect === "deny"
-              ? "do_not_subscribe"
-              : "follow_default",
-        sharingOverride:
-          !shareException
-            ? "follow_default"
-            : shareException.shareVitals === null &&
-                shareException.shareStories === null &&
-                shareException.shareMedia === null &&
-                shareException.shareConversations === null
-              ? shareException.effect === "allow"
-                ? "always_share"
-                : "name_only"
-              : "custom_scopes",
-        customSharingSummary: buildCustomSharingSummary(shareException ?? undefined),
+        subscriptionUseDefault: !subscriptionException,
+        receiveUpdates: subscriptionException?.effect !== "deny",
+        sharingUseDefault: !shareException,
+        sharingScopes: sharingScopesFromException(shareException ?? undefined),
       });
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "Failed to load settings.");
@@ -1667,68 +1724,40 @@ export function TreeClient({
     const nextSubscriptionExceptions = settings.subscriptionExceptions
       .filter((row) => row.targetPersonId !== targetPersonId)
       .concat(
-        settings.subscriptionOverride === "always_subscribe"
-          ? [
+        settings.subscriptionUseDefault
+          ? []
+          : [
               {
                 exceptionId: "",
                 viewerPersonId: "",
                 targetPersonId,
-                effect: "allow" as const,
+                effect: settings.receiveUpdates ? ("allow" as const) : ("deny" as const),
                 createdAt: "",
                 updatedAt: "",
               },
-            ]
-          : settings.subscriptionOverride === "do_not_subscribe"
-            ? [
-                {
-                  exceptionId: "",
-                  viewerPersonId: "",
-                  targetPersonId,
-                  effect: "deny" as const,
-                  createdAt: "",
-                  updatedAt: "",
-                },
-              ]
-            : [],
+            ],
       );
 
-    const existingShareException = settings.shareExceptions.find((row) => row.targetPersonId === targetPersonId);
+    const sharesAnyScope = Object.values(settings.sharingScopes).some(Boolean);
     const nextShareExceptions = settings.shareExceptions
       .filter((row) => row.targetPersonId !== targetPersonId)
       .concat(
-        settings.sharingOverride === "always_share"
-          ? [
+        settings.sharingUseDefault
+          ? []
+          : [
               {
                 exceptionId: "",
                 ownerPersonId: "",
                 targetPersonId,
-                effect: "allow" as const,
-                shareVitals: null,
-                shareStories: null,
-                shareMedia: null,
-                shareConversations: null,
+                effect: sharesAnyScope ? ("allow" as const) : ("deny" as const),
+                shareVitals: settings.sharingScopes.shareVitals,
+                shareStories: settings.sharingScopes.shareStories,
+                shareMedia: settings.sharingScopes.shareMedia,
+                shareConversations: settings.sharingScopes.shareConversations,
                 createdAt: "",
                 updatedAt: "",
               },
-            ]
-          : settings.sharingOverride === "name_only"
-            ? [
-                {
-                  exceptionId: "",
-                  ownerPersonId: "",
-                  targetPersonId,
-                  effect: "deny" as const,
-                  shareVitals: null,
-                  shareStories: null,
-                  shareMedia: null,
-                  shareConversations: null,
-                  createdAt: "",
-                  updatedAt: "",
-                },
-              ]
-            : settings.sharingOverride === "custom_scopes" && existingShareException
-              ? [existingShareException]
-              : [],
+            ],
       );
 
     const originalSubscriptionExceptionsPayload = buildSubscriptionExceptionPayloadRows(settings.subscriptionExceptions);

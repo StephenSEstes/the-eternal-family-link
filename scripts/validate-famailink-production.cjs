@@ -366,19 +366,26 @@ class Validator {
             {
               targetPersonId: sharingTarget.personId,
               effect: "allow",
-              shareVitals: null,
-              shareStories: null,
-              shareMedia: null,
-              shareConversations: null,
+              shareVitals: true,
+              shareStories: false,
+              shareMedia: true,
+              shareConversations: false,
             },
           ]);
         await this.putJson("/api/access/sharing/exceptions/people", testSharingPayload);
         const allowedPreview = await this.previewFor(sharingTarget.personId, this.options.personId);
         const scopes = allowedPreview.sharing?.scopes || {};
         this.assert(
-          "sharing exception allow affects reverse preview",
-          REQUIRED_SCOPE_KEYS.every((key) => scopes[key]?.source === "share_person_exception_allow"),
-          `sources=${REQUIRED_SCOPE_KEYS.map((key) => `${key}:${scopes[key]?.source || "(none)"}`).join(",")}`,
+          "scoped sharing exception affects reverse preview",
+          scopes.vitals?.source === "share_person_exception_allow" &&
+            scopes.vitals?.allowed === true &&
+            scopes.stories?.source === "share_person_exception_deny" &&
+            scopes.stories?.allowed === false &&
+            scopes.media?.source === "share_person_exception_allow" &&
+            scopes.media?.allowed === true &&
+            scopes.conversations?.source === "share_person_exception_deny" &&
+            scopes.conversations?.allowed === false,
+          `scopes=${REQUIRED_SCOPE_KEYS.map((key) => `${key}:${scopes[key]?.source || "(none)"}:${scopes[key]?.allowed}`).join(",")}`,
         );
       } finally {
         await this.putJson("/api/access/sharing/exceptions/people", originalSharingPayload);

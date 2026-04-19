@@ -88,6 +88,37 @@ I will update this list as we add, complete, or remove work.
     - A person modal cannot modify broad relationship defaults.
     - Person-specific subscription and sharing overrides remain available and understandable.
     - Broad defaults remain administered from Administration/Rules Tree or the full preferences fallback.
+  Agreed implementation plan 2026-04-18 (Famailink person checkbox controls):
+  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  - Scope:
+    - Replace the person modal's subscription/sharing dropdowns with checkbox-first controls.
+    - Keep broad relationship defaults in Administration/Rules Tree.
+    - Keep the change limited to person exception UX and exact scoped-exception evaluation.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Open a person's detail modal and choose `Updates & Sharing`.
+    - The modal uses dropdowns for person exception modes even though the desired workflow is simple person-level on/off and content-scope choices.
+  - Failing data/query/code path:
+    - `RelativeModal` exposes `SubscriptionOverrideMode` and `SharingOverrideMode` values directly in select controls.
+    - `saveSelectedRelative()` can preserve a custom sharing row, but the modal does not let users directly choose individual sharing scopes.
+    - `evaluateSharingScopes()` currently treats scoped sharing exception fields as allow/deny overlays rather than exact checkbox outcomes.
+  - Root cause:
+    - The UI still mirrors the exception storage vocabulary instead of presenting the simple product action: use the relationship default or override this one person.
+    - Scoped sharing exception fields exist, but the modal does not expose them as first-class person-specific choices.
+  - Implementation:
+    - Add `Use relationship default` checkboxes for updates and sharing.
+    - When update defaults are off, show one checkbox for receiving updates about the selected person.
+    - When sharing defaults are off, show Vitals, Stories, Media, and Conversations checkboxes for what the signed-in user shares with the selected person.
+    - Save no row when defaults are used, an allow/deny subscription row for update overrides, and one scoped sharing exception row for sharing overrides.
+    - Interpret scoped sharing exception booleans as exact per-scope outcomes: checked means allowed, unchecked means hidden, null means fall back to the all-scope effect/default behavior.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - `npm run famailink:validate:prod -- --write-restore` after deploy.
+  - Completion criteria:
+    - The person modal can modify person-specific subscription/sharing settings through checkboxes.
+    - Users can select individual sharing scopes for one person without entering Administration.
+    - Relationship-wide defaults remain unavailable from the person tile.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
   Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:
