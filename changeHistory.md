@@ -339,3 +339,4 @@ This file is a quick release-log entry point.
 - 2026-04-16: Updated Famailink `/tree` to use EFL colors, typography, logo/favicon assets, and cloud-backed tree styling, and added an `In-laws` switch that filters existing in-law relatives without changing data. See `docs/change-summary.md`.
 - 2026-04-18: Simplified the Famailink `/tree` person modal so individual tiles edit only person-specific subscription/sharing exceptions, while broad relationship defaults remain in Administration/Rules Tree. See `docs/change-summary.md`.
 - 2026-04-18: Replaced Famailink person modal dropdowns with checkbox-first update/sharing controls and made scoped person sharing exceptions evaluate as exact per-scope outcomes. See `docs/change-summary.md`.
+- 2026-04-18: Tightened the Famailink person modal into a stable fixed-height blue-white dialog with compact Customize/Reset setting rows so tab changes no longer resize or move the window. See `docs/change-summary.md`.

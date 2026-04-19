@@ -542,3 +542,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep dropdown override modes; expose all relationship defaults in the person modal; require the full preferences table for scope-level person exceptions.
 - `Impact`: Scoped sharing exception booleans are treated as exact per-scope outcomes for that person: checked scopes are allowed, unchecked scopes are hidden, and no person exception means the relationship default applies.
 - `Follow-up`: Carry the same checkbox-first model into the fuller person view when Vitals, Stories, Media, and Conversations tabs are added.
+
+- `Area`: Famailink person modal visual and layout behavior
+- `Decision`: The real person tree modal should use a stable fixed-height dialog frame with fixed header/tab/footer regions and a scrollable content body. Person settings should use compact status/action rows that visually match the blue-white tree/login system, not beige generic settings cards.
+- `Reason`: Variable-height centered modals jump when tabs change and make the person flow feel unstable. Full-size default rows waste screen space and conflict with the compact tree surface.
+- `Alternatives Considered`: Keep auto-height modal cards; preserve full checkbox rows for default/custom state; move settings out of the modal entirely.
+- `Impact`: Switching between person modal tabs should not move or resize the dialog frame. Default/custom remains available through compact `Customize` and `Reset` actions instead of prominent relationship-default checkboxes.
+- `Follow-up`: Reuse this stable modal frame for the future fuller person view with Vitals, Stories, Media, and Conversations tabs.

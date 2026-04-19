@@ -7646,3 +7646,20 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the checkbox-first person-specific subscription/sharing control decision to `designchoices.md`.
+
+## 2026-04-18 (Famailink stable compact person modal)
+
+- `Change`: Reworked the `/tree` person modal into a stable fixed-height dialog using the blue-white Famailink tree/login surface colors. The modal now has fixed header, content, and footer regions with a scrollable content body, removes the extra header scope line, replaces full default checkbox rows with compact `Customize` / `Reset` actions, and keeps customized updates/sharing controls in tighter rows.
+- `Type`: UX, Modal layout, Visual design
+- `Why`: Root cause was that the modal used generic beige settings-card styling and variable-height centered content. Switching tabs changed the modal height and caused the dialog to recenter, while redundant default rows consumed too much screen space.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the stable compact person modal visual/layout behavior decision to `designchoices.md`.

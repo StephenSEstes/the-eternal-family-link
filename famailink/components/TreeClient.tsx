@@ -761,18 +761,18 @@ function RelativeModal({
               <span className={`badge state ${subscription.badgeClass}`}>{subscription.label}</span>
               <span className={`badge state ${sharing.badgeClass}`}>{sharing.label}</span>
             </div>
-            {scopes ? <p className="person-detail muted">Saved scopes: {scopes}</p> : null}
           </div>
-          <button className="secondary-button" type="button" onClick={onClose}>
-            Close
+          <button className="secondary-button modal-close-button" type="button" onClick={onClose} aria-label="Close">
+            X
           </button>
         </div>
 
-        {modalError ? <p className="error-text modal-error">{modalError}</p> : null}
-        {settingsLoading ? <p className="muted">Loading person settings...</p> : null}
+        <div className="modal-content">
+          {modalError ? <p className="error-text modal-error">{modalError}</p> : null}
+          {settingsLoading ? <p className="muted modal-loading">Loading person settings...</p> : null}
 
-        {!settingsLoading && settings ? (
-          <>
+          {!settingsLoading && settings ? (
+            <>
             <div className="person-detail-tabs" role="tablist" aria-label="Person detail tabs">
               <button
                 type="button"
@@ -790,12 +790,9 @@ function RelativeModal({
               </button>
             </div>
 
-            {activeTab === "overview" ? (
-              <div className="modal-sections">
-                <section className="modal-section">
-                  <div className="modal-section-head">
-                    <h3>Overview</h3>
-                  </div>
+            <div className="modal-tab-body">
+              {activeTab === "overview" ? (
+                <div className="modal-sections">
                   <div className="person-detail-grid">
                     <article className="stat-card">
                       <p className="stat-label">Person</p>
@@ -814,15 +811,10 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
-                </section>
-              </div>
-            ) : (
-              <div className="modal-sections">
-                <section className="modal-section">
-                  <div className="modal-section-head">
-                    <h3>Current Result</h3>
-                  </div>
-                  <div className="person-detail-grid">
+                </div>
+              ) : (
+                <div className="modal-sections">
+                  <div className="person-detail-grid compact">
                     <article className="stat-card">
                       <p className="stat-label">Updates</p>
                       <p className="stat-value recompute-value">{subscription.label}</p>
@@ -832,131 +824,175 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{sharingResult}</p>
                     </article>
                   </div>
-                </section>
 
-                <section className="modal-section">
-                  <div className="modal-section-head">
-                    <h3>This Person</h3>
-                    <p className="muted">Changes here affect only {selected.person.displayName}.</p>
-                  </div>
-
-                  {canEditPersonRules ? (
-                    <div className="modal-rule-stack">
-                      <div className="modal-rule-group">
-                        <p className="field-label">Updates About This Person</p>
-                        <label className="settings-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={settings.subscriptionUseDefault}
-                            onChange={(event) =>
-                              setSettings((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      subscriptionUseDefault: event.target.checked,
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                          <span>
-                            <strong>Use relationship default</strong>
-                            <span>Current result: {subscription.label}</span>
+                  <section className="modal-section compact">
+                    {canEditPersonRules ? (
+                      <div className="preference-stack">
+                        <div className="preference-row">
+                          <div className="preference-copy">
+                            <span className="preference-title">Updates About This Person</span>
+                            <span className="preference-detail">
+                              {settings.subscriptionUseDefault
+                                ? `Default: ${subscription.label}`
+                                : settings.receiveUpdates
+                                  ? "Custom: updates enabled"
+                                  : "Custom: updates muted"}
+                            </span>
+                          </div>
+                          <span className={`rule-state-chip${settings.subscriptionUseDefault ? "" : " custom"}`}>
+                            {settings.subscriptionUseDefault ? "Default" : "Custom"}
                           </span>
-                        </label>
-                        <label className={`settings-checkbox${settings.subscriptionUseDefault ? " is-disabled" : ""}`}>
-                          <input
-                            type="checkbox"
-                            checked={settings.receiveUpdates}
-                            disabled={settings.subscriptionUseDefault}
-                            onChange={(event) =>
-                              setSettings((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      receiveUpdates: event.target.checked,
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                          <span>
-                            <strong>Get updates about {selected.person.displayName}</strong>
-                            <span>{settings.receiveUpdates ? "Updates enabled" : "Updates muted"}</span>
-                          </span>
-                        </label>
-                      </div>
-
-                      <div className="modal-rule-group">
-                        <p className="field-label">You Share With This Person</p>
-                        <label className="settings-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={settings.sharingUseDefault}
-                            onChange={(event) =>
-                              setSettings((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      sharingUseDefault: event.target.checked,
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                          <span>
-                            <strong>Use relationship default</strong>
-                            <span>Default sharing rules are managed in Administration.</span>
-                          </span>
-                        </label>
-
-                        <div className={`sharing-checkbox-grid${settings.sharingUseDefault ? " is-disabled" : ""}`}>
-                          {SHARING_SCOPE_OPTIONS.map(({ field, label }) => (
-                            <label key={field} className="settings-checkbox compact">
-                              <input
-                                type="checkbox"
-                                checked={settings.sharingScopes[field]}
-                                disabled={settings.sharingUseDefault}
-                                onChange={(event) =>
+                          {settings.subscriptionUseDefault ? (
+                            <button
+                              className="secondary-button compact-action"
+                              type="button"
+                              onClick={() =>
+                                setSettings((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        subscriptionUseDefault: false,
+                                      }
+                                    : current,
+                                )
+                              }
+                            >
+                              Customize
+                            </button>
+                          ) : (
+                            <div className="preference-actions">
+                              <label className="compact-check">
+                                <input
+                                  type="checkbox"
+                                  checked={settings.receiveUpdates}
+                                  onChange={(event) =>
+                                    setSettings((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            receiveUpdates: event.target.checked,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                                Get updates
+                              </label>
+                              <button
+                                className="secondary-button compact-action"
+                                type="button"
+                                onClick={() =>
                                   setSettings((current) =>
                                     current
                                       ? {
                                           ...current,
-                                          sharingScopes: {
-                                            ...current.sharingScopes,
-                                            [field]: event.target.checked,
-                                          },
+                                          subscriptionUseDefault: true,
                                         }
                                       : current,
                                   )
                                 }
-                              />
-                              <span>
-                                <strong>{label}</strong>
-                              </span>
-                            </label>
-                          ))}
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="preference-row is-sharing">
+                          <div className="preference-copy">
+                            <span className="preference-title">You Share With This Person</span>
+                            <span className="preference-detail">
+                              {settings.sharingUseDefault ? "Default" : "Custom scopes"}
+                            </span>
+                          </div>
+                          <span className={`rule-state-chip${settings.sharingUseDefault ? "" : " custom"}`}>
+                            {settings.sharingUseDefault ? "Default" : "Custom"}
+                          </span>
+                          {settings.sharingUseDefault ? (
+                            <button
+                              className="secondary-button compact-action"
+                              type="button"
+                              onClick={() =>
+                                setSettings((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        sharingUseDefault: false,
+                                      }
+                                    : current,
+                                )
+                              }
+                            >
+                              Customize
+                            </button>
+                          ) : (
+                            <div className="preference-actions share-actions">
+                              <div className="scope-toggle-row">
+                                {SHARING_SCOPE_OPTIONS.map(({ field, label }) => (
+                                  <label key={field} className="compact-check scope-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={settings.sharingScopes[field]}
+                                      onChange={(event) =>
+                                        setSettings((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                sharingScopes: {
+                                                  ...current.sharingScopes,
+                                                  [field]: event.target.checked,
+                                                },
+                                              }
+                                            : current,
+                                        )
+                                      }
+                                    />
+                                    {label}
+                                  </label>
+                                ))}
+                              </div>
+                              <button
+                                className="secondary-button compact-action"
+                                type="button"
+                                onClick={() =>
+                                  setSettings((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          sharingUseDefault: true,
+                                        }
+                                      : current,
+                                  )
+                                }
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <p className="muted">Your own profile is always visible and available to you.</p>
-                  )}
-                </section>
-
-                <div className="modal-actions">
-                  <button className="secondary-button" type="button" onClick={onClose} disabled={saveBusy}>
-                    {canEditPersonRules ? "Cancel" : "Close"}
-                  </button>
-                  {canEditPersonRules ? (
-                    <button className="primary-button" type="button" onClick={() => void onSave()} disabled={saveBusy}>
-                      {saveBusy ? "Saving..." : "Save and Apply"}
-                    </button>
-                  ) : null}
+                    ) : (
+                      <p className="muted">Your own profile is always visible and available to you.</p>
+                    )}
+                  </section>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
+          ) : null}
+        </div>
+
+        {settings ? (
+          <div className="modal-actions">
+            <button className="secondary-button" type="button" onClick={onClose} disabled={saveBusy}>
+              {canEditPersonRules ? "Cancel" : "Close"}
+            </button>
+            {canEditPersonRules ? (
+              <button className="primary-button" type="button" onClick={() => void onSave()} disabled={saveBusy}>
+                {saveBusy ? "Saving..." : "Save and Apply"}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </section>
     </div>
@@ -1705,7 +1741,9 @@ export function TreeClient({
         subscriptionExceptions,
         shareExceptions,
         subscriptionUseDefault: !subscriptionException,
-        receiveUpdates: subscriptionException?.effect !== "deny",
+        receiveUpdates: subscriptionException
+          ? subscriptionException.effect === "allow"
+          : (selectedPerson.subscriptionRow?.isSubscribed ?? true),
         sharingUseDefault: !shareException,
         sharingScopes: sharingScopesFromException(shareException ?? undefined),
       });

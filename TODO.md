@@ -119,6 +119,36 @@ I will update this list as we add, complete, or remove work.
     - The person modal can modify person-specific subscription/sharing settings through checkboxes.
     - Users can select individual sharing scopes for one person without entering Administration.
     - Relationship-wide defaults remain unavailable from the person tile.
+  Agreed implementation plan 2026-04-18 (Famailink stable compact person modal):
+  Status: Completed locally 2026-04-18; pending Steve deploy decision.
+  - Scope:
+    - Tighten the `/tree` person modal so it follows the tree/login visual system and no longer jumps between tabs.
+    - Reduce settings real estate by replacing full `Use relationship default` checkbox rows with compact `Customize` / `Reset` actions.
+    - Keep existing person exception APIs, scoped sharing behavior, and broad-default administration surfaces unchanged.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Open a person detail modal.
+    - Switch between `Overview` and `Updates & Sharing`.
+    - Observe that the modal height changes and the centered dialog shifts position; the controls also use beige card styling and duplicate default rows that do not match the tree/login design.
+  - Failing data/query/code path:
+    - `RelativeModal` renders variable-height tab content inside `.modal-card`.
+    - `.modal-card` uses auto height, beige background, large radius, and scroll on the whole dialog instead of a stable inner body.
+    - The updates/sharing controls spend one full row each on the default state.
+  - Root cause:
+    - The modal was built from generic settings-card patterns rather than the compact EFL-style tree surface.
+    - Because the modal is vertically centered and content height varies by tab, tab changes cause the window to recenter.
+  - Implementation:
+    - Give the modal a stable height and fixed header/tab/footer regions with a scrollable content body.
+    - Restyle the modal with the same blue-white surfaces, accent color, tighter radius, and restrained borders used by the tree/login shell.
+    - Replace default checkbox rows with compact status chips and `Customize` / `Reset` buttons.
+    - Keep updates as one compact checkbox when customized and sharing scopes as compact Vitals/Stories/Media/Conversations checkboxes when customized.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+  - Completion criteria:
+    - Switching modal tabs does not move or resize the dialog frame.
+    - The modal visually matches the tree/login surface family.
+    - Person-specific update/sharing changes remain available without relationship-default controls dominating the screen.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
   Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:
