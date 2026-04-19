@@ -453,6 +453,84 @@ export async function listSubscriptionPersonExceptions(
   });
 }
 
+export async function getSubscriptionPersonException(
+  viewerPersonId: string,
+  targetPersonId: string,
+): Promise<SubscriptionPersonException | null> {
+  await ensureSchema();
+
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT exception_id, viewer_person_id, target_person_id, effect, created_at, updated_at
+         FROM subscription_person_exceptions
+        WHERE viewer_person_id = :viewerPersonId
+          AND target_person_id = :targetPersonId
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        FETCH FIRST 1 ROW ONLY`,
+      {
+        viewerPersonId: normalize(viewerPersonId),
+        targetPersonId: normalize(targetPersonId),
+      },
+      OUT_FORMAT,
+    );
+    const row = ((result.rows ?? []) as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      exceptionId: getCell(row, "EXCEPTION_ID"),
+      viewerPersonId: getCell(row, "VIEWER_PERSON_ID"),
+      targetPersonId: getCell(row, "TARGET_PERSON_ID"),
+      effect: getCell(row, "EFFECT") as EffectType,
+      createdAt: getCell(row, "CREATED_AT"),
+      updatedAt: getCell(row, "UPDATED_AT"),
+    };
+  });
+}
+
+export async function saveSubscriptionPersonExceptionForTarget(
+  viewerPersonId: string,
+  targetPersonId: string,
+  row: { effect: EffectType } | null,
+) {
+  await ensureSchema();
+
+  const timestamp = nowIso();
+  const normalizedViewer = normalize(viewerPersonId);
+  const normalizedTarget = normalize(targetPersonId);
+  await withConnection(async (connection) => {
+    await connection.execute(
+      `DELETE FROM subscription_person_exceptions
+        WHERE viewer_person_id = :viewerPersonId
+          AND target_person_id = :targetPersonId`,
+      {
+        viewerPersonId: normalizedViewer,
+        targetPersonId: normalizedTarget,
+      },
+      { autoCommit: false },
+    );
+
+    if (row) {
+      await connection.execute(
+        `INSERT INTO subscription_person_exceptions (
+           exception_id, viewer_person_id, target_person_id, effect, created_at, updated_at
+         ) VALUES (
+           :exceptionId, :viewerPersonId, :targetPersonId, :effect, :createdAt, :updatedAt
+         )`,
+        {
+          exceptionId: `fm-sub-person-${randomUUID()}`,
+          viewerPersonId: normalizedViewer,
+          targetPersonId: normalizedTarget,
+          effect: row.effect,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        { autoCommit: false },
+      );
+    }
+
+    await connection.commit();
+  });
+}
+
 export async function replaceSubscriptionPersonExceptions(
   viewerPersonId: string,
   rows: Array<{ targetPersonId: string; effect: EffectType }>,
@@ -645,6 +723,102 @@ export async function listSharePersonExceptions(ownerPersonId: string): Promise<
   });
 }
 
+export async function getSharePersonException(
+  ownerPersonId: string,
+  targetPersonId: string,
+): Promise<SharePersonException | null> {
+  await ensureSchema();
+
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT exception_id, owner_person_id, target_person_id, effect, share_vitals, share_stories, share_media, share_conversations, created_at, updated_at
+         FROM owner_share_person_exceptions
+        WHERE owner_person_id = :ownerPersonId
+          AND target_person_id = :targetPersonId
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        FETCH FIRST 1 ROW ONLY`,
+      {
+        ownerPersonId: normalize(ownerPersonId),
+        targetPersonId: normalize(targetPersonId),
+      },
+      OUT_FORMAT,
+    );
+    const row = ((result.rows ?? []) as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      exceptionId: getCell(row, "EXCEPTION_ID"),
+      ownerPersonId: getCell(row, "OWNER_PERSON_ID"),
+      targetPersonId: getCell(row, "TARGET_PERSON_ID"),
+      effect: getCell(row, "EFFECT") as EffectType,
+      shareVitals: asNullableBool(getCell(row, "SHARE_VITALS")),
+      shareStories: asNullableBool(getCell(row, "SHARE_STORIES")),
+      shareMedia: asNullableBool(getCell(row, "SHARE_MEDIA")),
+      shareConversations: asNullableBool(getCell(row, "SHARE_CONVERSATIONS")),
+      createdAt: getCell(row, "CREATED_AT"),
+      updatedAt: getCell(row, "UPDATED_AT"),
+    };
+  });
+}
+
+export async function saveSharePersonExceptionForTarget(
+  ownerPersonId: string,
+  targetPersonId: string,
+  row: {
+    effect: EffectType;
+    shareVitals: boolean | null;
+    shareStories: boolean | null;
+    shareMedia: boolean | null;
+    shareConversations: boolean | null;
+  } | null,
+) {
+  await ensureSchema();
+
+  const timestamp = nowIso();
+  const normalizedOwner = normalize(ownerPersonId);
+  const normalizedTarget = normalize(targetPersonId);
+  await withConnection(async (connection) => {
+    await connection.execute(
+      `DELETE FROM owner_share_person_exceptions
+        WHERE owner_person_id = :ownerPersonId
+          AND target_person_id = :targetPersonId`,
+      {
+        ownerPersonId: normalizedOwner,
+        targetPersonId: normalizedTarget,
+      },
+      { autoCommit: false },
+    );
+
+    if (row) {
+      await connection.execute(
+        `INSERT INTO owner_share_person_exceptions (
+           exception_id, owner_person_id, target_person_id, effect,
+           share_vitals, share_stories, share_media, share_conversations,
+           created_at, updated_at
+         ) VALUES (
+           :exceptionId, :ownerPersonId, :targetPersonId, :effect,
+           :shareVitals, :shareStories, :shareMedia, :shareConversations,
+           :createdAt, :updatedAt
+         )`,
+        {
+          exceptionId: `fm-share-person-${randomUUID()}`,
+          ownerPersonId: normalizedOwner,
+          targetPersonId: normalizedTarget,
+          effect: row.effect,
+          shareVitals: toDbNullableBool(row.shareVitals),
+          shareStories: toDbNullableBool(row.shareStories),
+          shareMedia: toDbNullableBool(row.shareMedia),
+          shareConversations: toDbNullableBool(row.shareConversations),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        { autoCommit: false },
+      );
+    }
+
+    await connection.commit();
+  });
+}
+
 export async function listAllSharePersonExceptions(): Promise<SharePersonException[]> {
   await ensureSchema();
 
@@ -756,6 +930,44 @@ export async function listProfileVisibilityMap(viewerPersonId: string): Promise<
   });
 }
 
+export async function getProfileVisibilityMapForTarget(
+  viewerPersonId: string,
+  targetPersonId: string,
+): Promise<ProfileVisibilityMapRow | null> {
+  await ensureSchema();
+
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT map_id, viewer_person_id, target_person_id, tree_visible, can_vitals, can_stories, can_media, can_conversations, placeholder_only, reason_code, map_version, computed_at
+         FROM profile_visibility_map
+        WHERE viewer_person_id = :viewerPersonId
+          AND target_person_id = :targetPersonId
+        FETCH FIRST 1 ROW ONLY`,
+      {
+        viewerPersonId: normalize(viewerPersonId),
+        targetPersonId: normalize(targetPersonId),
+      },
+      OUT_FORMAT,
+    );
+    const row = ((result.rows ?? []) as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      mapId: getCell(row, "MAP_ID"),
+      viewerPersonId: getCell(row, "VIEWER_PERSON_ID"),
+      targetPersonId: getCell(row, "TARGET_PERSON_ID"),
+      treeVisible: asBool(getCell(row, "TREE_VISIBLE")),
+      canVitals: asBool(getCell(row, "CAN_VITALS")),
+      canStories: asBool(getCell(row, "CAN_STORIES")),
+      canMedia: asBool(getCell(row, "CAN_MEDIA")),
+      canConversations: asBool(getCell(row, "CAN_CONVERSATIONS")),
+      placeholderOnly: asBool(getCell(row, "PLACEHOLDER_ONLY")),
+      reasonCode: getCell(row, "REASON_CODE"),
+      mapVersion: getCell(row, "MAP_VERSION"),
+      computedAt: getCell(row, "COMPUTED_AT"),
+    };
+  });
+}
+
 export async function replaceProfileVisibilityMap(
   viewerPersonId: string,
   rows: Array<Omit<ProfileVisibilityMapRow, "mapId">>,
@@ -821,6 +1033,39 @@ export async function listProfileSubscriptionMap(viewerPersonId: string): Promis
       mapVersion: getCell(row, "MAP_VERSION"),
       computedAt: getCell(row, "COMPUTED_AT"),
     }));
+  });
+}
+
+export async function getProfileSubscriptionMapForTarget(
+  viewerPersonId: string,
+  targetPersonId: string,
+): Promise<ProfileSubscriptionMapRow | null> {
+  await ensureSchema();
+
+  return withConnection(async (connection) => {
+    const result = await connection.execute(
+      `SELECT map_id, viewer_person_id, target_person_id, is_subscribed, reason_code, map_version, computed_at
+         FROM profile_subscription_map
+        WHERE viewer_person_id = :viewerPersonId
+          AND target_person_id = :targetPersonId
+        FETCH FIRST 1 ROW ONLY`,
+      {
+        viewerPersonId: normalize(viewerPersonId),
+        targetPersonId: normalize(targetPersonId),
+      },
+      OUT_FORMAT,
+    );
+    const row = ((result.rows ?? []) as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      mapId: getCell(row, "MAP_ID"),
+      viewerPersonId: getCell(row, "VIEWER_PERSON_ID"),
+      targetPersonId: getCell(row, "TARGET_PERSON_ID"),
+      isSubscribed: asBool(getCell(row, "IS_SUBSCRIBED")),
+      reasonCode: getCell(row, "REASON_CODE"),
+      mapVersion: getCell(row, "MAP_VERSION"),
+      computedAt: getCell(row, "COMPUTED_AT"),
+    };
   });
 }
 

@@ -13,6 +13,38 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-19 (Famailink targeted person modal settings)
+
+- `Date`: 2026-04-19
+- `Change`: Changed the Famailink `/tree` person modal to load and save only the selected target person's subscription/sharing exception rows. The modal now calls targeted `GET /api/access/person-settings?targetPersonId=...`, sends targeted save payloads, updates the selected target's derived subscription/sharing readback locally, and no longer refreshes the full tree route after save.
+- `Type`: UI | API
+- `Why`: Root cause was a code/performance issue. The modal edits one person, but the previous load path fetched all subscription and sharing person exceptions for the viewer, filtered them client-side, then the save path built full replacement lists and refreshed the whole route after recompute. That made modal open and save slower as exception data grows.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/access/person-settings/route.ts`, `famailink/components/TreeClient.tsx`, `famailink/lib/access/store.ts`
+- `Data Changes`: None. No schema changes. Existing exception rows remain in the same tables; the new path deletes/inserts only the selected target person's row when a person-specific setting changes.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Source no longer fetches `/api/access/subscription/exceptions/people` or `/api/access/sharing/exceptions/people` when opening the person modal.
+  - Source no longer calls `router.refresh()` after person modal save.
+- `Rollback Notes`: Revert this change to restore full-list exception loading/saving and full route refresh behavior in the modal.
+- `Design Decision Change`: Yes. Added the targeted person-modal persistence/readback decision.
+
+## 2026-04-19 (Famailink person modal mode control and save path)
+
+- `Date`: 2026-04-19
+- `Change`: Replaced the person modal's separate `Default`/`Custom` status chip plus `Customize`/`Reset` actions with one compact `Default` / `Custom` segmented control per setting. Added a modal-specific `/api/access/person-settings` PUT route so saving both update and sharing changes uses one request and one recompute instead of two exception routes and two recomputes.
+- `Type`: UI | API
+- `Why`: Root cause was a mixed UX/code issue. The old `Reset` action returned to default but was visually disconnected from the `Default` state, making the action unclear. Save latency came from the modal reusing separate exception-table PUT routes; each route synchronously waited for `runViewerRecompute()`, so changing both settings could duplicate the full derived-map recompute.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/access/person-settings/route.ts`, `famailink/app/globals.css`, `famailink/components/TreeClient.tsx`
+- `Data Changes`: None. No schema changes. The new API writes the same subscription and sharing person-exception rows as the existing routes and then runs one viewer recompute.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Source no longer renders the person-modal `Reset` action for update/sharing settings.
+  - Existing dedicated exception APIs remain unchanged for production validation.
+- `Rollback Notes`: Revert this change to restore the previous chip plus `Customize`/`Reset` UI and the separate modal save calls.
+- `Design Decision Change`: Yes. Added decisions for segmented person-modal mode controls and one-request modal save behavior.
+
 ## 2026-04-18 (Famailink production validation script)
 
 - `Date`: 2026-04-18

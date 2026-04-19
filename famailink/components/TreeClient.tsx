@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import type {
@@ -11,7 +10,7 @@ import type {
   SharePersonException,
   SubscriptionPersonException,
 } from "@/lib/access/types";
-import type { LineageSide, RelationshipCategory } from "@/lib/model/relationships";
+import type { EffectType, LineageSide, RelationshipCategory } from "@/lib/model/relationships";
 import { RELATIONSHIP_LABELS } from "@/lib/model/relationships";
 
 const RELATION_PRIORITY: RelationshipCategory[] = [
@@ -125,12 +124,31 @@ type SharingScopeSettings = {
 };
 
 type ModalSettings = {
-  subscriptionExceptions: SubscriptionPersonException[];
-  shareExceptions: SharePersonException[];
+  subscriptionException: SubscriptionPersonException | null;
+  shareException: SharePersonException | null;
   subscriptionUseDefault: boolean;
   receiveUpdates: boolean;
   sharingUseDefault: boolean;
   sharingScopes: SharingScopeSettings;
+};
+
+type TargetSubscriptionExceptionPayload = {
+  targetPersonId: string;
+  effect: EffectType;
+};
+
+type TargetShareExceptionPayload = TargetSubscriptionExceptionPayload & SharingScopeSettings;
+
+type TargetPersonSettingsState = {
+  targetPersonId: string;
+  subscriptionException: SubscriptionPersonException | null;
+  shareException: SharePersonException | null;
+  subscriptionRow: ProfileSubscriptionMapRow | null;
+  visibilityRow: ProfileVisibilityMapRow | null;
+};
+
+type PersonSettingsSaveResponse = {
+  state?: TargetPersonSettingsState;
 };
 
 const SHARING_SCOPE_OPTIONS: Array<{ field: keyof SharingScopeSettings; label: string }> = [
@@ -139,6 +157,37 @@ const SHARING_SCOPE_OPTIONS: Array<{ field: keyof SharingScopeSettings; label: s
   { field: "shareMedia", label: "Media" },
   { field: "shareConversations", label: "Conversations" },
 ];
+
+function PreferenceModeControl({
+  label,
+  useDefault,
+  onChange,
+}: {
+  label: string;
+  useDefault: boolean;
+  onChange: (useDefault: boolean) => void;
+}) {
+  return (
+    <div className="mode-segment" role="group" aria-label={label}>
+      <button
+        className={`mode-segment-button${useDefault ? " is-active" : ""}`}
+        type="button"
+        onClick={() => onChange(true)}
+        aria-pressed={useDefault}
+      >
+        Default
+      </button>
+      <button
+        className={`mode-segment-button${useDefault ? "" : " is-active"}`}
+        type="button"
+        onClick={() => onChange(false)}
+        aria-pressed={!useDefault}
+      >
+        Custom
+      </button>
+    </div>
+  );
+}
 
 function readSideLabel(side: LineageSide) {
   if (side === "maternal") return "Maternal";
@@ -174,28 +223,6 @@ function scopeList(row: ProfileVisibilityMapRow | undefined) {
   return allowed.join(", ");
 }
 
-function buildSharePayloadRows(rows: SharePersonException[]) {
-  return rows
-    .map((row) => ({
-      targetPersonId: row.targetPersonId,
-      effect: row.effect,
-      shareVitals: row.shareVitals,
-      shareStories: row.shareStories,
-      shareMedia: row.shareMedia,
-      shareConversations: row.shareConversations,
-    }))
-    .sort((left, right) => left.targetPersonId.localeCompare(right.targetPersonId));
-}
-
-function buildSubscriptionExceptionPayloadRows(rows: SubscriptionPersonException[]) {
-  return rows
-    .map((row) => ({
-      targetPersonId: row.targetPersonId,
-      effect: row.effect,
-    }))
-    .sort((left, right) => left.targetPersonId.localeCompare(right.targetPersonId));
-}
-
 function sharingScopesFromException(row: SharePersonException | undefined): SharingScopeSettings {
   if (!row) {
     return {
@@ -228,6 +255,33 @@ function sharingScopesFromException(row: SharePersonException | undefined): Shar
     shareMedia: row.shareMedia === true,
     shareConversations: row.shareConversations === true,
   };
+}
+
+function subscriptionPayloadFromException(row: SubscriptionPersonException | null): TargetSubscriptionExceptionPayload | null {
+  if (!row) return null;
+  return {
+    targetPersonId: row.targetPersonId,
+    effect: row.effect,
+  };
+}
+
+function sharePayloadFromException(row: SharePersonException | null): TargetShareExceptionPayload | null {
+  if (!row) return null;
+  const scopes = sharingScopesFromException(row);
+  return {
+    targetPersonId: row.targetPersonId,
+    effect: row.effect,
+    ...scopes,
+  };
+}
+
+function replaceTargetRow<T extends { targetPersonId: string }>(
+  rows: T[],
+  targetPersonId: string,
+  replacement: T | null | undefined,
+) {
+  const filtered = rows.filter((row) => row.targetPersonId !== targetPersonId);
+  return replacement ? [...filtered, replacement] : filtered;
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -833,34 +887,28 @@ function RelativeModal({
                             <span className="preference-title">Updates About This Person</span>
                             <span className="preference-detail">
                               {settings.subscriptionUseDefault
-                                ? `Default: ${subscription.label}`
+                                ? `Following default: ${subscription.label}`
                                 : settings.receiveUpdates
-                                  ? "Custom: updates enabled"
-                                  : "Custom: updates muted"}
+                                  ? "Custom for this person: updates enabled"
+                                  : "Custom for this person: updates muted"}
                             </span>
                           </div>
-                          <span className={`rule-state-chip${settings.subscriptionUseDefault ? "" : " custom"}`}>
-                            {settings.subscriptionUseDefault ? "Default" : "Custom"}
-                          </span>
-                          {settings.subscriptionUseDefault ? (
-                            <button
-                              className="secondary-button compact-action"
-                              type="button"
-                              onClick={() =>
+                          <div className="preference-controls">
+                            <PreferenceModeControl
+                              label="Updates mode"
+                              useDefault={settings.subscriptionUseDefault}
+                              onChange={(useDefault) =>
                                 setSettings((current) =>
                                   current
                                     ? {
                                         ...current,
-                                        subscriptionUseDefault: false,
+                                        subscriptionUseDefault: useDefault,
                                       }
                                     : current,
                                 )
                               }
-                            >
-                              Customize
-                            </button>
-                          ) : (
-                            <div className="preference-actions">
+                            />
+                            {!settings.subscriptionUseDefault ? (
                               <label className="compact-check">
                                 <input
                                   type="checkbox"
@@ -878,55 +926,35 @@ function RelativeModal({
                                 />
                                 Get updates
                               </label>
-                              <button
-                                className="secondary-button compact-action"
-                                type="button"
-                                onClick={() =>
-                                  setSettings((current) =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          subscriptionUseDefault: true,
-                                        }
-                                      : current,
-                                  )
-                                }
-                              >
-                                Reset
-                              </button>
-                            </div>
-                          )}
+                            ) : null}
+                          </div>
                         </div>
 
                         <div className="preference-row is-sharing">
                           <div className="preference-copy">
                             <span className="preference-title">You Share With This Person</span>
                             <span className="preference-detail">
-                              {settings.sharingUseDefault ? "Default" : "Custom scopes"}
+                              {settings.sharingUseDefault
+                                ? "Following default sharing"
+                                : "Custom scopes for this person"}
                             </span>
                           </div>
-                          <span className={`rule-state-chip${settings.sharingUseDefault ? "" : " custom"}`}>
-                            {settings.sharingUseDefault ? "Default" : "Custom"}
-                          </span>
-                          {settings.sharingUseDefault ? (
-                            <button
-                              className="secondary-button compact-action"
-                              type="button"
-                              onClick={() =>
+                          <div className="preference-controls share-controls">
+                            <PreferenceModeControl
+                              label="Sharing mode"
+                              useDefault={settings.sharingUseDefault}
+                              onChange={(useDefault) =>
                                 setSettings((current) =>
                                   current
                                     ? {
                                         ...current,
-                                        sharingUseDefault: false,
+                                        sharingUseDefault: useDefault,
                                       }
                                     : current,
                                 )
                               }
-                            >
-                              Customize
-                            </button>
-                          ) : (
-                            <div className="preference-actions share-actions">
+                            />
+                            {!settings.sharingUseDefault ? (
                               <div className="scope-toggle-row">
                                 {SHARING_SCOPE_OPTIONS.map(({ field, label }) => (
                                   <label key={field} className="compact-check scope-check">
@@ -951,24 +979,8 @@ function RelativeModal({
                                   </label>
                                 ))}
                               </div>
-                              <button
-                                className="secondary-button compact-action"
-                                type="button"
-                                onClick={() =>
-                                  setSettings((current) =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          sharingUseDefault: true,
-                                        }
-                                      : current,
-                                  )
-                                }
-                              >
-                                Reset
-                              </button>
-                            </div>
-                          )}
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -1614,7 +1626,6 @@ export function TreeClient({
   visibilityRows: ProfileVisibilityMapRow[];
   subscriptionRows: ProfileSubscriptionMapRow[];
 }) {
-  const router = useRouter();
   const [focusedPersonId, setFocusedPersonId] = useState(snapshot.viewer.personId);
   const [focusGroup, setFocusGroup] = useState<FocusGroup>("household");
   const [selected, setSelected] = useState<SelectedRelative | null>(null);
@@ -1625,14 +1636,24 @@ export function TreeClient({
   const [treeSearch, setTreeSearch] = useState("");
   const [zoom, setZoom] = useState(1);
   const [fitNonce, setFitNonce] = useState(0);
+  const [localVisibilityRows, setLocalVisibilityRows] = useState(visibilityRows);
+  const [localSubscriptionRows, setLocalSubscriptionRows] = useState(subscriptionRows);
+
+  useEffect(() => {
+    setLocalVisibilityRows(visibilityRows);
+  }, [visibilityRows]);
+
+  useEffect(() => {
+    setLocalSubscriptionRows(subscriptionRows);
+  }, [subscriptionRows]);
 
   const visibilityByTarget = useMemo(
-    () => new Map(visibilityRows.map((row) => [row.targetPersonId, row])),
-    [visibilityRows],
+    () => new Map(localVisibilityRows.map((row) => [row.targetPersonId, row])),
+    [localVisibilityRows],
   );
   const subscriptionByTarget = useMemo(
-    () => new Map(subscriptionRows.map((row) => [row.targetPersonId, row])),
-    [subscriptionRows],
+    () => new Map(localSubscriptionRows.map((row) => [row.targetPersonId, row])),
+    [localSubscriptionRows],
   );
   const graph = useMemo(() => buildTreeGraphModel(snapshot), [snapshot]);
   const effectiveFocusedPersonId = graph.visiblePersonIds.has(focusedPersonId) ? focusedPersonId : snapshot.viewer.personId;
@@ -1718,32 +1739,37 @@ export function TreeClient({
   }
 
   async function openRelative(selectedPerson: SelectedRelative) {
+    const targetPersonId = selectedPerson.person.personId;
     setSelected(selectedPerson);
     setSettings(null);
     setModalError("");
     setSettingsLoading(true);
 
     try {
-      const [subscriptionExceptionsPayload, shareExceptionsPayload] = await Promise.all([
-        fetchJson("/api/access/subscription/exceptions/people"),
-        fetchJson("/api/access/sharing/exceptions/people"),
-      ]);
+      const state = (await fetchJson(
+        `/api/access/person-settings?targetPersonId=${encodeURIComponent(targetPersonId)}`,
+      )) as TargetPersonSettingsState;
+      const subscriptionException = state.subscriptionException ?? null;
+      const shareException = state.shareException ?? null;
+      const subscriptionRow = state.subscriptionRow ?? selectedPerson.subscriptionRow;
 
-      const subscriptionExceptions =
-        (subscriptionExceptionsPayload.rows as SubscriptionPersonException[] | undefined) ?? [];
-      const shareExceptions = (shareExceptionsPayload.rows as SharePersonException[] | undefined) ?? [];
-
-      const subscriptionException =
-        subscriptionExceptions.find((row) => row.targetPersonId === selectedPerson.person.personId) ?? null;
-      const shareException = shareExceptions.find((row) => row.targetPersonId === selectedPerson.person.personId) ?? null;
+      setLocalVisibilityRows((current) => replaceTargetRow(current, targetPersonId, state.visibilityRow));
+      setLocalSubscriptionRows((current) => replaceTargetRow(current, targetPersonId, state.subscriptionRow));
+      setSelected((current) =>
+        current && current.person.personId === targetPersonId
+          ? {
+              ...current,
+              visibilityRow: state.visibilityRow ?? undefined,
+              subscriptionRow: state.subscriptionRow ?? undefined,
+            }
+          : current,
+      );
 
       setSettings({
-        subscriptionExceptions,
-        shareExceptions,
+        subscriptionException,
+        shareException,
         subscriptionUseDefault: !subscriptionException,
-        receiveUpdates: subscriptionException
-          ? subscriptionException.effect === "allow"
-          : (selectedPerson.subscriptionRow?.isSubscribed ?? true),
+        receiveUpdates: subscriptionException ? subscriptionException.effect === "allow" : (subscriptionRow?.isSubscribed ?? true),
         sharingUseDefault: !shareException,
         sharingScopes: sharingScopesFromException(shareException ?? undefined),
       });
@@ -1758,72 +1784,42 @@ export function TreeClient({
     if (!selected || !settings) return;
 
     const targetPersonId = selected.person.personId;
-
-    const nextSubscriptionExceptions = settings.subscriptionExceptions
-      .filter((row) => row.targetPersonId !== targetPersonId)
-      .concat(
-        settings.subscriptionUseDefault
-          ? []
-          : [
-              {
-                exceptionId: "",
-                viewerPersonId: "",
-                targetPersonId,
-                effect: settings.receiveUpdates ? ("allow" as const) : ("deny" as const),
-                createdAt: "",
-                updatedAt: "",
-              },
-            ],
-      );
-
+    const nextSubscriptionException = settings.subscriptionUseDefault
+      ? null
+      : {
+          targetPersonId,
+          effect: settings.receiveUpdates ? ("allow" as const) : ("deny" as const),
+        };
     const sharesAnyScope = Object.values(settings.sharingScopes).some(Boolean);
-    const nextShareExceptions = settings.shareExceptions
-      .filter((row) => row.targetPersonId !== targetPersonId)
-      .concat(
-        settings.sharingUseDefault
-          ? []
-          : [
-              {
-                exceptionId: "",
-                ownerPersonId: "",
-                targetPersonId,
-                effect: sharesAnyScope ? ("allow" as const) : ("deny" as const),
-                shareVitals: settings.sharingScopes.shareVitals,
-                shareStories: settings.sharingScopes.shareStories,
-                shareMedia: settings.sharingScopes.shareMedia,
-                shareConversations: settings.sharingScopes.shareConversations,
-                createdAt: "",
-                updatedAt: "",
-              },
-            ],
-      );
+    const nextShareException = settings.sharingUseDefault
+      ? null
+      : {
+          targetPersonId,
+          effect: sharesAnyScope ? ("allow" as const) : ("deny" as const),
+          shareVitals: settings.sharingScopes.shareVitals,
+          shareStories: settings.sharingScopes.shareStories,
+          shareMedia: settings.sharingScopes.shareMedia,
+          shareConversations: settings.sharingScopes.shareConversations,
+        };
+    const originalSubscriptionException = subscriptionPayloadFromException(settings.subscriptionException);
+    const originalShareException = sharePayloadFromException(settings.shareException);
+    const savePayload: {
+      targetPersonId: string;
+      subscriptionException?: TargetSubscriptionExceptionPayload | null;
+      shareException?: TargetShareExceptionPayload | null;
+    } = { targetPersonId };
 
-    const originalSubscriptionExceptionsPayload = buildSubscriptionExceptionPayloadRows(settings.subscriptionExceptions);
-    const nextSubscriptionExceptionsPayload = buildSubscriptionExceptionPayloadRows(nextSubscriptionExceptions);
-    const originalShareExceptionsPayload = buildSharePayloadRows(settings.shareExceptions);
-    const nextShareExceptionsPayload = buildSharePayloadRows(nextShareExceptions);
+    if (JSON.stringify(originalSubscriptionException) !== JSON.stringify(nextSubscriptionException)) {
+      savePayload.subscriptionException = nextSubscriptionException;
+    }
+    if (JSON.stringify(originalShareException) !== JSON.stringify(nextShareException)) {
+      savePayload.shareException = nextShareException;
+    }
 
-    const requests: Array<Promise<unknown>> = [];
     if (
-      JSON.stringify(originalSubscriptionExceptionsPayload) !== JSON.stringify(nextSubscriptionExceptionsPayload)
+      !Object.prototype.hasOwnProperty.call(savePayload, "subscriptionException") &&
+      !Object.prototype.hasOwnProperty.call(savePayload, "shareException")
     ) {
-      requests.push(
-        fetchJson("/api/access/subscription/exceptions/people", {
-          method: "PUT",
-          body: JSON.stringify(nextSubscriptionExceptionsPayload),
-        }),
-      );
-    }
-    if (JSON.stringify(originalShareExceptionsPayload) !== JSON.stringify(nextShareExceptionsPayload)) {
-      requests.push(
-        fetchJson("/api/access/sharing/exceptions/people", {
-          method: "PUT",
-          body: JSON.stringify(nextShareExceptionsPayload),
-        }),
-      );
-    }
-
-    if (!requests.length) {
       setSelected(null);
       setSettings(null);
       setModalError("");
@@ -1833,10 +1829,20 @@ export function TreeClient({
     setSaveBusy(true);
     setModalError("");
     try {
-      await Promise.all(requests);
+      const response = (await fetchJson("/api/access/person-settings", {
+        method: "PUT",
+        body: JSON.stringify(savePayload),
+      })) as PersonSettingsSaveResponse;
+      if (response.state) {
+        setLocalVisibilityRows((current) =>
+          replaceTargetRow(current, targetPersonId, response.state?.visibilityRow ?? null),
+        );
+        setLocalSubscriptionRows((current) =>
+          replaceTargetRow(current, targetPersonId, response.state?.subscriptionRow ?? null),
+        );
+      }
       setSelected(null);
       setSettings(null);
-      router.refresh();
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "Save failed.");
     } finally {

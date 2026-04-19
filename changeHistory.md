@@ -7,6 +7,8 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-19: Optimized Famailink `/tree` person modal settings so opening and saving a person uses targeted person-settings rows, updates local readback, and avoids a full tree route refresh. See `docs/change-summary.md`.
+- 2026-04-19: Clarified Famailink person modal Default/Custom settings with a single segmented control per row and changed modal saves to use one request/recompute when both update and sharing settings change. See `docs/change-summary.md`.
 - 2026-04-18: Added a repeatable Famailink production validation command plus runbook coverage for route health, authenticated catalog/preview/recompute checks, and optional reversible exception write/restore validation. See `docs/change-summary.md`.
 - 2026-04-18: Fixed Famailink `/tree` focus chips so `Siblings` changes the tree pane to the sibling generation and `Parents` centers the parent household generation instead of only filtering the side list. See `docs/change-summary.md`.
 - 2026-04-18: Tightened Famailink `/tree` focused map layout with smaller tiles, adaptive child/sibling spacing, and automatic fit scaling so wider child rows are more likely to fit in the pane. See `docs/change-summary.md`.

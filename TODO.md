@@ -29,6 +29,43 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed locally: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Pending Steve visual confirmation after deploy.
+  Agreed implementation plan 2026-04-19 (Famailink person modal performance):
+  Status: Completed locally 2026-04-19; pending Steve deploy decision.
+  - Scope:
+    - Make the `/tree` person modal load only the selected person's subscription/sharing exception settings.
+    - Make person modal saves update only the selected target person's exception rows instead of replacing the signed-in viewer's full exception lists.
+    - Return the selected target's recomputed subscription/sharing readback from the save API so the client can update the visible card/modal state without a full route refresh.
+    - Keep save correctness by continuing to recompute the viewer's derived maps synchronously in this pass; do not move recompute async until we have a visible recompute/status UX for eventual consistency.
+  - Reproduction path:
+    - Open Famailink `/tree`.
+    - Click an already-focused person to open the person modal.
+    - Notice a delay while the modal loads settings.
+    - Change updates/sharing and save.
+    - Notice a longer delay while the save waits and the full tree refreshes.
+  - Failing data/query/code path:
+    - `TreeClient.openRelative()` calls `/api/access/subscription/exceptions/people` and `/api/access/sharing/exceptions/people`, loading all exception rows for the viewer before filtering to the selected person.
+    - `TreeClient.saveSelectedRelative()` builds and submits full exception lists even when one person changed.
+    - `/api/access/person-settings` accepts full exception arrays and calls `replaceSubscriptionPersonExceptions()` / `replaceSharePersonExceptions()`, which delete and reinsert all exception rows for the viewer/owner.
+    - The save route waits for `runViewerRecompute()`, then the client calls `router.refresh()`, reloading the whole tree page.
+  - Root cause:
+    - The MVP inherited bulk preference-list persistence in the person modal path even though the modal edits exactly one target person.
+    - Save correctness was achieved through broad recompute and full page refresh, which is safe but slower than necessary for the selected-person workflow.
+  - Implementation:
+    - Add targeted store helpers to get/upsert/delete one subscription person exception and one sharing person exception by viewer/owner + target person.
+    - Add `GET /api/access/person-settings?targetPersonId=...` returning only that target's current exception rows.
+    - Change `PUT /api/access/person-settings` to require `targetPersonId` and optional target-level subscription/sharing exception payloads, then upsert/delete only those target rows.
+    - Keep synchronous `runViewerRecompute()` after save for now, but return the recomputed target rows from the derived map summary.
+    - Change `TreeClient` to load targeted settings, send targeted save payloads, update local visibility/subscription row state for the selected person, and avoid `router.refresh()` on successful save.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Modal open makes one targeted person-settings request instead of two full-list requests.
+    - Save payload includes only `targetPersonId` and the target-specific exception choices.
+    - Save no longer triggers full route refresh after a successful response.
+  - Completion criteria:
+    - Person modal open and save do less database work for the common one-person edit path.
+    - Saved readback updates on the selected person without reloading the whole tree.
+    - Existing full preferences/defaults routes remain unchanged.
   Agreed implementation plan 2026-04-18 (Famailink production validation script and runbook):
   - Scope:
     - Add a repeatable production smoke/regression script for the deployed Famailink MVP flow.
@@ -149,6 +186,37 @@ I will update this list as we add, complete, or remove work.
     - Switching modal tabs does not move or resize the dialog frame.
     - The modal visually matches the tree/login surface family.
     - Person-specific update/sharing changes remain available without relationship-default controls dominating the screen.
+  Agreed implementation plan 2026-04-19 (Famailink clear person modal modes and save path):
+  Status: Completed locally 2026-04-19; pending Steve deploy decision.
+  - Scope:
+    - Replace the separate `Default`/`Custom` status chip plus `Customize`/`Reset` actions with one compact mode control per person setting.
+    - Keep person-specific exception editing in the `/tree` modal and keep broad default administration out of this modal.
+    - Reduce save latency when both update and sharing settings change by avoiding duplicate recompute work.
+  - Reproduction path:
+    - Open Famailink `/tree` after login.
+    - Open a person modal, choose `Updates & Sharing`, switch a setting to custom, then use `Reset`.
+    - Observe that `Reset` returns to the default behavior, but the relationship between `Reset` and `Default` is not obvious.
+    - Save changes that include both update and sharing settings; the modal remains in a saving state while API writes and recompute finish.
+  - Failing data/query/code path:
+    - `RelativeModal` renders `Default`/`Custom` as a passive chip and renders `Customize`/`Reset` as separate actions.
+    - `saveSelectedRelative()` sends separate PUT requests to subscription and sharing person-exception APIs when both changed.
+    - Each existing PUT route writes rows and synchronously waits for `runViewerRecompute()` before responding.
+  - Root cause:
+    - The mode state and mode-changing action are split across separate controls, so returning to default reads like a destructive reset instead of selecting the default mode.
+    - Person modal saves reuse full exception-table replacement routes that each trigger a full derived-map recompute, so changing two settings can duplicate the expensive recompute path.
+  - Implementation:
+    - Add a compact segmented `Default` / `Custom` mode control for update and sharing rows.
+    - Keep custom update and sharing checkboxes visible only when `Custom` is selected.
+    - Add a combined person-settings API for the modal save path so changed subscription and sharing exception payloads are saved together and followed by one recompute.
+    - Preserve the existing dedicated exception APIs for Administration/preferences and validation tooling.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Verify source no longer renders the person-modal `Reset` action.
+  - Completion criteria:
+    - Default/custom mode is one explicit control per row.
+    - Saving both person settings uses one modal save request and one recompute instead of two recomputes.
+    - Existing production validation routes remain compatible.
   Agreed implementation plan 2026-04-18 (Famailink focus-chip tree generation behavior):
   Status: Completed/deployed 2026-04-18 (`add401e`).
   - Scope:

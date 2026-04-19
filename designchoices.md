@@ -544,8 +544,31 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Follow-up`: Carry the same checkbox-first model into the fuller person view when Vitals, Stories, Media, and Conversations tabs are added.
 
 - `Area`: Famailink person modal visual and layout behavior
-- `Decision`: The real person tree modal should use a stable fixed-height dialog frame with fixed header/tab/footer regions and a scrollable content body. Person settings should use compact status/action rows that visually match the blue-white tree/login system, not beige generic settings cards.
+- `Decision`: The real person tree modal should use a stable fixed-height dialog frame with fixed header/tab/footer regions and a scrollable content body. Person settings should use compact mode/action rows that visually match the blue-white tree/login system, not beige generic settings cards.
 - `Reason`: Variable-height centered modals jump when tabs change and make the person flow feel unstable. Full-size default rows waste screen space and conflict with the compact tree surface.
 - `Alternatives Considered`: Keep auto-height modal cards; preserve full checkbox rows for default/custom state; move settings out of the modal entirely.
-- `Impact`: Switching between person modal tabs should not move or resize the dialog frame. Default/custom remains available through compact `Customize` and `Reset` actions instead of prominent relationship-default checkboxes.
+- `Impact`: Switching between person modal tabs should not move or resize the dialog frame. Default/custom remains available through compact mode controls instead of prominent relationship-default checkboxes.
 - `Follow-up`: Reuse this stable modal frame for the future fuller person view with Vitals, Stories, Media, and Conversations tabs.
+
+## 2026-04-19
+
+- `Area`: Famailink person modal default/custom controls
+- `Decision`: Person-specific update and sharing settings in the `/tree` modal should use one explicit `Default` / `Custom` segmented control per setting. Selecting `Default` removes the person exception and returns the person to the administered default; selecting `Custom` reveals only the person-specific checkboxes.
+- `Reason`: A separate status chip plus `Customize`/`Reset` buttons made `Reset` look like a vague destructive action instead of the same mode choice as `Default`.
+- `Alternatives Considered`: Keep `Reset`; rename it to `Use Default`; show full default checkboxes again.
+- `Impact`: The mode state and mode-changing action are now the same control, while broad defaults remain administered outside the person modal.
+- `Follow-up`: When the fuller person view adds Vitals, Stories, Media, and Conversations tabs, keep person-specific privacy/subscription modes segmented and avoid separate reset buttons.
+
+- `Area`: Famailink person modal save path
+- `Decision`: The person modal should save changed subscription and sharing exception payloads through one modal-specific API call, followed by one viewer recompute. Dedicated exception-table APIs remain available for Administration/preferences and validation tooling.
+- `Reason`: The previous modal save path reused separate exception APIs. Each route synchronously performed its own full derived-map recompute, so changing both update and sharing settings could duplicate the slowest part of the save.
+- `Alternatives Considered`: Keep two PUT requests; make recompute fully asynchronous immediately; add query parameters to skip recompute on existing APIs.
+- `Impact`: A modal save that changes both settings avoids duplicate recompute work while preserving the current synchronous "saved and applied" semantics.
+- `Follow-up`: If save time is still too long, move derived-map recompute to a background/queued or targeted recompute model with explicit UI status.
+
+- `Area`: Famailink person modal targeted persistence/readback
+- `Decision`: The `/tree` person modal should load and save settings for the selected target person only. Full-list subscription and sharing exception APIs remain available for Administration/preferences and validation tooling, but the person modal should use targeted `person-settings` reads/writes and update the selected target's derived readback locally instead of refreshing the whole route.
+- `Reason`: The modal edits exactly one person. Loading all exception rows, replacing full exception lists, and refreshing the route couples one-person edits to viewer-wide data volume and creates avoidable latency.
+- `Alternatives Considered`: Keep full-list replacement and rely on faster recompute only; make recompute asynchronous immediately; remove local readback updates and keep full page refresh.
+- `Impact`: Person modal open and save perform less database and client work while preserving the existing synchronous recompute semantics for "saved and applied" behavior.
+- `Follow-up`: If saves remain too slow after targeted exception persistence, evaluate background or targeted derived-map recompute with explicit UI status rather than reintroducing full route refresh.

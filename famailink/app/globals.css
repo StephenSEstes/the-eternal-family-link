@@ -792,8 +792,8 @@ select {
 
 .preference-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) auto auto;
-  gap: 10px;
+  grid-template-columns: minmax(170px, 1fr) minmax(240px, auto);
+  gap: 12px;
   align-items: center;
   min-height: 58px;
   padding: 9px 10px;
@@ -803,7 +803,7 @@ select {
 }
 
 .preference-row.is-sharing {
-  grid-template-columns: minmax(170px, 1fr) auto minmax(260px, auto);
+  grid-template-columns: minmax(170px, 1fr) minmax(330px, auto);
 }
 
 .preference-copy {
@@ -821,41 +821,43 @@ select {
   font-size: 12px;
 }
 
-.rule-state-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 62px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--line) 80%, #fff 20%);
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.rule-state-chip.custom {
-  background: var(--accent-soft);
-  border-color: color-mix(in oklab, var(--accent) 24%, #fff 76%);
-  color: var(--accent-strong);
-}
-
-.preference-actions {
+.preference-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
 }
 
-.preference-actions.share-actions {
-  justify-content: flex-end;
+.preference-controls.share-controls {
+  max-width: 430px;
 }
 
-.compact-action {
-  padding: 6px 10px;
+.mode-segment {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-soft) 80%, #fff 20%);
+  border: 1px solid color-mix(in oklab, var(--line) 80%, #fff 20%);
+}
+
+.mode-segment-button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
   font-size: 13px;
   font-weight: 800;
+}
+
+.mode-segment-button.is-active {
+  color: #fff;
+  background: color-mix(in oklab, var(--accent) 84%, #0f172a 16%);
+  box-shadow: 0 6px 14px color-mix(in oklab, var(--accent) 18%, transparent 82%);
 }
 
 .compact-check {
@@ -1811,12 +1813,8 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .rule-state-chip {
-    justify-self: start;
-  }
-
-  .preference-actions,
-  .preference-actions.share-actions,
+  .preference-controls,
+  .preference-controls.share-controls,
   .scope-toggle-row {
     justify-content: flex-start;
   }
