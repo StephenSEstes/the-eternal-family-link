@@ -1,6 +1,7 @@
 import "server-only";
 
 import oracledb from "oracledb";
+import type { ProfileVisibilityMapRow } from "@/lib/access/types";
 import { withConnection } from "@/lib/oci/client";
 import {
   RELATIONSHIP_CATEGORIES,
@@ -69,6 +70,48 @@ export type RelatedFamilyPerson = PersonLite & {
   relationships: RelationshipHit[];
 };
 
+export type PersonVitals = {
+  personId: string;
+  displayName: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  maidenName: string;
+  nickName: string;
+  birthDate: string;
+  deathDate: string;
+  age: string;
+  gender: string;
+  phones: string;
+  email: string;
+  address: string;
+  occupation: string;
+};
+
+export type PersonMediaItem = {
+  personId: string;
+  familyGroupKey: string;
+  linkId: string;
+  mediaId: string;
+  fileId: string;
+  mediaKind: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  fileName: string;
+  mimeType: string;
+  sourceProvider: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl: string;
+  createdAt: string;
+};
+
+export type PersonContent = {
+  vitals: PersonVitals | null;
+  media: PersonMediaItem[];
+};
+
 function normalize(value?: string) {
   return String(value ?? "").trim();
 }
@@ -81,6 +124,91 @@ function getCell(row: Record<string, unknown>, key: string) {
   const value = row[key];
   if (value === undefined || value === null) return "";
   return String(value).trim();
+}
+
+function uniqueNormalized(values: Iterable<string>) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const normalized = normalize(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
+function bindList(prefix: string, values: string[], binds: Record<string, string>) {
+  return values
+    .map((value, index) => {
+      const key = `${prefix}${index}`;
+      binds[key] = value;
+      return `:${key}`;
+    })
+    .join(", ");
+}
+
+function parseFlexibleDate(value?: string) {
+  const raw = normalize(value);
+  const match = raw.match(/^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?/);
+  if (!match) return null;
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2] ?? "1", 10);
+  const day = Number.parseInt(match[3] ?? "1", 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function calculateAge(birthDate: string, deathDate = "") {
+  const birth = parseFlexibleDate(birthDate);
+  if (!birth) return "";
+  const end = parseFlexibleDate(deathDate) ?? new Date();
+  let age = end.getUTCFullYear() - birth.getUTCFullYear();
+  const endMonth = end.getUTCMonth();
+  const birthMonth = birth.getUTCMonth();
+  if (endMonth < birthMonth || (endMonth === birthMonth && end.getUTCDate() < birth.getUTCDate())) {
+    age -= 1;
+  }
+  if (age < 0) return "";
+  if (!deathDate && age > 125) return "";
+  return String(age);
+}
+
+function encodeObjectKeyPath(objectKey: string) {
+  return objectKey
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function buildPublicMediaUrl(objectKey: string) {
+  const key = normalize(objectKey);
+  if (!key) return "";
+  const baseUrl = normalize(process.env.FAMAILINK_MEDIA_PUBLIC_BASE_URL) || normalize(process.env.OCI_OBJECT_PUBLIC_BASE_URL);
+  if (!baseUrl) return "";
+  return `${baseUrl.replace(/\/+$/, "")}/${encodeObjectKeyPath(key)}`;
+}
+
+function buildDriveThumbnailUrl(sourceProvider: string, fileId: string) {
+  const provider = normalizeLower(sourceProvider);
+  const normalizedFileId = normalize(fileId);
+  if (!normalizedFileId || (!provider.includes("google") && !provider.includes("drive"))) return "";
+  return `https://drive.google.com/thumbnail?id=${encodeURIComponent(normalizedFileId)}&sz=w1000`;
+}
+
+function buildMediaPreviewUrl(input: {
+  sourceProvider: string;
+  fileId: string;
+  thumbnailObjectKey: string;
+  originalObjectKey: string;
+}) {
+  return (
+    buildPublicMediaUrl(input.thumbnailObjectKey) ||
+    buildPublicMediaUrl(input.originalObjectKey) ||
+    buildDriveThumbnailUrl(input.sourceProvider, input.fileId)
+  );
 }
 
 function addSetValue(map: Map<string, Set<string>>, key: string, value: string) {
@@ -480,6 +608,229 @@ export async function listHouseholdsLite(): Promise<HouseholdLite[]> {
       label: getCell(row, "LABEL"),
     }));
   });
+}
+
+async function listPersonVitalsForIds(personIds: string[]): Promise<Map<string, PersonVitals>> {
+  const ids = uniqueNormalized(personIds);
+  const byPerson = new Map<string, PersonVitals>();
+  if (!ids.length) return byPerson;
+
+  return withConnection(async (connection) => {
+    const binds: Record<string, string> = {};
+    const inList = bindList("person", ids, binds);
+    const peopleResult = await connection.execute(
+      `SELECT person_id,
+              COALESCE(NULLIF(TRIM(display_name), ''), TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), person_id) AS display_name,
+              TRIM(NVL(first_name, '')) AS first_name,
+              TRIM(NVL(middle_name, '')) AS middle_name,
+              TRIM(NVL(last_name, '')) AS last_name,
+              TRIM(NVL(maiden_name, '')) AS maiden_name,
+              TRIM(NVL(nick_name, '')) AS nick_name,
+              TRIM(NVL(birth_date, '')) AS birth_date,
+              LOWER(TRIM(NVL(gender, ''))) AS gender,
+              TRIM(NVL(phones, '')) AS phones,
+              TRIM(NVL(email, '')) AS email,
+              TRIM(NVL(address, '')) AS address
+         FROM people
+        WHERE TRIM(person_id) IN (${inList})
+        ORDER BY display_name`,
+      binds,
+      OUT_FORMAT,
+    );
+    const peopleRows = (peopleResult.rows ?? []) as Record<string, unknown>[];
+    for (const row of peopleRows) {
+      const personId = getCell(row, "PERSON_ID");
+      if (!personId) continue;
+      byPerson.set(personId, {
+        personId,
+        displayName: getCell(row, "DISPLAY_NAME"),
+        firstName: getCell(row, "FIRST_NAME"),
+        middleName: getCell(row, "MIDDLE_NAME"),
+        lastName: getCell(row, "LAST_NAME"),
+        maidenName: getCell(row, "MAIDEN_NAME"),
+        nickName: getCell(row, "NICK_NAME"),
+        birthDate: getCell(row, "BIRTH_DATE"),
+        deathDate: "",
+        age: "",
+        gender: getCell(row, "GENDER"),
+        phones: getCell(row, "PHONES"),
+        email: getCell(row, "EMAIL"),
+        address: getCell(row, "ADDRESS"),
+        occupation: "",
+      });
+    }
+
+    const attributeResult = await connection.execute(
+      `SELECT entity_id,
+              LOWER(TRIM(NVL(attribute_type, ''))) AS attribute_type,
+              LOWER(TRIM(NVL(attribute_type_category, ''))) AS attribute_type_category,
+              TRIM(NVL(attribute_date, '')) AS attribute_date,
+              TRIM(NVL(attribute_detail, '')) AS attribute_detail,
+              TRIM(NVL(attribute_notes, '')) AS attribute_notes,
+              TRIM(NVL(end_date, '')) AS end_date,
+              TRIM(NVL(updated_at, '')) AS updated_at,
+              TRIM(NVL(created_at, '')) AS created_at
+         FROM attributes
+        WHERE LOWER(TRIM(entity_type)) = 'person'
+          AND TRIM(entity_id) IN (${inList})
+          AND (
+            LOWER(TRIM(NVL(attribute_type, ''))) IN ('occupation','profession','career','job','jobs','employment','hired','promotion','work','death','died')
+            OR LOWER(TRIM(NVL(attribute_type_category, ''))) IN ('occupation','profession','career','job','jobs','employment','work','death')
+          )
+        ORDER BY entity_id,
+                 CASE WHEN TRIM(NVL(attribute_date, '')) IS NULL THEN 1 ELSE 0 END,
+                 attribute_date DESC,
+                 updated_at DESC,
+                 created_at DESC`,
+      binds,
+      OUT_FORMAT,
+    );
+    const attributeRows = (attributeResult.rows ?? []) as Record<string, unknown>[];
+    const occupationTypes = new Set(["occupation", "profession", "career", "job", "jobs", "employment", "hired", "promotion", "work"]);
+    for (const row of attributeRows) {
+      const personId = getCell(row, "ENTITY_ID");
+      const current = byPerson.get(personId);
+      if (!current) continue;
+      const type = normalizeLower(getCell(row, "ATTRIBUTE_TYPE"));
+      const category = normalizeLower(getCell(row, "ATTRIBUTE_TYPE_CATEGORY"));
+      const detail = getCell(row, "ATTRIBUTE_DETAIL") || getCell(row, "ATTRIBUTE_NOTES");
+      const attributeDate = getCell(row, "ATTRIBUTE_DATE");
+      if ((type === "death" || type === "died" || category === "death") && !current.deathDate) {
+        current.deathDate = attributeDate || detail;
+      }
+      if ((occupationTypes.has(type) || occupationTypes.has(category)) && detail && !current.occupation) {
+        current.occupation = detail;
+      }
+    }
+
+    for (const row of byPerson.values()) {
+      row.age = calculateAge(row.birthDate, row.deathDate);
+    }
+
+    return byPerson;
+  });
+}
+
+async function listPersonMediaForIds(personIds: string[]): Promise<Map<string, PersonMediaItem[]>> {
+  const ids = uniqueNormalized(personIds);
+  const byPerson = new Map<string, PersonMediaItem[]>();
+  if (!ids.length) return byPerson;
+
+  return withConnection(async (connection) => {
+    const binds: Record<string, string> = {};
+    const inList = bindList("person", ids, binds);
+    const result = await connection.execute(
+      `SELECT l.family_group_key,
+              l.link_id,
+              l.media_id,
+              l.entity_id,
+              l.is_primary,
+              l.sort_order,
+              a.file_id,
+              a.file_name,
+              a.media_kind,
+              a.label,
+              a.description,
+              a.photo_date,
+              a.created_at,
+              a.source_provider,
+              a.original_object_key,
+              a.thumbnail_object_key,
+              a.mime_type
+         FROM media_links l
+         INNER JOIN media_assets a
+            ON TRIM(a.media_id) = TRIM(l.media_id)
+        WHERE LOWER(TRIM(l.entity_type)) = 'person'
+          AND TRIM(l.entity_id) IN (${inList})
+          AND LOWER(TRIM(NVL(l.usage_type, 'media'))) <> 'share'
+        ORDER BY l.entity_id,
+                 CASE WHEN LOWER(TRIM(NVL(l.is_primary, 'FALSE'))) = 'true' THEN 0 ELSE 1 END,
+                 CASE
+                   WHEN REGEXP_LIKE(TRIM(NVL(l.sort_order, '')), '^[+-]?[0-9]+([.][0-9]+)?$')
+                     THEN TO_NUMBER(TRIM(l.sort_order))
+                   ELSE 0
+                 END,
+                 a.photo_date DESC,
+                 a.created_at DESC,
+                 a.file_id`,
+      binds,
+      OUT_FORMAT,
+    );
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    const seenByPerson = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const personId = getCell(row, "ENTITY_ID");
+      if (!personId) continue;
+      const mediaId = getCell(row, "MEDIA_ID");
+      const fileId = getCell(row, "FILE_ID");
+      const dedupeKey = mediaId || fileId || getCell(row, "LINK_ID");
+      const seen = seenByPerson.get(personId) ?? new Set<string>();
+      if (dedupeKey && seen.has(dedupeKey)) continue;
+      if (dedupeKey) seen.add(dedupeKey);
+      seenByPerson.set(personId, seen);
+
+      const sourceProvider = getCell(row, "SOURCE_PROVIDER");
+      const thumbnailObjectKey = getCell(row, "THUMBNAIL_OBJECT_KEY");
+      const originalObjectKey = getCell(row, "ORIGINAL_OBJECT_KEY");
+      const mimeType = getCell(row, "MIME_TYPE");
+      const mediaKind = normalizeLower(getCell(row, "MEDIA_KIND")) || (mimeType.startsWith("image/") ? "image" : "");
+      const item: PersonMediaItem = {
+        personId,
+        familyGroupKey: getCell(row, "FAMILY_GROUP_KEY"),
+        linkId: getCell(row, "LINK_ID"),
+        mediaId,
+        fileId,
+        mediaKind,
+        label: getCell(row, "LABEL"),
+        description: getCell(row, "DESCRIPTION"),
+        photoDate: getCell(row, "PHOTO_DATE"),
+        fileName: getCell(row, "FILE_NAME"),
+        mimeType,
+        sourceProvider,
+        originalObjectKey,
+        thumbnailObjectKey,
+        previewUrl: buildMediaPreviewUrl({
+          sourceProvider,
+          fileId,
+          thumbnailObjectKey,
+          originalObjectKey,
+        }),
+        createdAt: getCell(row, "CREATED_AT"),
+      };
+      const current = byPerson.get(personId) ?? [];
+      current.push(item);
+      byPerson.set(personId, current);
+    }
+    return byPerson;
+  });
+}
+
+export async function buildPersonContentForAccess(input: {
+  viewerPersonId: string;
+  personIds: string[];
+  visibilityRows: ProfileVisibilityMapRow[];
+}): Promise<Record<string, PersonContent>> {
+  const viewerPersonId = normalize(input.viewerPersonId);
+  const personIds = uniqueNormalized(input.personIds);
+  const visibilityByTarget = new Map(input.visibilityRows.map((row) => [normalize(row.targetPersonId), row]));
+  const vitalsPersonIds = personIds.filter((personId) => personId === viewerPersonId || visibilityByTarget.get(personId)?.canVitals);
+  const mediaPersonIds = personIds.filter((personId) => personId === viewerPersonId || visibilityByTarget.get(personId)?.canMedia);
+  const [vitalsByPerson, mediaByPerson] = await Promise.all([
+    listPersonVitalsForIds(vitalsPersonIds),
+    listPersonMediaForIds(mediaPersonIds),
+  ]);
+
+  const out: Record<string, PersonContent> = {};
+  for (const personId of personIds) {
+    const visibilityRow = visibilityByTarget.get(personId);
+    const canSeeVitals = personId === viewerPersonId || Boolean(visibilityRow?.canVitals);
+    const canSeeMedia = personId === viewerPersonId || Boolean(visibilityRow?.canMedia);
+    out[personId] = {
+      vitals: canSeeVitals ? (vitalsByPerson.get(personId) ?? null) : null,
+      media: canSeeMedia ? (mediaByPerson.get(personId) ?? []) : [],
+    };
+  }
+  return out;
 }
 
 export async function listRelatedFamilyPeople(viewerPersonId: string): Promise<RelatedFamilyPerson[]> {

@@ -44,6 +44,8 @@ type SelectedRelative = {
   subscriptionRow?: ProfileSubscriptionMapRow;
 };
 
+type PersonDetailTab = "overview" | "vitals" | "media" | "stories" | "conversations" | "rules";
+
 type TreeBucketPerson = {
   personId: string;
   displayName: string;
@@ -86,6 +88,48 @@ type TreeSnapshot = {
   peopleCount: number;
   relationshipCount: number;
   relatedCount: number;
+};
+
+type PersonVitals = {
+  personId: string;
+  displayName: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  maidenName: string;
+  nickName: string;
+  birthDate: string;
+  deathDate: string;
+  age: string;
+  gender: string;
+  phones: string;
+  email: string;
+  address: string;
+  occupation: string;
+};
+
+type PersonMediaItem = {
+  personId: string;
+  familyGroupKey: string;
+  linkId: string;
+  mediaId: string;
+  fileId: string;
+  mediaKind: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  fileName: string;
+  mimeType: string;
+  sourceProvider: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl: string;
+  createdAt: string;
+};
+
+type PersonContent = {
+  vitals: PersonVitals | null;
+  media: PersonMediaItem[];
 };
 
 type HouseholdUnit = {
@@ -197,10 +241,10 @@ function readSideLabel(side: LineageSide) {
 }
 
 function shareSummary(row: ProfileVisibilityMapRow | undefined) {
-  if (!row) return { label: "Sharing Pending", badgeClass: "pending" };
+  if (!row) return { label: "Content Pending", badgeClass: "pending" };
   if (row.placeholderOnly) return { label: "Name Only", badgeClass: "placeholder" };
   if (row.canVitals || row.canStories || row.canMedia || row.canConversations) {
-    return { label: "You Share", badgeClass: "shared" };
+    return { label: "Content Available", badgeClass: "shared" };
   }
   return { label: "Name Only", badgeClass: "closed" };
 }
@@ -223,11 +267,11 @@ function scopeList(row: ProfileVisibilityMapRow | undefined) {
   return allowed.join(", ");
 }
 
-function outboundSharingResult(row: ProfileVisibilityMapRow | undefined) {
-  if (!row) return "Sharing pending";
+function availableContentResult(row: ProfileVisibilityMapRow | undefined) {
+  if (!row) return "Content availability pending";
   const scopes = scopeList(row);
-  if (scopes) return `You share: ${scopes}`;
-  return "You share: name and relationship only";
+  if (scopes) return `Available here: ${scopes}`;
+  return "Name and relationship only";
 }
 
 function sharingScopesFromException(row: SharePersonException | undefined): SharingScopeSettings {
@@ -766,8 +810,149 @@ function buildTreeGraphModel(snapshot: TreeSnapshot): TreeGraphModel {
   };
 }
 
+const PERSON_DETAIL_TABS: Array<{ id: PersonDetailTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "vitals", label: "Vitals" },
+  { id: "media", label: "Media" },
+  { id: "stories", label: "Stories" },
+  { id: "conversations", label: "Conversations" },
+  { id: "rules", label: "Updates & Sharing" },
+];
+
+function formatVitalValue(value: string, fallback = "Not listed") {
+  return normalize(value) || fallback;
+}
+
+function displayGender(value: string) {
+  const normalized = normalizeLower(value);
+  if (normalized === "female") return "Female";
+  if (normalized === "male") return "Male";
+  return formatVitalValue(value);
+}
+
+function mailHref(value: string) {
+  const email = normalize(value);
+  return email ? `mailto:${email}` : "";
+}
+
+function VitalRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  const displayValue = normalize(value);
+  return (
+    <div className="vital-row">
+      <dt>{label}</dt>
+      <dd>
+        {displayValue ? (
+          href ? (
+            <a href={href}>{displayValue}</a>
+          ) : (
+            displayValue
+          )
+        ) : (
+          <span className="muted">Not listed</span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function VitalsTab({ content }: { content: PersonContent }) {
+  const vitals = content.vitals;
+  if (!vitals) {
+    return (
+      <section className="modal-section compact">
+        <p className="empty-state">Vitals are not available here.</p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="modal-sections">
+      <div className="vitals-grid">
+        <section className="modal-section compact">
+          <div className="modal-section-head">
+            <h3>Contact</h3>
+          </div>
+          <dl className="vitals-list">
+            <VitalRow label="Phone" value={vitals.phones} />
+            <VitalRow label="Email" value={vitals.email} href={mailHref(vitals.email)} />
+            <VitalRow label="Address" value={vitals.address} />
+          </dl>
+        </section>
+
+        <section className="modal-section compact">
+          <div className="modal-section-head">
+            <h3>Personal</h3>
+          </div>
+          <dl className="vitals-list">
+            <VitalRow label="Age" value={vitals.age} />
+            <VitalRow label="Occupation" value={vitals.occupation} />
+            <VitalRow label="Birth Date" value={vitals.birthDate} />
+            {vitals.deathDate ? <VitalRow label="Death Date" value={vitals.deathDate} /> : null}
+            <VitalRow label="Gender" value={displayGender(vitals.gender)} />
+          </dl>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function mediaTitle(media: PersonMediaItem) {
+  return normalize(media.label) || normalize(media.fileName) || normalize(media.fileId) || "Untitled media";
+}
+
+function mediaDate(media: PersonMediaItem) {
+  return normalize(media.photoDate) || normalize(media.createdAt);
+}
+
+function isImageMedia(media: PersonMediaItem) {
+  return normalizeLower(media.mediaKind) === "image" || normalizeLower(media.mimeType).startsWith("image/");
+}
+
+function MediaTab({ content }: { content: PersonContent }) {
+  if (!content.media.length) {
+    return (
+      <section className="modal-section compact">
+        <p className="empty-state">No media is available here yet.</p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="person-media-grid">
+      {content.media.map((media) => {
+        const title = mediaTitle(media);
+        const date = mediaDate(media);
+        const imagePreview = isImageMedia(media) && media.previewUrl;
+        return (
+          <article key={media.linkId || media.mediaId || media.fileId} className="person-media-card">
+            {imagePreview ? (
+              <Image className="person-media-thumb" src={media.previewUrl} alt={title} width={420} height={315} unoptimized />
+            ) : (
+              <div className="person-media-placeholder">{formatVitalValue(media.mediaKind, "Media")}</div>
+            )}
+            <div className="person-media-copy">
+              <h3>{title}</h3>
+              {date ? <p className="person-media-date">{date}</p> : null}
+              {media.description ? <p className="person-media-description">{media.description}</p> : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function DeferredContentTab({ label }: { label: "Stories" | "Conversations" }) {
+  return (
+    <section className="modal-section compact">
+      <p className="empty-state">{label} are not populated in this MVP pass.</p>
+    </section>
+  );
+}
+
 function RelativeModal({
   selected,
+  personContent,
   settings,
   onClose,
   onSave,
@@ -777,6 +962,7 @@ function RelativeModal({
   setSettings,
 }: {
   selected: SelectedRelative;
+  personContent: PersonContent;
   settings: ModalSettings | null;
   onClose: () => void;
   onSave: () => Promise<void>;
@@ -785,12 +971,12 @@ function RelativeModal({
   modalError: string;
   setSettings: Dispatch<SetStateAction<ModalSettings | null>>;
 }) {
-  const [activeTab, setActiveTab] = useState<"overview" | "rules">("overview");
+  const [activeTab, setActiveTab] = useState<PersonDetailTab>("overview");
   const sharing = shareSummary(selected.visibilityRow);
   const subscription = subscriptionSummary(selected.subscriptionRow);
   const canEditPersonRules = selected.category !== "self";
   const relationshipLabel = RELATIONSHIP_LABELS[selected.category];
-  const sharingResult = outboundSharingResult(selected.visibilityRow);
+  const contentResult = availableContentResult(selected.visibilityRow);
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
@@ -834,20 +1020,16 @@ function RelativeModal({
           {!settingsLoading && settings ? (
             <>
             <div className="person-detail-tabs" role="tablist" aria-label="Person detail tabs">
-              <button
-                type="button"
-                className={`person-detail-tab${activeTab === "overview" ? " is-active" : ""}`}
-                onClick={() => setActiveTab("overview")}
-              >
-                Overview
-              </button>
-              <button
-                type="button"
-                className={`person-detail-tab${activeTab === "rules" ? " is-active" : ""}`}
-                onClick={() => setActiveTab("rules")}
-              >
-                Updates & Sharing
-              </button>
+              {PERSON_DETAIL_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`person-detail-tab${activeTab === tab.id ? " is-active" : ""}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <div className="modal-tab-body">
@@ -867,12 +1049,19 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">You Share With Them</p>
-                      <p className="stat-value recompute-value">{sharingResult}</p>
+                      <p className="stat-label">Available Content</p>
+                      <p className="stat-value recompute-value">{contentResult}</p>
                     </article>
                   </div>
                 </div>
-              ) : (
+              ) : null}
+
+              {activeTab === "vitals" ? <VitalsTab content={personContent} /> : null}
+              {activeTab === "media" ? <MediaTab content={personContent} /> : null}
+              {activeTab === "stories" ? <DeferredContentTab label="Stories" /> : null}
+              {activeTab === "conversations" ? <DeferredContentTab label="Conversations" /> : null}
+
+              {activeTab === "rules" ? (
                 <div className="modal-sections">
                   <div className="person-detail-grid compact">
                     <article className="stat-card">
@@ -880,8 +1069,8 @@ function RelativeModal({
                       <p className="stat-value recompute-value">{subscription.label}</p>
                     </article>
                     <article className="stat-card">
-                      <p className="stat-label">You Share With Them</p>
-                      <p className="stat-value recompute-value">{sharingResult}</p>
+                      <p className="stat-label">Available Content</p>
+                      <p className="stat-value recompute-value">{contentResult}</p>
                     </article>
                   </div>
 
@@ -994,7 +1183,7 @@ function RelativeModal({
                     )}
                   </section>
                 </div>
-              )}
+              ) : null}
             </div>
           </>
           ) : null}
@@ -1625,12 +1814,14 @@ export function TreeClient({
   snapshot,
   visibilityRows,
   subscriptionRows,
+  personContentById,
 }: {
   session: SessionInfo;
   snapshot: TreeSnapshot;
   recomputeStatus: AccessRecomputeStatus;
   visibilityRows: ProfileVisibilityMapRow[];
   subscriptionRows: ProfileSubscriptionMapRow[];
+  personContentById: Record<string, PersonContent>;
 }) {
   const [focusedPersonId, setFocusedPersonId] = useState(snapshot.viewer.personId);
   const [focusGroup, setFocusGroup] = useState<FocusGroup>("household");
@@ -2027,6 +2218,7 @@ export function TreeClient({
       {selected ? (
         <RelativeModal
           selected={selected}
+          personContent={personContentById[selected.person.personId] ?? { vitals: null, media: [] }}
           settings={settings}
           onClose={() => {
             if (saveBusy) return;

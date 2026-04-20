@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-19 (Famailink person detail Vitals and Media tabs)
+
+- `Date`: 2026-04-19
+- `Change`: Extended the Famailink `/tree` person detail modal with Overview, Vitals, Media, Stories, Conversations, and Updates & Sharing tabs. Vitals now displays contact fields, age, occupation, birth date, death date when present, and gender. Media now displays person-linked `MediaLinks`/`MediaAssets` cards with previews when a public/object-storage or Drive thumbnail URL can be derived. Stories and Conversations are present as MVP tab shells only.
+- `Type`: UI | Data Read
+- `Why`: Root cause was that the fuller modal object structure had been planned, but the active `/tree` code still loaded only lightweight person rows and rendered only Overview plus Updates & Sharing. The chosen fix loads Vitals and Media on the server after reading the derived visibility map, so denied Vitals/Media scopes are omitted from the serialized page payload instead of merely hidden in the browser.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/tree/page.tsx`, `famailink/components/TreeClient.tsx`, `famailink/lib/family/store.ts`, `famailink/app/globals.css`
+- `Data Changes`: None. No schema changes. Existing `People`, `Attributes`, `MediaLinks`, `MediaAssets`, and `profile_visibility_map` rows are read only.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - Source check: `buildPersonContentForAccess()` queries Vitals only for targets with `canVitals` and Media only for targets with `canMedia`, with self always available to the signed-in viewer.
+- `Rollback Notes`: Revert this change to return the person modal to Overview plus Updates & Sharing and remove the server-side content map.
+- `Design Decision Change`: Yes. Added the Famailink person detail content-tabs decision.
+
 ## 2026-04-19 (Famailink outbound sharing copy)
 
 - `Date`: 2026-04-19

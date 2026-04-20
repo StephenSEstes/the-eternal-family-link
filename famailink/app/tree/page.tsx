@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getRecomputeStatus } from "@/lib/access/recompute";
 import { listProfileSubscriptionMap, listProfileVisibilityMap } from "@/lib/access/store";
 import { getSessionFromCookieStore } from "@/lib/auth/session";
-import { buildTreeLabSnapshot } from "@/lib/family/store";
+import { buildPersonContentForAccess, buildTreeLabSnapshot } from "@/lib/family/store";
 import { TreeClient } from "@/components/TreeClient";
 
 export default async function TreePage() {
@@ -15,6 +15,17 @@ export default async function TreePage() {
     listProfileVisibilityMap(session.personId),
     listProfileSubscriptionMap(session.personId),
   ]);
+  const personIds = Array.from(
+    new Set([
+      snapshot.viewer.personId,
+      ...Object.values(snapshot.buckets).flatMap((people) => people.map((person) => person.personId)),
+    ]),
+  );
+  const personContentById = await buildPersonContentForAccess({
+    viewerPersonId: session.personId,
+    personIds,
+    visibilityRows,
+  });
 
   return (
     <TreeClient
@@ -26,6 +37,7 @@ export default async function TreePage() {
       recomputeStatus={recomputeStatus}
       visibilityRows={visibilityRows}
       subscriptionRows={subscriptionRows}
+      personContentById={personContentById}
     />
   );
 }

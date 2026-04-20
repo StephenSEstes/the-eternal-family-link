@@ -29,6 +29,41 @@ I will update this list as we add, complete, or remove work.
   - Completed: Famailink tree/preferences wording was tightened so graph-wide counts read clearly, pending derived states are explicit (`Subscription Pending` / `Sharing Pending`), and the user-facing copy no longer leans on confusing internal `lab` framing.
   Progress 2026-04-15:
   - Completed/deployed 2026-04-19: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Steve visually confirmed after deployment.
+  Agreed implementation plan 2026-04-19 (Famailink person detail tabs: Vitals and Media MVP):
+  Status: Completed locally 2026-04-19; pending deploy decision.
+  - Scope:
+    - Extend the `/tree` person detail modal with tabs for Overview, Vitals, Media, Stories, Conversations, and Updates & Sharing.
+    - Populate Vitals first with contact information from `People` (`phones`, `email`, `address`), occupation from person employment/occupation attributes when present, age derived from `birth_date`, and existing person fields such as birth date and gender.
+    - Populate Media from person-linked `MediaLinks` joined to `MediaAssets`; render cards and show image thumbnails when a configured media URL can be derived.
+    - Create Stories and Conversations tabs as empty modal object structure only; do not query or display story/conversation content in this MVP pass.
+    - Keep the existing person-specific update/sharing controls on the Updates & Sharing tab.
+  - Reproduction path:
+    - Open Famailink `/tree`, focus a person, and open `Open Person Details`.
+    - The modal currently has only `Overview` and `Updates & Sharing`.
+    - Contact details, age, occupation, and person-linked media are not available from the modal even when the viewer can see those scopes.
+  - Failing data/query/code path:
+    - `buildTreeLabSnapshot()` returns only lightweight person, relationship, and household rows.
+    - `TreeClient.RelativeModal` renders only overview stats plus the person-specific preference editor.
+    - No Famailink `/tree` code path reads `People` contact fields, employment/occupation attributes, or `MediaLinks`/`MediaAssets` for selected people.
+  - Root cause:
+    - Earlier Famailink work intentionally stopped at the privacy/sharing proof and modal rule editor.
+    - The fuller person modal object model was planned but not yet connected to real Vitals or Media data.
+  - Implementation:
+    - Add a server-side person content loader in `famailink/lib/family/store.ts` that accepts visible person IDs plus `profile_visibility_map` rows.
+    - Query and serialize Vitals only for targets whose visibility row allows Vitals; query and serialize Media only for targets whose visibility row allows Media.
+    - Pass the resulting person-content map from `app/tree/page.tsx` to `TreeClient` so denied scopes are not shipped to the browser.
+    - Add tab rendering helpers in `TreeClient` for Vitals, Media, Stories, and Conversations while preserving the stable modal frame and existing Updates & Sharing save behavior.
+    - Add compact responsive CSS for vitals lists and media cards.
+  - Validation checks:
+    - `npm run lint --prefix famailink`
+    - `npm run build --prefix famailink`
+    - Source check that denied Vitals/Media scopes are omitted from the serialized person-content prop rather than only hidden by the client.
+  - Completion criteria:
+    - The person modal shows all planned tabs.
+    - Vitals displays contact info, occupation, age, birth date, and gender when the viewer can see Vitals.
+    - Media displays person-linked media cards when the viewer can see Media.
+    - Stories and Conversations are present but intentionally unpopulated for MVP.
+    - Updates & Sharing still edits only person-specific rules.
   Agreed implementation plan 2026-04-19 (Famailink person modal performance):
   Status: Completed/deployed 2026-04-19 (`4510a76`).
   - Scope:
