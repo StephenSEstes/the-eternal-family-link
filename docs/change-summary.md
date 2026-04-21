@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-21 (Unused variable cleanup)
+
+- `Date`: 2026-04-21
+- `Change`: Removed disconnected unused declarations from the main tree graph and Shares client so the production build no longer reports unused-variable warnings.
+- `Type`: Code Quality
+- `Why`: Root cause was leftover code after UI wiring changed. `TreeGraph` still declared a default focus-group callback that `FocusPanel` no longer accepts, and `SharesClient` still kept selected-thread delete state/permission/handler code even though no rendered control calls it. The chosen fix removes only those unreachable declarations while preserving the active spouse/sibling/children focus controls and conversation/comment delete flows.
+- `Files`: `src/components/TreeGraph.tsx`, `src/components/shares/SharesClient.tsx`, `docs/change-summary.md`, `changeHistory.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npx tsc --noEmit --pretty false` passes.
+  - `npm run build` passes without unused-variable warnings.
+- `Rollback Notes`: Revert this change to restore the disconnected declarations; build warnings would return unless the UI is wired back to use them.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-21 (Root build excludes nested standalone apps)
 
 - `Date`: 2026-04-21

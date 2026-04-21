@@ -169,7 +169,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
   const [shareAttachOpen, setShareAttachOpen] = useState(false);
   const [composeBusy, setComposeBusy] = useState(false);
   const [composeStatus, setComposeStatus] = useState("");
-  const [threadDeleteBusy, setThreadDeleteBusy] = useState(false);
   const [openConversationMenuId, setOpenConversationMenuId] = useState("");
   const [editingConversationId, setEditingConversationId] = useState("");
   const [conversationEditDraftById, setConversationEditDraftById] = useState<Record<string, string>>({});
@@ -529,12 +528,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
     () => orderedPostsWithMedia.findIndex((entry) => entry.postId === lightboxPostId),
     [lightboxPostId, orderedPostsWithMedia],
   );
-  const canDeleteSelectedThread = useMemo(() => {
-    if (!selectedThread || !actorPersonId) return false;
-    const owner = String(selectedThread.ownerPersonId ?? "").trim();
-    const creator = String(selectedThread.createdByPersonId ?? "").trim();
-    return owner === actorPersonId || creator === actorPersonId;
-  }, [selectedThread, actorPersonId]);
   const attachPreselectedPersonIds = useMemo(
     () =>
       Array.from(
@@ -1074,33 +1067,6 @@ export function SharesClient({ tenantKey }: SharesClientProps) {
       setConversationsStatus(error instanceof Error ? error.message : "Failed to delete conversation.");
     } finally {
       setConversationDeleteBusyId("");
-    }
-  };
-
-  const deleteSelectedThread = async () => {
-    if (!selectedThreadId) return;
-    const confirmed = window.confirm("Delete this thread?");
-    if (!confirmed) return;
-    setThreadDeleteBusy(true);
-    try {
-      const res = await fetch(
-        `/api/t/${encodeURIComponent(tenantKey)}/shares/threads/${encodeURIComponent(selectedThreadId)}`,
-        { method: "DELETE" },
-      );
-      await assertOkWithAuth(res, "Failed to delete thread.");
-      setThreadModalOpen(false);
-      setConversationModalOpen(false);
-      setCreateConversationModalOpen(false);
-      setSelectedConversationId("");
-      setConversations([]);
-      setPosts([]);
-      setCommentsByPostId({});
-      setThreadsRefreshKey((current) => current + 1);
-      setConversationsRefreshKey((current) => current + 1);
-    } catch (error) {
-      setThreadsStatus(error instanceof Error ? error.message : "Failed to delete thread.");
-    } finally {
-      setThreadDeleteBusy(false);
     }
   };
 

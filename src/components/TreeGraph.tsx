@@ -1878,10 +1878,6 @@ export function TreeGraph({
     setFocusTarget({ kind: "person", personId });
   }, []);
 
-  const showDefaultGroup = useCallback(() => {
-    setFocusPanelGroup("default");
-  }, []);
-
   const showSpouseGroup = useCallback(() => {
     setFocusPanelGroup("spouses");
   }, []);
