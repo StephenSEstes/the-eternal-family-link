@@ -30,7 +30,7 @@ I will update this list as we add, complete, or remove work.
   Progress 2026-04-15:
   - Completed/deployed 2026-04-19: Famailink household tree now canonicalizes duplicate household identities by parent pair/person and nests child households under parent households instead of rendering duplicate peer households plus loose child cards. Steve visually confirmed after deployment.
   Agreed implementation plan 2026-04-19 (Famailink person detail tabs: Vitals and Media MVP):
-  Status: Completed locally 2026-04-19; pending deploy decision.
+  Status: Completed/deployed 2026-04-19 (`0f998fb`).
   - Scope:
     - Extend the `/tree` person detail modal with tabs for Overview, Vitals, Media, Stories, Conversations, and Updates & Sharing.
     - Populate Vitals first with contact information from `People` (`phones`, `email`, `address`), occupation from person employment/occupation attributes when present, age derived from `birth_date`, and existing person fields such as birth date and gender.
