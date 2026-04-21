@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-21 (Root build excludes nested standalone apps)
+
+- `Date`: 2026-04-21
+- `Change`: Updated the root TypeScript build scope so the root Next.js app does not type-check the nested standalone `efl2/` and `famailink/` apps.
+- `Type`: Infra
+- `Why`: Root cause was a code/config issue. The root `tsconfig.json` included every `*.ts` and `*.tsx` file in the repo, so the Vercel root build type-checked `efl2/app/api/auth/login/route.ts` with the root alias mapping `@/* -> ./src/*`. The nested app expects its own alias mapping `@/* -> ./*`, so `@/lib/auth/password` could not resolve during the root build. Excluding the nested app roots keeps each standalone app checked by its own package build and prevents the root app from applying the wrong alias.
+- `Files`: `tsconfig.json`, `docs/change-summary.md`, `changeHistory.md`
+- `Data Changes`: None.
+- `Verify`:
+  - `npm run build` from the root no longer fails on `efl2/app/api/auth/login/route.ts` resolving `@/lib/auth/password`.
+  - `npm run build --prefix famailink` remains the validation path for the nested Famailink app.
+  - `npm run build --prefix efl2` remains the validation path for the nested Unit 1 lab app.
+- `Rollback Notes`: Revert this change to restore root TypeScript checking of nested standalone apps, which will reintroduce the alias mismatch unless the nested apps are otherwise removed or converted into root-app code.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-19 (Famailink person detail Vitals and Media tabs)
 
 - `Date`: 2026-04-19
