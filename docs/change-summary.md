@@ -13,6 +13,30 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-22 (Famailink person-based Conversations MVP)
+
+- `Date`: 2026-04-22
+- `Change`: Added a Famailink `Conversations` surface modeled on root EFL Family Shares, with person-based circles, named retained conversations, text posts, comments, conversation read state, and conversation summaries in the person detail modal. The implementation reuses the normalized EFL share-table concepts while resolving access through active `person_id` membership instead of active family-group context.
+- `Type`: UI | API | Data | Schema
+- `Why`: The project definition now treats root EFL Shares as the feature reference, but Famailink must keep person/member-based access. The root cause of the missing product behavior was that Famailink only had a `conversations` visibility scope and a placeholder tab, not a conversation creation/read/posting surface.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `famailink/app/conversations/page.tsx`
+  - `famailink/app/api/conversations/**`
+  - `famailink/components/ConversationsClient.tsx`
+  - `famailink/components/FamailinkChrome.tsx`
+  - `famailink/components/TreeClient.tsx`
+  - `famailink/lib/conversations/**`
+  - `famailink/lib/family/store.ts`
+  - `famailink/app/globals.css`
+- `Data Changes`: No destructive data changes. Runtime compatibility creates/uses the existing normalized share tables if needed. Famailink-created circles write `family_group_key` only as required table metadata; read/write authorization is by membership rows.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run build --prefix famailink` initially failed inside the local sandbox with `[Error: spawn EPERM]`; rerunning outside the sandbox passed.
+- `Rollback Notes`: Revert the Famailink conversation routes, store, client page, navigation tab, person-modal conversation summary wiring, and associated docs.
+- `Design Decision Change`: Yes. Added the Famailink conversations decision to `designchoices.md`.
+
 ## 2026-04-21 (Disable hard-cutover apply mode)
 
 - `Date`: 2026-04-21

@@ -579,3 +579,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the two-tab modal until all content types are ready; populate Stories and Conversations immediately; ship all Vitals/Media data to the client and hide denied scopes in React.
 - `Impact`: Famailink `/tree` now loads person content through a server-side content map that omits Vitals or Media for denied scopes before serialization. Vitals use `People` contact fields plus person employment/death attributes for occupation and age, and Media uses direct person `MediaLinks` joined to `MediaAssets`. No schema changes are introduced.
 - `Follow-up`: Add a durable Famailink media delivery path or public media base configuration if object-storage thumbnails need to render beyond existing direct/public URLs, then populate Stories and Conversations in separate passes after the Vitals/Media MVP is validated.
+
+## 2026-04-22
+
+- `Area`: Famailink conversations
+- `Decision`: Build Famailink conversations from the root EFL Family Shares concepts while enforcing access by `person_id` membership, not active family-group context. Existing share tables may be reused as the normalized persistence shape, but `family_group_key` is implementation metadata for Famailink-created conversations.
+- `Reason`: The product goal is family communication that grows family history. Root EFL already implemented the useful conversation primitives, but Famailink's intended model is person-based visibility and membership rather than family-group-scoped access.
+- `Alternatives Considered`: Import root EFL Shares directly; keep Famailink Conversations as a shell; build a brand-new schema before the first user-facing slice.
+- `Impact`: Famailink gets a standalone Conversations page, member-based route guards, named conversations, posts, comments, and read state without changing the existing subscription/profile-sharing rules.
+- `Follow-up`: Add canonical media attach/upload in the next slice using `MediaAssets` originals/thumbnails and `MediaLinks` associations, instead of inventing a separate conversation-media path.

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import type {
@@ -130,6 +131,17 @@ type PersonMediaItem = {
 type PersonContent = {
   vitals: PersonVitals | null;
   media: PersonMediaItem[];
+  conversations: PersonConversationSummary[];
+};
+
+type PersonConversationSummary = {
+  targetPersonId: string;
+  conversationId: string;
+  circleId: string;
+  circleTitle: string;
+  title: string;
+  lastActivityAt: string;
+  unreadCount: number;
 };
 
 type HouseholdUnit = {
@@ -942,7 +954,51 @@ function MediaTab({ content }: { content: PersonContent }) {
   );
 }
 
-function DeferredContentTab({ label }: { label: "Stories" | "Conversations" }) {
+function formatConversationDate(value: string) {
+  const raw = normalize(value);
+  if (!raw) return "";
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function ConversationsTab({ content }: { content: PersonContent }) {
+  if (!content.conversations.length) {
+    return (
+      <section className="modal-section compact">
+        <p className="empty-state">No conversations are available here yet.</p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="person-conversation-list">
+      {content.conversations.map((conversation) => (
+        <Link
+          key={`${conversation.circleId}:${conversation.conversationId}`}
+          className="person-conversation-card"
+          href={`/conversations?circleId=${encodeURIComponent(conversation.circleId)}&conversationId=${encodeURIComponent(conversation.conversationId)}`}
+        >
+          <span>
+            <strong>{conversation.title}</strong>
+            <small>{conversation.circleTitle}</small>
+          </span>
+          <span className="person-conversation-meta">
+            {conversation.unreadCount > 0 ? <em>{conversation.unreadCount}</em> : null}
+            {formatConversationDate(conversation.lastActivityAt)}
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function DeferredContentTab({ label }: { label: "Stories" }) {
   return (
     <section className="modal-section compact">
       <p className="empty-state">{label} are not populated in this MVP pass.</p>
@@ -1059,7 +1115,7 @@ function RelativeModal({
               {activeTab === "vitals" ? <VitalsTab content={personContent} /> : null}
               {activeTab === "media" ? <MediaTab content={personContent} /> : null}
               {activeTab === "stories" ? <DeferredContentTab label="Stories" /> : null}
-              {activeTab === "conversations" ? <DeferredContentTab label="Conversations" /> : null}
+              {activeTab === "conversations" ? <ConversationsTab content={personContent} /> : null}
 
               {activeTab === "rules" ? (
                 <div className="modal-sections">
@@ -2218,7 +2274,7 @@ export function TreeClient({
       {selected ? (
         <RelativeModal
           selected={selected}
-          personContent={personContentById[selected.person.personId] ?? { vitals: null, media: [] }}
+          personContent={personContentById[selected.person.personId] ?? { vitals: null, media: [], conversations: [] }}
           settings={settings}
           onClose={() => {
             if (saveBusy) return;

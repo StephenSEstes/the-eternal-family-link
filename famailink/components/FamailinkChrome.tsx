@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 type FamailinkChromeProps = {
-  active: "tree" | "administration";
+  active: "tree" | "conversations" | "administration";
   username: string;
   personId: string;
 };
@@ -53,6 +53,9 @@ export function FamailinkChrome({ active, username, personId }: FamailinkChromeP
       <nav className="app-tabs" aria-label="Famailink navigation">
         <Link className={`app-tab${active === "tree" ? " is-active" : ""}`} href="/tree">
           Family Tree
+        </Link>
+        <Link className={`app-tab${active === "conversations" ? " is-active" : ""}`} href="/conversations">
+          Conversations
         </Link>
         <Link className={`app-tab${active === "administration" ? " is-active" : ""}`} href="/administration">
           Administration

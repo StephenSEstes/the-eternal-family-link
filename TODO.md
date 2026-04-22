@@ -4,6 +4,38 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
+- [ ] Famailink person-based Conversations MVP from EFL Shares
+  Priority: High (#1)
+  Status: In progress 2026-04-22
+  Progress 2026-04-22:
+  - Completed initial store/API/UI slice for person-based circles, named conversations, text posts, comments, read state, and person-modal conversation summaries.
+  - Remaining for this task: canonical media attach/upload and deployed-environment validation.
+  Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
+  Scope:
+  - Add a Famailink `Conversations` surface for family circles, named durable conversations, posts, comments, and conversation read state.
+  - Reuse the existing EFL Shares table concepts (`share_threads`, `share_thread_members`, `share_conversations`, `share_conversation_members`, `share_posts`, `share_post_comments`) while treating `family_group_key` as implementation metadata.
+  - Enforce access by active `person_id` membership in the circle/conversation.
+  - Keep Famailink profile visibility rules separate from conversation participation.
+  - Surface conversation summaries under the person detail `Conversations` tab when the signed-in viewer is allowed to see that person's conversation profile scope.
+  - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
+  Phases:
+  - Phase 1: Conversation store and route handlers for circles, conversations, text posts, comments, and read-state.
+  - Phase 2: User-facing Conversations page with circle creation, conversation creation, message posting, comments, unread counts, and participant display.
+  - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
+  - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
+  API/UI/data changes:
+  - API: new Famailink `/api/conversations/...` route handlers.
+  - UI: new `/conversations` page and app header tab.
+  - Data: no destructive migration; runtime compatibility creates/uses existing normalized share tables if needed.
+  Validation:
+  - Famailink type/build check passes.
+  - Signed-in member can create a circle from selected people.
+  - Signed-in member can create multiple named conversations inside a circle.
+  - Members can add text posts and comments.
+  - Conversation unread counts clear through per-person read state.
+  - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
+  Completion criteria:
+  - Famailink has a usable conversation MVP that follows the project definition and does not depend on active family-group access.
 - [ ] Legacy media/share compatibility hard cutover + test-content reset
   Priority: High
   Status: In progress 2026-04-04

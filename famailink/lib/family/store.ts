@@ -2,6 +2,7 @@ import "server-only";
 
 import oracledb from "oracledb";
 import type { ProfileVisibilityMapRow } from "@/lib/access/types";
+import { listPersonConversationSummaries, type PersonConversationSummary } from "@/lib/conversations/store";
 import { withConnection } from "@/lib/oci/client";
 import {
   RELATIONSHIP_CATEGORIES,
@@ -110,6 +111,7 @@ export type PersonMediaItem = {
 export type PersonContent = {
   vitals: PersonVitals | null;
   media: PersonMediaItem[];
+  conversations: PersonConversationSummary[];
 };
 
 function normalize(value?: string) {
@@ -815,9 +817,16 @@ export async function buildPersonContentForAccess(input: {
   const visibilityByTarget = new Map(input.visibilityRows.map((row) => [normalize(row.targetPersonId), row]));
   const vitalsPersonIds = personIds.filter((personId) => personId === viewerPersonId || visibilityByTarget.get(personId)?.canVitals);
   const mediaPersonIds = personIds.filter((personId) => personId === viewerPersonId || visibilityByTarget.get(personId)?.canMedia);
-  const [vitalsByPerson, mediaByPerson] = await Promise.all([
+  const conversationPersonIds = personIds.filter(
+    (personId) => personId === viewerPersonId || visibilityByTarget.get(personId)?.canConversations,
+  );
+  const [vitalsByPerson, mediaByPerson, conversationsByPerson] = await Promise.all([
     listPersonVitalsForIds(vitalsPersonIds),
     listPersonMediaForIds(mediaPersonIds),
+    listPersonConversationSummaries({
+      viewerPersonId,
+      targetPersonIds: conversationPersonIds,
+    }),
   ]);
 
   const out: Record<string, PersonContent> = {};
@@ -825,9 +834,11 @@ export async function buildPersonContentForAccess(input: {
     const visibilityRow = visibilityByTarget.get(personId);
     const canSeeVitals = personId === viewerPersonId || Boolean(visibilityRow?.canVitals);
     const canSeeMedia = personId === viewerPersonId || Boolean(visibilityRow?.canMedia);
+    const canSeeConversations = personId === viewerPersonId || Boolean(visibilityRow?.canConversations);
     out[personId] = {
       vitals: canSeeVitals ? (vitalsByPerson.get(personId) ?? null) : null,
       media: canSeeMedia ? (mediaByPerson.get(personId) ?? []) : [],
+      conversations: canSeeConversations ? (conversationsByPerson[personId] ?? []) : [],
     };
   }
   return out;
