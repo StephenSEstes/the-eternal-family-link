@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-21 (Disable hard-cutover apply mode)
+
+- `Date`: 2026-04-21
+- `Change`: Disabled the destructive hard-cutover reset apply path. The `content:reset:hard-cutover:apply` npm command was removed, and `scripts/reset-content-hard-cutover.cjs --apply` now exits before loading OCI environment or opening a database connection. The script remains available for dry-run count reporting only.
+- `Type`: Data Tooling
+- `Why`: Root cause was a tooling safety issue. The apply mode could delete canonical `MediaAssets` and `MediaLinks` rows even though the active media model uses those tables as the file registry and person/household/attribute association map. That made the reset apply path broader than the intended "test-only" cleanup.
+- `Files`: `package.json`, `scripts/reset-content-hard-cutover.cjs`, `TODO.md`, `docs/change-summary.md`, `changeHistory.md`
+- `Data Changes`: None. No OCI writes were run.
+- `Verify`:
+  - `npm run content:reset:hard-cutover` still reports dry-run counts.
+  - `node scripts/reset-content-hard-cutover.cjs --apply` fails before connecting to OCI.
+  - `npm run content:reset:hard-cutover:apply` is no longer a package script.
+- `Rollback Notes`: Reintroduce an apply command only after implementing a targeted reset plan that preserves canonical media registry/link data by default.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-21 (Legacy media/share hard-cutover dry-run coverage)
 
 - `Date`: 2026-04-21

@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-21: Disabled the destructive hard-cutover apply mode; the reset script is now dry-run only and the npm apply shortcut was removed. See `docs/change-summary.md`.
 - 2026-04-21: Removed the last legacy media metadata read fallback and expanded the hard-cutover reset dry-run/apply script to cover current Shares group and conversation tables. See `docs/change-summary.md`.
 - 2026-04-21: Removed disconnected tree/share declarations so the root build no longer reports unused-variable warnings. See `docs/change-summary.md`.
 - 2026-04-21: Fixed the root Vercel build scope so `efl2/` and `famailink/` are checked by their own package builds instead of by the root app's `@/* -> ./src/*` alias. See `docs/change-summary.md`.

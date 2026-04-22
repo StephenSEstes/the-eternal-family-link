@@ -115,18 +115,6 @@ async function safeCount(connection, tableName, whereClause = "", binds = {}) {
   }
 }
 
-async function safeExec(connection, sql, binds = {}) {
-  try {
-    const result = await connection.execute(sql, binds, { autoCommit: false });
-    return { skipped: false, rowsAffected: Number(result.rowsAffected ?? 0) };
-  } catch (error) {
-    if (isMissingTableError(error.message)) {
-      return { skipped: true, rowsAffected: 0 };
-    }
-    throw error;
-  }
-}
-
 function printCounts(title, counts) {
   console.log(`\n${title}`);
   for (const [label, value] of counts) {
@@ -139,8 +127,11 @@ function printCounts(title, counts) {
 }
 
 async function main() {
+  if (hasFlag("apply")) {
+    throw new Error("Apply mode is disabled. Use this script for dry-run counts only until a targeted reset plan is implemented.");
+  }
+
   loadLocalEnvFiles();
-  const apply = hasFlag("apply");
   const walletDir = resolveWalletDirectory();
   const required = ["OCI_DB_CONNECT_STRING", "OCI_DB_USER", "OCI_DB_PASSWORD", "OCI_WALLET_PASSWORD"];
   const missing = required.filter((key) => !String(process.env[key] ?? "").trim());
@@ -194,82 +185,7 @@ async function main() {
     ];
     printCounts("Before", beforeCounts);
 
-    if (!apply) {
-      console.log("\nDry run only. Re-run with --apply to delete test content.");
-      return;
-    }
-
-    const statements = [
-      ["notification_outbox", "DELETE FROM notification_outbox"],
-      ["push_subscriptions", "DELETE FROM push_subscriptions"],
-      ["share_post_comments", "DELETE FROM share_post_comments"],
-      ["share_posts", "DELETE FROM share_posts"],
-      ["share_conversation_members", "DELETE FROM share_conversation_members"],
-      ["share_conversations", "DELETE FROM share_conversations"],
-      ["share_thread_members", "DELETE FROM share_thread_members"],
-      ["share_threads", "DELETE FROM share_threads"],
-      ["share_group_members", "DELETE FROM share_group_members"],
-      ["share_groups", "DELETE FROM share_groups"],
-      ["media_comments", "DELETE FROM media_comments"],
-      ["face_matches", "DELETE FROM face_matches"],
-      ["face_instances", "DELETE FROM face_instances"],
-      ["person_face_profiles", "DELETE FROM person_face_profiles"],
-      ["media_links", "DELETE FROM media_links"],
-      ["media_assets", "DELETE FROM media_assets"],
-      [
-        "attributes(media/photo/video/audio)",
-        "DELETE FROM attributes WHERE LOWER(TRIM(NVL(attribute_type, ''))) IN ('media','photo','video','audio')",
-      ],
-      ["people.photo_file_id", "UPDATE people SET photo_file_id = '' WHERE TRIM(NVL(photo_file_id, '')) <> ''"],
-      [
-        "households.wedding_photo_file_id",
-        "UPDATE households SET wedding_photo_file_id = '' WHERE TRIM(NVL(wedding_photo_file_id, '')) <> ''",
-      ],
-    ];
-
-    console.log("\nApplying hard cutover reset...");
-    for (const [label, sql] of statements) {
-      const result = await safeExec(connection, sql);
-      if (result.skipped) {
-        console.log(`- ${label}: skipped (table not found)`);
-      } else {
-        console.log(`- ${label}: ${result.rowsAffected}`);
-      }
-    }
-    await connection.commit();
-
-    const afterCounts = [
-      ["share_groups", await safeCount(connection, "share_groups")],
-      ["share_group_members", await safeCount(connection, "share_group_members")],
-      ["share_threads", await safeCount(connection, "share_threads")],
-      ["share_thread_members", await safeCount(connection, "share_thread_members")],
-      ["share_conversations", await safeCount(connection, "share_conversations")],
-      ["share_conversation_members", await safeCount(connection, "share_conversation_members")],
-      ["share_posts", await safeCount(connection, "share_posts")],
-      ["share_post_comments", await safeCount(connection, "share_post_comments")],
-      ["notification_outbox", await safeCount(connection, "notification_outbox")],
-      ["push_subscriptions", await safeCount(connection, "push_subscriptions")],
-      ["media_assets", await safeCount(connection, "media_assets")],
-      ["media_links", await safeCount(connection, "media_links")],
-      ["media_comments", await safeCount(connection, "media_comments")],
-      ["face_instances", await safeCount(connection, "face_instances")],
-      ["face_matches", await safeCount(connection, "face_matches")],
-      ["person_face_profiles", await safeCount(connection, "person_face_profiles")],
-      [
-        "attributes(media/photo/video/audio)",
-        await safeCount(
-          connection,
-          "attributes",
-          "LOWER(TRIM(NVL(attribute_type, ''))) IN ('media','photo','video','audio')",
-        ),
-      ],
-      ["people.photo_file_id not empty", await safeCount(connection, "people", "TRIM(NVL(photo_file_id, '')) <> ''")],
-      [
-        "households.wedding_photo_file_id not empty",
-        await safeCount(connection, "households", "TRIM(NVL(wedding_photo_file_id, '')) <> ''"),
-      ],
-    ];
-    printCounts("After", afterCounts);
+    console.log("\nDry run only. Apply mode is disabled until a targeted reset plan is implemented.");
   } finally {
     await connection.close();
   }
