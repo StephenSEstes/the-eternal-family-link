@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-21 (Legacy media/share hard-cutover dry-run coverage)
+
+- `Date`: 2026-04-21
+- `Change`: Removed the remaining OCI media read fallback that inferred media kind from legacy `MediaAssets.media_metadata`, and expanded the hard-cutover reset script to count/delete the current normalized Shares tables (`share_groups`, `share_group_members`, `share_conversations`, `share_conversation_members`) in addition to the older share/media/face/comment content tables.
+- `Type`: API | Data Tooling
+- `Why`: Root cause was a mixed code/data cleanup issue. Runtime media reads had already stopped returning `usage_type='share'` links, but `getOciMediaAssetByFileId` and shared media-link mapping still derived `mediaKind` from legacy metadata JSON when the normalized `media_kind` column was missing. The existing reset script also predated the normalized Shares group/conversation tables, so a dry-run could underreport rows and an apply run could leave test share content behind.
+- `Files`: `src/lib/oci/tables.ts`, `scripts/reset-content-hard-cutover.cjs`, `TODO.md`, `docs/change-summary.md`, `changeHistory.md`
+- `Data Changes`: None applied. Read-only dry-run reported current cleanup candidates: `share_groups=1`, `share_group_members=9`, `share_threads=11`, `share_thread_members=341`, `share_conversations=6`, `share_conversation_members=228`, `share_posts=4`, `share_post_comments=2`, `notification_outbox=107`, `media_assets=98`, `media_links=303`, `face_instances=71`, `face_matches=32`, `attributes(media/photo/video/audio)=70`; `media_comments=0`, `person_face_profiles=0`, and no profile-photo pointers were set.
+- `Verify`:
+  - `node scripts/reset-content-hard-cutover.cjs` runs in dry-run mode and reports the full current share/media/face/comment reset surface without deleting data.
+  - Media-link read SQL still excludes `usage_type='share'` rows.
+  - Media asset/link read mapping now uses normalized `media_kind` only and returns no legacy `media_metadata` payload from `getOciMediaAssetByFileId`.
+- `Rollback Notes`: Revert this change to restore legacy metadata-based media-kind inference and the narrower reset dry-run/apply scope.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-04-21 (Unused variable cleanup)
 
 - `Date`: 2026-04-21

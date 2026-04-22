@@ -7,6 +7,10 @@ I will update this list as we add, complete, or remove work.
 - [ ] Legacy media/share compatibility hard cutover + test-content reset
   Priority: High
   Status: In progress 2026-04-04
+  Progress 2026-04-21:
+  - Removed the remaining runtime media-kind read fallback from legacy `MediaAssets.media_metadata`; canonical reads now use the normalized `media_kind` column only.
+  - Expanded `scripts/reset-content-hard-cutover.cjs` dry-run/apply coverage to include current normalized Shares group/conversation tables.
+  - Captured read-only dry-run counts; destructive reset apply is still pending explicit approval.
   Est date: 2026-04-05
   Desc: Remove compatibility support for pre-canonical media/share behaviors and purge existing test-only media/share content so only the canonical write/read model remains active.
   Scope:

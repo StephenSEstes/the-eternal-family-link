@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import oracledb from "oracledb";
 import type { TableRecord } from "@/lib/data/types";
-import { buildMediaKindMetadata, inferStoredMediaKind } from "@/lib/media/upload";
+import { buildMediaKindMetadata } from "@/lib/media/upload";
 
 // Ensure CLOB columns are returned as text instead of Lob objects.
 oracledb.fetchAsString = [oracledb.CLOB];
@@ -3330,26 +3330,19 @@ function parseStoredNumber(value: unknown) {
 
 function resolveStoredMediaKindValue(input: {
   mediaKind?: string;
-  fileId?: string;
-  fileName?: string;
-  rawMetadata?: string;
 }) {
   const normalized = String(input.mediaKind ?? "").trim().toLowerCase();
   if (normalized === "image" || normalized === "video" || normalized === "audio" || normalized === "document") {
     return normalized;
   }
-  return inferStoredMediaKind(input.fileName || input.fileId || "", input.rawMetadata);
+  return "";
 }
 
 function mapOciMediaLinkRow(row: Record<string, unknown>): OciMediaLinkRow {
   const fileId = fromDbValue(row.FILE_ID);
   const fileName = fromDbValue(row.FILE_NAME);
-  const rawMetadata = fromDbValue(row.RAW_MEDIA_METADATA);
   const mediaKind = resolveStoredMediaKindValue({
     mediaKind: fromDbValue(row.MEDIA_KIND),
-    fileId,
-    fileName,
-    rawMetadata,
   });
   return {
     familyGroupKey: fromDbValue(row.FAMILY_GROUP_KEY),
@@ -3666,7 +3659,6 @@ async function queryOciMediaLinks(
          a.photo_date AS photo_date,
          l.is_primary,
          l.sort_order,
-         a.media_metadata AS raw_media_metadata,
          a.created_at AS created_at,
          a.source_provider,
          a.original_object_key,
@@ -7706,7 +7698,6 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
          a.media_width,
          a.media_height,
          a.media_duration_sec,
-         a.media_metadata,
          a.created_at,
          a.exif_extracted_at,
          a.exif_source_tag,
@@ -7734,13 +7725,9 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
     if (!row) {
       return null;
     }
-    const rawMetadata = fromDbValue(row.MEDIA_METADATA);
     const fileName = fromDbValue(row.FILE_NAME);
     const mediaKind = resolveStoredMediaKindValue({
       mediaKind: fromDbValue(row.MEDIA_KIND),
-      fileId: normalizedFileId,
-      fileName,
-      rawMetadata,
     });
     return {
       mediaId: fromDbValue(row.MEDIA_ID),
@@ -7760,7 +7747,7 @@ export async function getOciMediaAssetByFileId(fileId: string): Promise<OciMedia
       mediaWidth: parseStoredNumber(row.MEDIA_WIDTH),
       mediaHeight: parseStoredNumber(row.MEDIA_HEIGHT),
       mediaDurationSec: parseStoredNumber(row.MEDIA_DURATION_SEC),
-      mediaMetadata: rawMetadata,
+      mediaMetadata: "",
       createdAt: fromDbValue(row.CREATED_AT),
       exifExtractedAt: fromDbValue(row.EXIF_EXTRACTED_AT),
       exifSourceTag: fromDbValue(row.EXIF_SOURCE_TAG),

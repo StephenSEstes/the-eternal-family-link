@@ -162,8 +162,12 @@ async function main() {
 
   try {
     const beforeCounts = [
+      ["share_groups", await safeCount(connection, "share_groups")],
+      ["share_group_members", await safeCount(connection, "share_group_members")],
       ["share_threads", await safeCount(connection, "share_threads")],
       ["share_thread_members", await safeCount(connection, "share_thread_members")],
+      ["share_conversations", await safeCount(connection, "share_conversations")],
+      ["share_conversation_members", await safeCount(connection, "share_conversation_members")],
       ["share_posts", await safeCount(connection, "share_posts")],
       ["share_post_comments", await safeCount(connection, "share_post_comments")],
       ["notification_outbox", await safeCount(connection, "notification_outbox")],
@@ -200,8 +204,12 @@ async function main() {
       ["push_subscriptions", "DELETE FROM push_subscriptions"],
       ["share_post_comments", "DELETE FROM share_post_comments"],
       ["share_posts", "DELETE FROM share_posts"],
+      ["share_conversation_members", "DELETE FROM share_conversation_members"],
+      ["share_conversations", "DELETE FROM share_conversations"],
       ["share_thread_members", "DELETE FROM share_thread_members"],
       ["share_threads", "DELETE FROM share_threads"],
+      ["share_group_members", "DELETE FROM share_group_members"],
+      ["share_groups", "DELETE FROM share_groups"],
       ["media_comments", "DELETE FROM media_comments"],
       ["face_matches", "DELETE FROM face_matches"],
       ["face_instances", "DELETE FROM face_instances"],
@@ -231,8 +239,12 @@ async function main() {
     await connection.commit();
 
     const afterCounts = [
+      ["share_groups", await safeCount(connection, "share_groups")],
+      ["share_group_members", await safeCount(connection, "share_group_members")],
       ["share_threads", await safeCount(connection, "share_threads")],
       ["share_thread_members", await safeCount(connection, "share_thread_members")],
+      ["share_conversations", await safeCount(connection, "share_conversations")],
+      ["share_conversation_members", await safeCount(connection, "share_conversation_members")],
       ["share_posts", await safeCount(connection, "share_posts")],
       ["share_post_comments", await safeCount(connection, "share_post_comments")],
       ["notification_outbox", await safeCount(connection, "notification_outbox")],
