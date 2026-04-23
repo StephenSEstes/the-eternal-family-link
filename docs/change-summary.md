@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-22 (Famailink Groups access layer)
+
+- `Date`: 2026-04-22
+- `Change`: Renamed the user-facing Famailink circle concept to `Groups`, added group descriptions, blocked duplicate active groups with the same exact member set, added owner soft-delete/archive for groups, and scoped Famailink group reads to the Famailink group namespace.
+- `Type`: UI | API | Data | Schema
+- `Why`: Root cause was that the first conversation MVP exposed the temporary `circle` language and only stored a member set/title. The product direction is now that Groups are the member-based sharing/access container for conversations and future media/story sharing, while subscription and profile-sharing rules remain separate access tools.
+- `Files`: `famailink/lib/conversations/store.ts`, `famailink/app/api/conversations/circles/**`, `famailink/components/ConversationsClient.tsx`, `famailink/components/FamailinkChrome.tsx`, `famailink/app/globals.css`, `docs/project-definition.md`, `docs/data-schema.md`, `designchoices.md`, `TODO.md`, `changeHistory.md`
+- `Data Changes`: Adds runtime compatibility for `share_threads.group_description`. Delete is soft archive only: group/thread rows and conversations are hidden by status, not hard-deleted, and media/story registry rows are not touched.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` timed out inside the local sandbox; rerunning outside the sandbox passed.
+- `Rollback Notes`: Revert the group description column usage, group delete route, UI terminology changes, and namespace filtering.
+- `Design Decision Change`: Yes. Added the Famailink Groups decision to `designchoices.md`.
+
 ## 2026-04-22 (Famailink person-based Conversations MVP)
 
 - `Date`: 2026-04-22

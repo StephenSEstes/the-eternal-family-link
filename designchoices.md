@@ -588,3 +588,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Import root EFL Shares directly; keep Famailink Conversations as a shell; build a brand-new schema before the first user-facing slice.
 - `Impact`: Famailink gets a standalone Conversations page, member-based route guards, named conversations, posts, comments, and read state without changing the existing subscription/profile-sharing rules.
 - `Follow-up`: Add canonical media attach/upload in the next slice using `MediaAssets` originals/thumbnails and `MediaLinks` associations, instead of inventing a separate conversation-media path.
+
+- `Area`: Famailink groups
+- `Decision`: Use the user-facing term `Groups` for the family member sets that contain conversations and later mediate media/story sharing. A Famailink group has a name, description, exact active member set, and owner; duplicate active groups with the same exact member set are blocked/reused. Group access is direct membership-based and acts as an additional permission method alongside subscription and profile-sharing rules.
+- `Reason`: The product direction is that media and stories can be shared naturally through family groups, while subscription and sharing settings remain important for person-profile visibility and update preferences.
+- `Alternatives Considered`: Keep the temporary `circle` label; rely only on relationship-derived sharing rules; allow duplicate named groups with identical members.
+- `Impact`: The UI presents Groups instead of Circles, Famailink group rows are namespaced to Famailink-created share threads, and owner deletion archives groups without hard-deleting conversation/media/story history.
+- `Follow-up`: Wire group membership into canonical media/story attach flows so group-shared content can become person-linked history while preserving group conversation context.

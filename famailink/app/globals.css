@@ -626,9 +626,23 @@ select {
   border-color: color-mix(in oklab, var(--line) 82%, #fff 18%);
 }
 
+.danger-button {
+  color: #9f1d1d;
+  border-color: rgba(159, 29, 29, 0.24);
+  background: rgba(253, 242, 242, 0.94);
+}
+
 .primary-button:hover,
 .secondary-button:hover {
   transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  transform: none;
+  box-shadow: none;
 }
 
 .login-shell {
@@ -1670,6 +1684,21 @@ select {
   font-weight: 800;
 }
 
+.conversation-head-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.conversation-group-description {
+  max-width: 360px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .conversation-create-panel,
 .conversation-compose {
   display: grid;
@@ -1764,6 +1793,10 @@ select {
   font-size: 12px;
 }
 
+.conversation-list-description {
+  color: color-mix(in oklab, var(--ink) 70%, var(--muted) 30%);
+}
+
 .conversation-unread {
   min-width: 26px;
   height: 26px;
@@ -1780,6 +1813,19 @@ select {
   min-height: 84px;
   border-radius: 12px;
   resize: vertical;
+}
+
+.conversation-description-input {
+  min-height: 72px;
+  border-radius: 12px;
+  resize: vertical;
+}
+
+.conversation-inline-note {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .conversation-status {

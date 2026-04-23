@@ -22,8 +22,10 @@ type ConversationMember = {
 type ConversationCircle = {
   circleId: string;
   title: string;
+  description: string;
   lastActivityAt: string;
   unreadCount: number;
+  canDelete: boolean;
   members: ConversationMember[];
 };
 
@@ -82,6 +84,12 @@ function memberNames(members: ConversationMember[]) {
   return members.map((member) => member.displayName || member.personId).join(", ");
 }
 
+function personSignature(personIds: Iterable<string>) {
+  return Array.from(new Set(Array.from(personIds).map(normalize).filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right))
+    .join("|");
+}
+
 async function fetchJson(url: string, init?: RequestInit) {
   const response = await fetch(url, {
     ...init,
@@ -122,6 +130,7 @@ export function ConversationsClient({
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [newCircleTitle, setNewCircleTitle] = useState("");
+  const [newCircleDescription, setNewCircleDescription] = useState("");
   const [circleSearch, setCircleSearch] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [newConversationTitle, setNewConversationTitle] = useState("");
@@ -144,6 +153,14 @@ export function ConversationsClient({
       .filter((person) => !query || person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query))
       .slice(0, 40);
   }, [circleSearch, people, session.personId]);
+  const duplicateSelectedGroup = useMemo(() => {
+    const selectedSignature = personSignature([session.personId, ...selectedMemberIds]);
+    if (!selectedSignature || selectedMemberIds.length === 0) return null;
+    return (
+      circles.find((circle) => personSignature(circle.members.map((member) => member.personId)) === selectedSignature) ??
+      null
+    );
+  }, [circles, selectedMemberIds, session.personId]);
 
   async function reloadCircles(nextSelectedId = selectedCircleId) {
     const body = (await fetchJson("/api/conversations/circles")) as { circles?: ConversationCircle[] };
@@ -232,6 +249,11 @@ export function ConversationsClient({
   }
 
   async function createCircle() {
+    if (duplicateSelectedGroup) {
+      setSelectedCircleId(duplicateSelectedGroup.circleId);
+      setStatus(`Group already exists: ${duplicateSelectedGroup.title}`);
+      return;
+    }
     setBusy(true);
     setStatus("");
     try {
@@ -239,18 +261,42 @@ export function ConversationsClient({
         method: "POST",
         body: JSON.stringify({
           title: newCircleTitle,
+          description: newCircleDescription,
           memberPersonIds: selectedMemberIds,
         }),
-      })) as { circle?: ConversationCircle };
+      })) as { circle?: ConversationCircle; duplicate?: boolean };
       const circle = body.circle;
-      if (!circle) throw new Error("No circle returned.");
+      if (!circle) throw new Error("No group returned.");
       setNewCircleTitle("");
+      setNewCircleDescription("");
       setSelectedMemberIds([]);
       setCircleSearch("");
       await reloadCircles(circle.circleId);
       setSelectedCircleId(circle.circleId);
+      setStatus(body.duplicate ? `Group already exists: ${circle.title}` : "Group created.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to create circle.");
+      setStatus(error instanceof Error ? error.message : "Failed to create group.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSelectedGroup() {
+    if (!selectedCircle) return;
+    const confirmed = window.confirm(`Delete group "${selectedCircle.title}"? Its conversations will be hidden from all members.`);
+    if (!confirmed) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      await fetchJson(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}`, {
+        method: "DELETE",
+      });
+      setConversations([]);
+      setPosts([]);
+      await reloadCircles("");
+      setStatus("Group deleted.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to delete group.");
     } finally {
       setBusy(false);
     }
@@ -349,19 +395,28 @@ export function ConversationsClient({
         <div className="conversation-column circles-column">
           <div className="conversation-column-head">
             <div>
-              <p className="eyebrow">Family Circles</p>
-              <h1 className="conversation-title">Conversations</h1>
+              <p className="eyebrow">Family Groups</p>
+              <h1 className="conversation-title">Groups</h1>
             </div>
           </div>
 
           <div className="conversation-create-panel">
             <label className="field">
-              <span className="field-label">Circle name</span>
+              <span className="field-label">Group name</span>
               <input
                 className="input"
                 value={newCircleTitle}
                 onChange={(event) => setNewCircleTitle(event.target.value)}
                 placeholder="Example: Siblings"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Group description</span>
+              <textarea
+                className="input conversation-description-input"
+                value={newCircleDescription}
+                onChange={(event) => setNewCircleDescription(event.target.value)}
+                placeholder="What this group is for"
               />
             </label>
             <label className="field">
@@ -386,18 +441,21 @@ export function ConversationsClient({
                 </label>
               ))}
             </div>
+            {duplicateSelectedGroup ? (
+              <p className="conversation-inline-note">Group already exists: {duplicateSelectedGroup.title}</p>
+            ) : null}
             <button
               className="primary-button"
               type="button"
-              disabled={busy || selectedMemberIds.length === 0}
+              disabled={busy || selectedMemberIds.length === 0 || Boolean(duplicateSelectedGroup)}
               onClick={() => void createCircle()}
             >
-              Create Circle
+              Create Group
             </button>
           </div>
 
-          <div className="conversation-list" aria-label="Family circles">
-            {circles.length === 0 ? <p className="empty-state">No circles yet.</p> : null}
+          <div className="conversation-list" aria-label="Family groups">
+            {circles.length === 0 ? <p className="empty-state">No groups yet.</p> : null}
             {circles.map((circle) => (
               <button
                 key={circle.circleId}
@@ -407,6 +465,7 @@ export function ConversationsClient({
               >
                 <span className="conversation-list-main">
                   <strong>{circle.title}</strong>
+                  {circle.description ? <small className="conversation-list-description">{circle.description}</small> : null}
                   <small>{memberNames(circle.members)}</small>
                 </span>
                 {unreadBadge(circle.unreadCount)}
@@ -418,10 +477,20 @@ export function ConversationsClient({
         <div className="conversation-column topics-column">
           <div className="conversation-column-head">
             <div>
-              <p className="eyebrow">Named Topics</p>
-              <h2>{selectedCircle?.title ?? "Select a circle"}</h2>
+              <p className="eyebrow">Named Conversations</p>
+              <h2>{selectedCircle?.title ?? "Select a group"}</h2>
+              {selectedCircle?.description ? <p className="conversation-group-description">{selectedCircle.description}</p> : null}
             </div>
-            {selectedCircle ? <p className="conversation-meta">{selectedCircle.members.length} members</p> : null}
+            {selectedCircle ? (
+              <div className="conversation-head-actions">
+                <p className="conversation-meta">{selectedCircle.members.length} members</p>
+                {selectedCircle.canDelete ? (
+                  <button className="secondary-button danger-button" type="button" disabled={busy} onClick={() => void deleteSelectedGroup()}>
+                    Delete Group
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {selectedCircle ? (
@@ -456,7 +525,7 @@ export function ConversationsClient({
           ) : null}
 
           <div className="conversation-list" aria-label="Named conversations">
-            {selectedCircle && conversations.length === 0 ? <p className="empty-state">No conversations in this circle yet.</p> : null}
+            {selectedCircle && conversations.length === 0 ? <p className="empty-state">No conversations in this group yet.</p> : null}
             {conversations.map((conversation) => (
               <button
                 key={conversation.conversationId}

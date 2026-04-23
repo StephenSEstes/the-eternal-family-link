@@ -16,33 +16,36 @@ When root EFL behavior conflicts with Famailink's person-based data access rules
 
 ## Core Experience
 
-Family members share thoughts, comments, photos, videos, audio, and other media inside family circles. A circle defines who participates, such as immediate family, siblings, a family branch, or a custom set of family members.
+Family members share thoughts, comments, photos, videos, audio, and other media inside family Groups. A Group defines who participates, such as immediate family, siblings, a family branch, or a custom set of family members.
 
-Within each circle, members can create multiple named conversations. A conversation is a durable topic inside that circle, not a temporary chat message. When a conversation is started:
+Within each Group, members can create multiple named conversations. A conversation is a durable topic inside that Group, not a temporary chat message. When a conversation is started:
 
 - It has a name or title.
-- It is retained inside the circle.
+- It is retained inside the Group.
 - Members can keep adding comments, replies, thoughts, and media over time.
-- New conversations can be added inside the same circle without replacing older conversations.
+- New conversations can be added inside the same Group without replacing older conversations.
 
-A circle is therefore a container for multiple ongoing conversations. For example, one sibling circle might have separate conversations for a reunion, old photos, a birthday, family recipes, or a specific memory.
+A Group is therefore a named, described, member-based container for multiple ongoing conversations. For example, one sibling Group might have separate conversations for a reunion, old photos, a birthday, family recipes, or a specific memory.
 
-In the current root EFL implementation, these circles are represented by Family Shares thread/group tables. That implementation is a useful feature reference, but the long-term access model should be person/member based rather than active-family-group based.
+In the current root EFL implementation, these Groups are represented by Family Shares thread/group tables. That implementation is a useful feature reference, but the long-term access model should be person/member based rather than active-family-group based.
 
 ## Access Model
 
-Conversation access is based on people, not on whichever family group is active in the UI.
+Conversation and Group access is based on people, not on whichever family group is active in the UI.
 
-- A person can see a circle when they are an active participant/member of that circle.
-- A person can see a conversation when they are an active participant/member of that conversation or its parent circle.
+- A person can see a Group when they are an active participant/member of that Group.
+- A person can see a conversation when they are an active participant/member of that conversation or its parent Group.
 - The active family group may be used as audience-template metadata, lineage context, or a filtering convenience, but it should not be the primary read/access gate for conversations.
 - Family group keys from the root EFL implementation should be treated as implementation metadata unless a future design decision explicitly makes them access gates again.
 
 Famailink's person-based sharing rules remain the source for profile-content visibility. A user may participate in a conversation while still having limited access to another person's profile details depending on owner sharing rules.
 
+Groups are also an access-permission method for group-shared media and stories. Subscription preferences and profile-sharing settings remain important, but group membership can grant direct access to content shared into that Group when the media/story feature is wired to canonical storage.
+
 The access model should keep these concepts separate:
 
-- Conversation membership: whether a person participates in a circle or conversation.
+- Group membership: whether a person participates in a Group.
+- Conversation membership: whether a person participates in a conversation.
 - Profile/content visibility: whether a viewer can see another person's vitals, stories, media, or conversations on that person's profile.
 - Subscription preferences: whether a viewer wants updates/notifications from a person or relationship category.
 
@@ -54,8 +57,8 @@ Unread indicators should be conversation-specific. A user should be able to tell
 
 The product model should keep these concepts distinct:
 
-- Circle: who participates.
-- Conversation: the named durable topic inside the circle.
+- Group: who participates.
+- Conversation: the named durable topic inside the Group.
 - Post, message, media, comment, or reply: the content added to a conversation.
 - Read state: what each participant has or has not seen in each conversation.
 
@@ -91,13 +94,13 @@ Conversation cleanup must not destroy the family archive. Resetting or rebuildin
 
 The root EFL schema already contains useful tables for the sharing/conversation model. These are the reference concepts, with access semantics adjusted toward Famailink's person-based rules:
 
-- Circle identity and membership:
+- Group identity and membership:
   - Current root EFL reference: `share_groups`, `share_group_members`, `share_threads`, `share_thread_members`.
   - Intended direction: membership rows keyed by `person_id` should control access.
   - Family group fields may remain as metadata/template context, not primary access gates.
 - Named conversations:
   - Current root EFL reference: `share_conversations`.
-  - Each conversation belongs inside a circle/thread, has a required title, and is retained over time.
+  - Each conversation belongs inside a Group/thread, has a required title, and is retained over time.
 - Conversation membership and read state:
   - Current root EFL reference: `share_conversation_members`.
   - Stores per-person participation and `last_read_at`.
@@ -119,10 +122,12 @@ The root EFL schema already contains useful tables for the sharing/conversation 
 
 The target product should support:
 
-- Create and manage family circles from selected people or relationship templates.
-- Create named conversations inside a circle.
+- Create and manage family Groups from selected people or relationship templates.
+- Store a Group name, description, owner, and active member set.
+- Prevent duplicate active Groups with the exact same active member set.
+- Create named conversations inside a Group.
 - Continue adding comments, replies, text, and media to an existing conversation.
-- Create multiple conversations inside the same circle.
+- Create multiple conversations inside the same Group.
 - Show conversation-specific unread counts and new-media indicators.
 - Upload media into a conversation.
 - Store an archived original and generated thumbnail/preview for uploaded media.
@@ -136,7 +141,7 @@ The target product should support:
 
 Future planning should refine:
 
-- Circle membership and relationship-template behavior.
+- Group membership and relationship-template behavior.
 - Named conversation creation, retention, and unread/read behavior.
 - Media upload, thumbnail generation, and high-resolution archive storage.
 - Tagging people in media and manually linking media to people or history records.

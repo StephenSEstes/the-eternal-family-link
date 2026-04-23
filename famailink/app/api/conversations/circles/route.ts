@@ -28,10 +28,11 @@ export async function POST(request: NextRequest) {
     const circle = await createConversationCircle({
       actor: actorFromSession(session),
       title: normalize(payload.title),
+      description: normalize(payload.description),
       memberPersonIds: readStringArray(payload.memberPersonIds),
     });
-    return NextResponse.json({ circle });
+    return NextResponse.json(circle);
   } catch (error) {
-    return jsonError(error, "create_circle_failed", 400);
+    return jsonError(error, "create_group_failed", 400);
   }
 }

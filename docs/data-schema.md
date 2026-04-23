@@ -647,9 +647,10 @@ This section is a quick reference for the three data areas that drive profile/me
   - `thread_id`
   - `family_group_key`
   - `group_id` (nullable FK-style pointer to `ShareGroups.group_id` for normalized custom groups)
-  - `audience_type` (`siblings` | `household` | `entire_family` | `family_group` | `custom_group`)
+  - `audience_type` (`siblings` | `household` | `entire_family` | `family_group` | `custom_group` | `person_group`)
   - `audience_key`
   - `audience_label`
+  - `group_description`
   - `owner_person_id`
   - `created_by_person_id`
   - `created_by_email`
@@ -660,9 +661,12 @@ This section is a quick reference for the three data areas that drive profile/me
 - Purpose:
   - Canonical thread container for Family Shares conversations, keyed by audience resolution.
   - For normalized custom groups, thread membership intent is sourced from `ShareGroups` / `ShareGroupMembers`, while active thread access remains enforced by `ShareThreadMembers`.
+  - In Famailink, `family_group_key='famailink-person'` and `audience_type='person_group'` namespace Groups whose access is enforced by active `ShareThreadMembers.person_id` rows rather than active family-group context.
+  - `group_description` stores the user-facing Group description for Famailink Groups.
 - Logical index/key:
   - Unique: `thread_id`
   - Unique scope: (`family_group_key`, `audience_type`, `audience_key`)
+  - Famailink Groups use a hash of the exact active member signature as `audience_key`; active duplicate Groups with the same exact member set are blocked/reused in application logic.
   - Group lookup: (`group_id`, `family_group_key`)
   - Common lookup: (`family_group_key`, `last_post_at`)
 

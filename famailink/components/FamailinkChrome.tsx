@@ -55,7 +55,7 @@ export function FamailinkChrome({ active, username, personId }: FamailinkChromeP
           Family Tree
         </Link>
         <Link className={`app-tab${active === "conversations" ? " is-active" : ""}`} href="/conversations">
-          Conversations
+          Groups
         </Link>
         <Link className={`app-tab${active === "administration" ? " is-active" : ""}`} href="/administration">
           Administration
