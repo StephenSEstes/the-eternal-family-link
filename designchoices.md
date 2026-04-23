@@ -595,3 +595,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the temporary `circle` label; rely only on relationship-derived sharing rules; allow duplicate named groups with identical members.
 - `Impact`: The UI presents Groups instead of Circles, Famailink group rows are namespaced to Famailink-created share threads, and owner deletion archives groups without hard-deleting conversation/media/story history.
 - `Follow-up`: Wire group membership into canonical media/story attach flows so group-shared content can become person-linked history while preserving group conversation context.
+
+- `Area`: Famailink group creation
+- `Decision`: Group creation should support relationship preset member selection using the existing Famailink relationship categories, while still allowing individual add/remove. Group descriptions are optional. Each group member can have a member-specific display name for the same group.
+- `Reason`: Groups are intended to be natural sharing containers, so users should not have to manually search every sibling, cousin, parent-in-law, or niece/nephew when the relationship graph can resolve those sets.
+- `Alternatives Considered`: Keep only the flat person picker; create separate automatic system groups; force one shared group name for every member.
+- `Impact`: The Groups creation UI can add members by relationship category, and `share_thread_members.group_display_name` stores the member-specific group title used when that member views the group.
+- `Follow-up`: Add owner/admin member editing for existing groups after the create flow is validated.

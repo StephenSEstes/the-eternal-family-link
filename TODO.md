@@ -10,21 +10,24 @@ I will update this list as we add, complete, or remove work.
   Progress 2026-04-22:
   - Completed initial store/API/UI slice for person-based groups (initially labeled circles), named conversations, text posts, comments, read state, and person-modal conversation summaries.
   - In progress: renamed the user-facing circle concept to `Groups`, added group descriptions, duplicate member-set prevention/feedback, owner soft-delete, and Famailink group namespace filtering.
+  - In progress: added relationship preset member selection for group creation and member-specific group display names.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
-  - Add a Famailink `Groups` surface for named family groups, group descriptions, durable conversations, posts, comments, and conversation read state.
+  - Add a Famailink `Groups` surface for named family groups, optional group descriptions, durable conversations, posts, comments, and conversation read state.
   - Reuse the existing EFL Shares table concepts (`share_threads`, `share_thread_members`, `share_conversations`, `share_conversation_members`, `share_posts`, `share_post_comments`) while treating `family_group_key` as implementation metadata.
   - Enforce access by active `person_id` membership in the group/conversation.
   - Prevent duplicate active groups with the exact same member set.
   - Allow group owners to delete/archive groups without hard-deleting conversation, media, or story history rows.
+  - Support relationship preset member selection (siblings, parents, cousins, in-laws, nieces/nephews, everyone, etc.) while preserving individual member add/remove.
+  - Store each member's own display name for the same group.
   - Treat Groups as an additional direct access-permission method for group-linked media and stories, alongside subscription and profile-sharing rules.
   - Keep Famailink profile visibility rules separate from conversation participation.
   - Surface conversation summaries under the person detail `Conversations` tab when the signed-in viewer is allowed to see that person's conversation profile scope.
   - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
   Phases:
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
-  - Phase 2: User-facing Groups page with group creation, description capture, conversation creation, message posting, comments, unread counts, and participant display.
+  - Phase 2: User-facing Groups page with group creation, relationship preset member selection, optional description capture, member-specific group names, conversation creation, message posting, comments, unread counts, and participant display.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -33,7 +36,9 @@ I will update this list as we add, complete, or remove work.
   - Data: no destructive migration; runtime compatibility creates/uses existing normalized share tables if needed.
   Validation:
   - Famailink type/build check passes.
-  - Signed-in member can create a group from selected people with a name and description.
+  - Signed-in member can create a group from selected people with a name and optional description.
+  - Signed-in member can add group members by relationship preset and still add individual members.
+  - Each group member can have their own display name for that group.
   - Signed-in member cannot create a duplicate active group with the same exact member set.
   - Group owner can delete/archive a group and remove it from member-visible group lists.
   - Signed-in member can create multiple named conversations inside a group.

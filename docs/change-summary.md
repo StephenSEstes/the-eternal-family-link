@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-22 (Famailink relationship-based Group creation)
+
+- `Date`: 2026-04-22
+- `Change`: Added relationship preset member selection to the Famailink Groups creation flow, kept individual member add/remove, made descriptions explicitly optional, and added member-specific group display names with a per-member rename route.
+- `Type`: UI | API | Data | Schema
+- `Why`: Root cause was that the first Groups creation flow exposed only a flat person search, even though Famailink already computes relationship categories like siblings, parents, cousins, parents-in-law, and nieces/nephews. The chosen fix reuses those existing relationship buckets and stores each member's own group name on the membership row.
+- `Files`: `famailink/app/conversations/page.tsx`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`, `famailink/lib/conversations/route-helpers.ts`, `famailink/app/api/conversations/circles/**`, `famailink/app/globals.css`, `docs/project-definition.md`, `docs/data-schema.md`, `designchoices.md`, `TODO.md`, `changeHistory.md`
+- `Data Changes`: Adds runtime compatibility for `share_thread_members.group_display_name`. No destructive data changes.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes outside the local sandbox.
+- `Rollback Notes`: Revert the relationship preset UI, member display-name column usage, member-name PATCH route, and docs.
+- `Design Decision Change`: Yes. Added the Famailink group creation decision to `designchoices.md`.
+
 ## 2026-04-22 (Famailink Groups access layer)
 
 - `Date`: 2026-04-22

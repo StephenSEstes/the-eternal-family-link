@@ -1690,6 +1690,18 @@ select {
   gap: 8px;
 }
 
+.conversation-my-group-name {
+  width: min(300px, 100%);
+  display: grid;
+  gap: 5px;
+}
+
+.conversation-my-group-name span:last-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
 .conversation-group-description {
   max-width: 360px;
   margin: 6px 0 0;
@@ -1721,6 +1733,27 @@ select {
   display: grid;
   gap: 6px;
   padding-right: 2px;
+}
+
+.conversation-member-name-list {
+  display: grid;
+  gap: 8px;
+}
+
+.conversation-member-name-row {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.44fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.conversation-member-name-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversation-person-option {
@@ -1915,6 +1948,89 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
+}
+
+.conversation-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 31, 42, 0.42);
+}
+
+.conversation-modal {
+  width: min(620px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  border-radius: 12px;
+  background: var(--paper-strong);
+  box-shadow: 0 24px 64px rgba(11, 31, 42, 0.28);
+}
+
+.conversation-modal-head,
+.conversation-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.conversation-modal-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
+.conversation-modal-actions {
+  justify-content: flex-end;
+}
+
+.conversation-relationship-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.conversation-relationship-option {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.conversation-relationship-option.is-selected {
+  border-color: color-mix(in oklab, var(--accent) 62%, #fff 38%);
+  background: color-mix(in oklab, var(--accent-soft) 48%, #fff 52%);
+}
+
+.conversation-relationship-option strong {
+  overflow-wrap: anywhere;
+}
+
+.conversation-relationship-option span {
+  min-width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-soft) 78%, #fff 22%);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .rules-tree-shell {
@@ -2319,6 +2435,11 @@ select {
   .conversation-post-bubble,
   .conversation-comments {
     width: 100%;
+  }
+
+  .conversation-member-name-row,
+  .conversation-my-group-name span:last-child {
+    grid-template-columns: 1fr;
   }
 
   .conversation-comment-form {

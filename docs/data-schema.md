@@ -699,6 +699,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `group_id`
   - `family_group_key`
   - `person_id`
+  - `group_display_name`
   - `member_role` (`owner` | `member`)
   - `joined_at`
   - `left_at`
@@ -725,6 +726,7 @@ This section is a quick reference for the three data areas that drive profile/me
   - `is_active`
 - Purpose:
   - Membership/access table for share threads including read-state tracking.
+  - For Famailink Groups, `group_display_name` stores the member-specific name shown to that person for the group.
 - Logical index/key:
   - Unique: `thread_member_id`
   - Unique composite: (`thread_id`, `person_id`)

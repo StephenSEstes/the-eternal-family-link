@@ -25,7 +25,9 @@ Within each Group, members can create multiple named conversations. A conversati
 - Members can keep adding comments, replies, thoughts, and media over time.
 - New conversations can be added inside the same Group without replacing older conversations.
 
-A Group is therefore a named, described, member-based container for multiple ongoing conversations. For example, one sibling Group might have separate conversations for a reunion, old photos, a birthday, family recipes, or a specific memory.
+A Group is therefore a named, member-based container for multiple ongoing conversations. A description can be stored when useful, but it is optional. For example, one sibling Group might have separate conversations for a reunion, old photos, a birthday, family recipes, or a specific memory.
+
+Groups should be easy to create from the family relationship graph. A user can add members manually, or add a relationship preset such as siblings, parents, cousins, parents-in-law, nieces/nephews, or everyone. Relationship presets add the resolved people to the draft group while still allowing manual changes before save.
 
 In the current root EFL implementation, these Groups are represented by Family Shares thread/group tables. That implementation is a useful feature reference, but the long-term access model should be person/member based rather than active-family-group based.
 
@@ -35,6 +37,7 @@ Conversation and Group access is based on people, not on whichever family group 
 
 - A person can see a Group when they are an active participant/member of that Group.
 - A person can see a conversation when they are an active participant/member of that conversation or its parent Group.
+- Each member can have their own display name for the same Group.
 - The active family group may be used as audience-template metadata, lineage context, or a filtering convenience, but it should not be the primary read/access gate for conversations.
 - Family group keys from the root EFL implementation should be treated as implementation metadata unless a future design decision explicitly makes them access gates again.
 
@@ -124,6 +127,9 @@ The target product should support:
 
 - Create and manage family Groups from selected people or relationship templates.
 - Store a Group name, description, owner, and active member set.
+- Treat Group descriptions as optional.
+- Allow relationship preset member selection during Group creation.
+- Allow each member to store a member-specific Group display name.
 - Prevent duplicate active Groups with the exact same active member set.
 - Create named conversations inside a Group.
 - Continue adding comments, replies, text, and media to an existing conversation.

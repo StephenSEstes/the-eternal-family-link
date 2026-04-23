@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRouteSession } from "@/lib/auth/guards";
-import { deleteConversationCircle, getConversationCircleForPerson } from "@/lib/conversations/store";
-import { actorFromSession, jsonError } from "@/lib/conversations/route-helpers";
+import { deleteConversationCircle, getConversationCircleForPerson, updateConversationCircleMemberName } from "@/lib/conversations/store";
+import { actorFromSession, isRecord, jsonError, normalize } from "@/lib/conversations/route-helpers";
 
 type RouteContext = {
   params: Promise<{ circleId: string }>;
@@ -34,5 +34,27 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok });
   } catch (error) {
     return jsonError(error, "delete_group_failed", 400);
+  }
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { session, unauthorized } = requireRouteSession(request);
+  if (!session) return unauthorized;
+
+  const { circleId } = await context.params;
+  const payload = await request.json().catch(() => null);
+  if (!isRecord(payload)) {
+    return NextResponse.json({ error: "payload_must_be_object" }, { status: 400 });
+  }
+
+  try {
+    const circle = await updateConversationCircleMemberName({
+      actor: actorFromSession(session),
+      circleId,
+      title: normalize(payload.title),
+    });
+    return NextResponse.json({ circle });
+  } catch (error) {
+    return jsonError(error, "update_group_name_failed", 400);
   }
 }

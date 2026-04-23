@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-22: Made Famailink Group creation easier with relationship preset member selection, optional descriptions, individual member add/remove, and member-specific group display names. See `docs/change-summary.md`.
 - 2026-04-22: Updated Famailink Conversations to use user-facing Groups with descriptions, duplicate member-set prevention, member-only visibility, owner soft-delete/archive, and group-access documentation. See `docs/change-summary.md`.
 - 2026-04-22: Added the Famailink person-based Conversations MVP using EFL Shares concepts with member-based access, named conversations, text posts, comments, read state, and person-modal conversation summaries. See `docs/change-summary.md`.
 - 2026-04-21: Disabled the destructive hard-cutover apply mode; the reset script is now dry-run only and the npm apply shortcut was removed. See `docs/change-summary.md`.

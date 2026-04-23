@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRouteSession } from "@/lib/auth/guards";
 import { createConversationCircle, listConversationCirclesForPerson } from "@/lib/conversations/store";
-import { actorFromSession, isRecord, jsonError, normalize, readStringArray } from "@/lib/conversations/route-helpers";
+import { actorFromSession, isRecord, jsonError, normalize, readStringArray, readStringRecord } from "@/lib/conversations/route-helpers";
 
 export async function GET(request: NextRequest) {
   const { session, unauthorized } = requireRouteSession(request);
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       title: normalize(payload.title),
       description: normalize(payload.description),
       memberPersonIds: readStringArray(payload.memberPersonIds),
+      memberGroupNames: readStringRecord(payload.memberGroupNames),
     });
     return NextResponse.json(circle);
   } catch (error) {

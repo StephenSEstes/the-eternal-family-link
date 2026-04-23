@@ -22,6 +22,18 @@ export function readStringArray(value: unknown) {
   return value.map((entry) => normalize(entry)).filter(Boolean);
 }
 
+export function readStringRecord(value: unknown) {
+  if (!isRecord(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = normalize(key);
+    const normalizedEntry = normalize(entry);
+    if (!normalizedKey || !normalizedEntry) continue;
+    out[normalizedKey] = normalizedEntry;
+  }
+  return out;
+}
+
 export function jsonError(error: unknown, fallback: string, status = 500) {
   return NextResponse.json(
     { error: error instanceof Error ? error.message : fallback },

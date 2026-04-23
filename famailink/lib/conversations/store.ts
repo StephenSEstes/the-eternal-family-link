@@ -22,12 +22,14 @@ type DbConnection = {
 export type ConversationMember = {
   personId: string;
   displayName: string;
+  groupDisplayName: string;
   role: string;
 };
 
 export type ConversationCircle = {
   circleId: string;
   title: string;
+  defaultTitle: string;
   description: string;
   familyGroupKey: string;
   ownerPersonId: string;
@@ -202,12 +204,17 @@ async function ensureShareTables(connection: DbConnection) {
        thread_id VARCHAR2(128) NOT NULL,
        family_group_key VARCHAR2(128) NOT NULL,
        person_id VARCHAR2(128) NOT NULL,
+       group_display_name VARCHAR2(512),
        member_role VARCHAR2(64),
        joined_at VARCHAR2(64),
        last_read_at VARCHAR2(64),
        muted_until VARCHAR2(64),
        is_active VARCHAR2(8)
      )`,
+  );
+  await tryExecuteDdl(
+    connection,
+    "ALTER TABLE share_thread_members ADD group_display_name VARCHAR2(512)",
   );
   await tryExecuteDdl(
     connection,
@@ -301,7 +308,8 @@ function mapCircle(row: Record<string, unknown>): ConversationCircle {
   const createdByPersonId = getCell(row, "CREATED_BY_PERSON_ID");
   return {
     circleId: getCell(row, "THREAD_ID"),
-    title: getCell(row, "AUDIENCE_LABEL") || "Family Group",
+    title: getCell(row, "VIEWER_GROUP_DISPLAY_NAME") || getCell(row, "AUDIENCE_LABEL") || "Family Group",
+    defaultTitle: getCell(row, "AUDIENCE_LABEL") || "Family Group",
     description: getCell(row, "GROUP_DESCRIPTION"),
     familyGroupKey: getCell(row, "FAMILY_GROUP_KEY"),
     ownerPersonId,
@@ -373,6 +381,7 @@ async function listMembersForCircles(connection: DbConnection, circleIds: string
     `SELECT
        m.thread_id,
        m.person_id,
+       TRIM(NVL(m.group_display_name, '')) AS group_display_name,
        LOWER(TRIM(NVL(m.member_role, 'member'))) AS member_role,
        COALESCE(NULLIF(TRIM(p.display_name), ''), TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')), m.person_id) AS display_name
      FROM share_thread_members m
@@ -390,6 +399,7 @@ async function listMembersForCircles(connection: DbConnection, circleIds: string
     members.push({
       personId: getCell(row, "PERSON_ID"),
       displayName: getCell(row, "DISPLAY_NAME"),
+      groupDisplayName: getCell(row, "GROUP_DISPLAY_NAME"),
       role: getCell(row, "MEMBER_ROLE") || "member",
     });
     byCircle.set(circleId, members);
@@ -408,6 +418,7 @@ export async function listConversationCirclesForPerson(personId: string): Promis
          t.thread_id,
          t.family_group_key,
          t.audience_label,
+         COALESCE(NULLIF(TRIM(m.group_display_name), ''), NULLIF(TRIM(t.audience_label), ''), 'Family Group') AS viewer_group_display_name,
          DBMS_LOB.SUBSTR(t.group_description, 4000, 1) AS group_description,
          t.owner_person_id,
          t.created_by_person_id,
@@ -481,7 +492,8 @@ export async function getConversationCircleForPerson(circleId: string, personId:
          t.thread_id,
          t.family_group_key,
          t.audience_label,
-         t.group_description,
+         COALESCE(NULLIF(TRIM(m.group_display_name), ''), NULLIF(TRIM(t.audience_label), ''), 'Family Group') AS viewer_group_display_name,
+         DBMS_LOB.SUBSTR(t.group_description, 4000, 1) AS group_description,
          t.owner_person_id,
          t.created_by_person_id,
          t.created_at,
@@ -519,6 +531,7 @@ async function findCircleBySignature(connection: DbConnection, signature: string
          t.thread_id,
          t.family_group_key,
          t.audience_label,
+         COALESCE(NULLIF(TRIM(viewer_m.group_display_name), ''), NULLIF(TRIM(t.audience_label), ''), 'Family Group') AS viewer_group_display_name,
          DBMS_LOB.SUBSTR(t.group_description, 4000, 1) AS group_description,
          t.owner_person_id,
          t.created_by_person_id,
@@ -540,7 +553,7 @@ async function findCircleBySignature(connection: DbConnection, signature: string
          AND TRIM(t.family_group_key) = :familyGroupKey
          AND LOWER(TRIM(NVL(t.audience_type, 'person_group'))) IN ('person_group', 'person_circle')
          AND LOWER(TRIM(NVL(m.is_active, 'TRUE'))) <> 'false'
-       GROUP BY t.thread_id, t.family_group_key, t.audience_label, DBMS_LOB.SUBSTR(t.group_description, 4000, 1), t.owner_person_id,
+       GROUP BY t.thread_id, t.family_group_key, t.audience_label, viewer_m.group_display_name, DBMS_LOB.SUBSTR(t.group_description, 4000, 1), t.owner_person_id,
                 t.created_by_person_id, t.created_at, t.updated_at, t.last_post_at, viewer_m.member_role
        HAVING COUNT(*) = :memberCount
      )
@@ -558,6 +571,7 @@ export async function createConversationCircle(input: {
   title: string;
   description?: string;
   memberPersonIds: string[];
+  memberGroupNames?: Record<string, string>;
 }): Promise<{ circle: ConversationCircle; duplicate: boolean }> {
   const actorPersonId = normalize(input.actor.personId);
   const title = normalize(input.title) || "Family Group";
@@ -567,6 +581,7 @@ export async function createConversationCircle(input: {
     throw new Error("group_requires_at_least_two_people");
   }
   const signature = memberSignature(members);
+  const memberGroupNames = input.memberGroupNames ?? {};
   return withConnection(async (rawConnection) => {
     const connection = rawConnection as DbConnection;
     await ensureShareTables(connection);
@@ -635,6 +650,7 @@ export async function createConversationCircle(input: {
              thread_id,
              family_group_key,
              person_id,
+             group_display_name,
              member_role,
              joined_at,
              last_read_at,
@@ -645,6 +661,7 @@ export async function createConversationCircle(input: {
              :circleId,
              :familyGroupKey,
              :personId,
+             :groupDisplayName,
              :memberRole,
              :joinedAt,
              :lastReadAt,
@@ -656,6 +673,7 @@ export async function createConversationCircle(input: {
             circleId,
             familyGroupKey: FAMAILINK_SHARE_KEY,
             personId: memberPersonId,
+            groupDisplayName: normalize(memberGroupNames[memberPersonId]) || title,
             memberRole: memberPersonId === actorPersonId ? "owner" : "member",
             joinedAt: createdAt,
             lastReadAt: memberPersonId === actorPersonId ? createdAt : "",
@@ -739,6 +757,39 @@ export async function deleteConversationCircle(input: {
       await connection.rollback();
       throw error;
     }
+  });
+}
+
+export async function updateConversationCircleMemberName(input: {
+  actor: SessionActor;
+  circleId: string;
+  title: string;
+}): Promise<ConversationCircle> {
+  const actorPersonId = normalize(input.actor.personId);
+  const circleId = normalize(input.circleId);
+  const title = normalize(input.title);
+  if (!actorPersonId || !circleId) throw new Error("group_not_found");
+  if (!title) throw new Error("group_name_required");
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const circle = await getConversationCircleForPerson(circleId, actorPersonId);
+    if (!circle) throw new Error("group_not_found_or_not_member");
+
+    await connection.execute(
+      `UPDATE share_thread_members
+       SET group_display_name = :title
+       WHERE TRIM(thread_id) = :circleId
+         AND TRIM(person_id) = :personId
+         AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'`,
+      { title, circleId: circle.circleId, personId: actorPersonId },
+      { autoCommit: true },
+    );
+
+    const updated = await getConversationCircleForPerson(circle.circleId, actorPersonId);
+    if (!updated) throw new Error("updated_group_not_found");
+    return updated;
   });
 }
 

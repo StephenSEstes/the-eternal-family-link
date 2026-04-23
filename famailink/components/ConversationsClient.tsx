@@ -16,12 +16,14 @@ type PersonOption = {
 type ConversationMember = {
   personId: string;
   displayName: string;
+  groupDisplayName: string;
   role: string;
 };
 
 type ConversationCircle = {
   circleId: string;
   title: string;
+  defaultTitle: string;
   description: string;
   lastActivityAt: string;
   unreadCount: number;
@@ -61,6 +63,13 @@ type ConversationsClientProps = {
   initialCircleId: string;
   initialConversationId: string;
   people: PersonOption[];
+  relationshipOptions: RelationshipOption[];
+};
+
+type RelationshipOption = {
+  key: string;
+  label: string;
+  personIds: string[];
 };
 
 function normalize(value?: string) {
@@ -88,6 +97,10 @@ function personSignature(personIds: Iterable<string>) {
   return Array.from(new Set(Array.from(personIds).map(normalize).filter(Boolean)))
     .sort((left, right) => left.localeCompare(right))
     .join("|");
+}
+
+function uniqueIds(values: Iterable<string>) {
+  return Array.from(new Set(Array.from(values).map(normalize).filter(Boolean)));
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -118,6 +131,7 @@ export function ConversationsClient({
   initialCircleId: requestedCircleId,
   initialConversationId: requestedConversationId,
   people,
+  relationshipOptions,
 }: ConversationsClientProps) {
   const startingCircleId = initialCircles.some((circle) => circle.circleId === requestedCircleId)
     ? requestedCircleId
@@ -133,6 +147,11 @@ export function ConversationsClient({
   const [newCircleDescription, setNewCircleDescription] = useState("");
   const [circleSearch, setCircleSearch] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [memberGroupNames, setMemberGroupNames] = useState<Record<string, string>>({});
+  const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
+  const [selectedRelationshipKeys, setSelectedRelationshipKeys] = useState<string[]>([]);
+  const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
+  const [groupNameBusy, setGroupNameBusy] = useState(false);
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
   const [postDraft, setPostDraft] = useState("");
@@ -153,6 +172,24 @@ export function ConversationsClient({
       .filter((person) => !query || person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query))
       .slice(0, 40);
   }, [circleSearch, people, session.personId]);
+  const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
+  const selectedGroupMembersForNames = useMemo(() => {
+    const creator = peopleById.get(session.personId) ?? {
+      personId: session.personId,
+      displayName: "You",
+    };
+    return [creator, ...selectedMemberIds.map((personId) => peopleById.get(personId)).filter((person): person is PersonOption => Boolean(person))];
+  }, [peopleById, selectedMemberIds, session.personId]);
+  const selectedRelationshipPeopleCount = useMemo(() => {
+    const personIds = new Set<string>();
+    for (const key of selectedRelationshipKeys) {
+      const option = relationshipOptions.find((entry) => entry.key === key);
+      for (const personId of option?.personIds ?? []) {
+        if (personId !== session.personId) personIds.add(personId);
+      }
+    }
+    return personIds.size;
+  }, [relationshipOptions, selectedRelationshipKeys, session.personId]);
   const duplicateSelectedGroup = useMemo(() => {
     const selectedSignature = personSignature([session.personId, ...selectedMemberIds]);
     if (!selectedSignature || selectedMemberIds.length === 0) return null;
@@ -161,6 +198,7 @@ export function ConversationsClient({
       null
     );
   }, [circles, selectedMemberIds, session.personId]);
+  const selectedGroupNameDraft = selectedCircle ? groupNameDrafts[selectedCircle.circleId] ?? selectedCircle.title : "";
 
   async function reloadCircles(nextSelectedId = selectedCircleId) {
     const body = (await fetchJson("/api/conversations/circles")) as { circles?: ConversationCircle[] };
@@ -248,6 +286,33 @@ export function ConversationsClient({
     );
   }
 
+  function toggleRelationshipKey(key: string) {
+    setSelectedRelationshipKeys((current) =>
+      current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
+    );
+  }
+
+  function addRelationshipMembers() {
+    const personIds = new Set<string>();
+    for (const key of selectedRelationshipKeys) {
+      const option = relationshipOptions.find((entry) => entry.key === key);
+      for (const personId of option?.personIds ?? []) {
+        if (personId !== session.personId) personIds.add(personId);
+      }
+    }
+    setSelectedMemberIds((current) => uniqueIds([...current, ...personIds]));
+    setSelectedRelationshipKeys([]);
+    setRelationshipModalOpen(false);
+    if (personIds.size) setStatus(`${personIds.size} relationship members added.`);
+  }
+
+  function setMemberGroupName(personId: string, value: string) {
+    setMemberGroupNames((current) => ({
+      ...current,
+      [personId]: value,
+    }));
+  }
+
   async function createCircle() {
     if (duplicateSelectedGroup) {
       setSelectedCircleId(duplicateSelectedGroup.circleId);
@@ -263,6 +328,12 @@ export function ConversationsClient({
           title: newCircleTitle,
           description: newCircleDescription,
           memberPersonIds: selectedMemberIds,
+          memberGroupNames: Object.fromEntries(
+            selectedGroupMembersForNames.map((person) => [
+              person.personId,
+              normalize(memberGroupNames[person.personId]) || normalize(newCircleTitle) || "Family Group",
+            ]),
+          ),
         }),
       })) as { circle?: ConversationCircle; duplicate?: boolean };
       const circle = body.circle;
@@ -270,6 +341,7 @@ export function ConversationsClient({
       setNewCircleTitle("");
       setNewCircleDescription("");
       setSelectedMemberIds([]);
+      setMemberGroupNames({});
       setCircleSearch("");
       await reloadCircles(circle.circleId);
       setSelectedCircleId(circle.circleId);
@@ -299,6 +371,29 @@ export function ConversationsClient({
       setStatus(error instanceof Error ? error.message : "Failed to delete group.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function saveMyGroupName() {
+    if (!selectedCircle) return;
+    const title = normalize(selectedGroupNameDraft);
+    if (!title || title === selectedCircle.title) return;
+    setGroupNameBusy(true);
+    setStatus("");
+    try {
+      const body = (await fetchJson(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      })) as { circle?: ConversationCircle };
+      const circle = body.circle;
+      if (!circle) throw new Error("No group returned.");
+      setCircles((current) => current.map((entry) => (entry.circleId === circle.circleId ? circle : entry)));
+      setGroupNameDrafts((current) => ({ ...current, [circle.circleId]: circle.title }));
+      setStatus("Group name saved.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to save group name.");
+    } finally {
+      setGroupNameBusy(false);
     }
   }
 
@@ -411,7 +506,7 @@ export function ConversationsClient({
               />
             </label>
             <label className="field">
-              <span className="field-label">Group description</span>
+              <span className="field-label">Group description (optional)</span>
               <textarea
                 className="input conversation-description-input"
                 value={newCircleDescription}
@@ -419,6 +514,9 @@ export function ConversationsClient({
                 placeholder="What this group is for"
               />
             </label>
+            <button className="secondary-button" type="button" onClick={() => setRelationshipModalOpen(true)}>
+              Add by Relationship
+            </button>
             <label className="field">
               <span className="field-label">Add people</span>
               <input
@@ -441,6 +539,22 @@ export function ConversationsClient({
                 </label>
               ))}
             </div>
+            {selectedMemberIds.length > 0 ? (
+              <div className="conversation-member-name-list">
+                <span className="field-label">Group name by member</span>
+                {selectedGroupMembersForNames.map((person) => (
+                  <label key={person.personId} className="conversation-member-name-row">
+                    <span>{person.personId === session.personId ? "You" : person.displayName}</span>
+                    <input
+                      className="input"
+                      value={memberGroupNames[person.personId] ?? ""}
+                      onChange={(event) => setMemberGroupName(person.personId, event.target.value)}
+                      placeholder={newCircleTitle || "Family Group"}
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : null}
             {duplicateSelectedGroup ? (
               <p className="conversation-inline-note">Group already exists: {duplicateSelectedGroup.title}</p>
             ) : null}
@@ -484,6 +598,29 @@ export function ConversationsClient({
             {selectedCircle ? (
               <div className="conversation-head-actions">
                 <p className="conversation-meta">{selectedCircle.members.length} members</p>
+                <label className="conversation-my-group-name">
+                  <span className="field-label">My group name</span>
+                  <span>
+                    <input
+                      className="input"
+                      value={selectedGroupNameDraft}
+                      onChange={(event) =>
+                        setGroupNameDrafts((current) => ({
+                          ...current,
+                          [selectedCircle.circleId]: event.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={groupNameBusy || !normalize(selectedGroupNameDraft) || selectedGroupNameDraft === selectedCircle.title}
+                      onClick={() => void saveMyGroupName()}
+                    >
+                      Save
+                    </button>
+                  </span>
+                </label>
                 {selectedCircle.canDelete ? (
                   <button className="secondary-button danger-button" type="button" disabled={busy} onClick={() => void deleteSelectedGroup()}>
                     Delete Group
@@ -620,6 +757,49 @@ export function ConversationsClient({
           </div>
         </div>
       </section>
+      {relationshipModalOpen ? (
+        <div className="conversation-modal-backdrop" role="presentation">
+          <div className="conversation-modal" role="dialog" aria-modal="true" aria-label="Add members by relationship">
+            <div className="conversation-modal-head">
+              <h2>Add by Relationship</h2>
+              <button
+                type="button"
+                className="account-close"
+                aria-label="Close relationship selector"
+                onClick={() => setRelationshipModalOpen(false)}
+              >
+                x
+              </button>
+            </div>
+            <div className="conversation-relationship-grid">
+              {relationshipOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`conversation-relationship-option${selectedRelationshipKeys.includes(option.key) ? " is-selected" : ""}`}
+                  onClick={() => toggleRelationshipKey(option.key)}
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.personIds.length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="conversation-modal-actions">
+              <button className="secondary-button" type="button" onClick={() => setRelationshipModalOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={selectedRelationshipKeys.length === 0}
+                onClick={() => addRelationshipMembers()}
+              >
+                Add {selectedRelationshipPeopleCount}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
