@@ -12,10 +12,11 @@ I will update this list as we add, complete, or remove work.
   - In progress: renamed the user-facing circle concept to `Groups`, added group descriptions, duplicate member-set prevention/feedback, owner soft-delete, and Famailink group namespace filtering.
   - In progress: added relationship preset member selection for group creation and member-specific group display names.
   - Completed local implementation: replaced the create-group form with a text-style `New Message` composer that uses recipient chips, removable preset-added members, side-aware relationship selection, optional advanced fields, and send-to-existing-group behavior.
+  - In progress 2026-04-24: shifting the user-facing surface from `Groups` to `Share`, keeping the group list compact with unread bubbles and an `Add Group` modal entry point, and making conversation open/scroll behavior jump to the unread boundary like a text thread.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
-  - Add a Famailink `Groups` surface for named family groups, optional group descriptions, durable conversations, posts, comments, and conversation read state.
+  - Add a Famailink `Share` surface for named family groups, optional group descriptions, durable conversations, posts, comments, and conversation read state.
   - Reuse the existing EFL Shares table concepts (`share_threads`, `share_thread_members`, `share_conversations`, `share_conversation_members`, `share_posts`, `share_post_comments`) while treating `family_group_key` as implementation metadata.
   - Enforce access by active `person_id` membership in the group/conversation.
   - Prevent duplicate active groups with the exact same member set.
@@ -28,16 +29,20 @@ I will update this list as we add, complete, or remove work.
   - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
   Phases:
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
-  - Phase 2: User-facing Groups page with text-style `New Message` composer, relationship preset member selection, manual add/remove chips, optional advanced fields, conversation creation/reuse, message posting, comments, unread counts, and participant display.
+  - Phase 2: User-facing Share page with compact group-list-first UX, Add Group modal entry, relationship preset member selection, manual add/remove chips, conversation creation, message posting, comments, unread counts, and participant display.
+  - Phase 2a: Share-first UX pass with `Share` labeling, compact group-list-first layout, `Add Group` modal entry, and conversation open behavior that scrolls to the unread boundary.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
   - API: new Famailink `/api/conversations/...` route handlers.
-  - UI: new `/conversations` page and app header tab.
+  - UI: new `/conversations` page surfaced to users as `Share` in the app header.
   - Data: no destructive migration; runtime compatibility creates/uses existing normalized share tables if needed.
   Validation:
   - Famailink type/build check passes.
-  - Signed-in member can start from `New Message`, add/remove recipients as chips, and send the first message without filling a separate create-group form.
+  - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
+  - The Share screen shows a compact list of Groups with unread bubbles ordered by most recent activity.
+  - The Share screen exposes an `Add Group` button that opens the Group-creation modal without taking persistent page space.
+  - Signed-in member can use `Add Group`, add/remove recipients as chips, and create/select a group without consuming persistent page space.
   - Signed-in member can add group members by relationship preset and still add individual members.
   - Relationship presets can add recipients by `Both`, `Maternal`, or `Paternal` side where applicable.
   - Preset-added recipients can still be removed manually before send.
@@ -47,6 +52,7 @@ I will update this list as we add, complete, or remove work.
   - Signed-in member can create multiple named conversations inside a group when they intentionally provide a conversation title in advanced options.
   - Members can add text posts and comments.
   - Conversation unread counts clear through per-person read state.
+  - Opening a conversation scrolls the thread to the first unread point when unread content exists.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
   - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.

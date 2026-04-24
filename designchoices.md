@@ -611,3 +611,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the full create-group form; keep relationship add in a separate modal but preserve the form-first flow; add temporary non-Group conversations before simplifying the Group composer.
 - `Impact`: `/conversations` now centers on `New Message`, recipients can be removed after preset add, side-aware preset adds are available during composition, and sending without an explicit conversation title reuses the latest conversation in an exact-match Group or creates a default retained conversation only when needed.
 - `Follow-up`: Add owner/admin editing for existing Group membership after the text-style composer is validated in production.
+
+## 2026-04-24
+
+- `Area`: Famailink Share surface behavior
+- `Decision`: The user-facing section should be named `Share`, not `Groups`. The Share screen should open on a compact list of Groups ordered by recent activity with unread bubbles, expose `Add Group` as a modal entry point instead of a persistent create surface, and keep the active experience conversation-first after a Group is selected. Opening a conversation should jump to the unread boundary so the thread behaves like texting.
+- `Reason`: The previous screen still centered the Group construct and creation flow too much. The intended product behavior is that users enter a sharing inbox first, then pick a Group, then read/respond inside conversations like a text thread.
+- `Alternatives Considered`: Keep the `Groups` label; keep `New Message` as the main CTA; continue opening conversations at the top of the full thread regardless of unread position.
+- `Impact`: App navigation now presents `Share`, the left column is a recent/unread Group inbox, Group creation is modal-first, and conversation open behavior scrolls to the unread point when unread content exists.
+- `Follow-up`: Refine the Add Group modal further after validating the compact Share-first layout in production.

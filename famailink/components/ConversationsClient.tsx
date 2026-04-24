@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 
 type SessionInfo = { username: string; personId: string };
@@ -16,7 +16,14 @@ type ConversationCircle = {
   canDelete: boolean;
   members: ConversationMember[];
 };
-type CircleConversation = { conversationId: string; circleId: string; title: string; lastActivityAt: string; unreadCount: number };
+type CircleConversation = {
+  conversationId: string;
+  circleId: string;
+  title: string;
+  lastActivityAt: string;
+  unreadCount: number;
+  memberLastReadAt?: string;
+};
 type ConversationComment = { commentId: string; postId: string; authorPersonId: string; authorDisplayName: string; commentText: string; createdAt: string };
 type ConversationPost = { postId: string; authorPersonId: string; authorDisplayName: string; caption: string; createdAt: string; comments: ConversationComment[] };
 type RelationshipOption = {
@@ -48,6 +55,11 @@ function formatDate(value?: string) {
   const parsed = Date.parse(raw);
   if (!Number.isFinite(parsed)) return raw;
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(parsed));
+}
+
+function getTimeValue(value?: string) {
+  const parsed = Date.parse(normalize(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function uniqueIds(values: Iterable<string>) {
@@ -120,16 +132,24 @@ export function ConversationsClient({
   const [composerOpen, setComposerOpen] = useState(initialCircles.length === 0);
   const [composerRecipientIds, setComposerRecipientIds] = useState<string[]>([]);
   const [composerSearch, setComposerSearch] = useState("");
-  const [composerMessage, setComposerMessage] = useState("");
   const [composerGroupTitle, setComposerGroupTitle] = useState("");
   const [composerDescription, setComposerDescription] = useState("");
-  const [composerConversationTitle, setComposerConversationTitle] = useState("");
   const [composerAdvancedOpen, setComposerAdvancedOpen] = useState(false);
   const [composerSideFilter, setComposerSideFilter] = useState<FamilySideFilter>("both");
+  const itemRefs = useRef<Record<string, HTMLElement | null>>({});
+  const pendingUnreadJumpConversationIdRef = useRef("");
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
   const selectedConversation = useMemo(() => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null, [conversations, selectedConversationId]);
+  const sortedCircles = useMemo(
+    () => [...circles].sort((left, right) => getTimeValue(right.lastActivityAt) - getTimeValue(left.lastActivityAt)),
+    [circles],
+  );
+  const sortedConversations = useMemo(
+    () => [...conversations].sort((left, right) => getTimeValue(right.lastActivityAt) - getTimeValue(left.lastActivityAt)),
+    [conversations],
+  );
   const selectedGroupNameDraft = selectedCircle ? groupNameDrafts[selectedCircle.circleId] ?? selectedCircle.title : "";
   const composerRecipients = useMemo(() => composerRecipientIds.map((personId) => peopleById.get(personId)).filter((person): person is PersonOption => Boolean(person)), [composerRecipientIds, peopleById]);
   const composerAutoGroupTitle = useMemo(() => buildAutoGroupTitle(composerRecipientIds, peopleById), [composerRecipientIds, peopleById]);
@@ -149,7 +169,7 @@ export function ConversationsClient({
     ...option,
     applicablePersonIds: uniqueIds(optionPersonIds(option, composerSideFilter).filter((personId) => personId !== session.personId)),
   })), [composerSideFilter, relationshipOptions, session.personId]);
-  const canSendComposer = composerRecipientIds.length > 0 && Boolean(normalize(composerMessage));
+  const canCreateGroup = composerRecipientIds.length > 0;
 
   async function loadCircles() {
     const body = await fetchJson<{ circles?: ConversationCircle[] }>("/api/conversations/circles");
@@ -220,16 +240,43 @@ export function ConversationsClient({
 
   useEffect(() => { setPostDraft(""); }, [selectedConversationId]);
   useEffect(() => { setNewTopicOpen(false); setNewConversationTitle(""); setInitialMessage(""); }, [selectedCircleId]);
+  useEffect(() => {
+    pendingUnreadJumpConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
+
+  const unreadAnchorKey = useMemo(() => {
+    const lastReadAt = getTimeValue(selectedConversation?.memberLastReadAt);
+    if (!selectedConversation || !lastReadAt) return "";
+    for (const post of posts) {
+      if (getTimeValue(post.createdAt) > lastReadAt) return `post:${post.postId}`;
+      for (const comment of post.comments) {
+        if (getTimeValue(comment.createdAt) > lastReadAt) return `comment:${comment.commentId}`;
+      }
+    }
+    return "";
+  }, [posts, selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversationId || pendingUnreadJumpConversationIdRef.current !== selectedConversationId) return;
+    const targetKey = unreadAnchorKey || (posts.length ? `post:${posts[posts.length - 1].postId}` : "");
+    if (!targetKey) return;
+    const target = itemRefs.current[targetKey];
+    if (!target) return;
+    target.scrollIntoView({ block: "start", behavior: "auto" });
+    pendingUnreadJumpConversationIdRef.current = "";
+  }, [posts, selectedConversationId, unreadAnchorKey]);
 
   function clearComposer() {
     setComposerRecipientIds([]);
     setComposerSearch("");
-    setComposerMessage("");
     setComposerGroupTitle("");
     setComposerDescription("");
-    setComposerConversationTitle("");
     setComposerAdvancedOpen(false);
     setComposerSideFilter("both");
+  }
+
+  function setItemRef(key: string, node: HTMLElement | null) {
+    itemRefs.current[key] = node;
   }
 
   function toggleRecipient(personId: string) {
@@ -251,8 +298,8 @@ export function ConversationsClient({
     clearComposer();
   }
 
-  async function sendNewMessage() {
-    if (!canSendComposer) return;
+  async function createGroupFromComposer() {
+    if (!canCreateGroup) return;
     setBusy(true);
     setStatus(null);
     try {
@@ -268,47 +315,14 @@ export function ConversationsClient({
       const circle = circleBody.circle;
       if (!circle) throw new Error("No group returned.");
 
-      const conversationTitle = normalize(composerConversationTitle);
-      let targetConversationId = "";
-
-      if (conversationTitle) {
-        const body = await fetchJson<{ conversation?: CircleConversation }>(`/api/conversations/circles/${encodeURIComponent(circle.circleId)}/conversations`, {
-          method: "POST",
-          body: JSON.stringify({
-            title: conversationTitle,
-            initialMessage: normalize(composerMessage),
-          }),
-        });
-        targetConversationId = body.conversation?.conversationId ?? "";
-      } else {
-        const nextConversations = await loadCircleConversations(circle.circleId);
-        const latestConversation = nextConversations[0] ?? null;
-        if (latestConversation) {
-          await fetchJson<{ post?: ConversationPost }>(`/api/conversations/circles/${encodeURIComponent(circle.circleId)}/conversations/${encodeURIComponent(latestConversation.conversationId)}/posts`, {
-            method: "POST",
-            body: JSON.stringify({ caption: normalize(composerMessage) }),
-          });
-          targetConversationId = latestConversation.conversationId;
-        } else {
-          const body = await fetchJson<{ conversation?: CircleConversation }>(`/api/conversations/circles/${encodeURIComponent(circle.circleId)}/conversations`, {
-            method: "POST",
-            body: JSON.stringify({
-              title: "",
-              initialMessage: normalize(composerMessage),
-            }),
-          });
-          targetConversationId = body.conversation?.conversationId ?? "";
-        }
-      }
-
-      await syncCircleSelection(circle.circleId, targetConversationId);
+      await syncCircleSelection(circle.circleId);
       await closeComposer();
       setStatus({
         tone: "info",
-        message: circleBody.duplicate ? `Message sent. Existing group "${circle.title}" was reused.` : `Message sent to "${circle.title}".`,
+        message: circleBody.duplicate ? `Existing group "${circle.title}" was opened.` : `Group "${circle.title}" created.`,
       });
     } catch (error) {
-      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to send message." });
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to create group." });
     } finally {
       setBusy(false);
     }
@@ -432,18 +446,18 @@ export function ConversationsClient({
         <div className="conversation-column circles-column">
           <div className="conversation-column-head">
             <div>
-              <p className="eyebrow">Family Groups</p>
-              <h1 className="conversation-title">Groups</h1>
-              <p className="conversation-meta">Choose a Group or start a new message.</p>
+              <p className="eyebrow">Family Sharing</p>
+              <h1 className="conversation-title">Share</h1>
+              <p className="conversation-meta">Groups ordered by recent activity.</p>
             </div>
             <button className="primary-button" type="button" onClick={() => setComposerOpen(true)}>
-              New Message
+              Add Group
             </button>
           </div>
 
           <div className="conversation-list" aria-label="Family groups">
-            {circles.length === 0 ? <p className="empty-state">No Groups yet. Start with New Message.</p> : null}
-            {circles.map((circle) => (
+            {sortedCircles.length === 0 ? <p className="empty-state">No Groups yet. Use Add Group to create one.</p> : null}
+            {sortedCircles.map((circle) => (
               <button
                 key={circle.circleId}
                 type="button"
@@ -464,7 +478,7 @@ export function ConversationsClient({
         <div className="conversation-column topics-column">
           <div className="conversation-column-head">
             <div>
-              <p className="eyebrow">Named Conversations</p>
+              <p className="eyebrow">Conversations</p>
               <h2>{selectedCircle?.title ?? "Select a Group"}</h2>
               {selectedCircle ? (
                 <p className="conversation-meta">
@@ -554,7 +568,7 @@ export function ConversationsClient({
 
           <div className="conversation-list" aria-label="Named conversations">
             {selectedCircle && conversations.length === 0 ? <p className="empty-state">No named conversations yet. Use New Topic when you want a separate thread.</p> : null}
-            {conversations.map((conversation) => (
+            {sortedConversations.map((conversation) => (
               <button
                 key={conversation.conversationId}
                 type="button"
@@ -609,7 +623,11 @@ export function ConversationsClient({
             {posts.map((post) => {
               const ownPost = post.authorPersonId === session.personId;
               return (
-                <article key={post.postId} className={`conversation-post${ownPost ? " is-mine" : ""}`}>
+                <article
+                  key={post.postId}
+                  ref={(node) => setItemRef(`post:${post.postId}`, node)}
+                  className={`conversation-post${ownPost ? " is-mine" : ""}${unreadAnchorKey === `post:${post.postId}` ? " is-unread-anchor" : ""}`}
+                >
                   <div className="conversation-post-bubble">
                     <div className="conversation-post-head">
                       <strong>{post.authorDisplayName || post.authorPersonId}</strong>
@@ -619,7 +637,11 @@ export function ConversationsClient({
                   </div>
                   <div className="conversation-comments">
                     {post.comments.map((comment) => (
-                      <div key={comment.commentId} className="conversation-comment">
+                      <div
+                        key={comment.commentId}
+                        ref={(node) => setItemRef(`comment:${comment.commentId}`, node)}
+                        className={`conversation-comment${unreadAnchorKey === `comment:${comment.commentId}` ? " is-unread-anchor" : ""}`}
+                      >
                         <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
                         <span>{comment.commentText}</span>
                       </div>
@@ -645,13 +667,13 @@ export function ConversationsClient({
 
       {composerOpen ? (
         <div className="conversation-modal-backdrop" role="presentation">
-          <div className="conversation-modal conversation-modal-wide" role="dialog" aria-modal="true" aria-label="Create a new Group message">
+          <div className="conversation-modal conversation-modal-wide" role="dialog" aria-modal="true" aria-label="Add Group">
             <div className="conversation-modal-head">
               <div>
-                <h2>New Message</h2>
-                <p className="conversation-meta">Pick relatives, remove anyone you do not want, then send.</p>
+                <h2>Add Group</h2>
+                <p className="conversation-meta">Pick relatives, remove anyone you do not want, then create the Group.</p>
               </div>
-              <button type="button" className="account-close" aria-label="Close new message composer" onClick={() => void closeComposer()}>
+              <button type="button" className="account-close" aria-label="Close add group modal" onClick={() => void closeComposer()}>
                 x
               </button>
             </div>
@@ -731,18 +753,6 @@ export function ConversationsClient({
             </div>
 
             <div className="conversation-modal-section">
-              <label className="field">
-                <span className="field-label">Message</span>
-                <textarea
-                  className="input conversation-textarea"
-                  value={composerMessage}
-                  onChange={(event) => setComposerMessage(event.target.value)}
-                  placeholder="Write a message"
-                />
-              </label>
-            </div>
-
-            <div className="conversation-modal-section">
               <button type="button" className="secondary-button conversation-advanced-toggle" onClick={() => setComposerAdvancedOpen((current) => !current)}>
                 {composerAdvancedOpen ? "Hide options" : "More options"}
               </button>
@@ -751,10 +761,6 @@ export function ConversationsClient({
                   <label className="field">
                     <span className="field-label">Group name (optional)</span>
                     <input className="input" value={composerGroupTitle} onChange={(event) => setComposerGroupTitle(event.target.value)} placeholder={composerAutoGroupTitle || "Family Group"} />
-                  </label>
-                  <label className="field">
-                    <span className="field-label">Conversation name (optional)</span>
-                    <input className="input" value={composerConversationTitle} onChange={(event) => setComposerConversationTitle(event.target.value)} placeholder="Only use when you want a separate named conversation" />
                   </label>
                   <label className="field">
                     <span className="field-label">Description (optional)</span>
@@ -768,8 +774,8 @@ export function ConversationsClient({
               <button className="secondary-button" type="button" onClick={() => void closeComposer()}>
                 Cancel
               </button>
-              <button className="primary-button" type="button" disabled={busy || !canSendComposer} onClick={() => void sendNewMessage()}>
-                Send
+              <button className="primary-button" type="button" disabled={busy || !canCreateGroup} onClick={() => void createGroupFromComposer()}>
+                Add Group
               </button>
             </div>
           </div>

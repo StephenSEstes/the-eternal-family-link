@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-24 (Famailink Share-first inbox UX)
+
+- `Date`: 2026-04-24
+- `Change`: Renamed the user-facing Famailink Groups section to `Share`, kept the left column as a compact Group inbox with unread bubbles ordered by recent activity, changed the primary action to `Add Group`, moved group creation behind a modal, and added conversation-open behavior that jumps to the unread boundary.
+- `Type`: UI
+- `Why`: Root cause was a UX/code mismatch. The previous screen still emphasized Group creation and Group naming more than the actual sharing inbox flow. The chosen fix makes the screen behave more like a text/share inbox: pick a Group, pick a conversation, and land where unread content begins.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/project-definition.md`, `famailink/components/FamailinkChrome.tsx`, `famailink/components/ConversationsClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert the Share-label changes, restore the prior `New Message` modal semantics, and remove the unread-jump scroll behavior.
+- `Design Decision Change`: Yes. Added the Famailink Share surface behavior decision to `designchoices.md`.
+
 ## 2026-04-23 (Famailink text-style Group composer)
 
 - `Date`: 2026-04-23

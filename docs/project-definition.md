@@ -4,6 +4,8 @@ Eternal Family Link exists to build and strengthen family relationships by makin
 
 The product is a private family communication and family-history app. It should feel familiar, like a blend of text messaging, Instagram-style media sharing, and family archive building. The important product goal is that everyday family conversation naturally grows the family record instead of requiring a separate archival chore.
 
+The main user-facing communication surface should be called `Share`. `Share` is the inbox-style screen that lists Groups by recent activity and unread state. The underlying member containers are still Groups, but the user enters sharing through the Share surface rather than through a group-management-first screen.
+
 ## Existing App Tracks
 
 The root EFL app is the current feature reference for family sharing: group/circle threads, named conversations, posts, comments, media upload, tagging, unread state, and notification scaffolding.
@@ -28,6 +30,8 @@ Within each Group, members can create multiple named conversations. A conversati
 A Group is therefore a named, member-based container for multiple ongoing conversations. A description can be stored when useful, but it is optional. For example, one sibling Group might have separate conversations for a reunion, old photos, a birthday, family recipes, or a specific memory.
 
 Groups should be easy to create from the family relationship graph. A user can add members manually, or add a relationship preset such as siblings, parents, cousins, parents-in-law, nieces/nephews, or everyone. Relationship presets add the resolved people to the draft group while still allowing manual changes before save.
+
+The Share screen should remain compact. Group creation should open in an `Add Group` modal instead of taking permanent page space on the main Share screen.
 
 The default Group-start flow should feel like sending a text message, not filling out a setup form. The user should begin with `New Message`, add recipients as removable chips, use relationship presets as a fast way to seed recipients, optionally narrow those presets to both sides, maternal side, or paternal side where lineage context exists, and then send the first message. Group name, description, and an explicit named-conversation title belong in optional advanced controls, not in the default path.
 
@@ -59,6 +63,8 @@ The access model should keep these concepts separate:
 Each conversation tracks read/unread state for participating members. The app should show when a user has not yet read new comments or seen newly shared media in conversations they participate in.
 
 Unread indicators should be conversation-specific. A user should be able to tell which named conversation needs attention without treating the entire group as unread.
+
+When a user opens a conversation with unread content, the thread should jump to the unread boundary instead of always opening at the top of the full history.
 
 The product model should keep these concepts distinct:
 

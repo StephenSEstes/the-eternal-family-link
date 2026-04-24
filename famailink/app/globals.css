@@ -1922,6 +1922,7 @@ select {
   display: grid;
   justify-items: start;
   gap: 8px;
+  scroll-margin-top: 14px;
 }
 
 .conversation-post.is-mine {
@@ -1982,6 +1983,12 @@ select {
   background: color-mix(in oklab, var(--surface-soft) 72%, #fff 28%);
   color: var(--text);
   font-size: 13px;
+  scroll-margin-top: 14px;
+}
+
+.conversation-post.is-unread-anchor .conversation-post-bubble,
+.conversation-comment.is-unread-anchor {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 34%, transparent 66%);
 }
 
 .conversation-comment strong {
@@ -2020,7 +2027,7 @@ select {
 }
 
 .conversation-modal-wide {
-  width: min(820px, 100%);
+  width: min(720px, 100%);
 }
 
 .conversation-modal-head,

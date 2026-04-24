@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-04-24: Reworked the Famailink communication screen into a Share-first inbox with recent/unread Group ordering, an `Add Group` modal entry point, and conversation open behavior that jumps to the unread boundary. See `docs/change-summary.md`.
 - 2026-04-23: Reworked Famailink Group creation into a text-style `New Message` composer with removable recipient chips, side-aware relationship adds, optional advanced fields, and exact-member-set Group reuse on send. See `docs/change-summary.md`.
 - 2026-04-22: Made Famailink Group creation easier with relationship preset member selection, optional descriptions, individual member add/remove, and member-specific group display names. See `docs/change-summary.md`.
 - 2026-04-22: Updated Famailink Conversations to use user-facing Groups with descriptions, duplicate member-set prevention, member-only visibility, owner soft-delete/archive, and group-access documentation. See `docs/change-summary.md`.
