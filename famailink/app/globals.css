@@ -1711,6 +1711,52 @@ select {
   overflow-wrap: anywhere;
 }
 
+.conversation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.conversation-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conversation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.conversation-chip button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-soft) 74%, #fff 26%);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.conversation-chip-static {
+  background: color-mix(in oklab, var(--accent-soft) 54%, #fff 46%);
+  border-color: color-mix(in oklab, var(--accent) 28%, #fff 72%);
+}
+
 .conversation-create-panel,
 .conversation-compose {
   display: grid;
@@ -1973,6 +2019,10 @@ select {
   box-shadow: 0 24px 64px rgba(11, 31, 42, 0.28);
 }
 
+.conversation-modal-wide {
+  width: min(820px, 100%);
+}
+
 .conversation-modal-head,
 .conversation-modal-actions {
   display: flex;
@@ -1989,6 +2039,122 @@ select {
 
 .conversation-modal-actions {
   justify-content: flex-end;
+}
+
+.conversation-modal-section {
+  display: grid;
+  gap: 10px;
+}
+
+.conversation-relationship-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.conversation-side-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-soft) 82%, #fff 18%);
+  border: 1px solid color-mix(in oklab, var(--line) 80%, #fff 20%);
+}
+
+.conversation-side-button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.conversation-side-button.is-active {
+  background: color-mix(in oklab, var(--accent) 84%, #0f172a 16%);
+  color: #fff;
+}
+
+.conversation-relationship-pills {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.conversation-preset-pill {
+  min-height: 54px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-weight: 800;
+}
+
+.conversation-preset-pill span {
+  overflow-wrap: anywhere;
+}
+
+.conversation-preset-pill strong {
+  min-width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-soft) 78%, #fff 22%);
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.conversation-preset-pill:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+}
+
+.conversation-people-results {
+  max-height: 220px;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.conversation-person-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  color: var(--text);
+  font-weight: 750;
+}
+
+.conversation-person-row.is-selected {
+  background: color-mix(in oklab, var(--accent-soft) 48%, #fff 52%);
+  border-color: color-mix(in oklab, var(--accent) 36%, #fff 64%);
+}
+
+.conversation-advanced-toggle {
+  justify-self: start;
+}
+
+.conversation-advanced-grid {
+  display: grid;
+  gap: 10px;
 }
 
 .conversation-relationship-grid {
@@ -2444,6 +2610,20 @@ select {
 
   .conversation-comment-form {
     grid-template-columns: 1fr;
+  }
+
+  .conversation-relationship-toolbar,
+  .conversation-person-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .conversation-side-toggle {
+    width: 100%;
+  }
+
+  .conversation-side-button {
+    flex: 1;
   }
 
   .rules-generation-note {

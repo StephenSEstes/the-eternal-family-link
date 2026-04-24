@@ -602,3 +602,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep only the flat person picker; create separate automatic system groups; force one shared group name for every member.
 - `Impact`: The Groups creation UI can add members by relationship category, and `share_thread_members.group_display_name` stores the member-specific group title used when that member views the group.
 - `Follow-up`: Add owner/admin member editing for existing groups after the create flow is validated.
+
+## 2026-04-23
+
+- `Area`: Famailink Group messaging UX
+- `Decision`: Famailink Group creation should default to a text-style `New Message` composer instead of a form-first create-group workflow. The composer must show removable recipient chips, support relationship-preset adds plus manual add/remove, allow `Both` / `Maternal` / `Paternal` preset resolution where lineage sides exist, and reuse an existing active Group when the exact member set already exists. Group description and explicit conversation title stay in optional advanced fields.
+- `Reason`: The previous Group creation flow required too much form completion before the user could send a message. The product goal is for Group creation and first-message sending to feel like texting, with relationship presets acting as fast recipient seeding rather than as a rigid separate workflow.
+- `Alternatives Considered`: Keep the full create-group form; keep relationship add in a separate modal but preserve the form-first flow; add temporary non-Group conversations before simplifying the Group composer.
+- `Impact`: `/conversations` now centers on `New Message`, recipients can be removed after preset add, side-aware preset adds are available during composition, and sending without an explicit conversation title reuses the latest conversation in an exact-match Group or creates a default retained conversation only when needed.
+- `Follow-up`: Add owner/admin editing for existing Group membership after the text-style composer is validated in production.

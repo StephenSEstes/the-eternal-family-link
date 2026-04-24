@@ -11,6 +11,7 @@ I will update this list as we add, complete, or remove work.
   - Completed initial store/API/UI slice for person-based groups (initially labeled circles), named conversations, text posts, comments, read state, and person-modal conversation summaries.
   - In progress: renamed the user-facing circle concept to `Groups`, added group descriptions, duplicate member-set prevention/feedback, owner soft-delete, and Famailink group namespace filtering.
   - In progress: added relationship preset member selection for group creation and member-specific group display names.
+  - Completed local implementation: replaced the create-group form with a text-style `New Message` composer that uses recipient chips, removable preset-added members, side-aware relationship selection, optional advanced fields, and send-to-existing-group behavior.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -27,7 +28,7 @@ I will update this list as we add, complete, or remove work.
   - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
   Phases:
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
-  - Phase 2: User-facing Groups page with group creation, relationship preset member selection, optional description capture, member-specific group names, conversation creation, message posting, comments, unread counts, and participant display.
+  - Phase 2: User-facing Groups page with text-style `New Message` composer, relationship preset member selection, manual add/remove chips, optional advanced fields, conversation creation/reuse, message posting, comments, unread counts, and participant display.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -36,12 +37,14 @@ I will update this list as we add, complete, or remove work.
   - Data: no destructive migration; runtime compatibility creates/uses existing normalized share tables if needed.
   Validation:
   - Famailink type/build check passes.
-  - Signed-in member can create a group from selected people with a name and optional description.
+  - Signed-in member can start from `New Message`, add/remove recipients as chips, and send the first message without filling a separate create-group form.
   - Signed-in member can add group members by relationship preset and still add individual members.
+  - Relationship presets can add recipients by `Both`, `Maternal`, or `Paternal` side where applicable.
+  - Preset-added recipients can still be removed manually before send.
+  - Sending to an exact existing member set reuses that group instead of creating a duplicate.
   - Each group member can have their own display name for that group.
-  - Signed-in member cannot create a duplicate active group with the same exact member set.
   - Group owner can delete/archive a group and remove it from member-visible group lists.
-  - Signed-in member can create multiple named conversations inside a group.
+  - Signed-in member can create multiple named conversations inside a group when they intentionally provide a conversation title in advanced options.
   - Members can add text posts and comments.
   - Conversation unread counts clear through per-person read state.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.

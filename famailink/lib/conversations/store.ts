@@ -918,10 +918,9 @@ export async function createCircleConversation(input: {
   initialMessage?: string;
 }): Promise<CircleConversation> {
   const actorPersonId = normalize(input.actor.personId);
-  const title = normalize(input.title);
-  if (!title) throw new Error("conversation_title_required");
   const circle = await getConversationCircleForPerson(input.circleId, actorPersonId);
   if (!circle) throw new Error("group_not_found_or_not_member");
+  const title = normalize(input.title) || "General";
   const memberIds = circle.members.map((member) => member.personId);
   const createdAt = nowIso();
   const conversationId = newId("conv");

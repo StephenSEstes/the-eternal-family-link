@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-23 (Famailink text-style Group composer)
+
+- `Date`: 2026-04-23
+- `Change`: Replaced the Famailink Group create form with a text-style `New Message` composer. The new flow uses recipient chips, relationship-preset adds, manual add/remove, side-aware preset resolution (`Both`, `Maternal`, `Paternal` where supported), optional advanced fields for Group name/description and named conversation title, and exact-member-set Group reuse when sending.
+- `Type`: UI | API
+- `Why`: Root cause was a UX/code issue. Group creation required users to fill out a form before they could send a message, which did not match the product goal that Groups should feel like natural texting-driven sharing containers. The chosen fix keeps the existing Groups/conversations APIs but changes the client flow so recipient selection and the first message are the primary action.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/project-definition.md`, `famailink/app/conversations/page.tsx`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`, `famailink/app/globals.css`
+- `Data Changes`: None. No schema change. Existing `share_thread_members.group_display_name` and Group/conversation tables are reused as-is.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert the new composer client/UI and restore the prior form-first Group creation flow.
+- `Design Decision Change`: Yes. Added the Famailink text-style Group messaging UX decision to `designchoices.md`.
+
 ## 2026-04-22 (Famailink relationship-based Group creation)
 
 - `Date`: 2026-04-22

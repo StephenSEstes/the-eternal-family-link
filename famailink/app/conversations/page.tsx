@@ -15,6 +15,12 @@ function normalize(value?: string) {
   return String(value ?? "").trim();
 }
 
+function addToSet(map: Map<string, Set<string>>, key: string, personId: string) {
+  const current = map.get(key) ?? new Set<string>();
+  current.add(personId);
+  map.set(key, current);
+}
+
 export default async function ConversationsPage({ searchParams }: ConversationsPageProps) {
   const session = await getSessionFromCookieStore();
   if (!session) redirect("/login");
@@ -25,12 +31,18 @@ export default async function ConversationsPage({ searchParams }: ConversationsP
     listPeopleLite(),
     listRelatedFamilyPeople(session.personId),
   ]);
-  const peopleByRelationship = new Map<string, Set<string>>();
+  const allByRelationship = new Map<string, Set<string>>();
+  const maternalByRelationship = new Map<string, Set<string>>();
+  const paternalByRelationship = new Map<string, Set<string>>();
   for (const person of relatedPeople) {
     for (const relationship of person.relationships) {
-      const current = peopleByRelationship.get(relationship.category) ?? new Set<string>();
-      current.add(person.personId);
-      peopleByRelationship.set(relationship.category, current);
+      addToSet(allByRelationship, relationship.category, person.personId);
+      if (relationship.lineageSides.includes("maternal") || relationship.lineageSides.includes("both")) {
+        addToSet(maternalByRelationship, relationship.category, person.personId);
+      }
+      if (relationship.lineageSides.includes("paternal") || relationship.lineageSides.includes("both")) {
+        addToSet(paternalByRelationship, relationship.category, person.personId);
+      }
     }
   }
   const relationshipOptions = [
@@ -38,11 +50,18 @@ export default async function ConversationsPage({ searchParams }: ConversationsP
       key: "everyone",
       label: "Everyone",
       personIds: people.filter((person) => person.personId !== session.personId).map((person) => person.personId),
+      maternalPersonIds: [] as string[],
+      paternalPersonIds: [] as string[],
+      supportsSides: false,
     },
     ...CATEGORY_ORDER.filter((category) => category !== "self").map((category) => ({
       key: category,
       label: CATEGORY_LABELS[category],
-      personIds: Array.from(peopleByRelationship.get(category) ?? []),
+      personIds: Array.from(allByRelationship.get(category) ?? []),
+      maternalPersonIds: Array.from(maternalByRelationship.get(category) ?? []),
+      paternalPersonIds: Array.from(paternalByRelationship.get(category) ?? []),
+      supportsSides:
+        (maternalByRelationship.get(category)?.size ?? 0) > 0 || (paternalByRelationship.get(category)?.size ?? 0) > 0,
     })),
   ].filter((option) => option.personIds.length > 0);
 

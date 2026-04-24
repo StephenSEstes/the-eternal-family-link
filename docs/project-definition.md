@@ -29,6 +29,8 @@ A Group is therefore a named, member-based container for multiple ongoing conver
 
 Groups should be easy to create from the family relationship graph. A user can add members manually, or add a relationship preset such as siblings, parents, cousins, parents-in-law, nieces/nephews, or everyone. Relationship presets add the resolved people to the draft group while still allowing manual changes before save.
 
+The default Group-start flow should feel like sending a text message, not filling out a setup form. The user should begin with `New Message`, add recipients as removable chips, use relationship presets as a fast way to seed recipients, optionally narrow those presets to both sides, maternal side, or paternal side where lineage context exists, and then send the first message. Group name, description, and an explicit named-conversation title belong in optional advanced controls, not in the default path.
+
 In the current root EFL implementation, these Groups are represented by Family Shares thread/group tables. That implementation is a useful feature reference, but the long-term access model should be person/member based rather than active-family-group based.
 
 ## Access Model
@@ -129,6 +131,9 @@ The target product should support:
 - Store a Group name, description, owner, and active member set.
 - Treat Group descriptions as optional.
 - Allow relationship preset member selection during Group creation.
+- Use a text-style `New Message` composer as the default Group creation and first-message flow.
+- Allow recipient removal after relationship-preset adds.
+- Allow side-aware relationship adds (`Both`, `Maternal`, `Paternal`) where lineage data supports it.
 - Allow each member to store a member-specific Group display name.
 - Prevent duplicate active Groups with the exact same active member set.
 - Create named conversations inside a Group.
