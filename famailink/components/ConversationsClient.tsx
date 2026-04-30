@@ -106,6 +106,14 @@ function unreadBadge(count: number) {
   return <span className="conversation-unread">{count}</span>;
 }
 
+function buildShareUrl(circleId: string, conversationId: string) {
+  const params = new URLSearchParams();
+  if (circleId) params.set("circleId", circleId);
+  if (circleId && conversationId) params.set("conversationId", conversationId);
+  const query = params.toString();
+  return query ? `/conversations?${query}` : "/conversations";
+}
+
 export function ConversationsClient({
   session,
   initialCircles,
@@ -114,22 +122,21 @@ export function ConversationsClient({
   people,
   relationshipOptions,
 }: ConversationsClientProps) {
-  const startCircleId = initialCircles.some((circle) => circle.circleId === requestedCircleId) ? requestedCircleId : initialCircles[0]?.circleId ?? "";
+  const startCircleId = initialCircles.some((circle) => circle.circleId === requestedCircleId) ? requestedCircleId : "";
+  const startConversationId = startCircleId ? requestedConversationId : "";
   const [circles, setCircles] = useState(initialCircles);
   const [selectedCircleId, setSelectedCircleId] = useState(startCircleId);
   const [conversations, setConversations] = useState<CircleConversation[]>([]);
-  const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [selectedConversationId, setSelectedConversationId] = useState(startConversationId);
   const [posts, setPosts] = useState<ConversationPost[]>([]);
   const [status, setStatus] = useState<StatusState>(null);
   const [busy, setBusy] = useState(false);
-  const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
-  const [groupNameBusy, setGroupNameBusy] = useState(false);
   const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
   const [postDraft, setPostDraft] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const [composerOpen, setComposerOpen] = useState(initialCircles.length === 0);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [composerRecipientIds, setComposerRecipientIds] = useState<string[]>([]);
   const [composerSearch, setComposerSearch] = useState("");
   const [composerGroupTitle, setComposerGroupTitle] = useState("");
@@ -142,6 +149,7 @@ export function ConversationsClient({
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
   const selectedConversation = useMemo(() => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null, [conversations, selectedConversationId]);
+  const currentView = selectedConversationId ? "thread" : selectedCircleId ? "conversations" : "groups";
   const sortedCircles = useMemo(
     () => [...circles].sort((left, right) => getTimeValue(right.lastActivityAt) - getTimeValue(left.lastActivityAt)),
     [circles],
@@ -150,7 +158,6 @@ export function ConversationsClient({
     () => [...conversations].sort((left, right) => getTimeValue(right.lastActivityAt) - getTimeValue(left.lastActivityAt)),
     [conversations],
   );
-  const selectedGroupNameDraft = selectedCircle ? groupNameDrafts[selectedCircle.circleId] ?? selectedCircle.title : "";
   const composerRecipients = useMemo(() => composerRecipientIds.map((personId) => peopleById.get(personId)).filter((person): person is PersonOption => Boolean(person)), [composerRecipientIds, peopleById]);
   const composerAutoGroupTitle = useMemo(() => buildAutoGroupTitle(composerRecipientIds, peopleById), [composerRecipientIds, peopleById]);
   const composerGroupMatch = useMemo(() => {
@@ -181,19 +188,104 @@ export function ConversationsClient({
     return Array.isArray(body.conversations) ? body.conversations : [];
   }
 
-  async function syncCircleSelection(circleId: string, preferredConversationId?: string) {
+  function applySelection(circleId: string, conversationId: string, options?: { preserveConversations?: boolean }) {
+    const nextCircleId = normalize(circleId);
+    const nextConversationId = nextCircleId ? normalize(conversationId) : "";
+    setSelectedCircleId(nextCircleId);
+    setSelectedConversationId(nextConversationId);
+    if (!nextCircleId) {
+      setConversations([]);
+      setPosts([]);
+    } else {
+      if (!options?.preserveConversations && nextCircleId !== selectedCircleId) {
+        setConversations([]);
+      }
+      if (!nextConversationId) {
+        setPosts([]);
+      }
+    }
+    if (nextCircleId && nextConversationId && nextCircleId !== selectedCircleId) {
+      setPosts([]);
+    }
+  }
+
+  function writeShareUrl(circleId: string, conversationId: string, mode: "push" | "replace") {
+    if (typeof window === "undefined") return;
+    const nextUrl = buildShareUrl(circleId, conversationId);
+    if (mode === "replace") {
+      window.history.replaceState(null, "", nextUrl);
+      return;
+    }
+    window.history.pushState(null, "", nextUrl);
+  }
+
+  function openGroups(mode: "push" | "replace" = "push") {
+    applySelection("", "");
+    writeShareUrl("", "", mode);
+  }
+
+  function openCircle(circleId: string, mode: "push" | "replace" = "push") {
+    applySelection(circleId, "");
+    writeShareUrl(circleId, "", mode);
+  }
+
+  function openConversation(circleId: string, conversationId: string, mode: "push" | "replace" = "push") {
+    applySelection(circleId, conversationId);
+    writeShareUrl(circleId, conversationId, mode);
+  }
+
+  async function syncCircleSelection(circleId: string, preferredConversationId?: string, mode: "push" | "replace" | "none" = "none") {
     const [nextCircles, nextConversations] = await Promise.all([loadCircles(), loadCircleConversations(circleId)]);
     setCircles(nextCircles);
-    setConversations(nextConversations);
-    setSelectedCircleId(nextCircles.some((circle) => circle.circleId === circleId) ? circleId : nextCircles[0]?.circleId ?? "");
-    setSelectedConversationId(nextConversations.some((conversation) => conversation.conversationId === preferredConversationId) ? normalize(preferredConversationId) : nextConversations[0]?.conversationId ?? "");
+    const nextCircleId = nextCircles.some((circle) => circle.circleId === circleId) ? circleId : "";
+    const nextConversationId =
+      nextCircleId && preferredConversationId && nextConversations.some((conversation) => conversation.conversationId === preferredConversationId)
+        ? normalize(preferredConversationId)
+        : "";
+    setConversations(nextCircleId ? nextConversations : []);
+    applySelection(nextCircleId, nextConversationId, { preserveConversations: true });
+    if (mode !== "none") {
+      writeShareUrl(nextCircleId, nextConversationId, mode);
+    }
   }
+
+  useEffect(() => {
+    writeShareUrl(startCircleId, startConversationId, "replace");
+  }, [startCircleId, startConversationId]);
+
+  useEffect(() => {
+    function handlePopState() {
+      const params = new URLSearchParams(window.location.search);
+      const nextCircleId = normalize(params.get("circleId") ?? "");
+      const nextConversationId = nextCircleId ? normalize(params.get("conversationId") ?? "") : "";
+      const validCircleId = circles.some((circle) => circle.circleId === nextCircleId) ? nextCircleId : "";
+      setSelectedCircleId(validCircleId);
+      setSelectedConversationId(validCircleId ? nextConversationId : "");
+      if (!validCircleId) {
+        setConversations([]);
+        setPosts([]);
+        return;
+      }
+      if (validCircleId !== selectedCircleId) {
+        setConversations([]);
+        setPosts([]);
+        return;
+      }
+      if (!nextConversationId) {
+        setPosts([]);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [circles, selectedCircleId]);
 
   useEffect(() => {
     let cancelled = false;
     if (!selectedCircleId) {
       setConversations([]);
       setSelectedConversationId("");
+      setPosts([]);
       return;
     }
     void (async () => {
@@ -202,20 +294,18 @@ export function ConversationsClient({
         if (cancelled) return;
         setConversations(nextConversations);
         setSelectedConversationId((current) => {
-          const routeMatch = selectedCircleId === requestedCircleId && nextConversations.some((conversation) => conversation.conversationId === requestedConversationId);
-          if (routeMatch) return requestedConversationId;
-          return nextConversations.some((conversation) => conversation.conversationId === current) ? current : nextConversations[0]?.conversationId ?? "";
+          return current && nextConversations.some((conversation) => conversation.conversationId === current) ? current : "";
         });
       } catch (error) {
         if (!cancelled) setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to load conversations." });
       }
     })();
     return () => { cancelled = true; };
-  }, [requestedCircleId, requestedConversationId, selectedCircleId]);
+  }, [selectedCircleId]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!selectedCircleId || !selectedConversationId) {
+    if (!selectedCircleId || !selectedConversationId || !conversations.some((conversation) => conversation.conversationId === selectedConversationId)) {
       setPosts([]);
       return;
     }
@@ -236,7 +326,7 @@ export function ConversationsClient({
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedCircleId, selectedConversationId]);
+  }, [conversations, selectedCircleId, selectedConversationId]);
 
   useEffect(() => { setPostDraft(""); }, [selectedConversationId]);
   useEffect(() => { setNewTopicOpen(false); setNewConversationTitle(""); setInitialMessage(""); }, [selectedCircleId]);
@@ -315,7 +405,7 @@ export function ConversationsClient({
       const circle = circleBody.circle;
       if (!circle) throw new Error("No group returned.");
 
-      await syncCircleSelection(circle.circleId);
+      await syncCircleSelection(circle.circleId, "", "push");
       await closeComposer();
       setStatus({
         tone: "info",
@@ -323,50 +413,6 @@ export function ConversationsClient({
       });
     } catch (error) {
       setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to create group." });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveMyGroupName() {
-    if (!selectedCircle) return;
-    const title = normalize(selectedGroupNameDraft);
-    if (!title || title === selectedCircle.title) return;
-    setGroupNameBusy(true);
-    setStatus(null);
-    try {
-      const body = await fetchJson<{ circle?: ConversationCircle }>(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ title }),
-      });
-      const circle = body.circle;
-      if (!circle) throw new Error("No group returned.");
-      setCircles((current) => current.map((entry) => entry.circleId === circle.circleId ? circle : entry));
-      setGroupNameDrafts((current) => ({ ...current, [circle.circleId]: circle.title }));
-      setStatus({ tone: "info", message: "Your group name was saved." });
-    } catch (error) {
-      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to save your group name." });
-    } finally {
-      setGroupNameBusy(false);
-    }
-  }
-
-  async function deleteSelectedGroup() {
-    if (!selectedCircle) return;
-    if (!window.confirm(`Delete group "${selectedCircle.title}"? Its conversations will be archived.`)) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      await fetchJson<{ ok?: boolean }>(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}`, { method: "DELETE" });
-      const nextCircles = await loadCircles();
-      setCircles(nextCircles);
-      setConversations([]);
-      setPosts([]);
-      setSelectedCircleId(nextCircles[0]?.circleId ?? "");
-      setSelectedConversationId("");
-      setStatus({ tone: "info", message: "Group deleted." });
-    } catch (error) {
-      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to delete group." });
     } finally {
       setBusy(false);
     }
@@ -386,7 +432,7 @@ export function ConversationsClient({
           initialMessage: normalize(initialMessage),
         }),
       });
-      await syncCircleSelection(selectedCircle.circleId, body.conversation?.conversationId ?? "");
+      await syncCircleSelection(selectedCircle.circleId, body.conversation?.conversationId ?? "", "push");
       setNewTopicOpen(false);
       setNewConversationTitle("");
       setInitialMessage("");
@@ -442,155 +488,46 @@ export function ConversationsClient({
     <main className="shell">
       <FamailinkChrome active="conversations" username={session.username} personId={session.personId} />
 
-      <section className="conversations-shell">
-        <div className="conversation-column circles-column">
+      <section className="conversations-shell is-single-pane">
+        <div className={`conversation-column conversation-stage${currentView === "thread" ? " thread-column" : ""}`}>
           <div className="conversation-column-head">
-            <div>
-              <p className="eyebrow">Family Sharing</p>
-              <h1 className="conversation-title">Share</h1>
-              <p className="conversation-meta">Groups ordered by recent activity.</p>
-            </div>
-            <button className="primary-button" type="button" onClick={() => setComposerOpen(true)}>
-              Add Group
-            </button>
-          </div>
-
-          <div className="conversation-list" aria-label="Family groups">
-            {sortedCircles.length === 0 ? <p className="empty-state">No Groups yet. Use Add Group to create one.</p> : null}
-            {sortedCircles.map((circle) => (
-              <button
-                key={circle.circleId}
-                type="button"
-                className={`conversation-list-item${circle.circleId === selectedCircleId ? " is-active" : ""}`}
-                onClick={() => setSelectedCircleId(circle.circleId)}
-              >
-                <span className="conversation-list-main">
-                  <strong>{circle.title}</strong>
-                  {circle.description ? <small className="conversation-list-description">{circle.description}</small> : null}
-                  <small>{memberNames(circle.members)}</small>
-                </span>
-                {unreadBadge(circle.unreadCount)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="conversation-column topics-column">
-          <div className="conversation-column-head">
-            <div>
-              <p className="eyebrow">Conversations</p>
-              <h2>{selectedCircle?.title ?? "Select a Group"}</h2>
-              {selectedCircle ? (
-                <p className="conversation-meta">
-                  {selectedCircle.members.length} members
-                  {selectedCircle.defaultTitle && selectedCircle.defaultTitle !== selectedCircle.title ? ` | Default: ${selectedCircle.defaultTitle}` : ""}
-                </p>
-              ) : null}
-            </div>
-            {selectedCircle ? (
-              <button className="secondary-button" type="button" onClick={() => setNewTopicOpen((current) => !current)}>
-                {newTopicOpen ? "Close Topic" : "New Topic"}
-              </button>
-            ) : null}
-          </div>
-
-          {selectedCircle ? (
-            <div className="conversation-create-panel">
-              <label className="conversation-my-group-name">
-                <span className="field-label">My name for this Group</span>
-                <span>
-                  <input
-                    className="input"
-                    value={selectedGroupNameDraft}
-                    onChange={(event) =>
-                      setGroupNameDrafts((current) => ({
-                        ...current,
-                        [selectedCircle.circleId]: event.target.value,
-                      }))
-                    }
-                    placeholder={selectedCircle.defaultTitle || "Family Group"}
-                  />
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={groupNameBusy || !normalize(selectedGroupNameDraft) || selectedGroupNameDraft === selectedCircle.title}
-                    onClick={() => void saveMyGroupName()}
-                  >
-                    Save
-                  </button>
-                </span>
-              </label>
-              {selectedCircle.description ? <p className="conversation-group-description">{selectedCircle.description}</p> : null}
-              <div className="conversation-chip-list" aria-label="Group members">
-                {selectedCircle.members.map((member) => (
-                  <span key={member.personId} className="conversation-chip conversation-chip-static">
-                    {member.personId === session.personId ? "You" : member.displayName || member.personId}
-                  </span>
-                ))}
-              </div>
-              {selectedCircle.canDelete ? (
-                <div className="conversation-toolbar">
-                  <button className="secondary-button danger-button" type="button" disabled={busy} onClick={() => void deleteSelectedGroup()}>
-                    Delete Group
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {selectedCircle && newTopicOpen ? (
-            <div className="conversation-create-panel">
-              <label className="field">
-                <span className="field-label">Topic name</span>
-                <input
-                  className="input"
-                  value={newConversationTitle}
-                  onChange={(event) => setNewConversationTitle(event.target.value)}
-                  placeholder="Example: Reunion planning"
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Opening message (optional)</span>
-                <textarea
-                  className="input conversation-textarea"
-                  value={initialMessage}
-                  onChange={(event) => setInitialMessage(event.target.value)}
-                  placeholder="Start the conversation"
-                />
-              </label>
-              <div className="conversation-toolbar">
-                <button className="primary-button" type="button" disabled={busy || !normalize(newConversationTitle)} onClick={() => void createConversation()}>
-                  Start Topic
+            <div className="conversation-stage-head">
+              {currentView === "conversations" ? (
+                <button className="secondary-button conversation-back-button" type="button" onClick={() => openGroups()}>
+                  Back
                 </button>
+              ) : null}
+              {currentView === "thread" && selectedCircle ? (
+                <button className="secondary-button conversation-back-button" type="button" onClick={() => openCircle(selectedCircle.circleId)}>
+                  Back
+                </button>
+              ) : null}
+              <div>
+                <p className="eyebrow">
+                  {currentView === "groups" ? "Family Sharing" : currentView === "conversations" ? "Conversations" : "Thread"}
+                </p>
+                {currentView === "groups" ? <h1 className="conversation-title">Share</h1> : null}
+                {currentView === "conversations" ? <h1 className="conversation-title">{selectedCircle?.title ?? "Group"}</h1> : null}
+                {currentView === "thread" ? <h1 className="conversation-title">{selectedConversation?.title ?? "Conversation"}</h1> : null}
+                {currentView === "groups" ? <p className="conversation-meta">Groups ordered by recent activity.</p> : null}
+                {currentView === "conversations" && selectedCircle ? (
+                  <p className="conversation-meta">{selectedCircle.members.length} members</p>
+                ) : null}
+                {currentView === "thread" && selectedCircle ? <p className="conversation-meta">{selectedCircle.title}</p> : null}
               </div>
             </div>
-          ) : null}
 
-          <div className="conversation-list" aria-label="Named conversations">
-            {selectedCircle && conversations.length === 0 ? <p className="empty-state">No named conversations yet. Use New Topic when you want a separate thread.</p> : null}
-            {sortedConversations.map((conversation) => (
-              <button
-                key={conversation.conversationId}
-                type="button"
-                className={`conversation-list-item${conversation.conversationId === selectedConversationId ? " is-active" : ""}`}
-                onClick={() => setSelectedConversationId(conversation.conversationId)}
-              >
-                <span className="conversation-list-main">
-                  <strong>{conversation.title}</strong>
-                  <small>{formatDate(conversation.lastActivityAt)}</small>
-                </span>
-                {unreadBadge(conversation.unreadCount)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="conversation-column thread-column">
-          <div className="conversation-column-head">
-            <div>
-              <p className="eyebrow">Thread</p>
-              <h2>{selectedConversation?.title ?? "Select a conversation"}</h2>
-              {selectedCircle ? <p className="conversation-meta">{selectedCircle.title}</p> : null}
+            <div className="conversation-head-actions">
+              {currentView === "groups" ? (
+                <button className="primary-button" type="button" onClick={() => setComposerOpen(true)}>
+                  Add Group
+                </button>
+              ) : null}
+              {currentView === "conversations" ? (
+                <button className="secondary-button" type="button" onClick={() => setNewTopicOpen((current) => !current)}>
+                  {newTopicOpen ? "Close Topic" : "New Topic"}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -598,70 +535,139 @@ export function ConversationsClient({
             <p className={status.tone === "error" ? "error-text conversation-status" : "conversation-inline-note conversation-status"}>{status.message}</p>
           ) : null}
 
-          {selectedConversation ? (
-            <div className="conversation-compose">
-              <textarea
-                className="input conversation-textarea"
-                value={postDraft}
-                onChange={(event) => setPostDraft(event.target.value)}
-                placeholder="Send a message"
-              />
-              <div className="conversation-toolbar">
-                <button className="primary-button" type="button" disabled={busy || !normalize(postDraft)} onClick={() => void createPost()}>
-                  Send
-                </button>
-              </div>
-            </div>
-          ) : selectedCircle ? (
-            <p className="empty-state">Choose a conversation, or start a new topic in this Group.</p>
-          ) : (
-            <p className="empty-state">Select a Group to see conversations and messages.</p>
-          )}
-
-          <div className="conversation-posts" aria-label="Conversation posts">
-            {selectedConversation && posts.length === 0 ? <p className="empty-state">No messages yet.</p> : null}
-            {posts.map((post) => {
-              const ownPost = post.authorPersonId === session.personId;
-              return (
-                <article
-                  key={post.postId}
-                  ref={(node) => setItemRef(`post:${post.postId}`, node)}
-                  className={`conversation-post${ownPost ? " is-mine" : ""}${unreadAnchorKey === `post:${post.postId}` ? " is-unread-anchor" : ""}`}
+          {currentView === "groups" ? (
+            <div className="conversation-list" aria-label="Family groups">
+              {sortedCircles.length === 0 ? <p className="empty-state">No Groups yet. Use Add Group to create one.</p> : null}
+              {sortedCircles.map((circle) => (
+                <button
+                  key={circle.circleId}
+                  type="button"
+                  className="conversation-list-item"
+                  onClick={() => openCircle(circle.circleId)}
                 >
-                  <div className="conversation-post-bubble">
-                    <div className="conversation-post-head">
-                      <strong>{post.authorDisplayName || post.authorPersonId}</strong>
-                      <span>{formatDate(post.createdAt)}</span>
-                    </div>
-                    <p>{post.caption}</p>
+                  <span className="conversation-list-main">
+                    <strong>{circle.title}</strong>
+                    <small>{memberNames(circle.members)}</small>
+                    <small>{formatDate(circle.lastActivityAt)}</small>
+                  </span>
+                  {unreadBadge(circle.unreadCount)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {currentView === "conversations" ? (
+            <>
+              {selectedCircle && newTopicOpen ? (
+                <div className="conversation-create-panel">
+                  <label className="field">
+                    <span className="field-label">Topic name</span>
+                    <input
+                      className="input"
+                      value={newConversationTitle}
+                      onChange={(event) => setNewConversationTitle(event.target.value)}
+                      placeholder="Example: Reunion planning"
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Opening message (optional)</span>
+                    <textarea
+                      className="input conversation-textarea"
+                      value={initialMessage}
+                      onChange={(event) => setInitialMessage(event.target.value)}
+                      placeholder="Start the conversation"
+                    />
+                  </label>
+                  <div className="conversation-toolbar">
+                    <button className="primary-button" type="button" disabled={busy || !normalize(newConversationTitle)} onClick={() => void createConversation()}>
+                      Start Topic
+                    </button>
                   </div>
-                  <div className="conversation-comments">
-                    {post.comments.map((comment) => (
-                      <div
-                        key={comment.commentId}
-                        ref={(node) => setItemRef(`comment:${comment.commentId}`, node)}
-                        className={`conversation-comment${unreadAnchorKey === `comment:${comment.commentId}` ? " is-unread-anchor" : ""}`}
-                      >
-                        <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
-                        <span>{comment.commentText}</span>
+                </div>
+              ) : null}
+
+              <div className="conversation-list" aria-label="Named conversations">
+                {selectedCircle && conversations.length === 0 ? <p className="empty-state">No named conversations yet. Use New Topic to start one.</p> : null}
+                {sortedConversations.map((conversation) => (
+                  <button
+                    key={conversation.conversationId}
+                    type="button"
+                    className="conversation-list-item"
+                    onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
+                  >
+                    <span className="conversation-list-main">
+                      <strong>{conversation.title}</strong>
+                      <small>{formatDate(conversation.lastActivityAt)}</small>
+                    </span>
+                    {unreadBadge(conversation.unreadCount)}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {currentView === "thread" ? (
+            <>
+              <div className="conversation-compose">
+                <textarea
+                  className="input conversation-textarea"
+                  value={postDraft}
+                  onChange={(event) => setPostDraft(event.target.value)}
+                  placeholder="Send a message"
+                />
+                <div className="conversation-toolbar">
+                  <button className="primary-button" type="button" disabled={busy || !normalize(postDraft)} onClick={() => void createPost()}>
+                    Send
+                  </button>
+                </div>
+              </div>
+
+              <div className="conversation-posts" aria-label="Conversation posts">
+                {selectedConversation && posts.length === 0 ? <p className="empty-state">No messages yet.</p> : null}
+                {posts.map((post) => {
+                  const ownPost = post.authorPersonId === session.personId;
+                  return (
+                    <article
+                      key={post.postId}
+                      ref={(node) => setItemRef(`post:${post.postId}`, node)}
+                      className={`conversation-post${ownPost ? " is-mine" : ""}${unreadAnchorKey === `post:${post.postId}` ? " is-unread-anchor" : ""}`}
+                    >
+                      <div className="conversation-post-bubble">
+                        <div className="conversation-post-head">
+                          <strong>{post.authorDisplayName || post.authorPersonId}</strong>
+                          <span>{formatDate(post.createdAt)}</span>
+                        </div>
+                        <p>{post.caption}</p>
                       </div>
-                    ))}
-                    <div className="conversation-comment-form">
-                      <input
-                        className="input"
-                        value={commentDrafts[post.postId] ?? ""}
-                        onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.postId]: event.target.value }))}
-                        placeholder="Reply"
-                      />
-                      <button className="secondary-button" type="button" disabled={busy || !normalize(commentDrafts[post.postId])} onClick={() => void createComment(post.postId)}>
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                      <div className="conversation-comments">
+                        {post.comments.map((comment) => (
+                          <div
+                            key={comment.commentId}
+                            ref={(node) => setItemRef(`comment:${comment.commentId}`, node)}
+                            className={`conversation-comment${unreadAnchorKey === `comment:${comment.commentId}` ? " is-unread-anchor" : ""}`}
+                          >
+                            <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
+                            <span>{comment.commentText}</span>
+                          </div>
+                        ))}
+                        <div className="conversation-comment-form">
+                          <input
+                            className="input"
+                            value={commentDrafts[post.postId] ?? ""}
+                            onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.postId]: event.target.value }))}
+                            placeholder="Reply"
+                          />
+                          <button className="secondary-button" type="button" disabled={busy || !normalize(commentDrafts[post.postId])} onClick={() => void createComment(post.postId)}>
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
         </div>
       </section>
 

@@ -1645,6 +1645,10 @@ select {
   min-height: calc(100vh - 120px);
 }
 
+.conversations-shell.is-single-pane {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .conversation-column {
   min-height: 0;
   display: grid;
@@ -1661,11 +1665,26 @@ select {
   grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr);
 }
 
+.conversation-stage {
+  grid-column: 1 / -1;
+  grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr);
+}
+
 .conversation-column-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+}
+
+.conversation-stage-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.conversation-back-button {
+  min-width: 72px;
 }
 
 .conversation-column-head h1,

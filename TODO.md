@@ -13,6 +13,7 @@ I will update this list as we add, complete, or remove work.
   - In progress: added relationship preset member selection for group creation and member-specific group display names.
   - Completed local implementation: replaced the create-group form with a text-style `New Message` composer that uses recipient chips, removable preset-added members, side-aware relationship selection, optional advanced fields, and send-to-existing-group behavior.
   - In progress 2026-04-24: shifting the user-facing surface from `Groups` to `Share`, keeping the group list compact with unread bubbles and an `Add Group` modal entry point, and making conversation open/scroll behavior jump to the unread boundary like a text thread.
+  - In progress 2026-04-29: changing Share to single-level navigation so it shows only one layer at a time: Groups list, then conversations list for one Group, then the selected thread. Back behavior should step thread -> conversations -> groups.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -31,6 +32,7 @@ I will update this list as we add, complete, or remove work.
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
   - Phase 2: User-facing Share page with compact group-list-first UX, Add Group modal entry, relationship preset member selection, manual add/remove chips, conversation creation, message posting, comments, unread counts, and participant display.
   - Phase 2a: Share-first UX pass with `Share` labeling, compact group-list-first layout, `Add Group` modal entry, and conversation open behavior that scrolls to the unread boundary.
+  - Phase 2b: Single-level Share navigation with one-pane behavior, explicit back controls, and browser/history state that steps from thread to conversations to groups instead of showing multiple levels simultaneously.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -42,6 +44,10 @@ I will update this list as we add, complete, or remove work.
   - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
   - The Share screen shows a compact list of Groups with unread bubbles ordered by most recent activity.
   - The Share screen exposes an `Add Group` button that opens the Group-creation modal without taking persistent page space.
+  - The Share screen shows only one level at a time instead of Group list, conversation list, and thread together.
+  - Selecting a Group shows only that Group's conversations.
+  - Selecting a conversation shows only that thread.
+  - Back navigation steps from thread -> conversations -> groups.
   - Signed-in member can use `Add Group`, add/remove recipients as chips, and create/select a group without consuming persistent page space.
   - Signed-in member can add group members by relationship preset and still add individual members.
   - Relationship presets can add recipients by `Both`, `Maternal`, or `Paternal` side where applicable.

@@ -620,3 +620,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the `Groups` label; keep `New Message` as the main CTA; continue opening conversations at the top of the full thread regardless of unread position.
 - `Impact`: App navigation now presents `Share`, the left column is a recent/unread Group inbox, Group creation is modal-first, and conversation open behavior scrolls to the unread point when unread content exists.
 - `Follow-up`: Refine the Add Group modal further after validating the compact Share-first layout in production.
+
+## 2026-04-29
+
+- `Area`: Famailink Share navigation model
+- `Decision`: The Share screen should behave like a texting app with single-level navigation. It must show only one level at a time: first the Group list, then the conversation list for a selected Group, then the selected thread. In-app back controls and browser history should step from thread -> conversations -> groups instead of rendering multiple levels simultaneously.
+- `Reason`: The prior Share screen still behaved like a dashboard with parallel panes, which made the hierarchy harder to read and did not match the requested text-style mental model.
+- `Alternatives Considered`: Keep the three-column simultaneous layout; hide panes responsively without changing selection behavior; keep only visual back buttons without URL/history state.
+- `Impact`: `ConversationsClient` now uses explicit `groups` / `conversations` / `thread` view state, no longer auto-opens the first Group or first conversation, and syncs `circleId` / `conversationId` into browser history so back navigation matches the visible level.
+- `Follow-up`: Continue tightening the Add Group modal and thread view once the single-level Share flow is validated in production.

@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-29 (Famailink Share single-level navigation)
+
+- `Date`: 2026-04-29
+- `Change`: Changed the Famailink Share screen from a simultaneous multi-pane layout into a single-level text-style navigator. The screen now shows only one level at a time: Groups list, then a selected Group's conversations, then the selected thread. Added explicit Back controls and browser-history state so navigation steps thread -> conversations -> groups.
+- `Type`: UI
+- `Why`: Root cause was a code/UX mismatch. The Share screen still behaved like a dashboard with multiple panes visible at once and auto-opened deeper levels, which did not match the requested text-app interaction model. The chosen fix changed the client navigation state itself instead of only hiding panes.
+- `Files`: `TODO.md`, `designchoices.md`, `famailink/components/ConversationsClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Restore the previous multi-pane Share layout and remove the single-level selection/history behavior.
+- `Design Decision Change`: Yes. Added the Famailink Share navigation model decision to `designchoices.md`.
+
 ## 2026-04-24 (Famailink Share-first inbox UX)
 
 - `Date`: 2026-04-24
