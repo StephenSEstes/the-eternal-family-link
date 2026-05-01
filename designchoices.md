@@ -638,3 +638,10 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep plain text member names only; color only chips but not message/comment bubbles; invent a new Famailink-specific participant styling pattern.
 - `Impact`: Famailink thread headers now render colored participant chips, and post/comment bubbles use the same author color family for faster visual scanning without changing any share data or API shape.
 - `Follow-up`: Reuse the same member color treatment when canonical media/story sharing is added into Famailink conversations.
+
+- `Area`: Famailink mobile install and Share push notifications
+- `Decision`: Famailink Share should support an installable mobile web-app shell and opt-in per-device web-push notifications. The app uses a manifest plus service worker for installability and notification display, stores subscriptions per person/device, and delivers push events for new Group conversations, posts, and comments as a best-effort background step after the share write commits.
+- `Reason`: Famailink's Share experience is intended to behave like a family messaging surface on a phone. Before this change, the code had no PWA manifest, no service worker, no Famailink push-subscription APIs, and no delivery path for Share activity notifications.
+- `Alternatives Considered`: Keep Famailink browser-only without installability; defer all phone alerts to email or SMS; make conversation writes wait on notification delivery.
+- `Impact`: Famailink now exposes a device notification control in Share, uses `push_subscriptions` and `notification_outbox` for Famailink Share events, requires VAPID environment variables for real delivery, and deactivates expired endpoints instead of repeatedly retrying dead subscriptions.
+- `Follow-up`: Validate production VAPID configuration and real device delivery, then extend the same push model to canonical media/story sharing once Group-based media posting is added.

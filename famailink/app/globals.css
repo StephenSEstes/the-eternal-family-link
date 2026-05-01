@@ -1930,6 +1930,61 @@ select {
   margin: 0;
 }
 
+.conversation-push-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--surface-soft) 70%, #fff 30%);
+}
+
+.conversation-push-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.conversation-push-copy strong {
+  color: var(--text);
+}
+
+.conversation-push-copy .conversation-meta {
+  margin-top: 0;
+}
+
+.conversation-push-status {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.conversation-push-status.is-enabled {
+  color: #166534;
+}
+
+.conversation-push-status.is-ready,
+.conversation-push-status.is-loading {
+  color: var(--muted);
+}
+
+.conversation-push-status.is-install_required,
+.conversation-push-status.is-blocked {
+  color: #92400e;
+}
+
+.conversation-push-status.is-error,
+.conversation-push-status.is-unsupported {
+  color: #991b1b;
+}
+
+.conversation-push-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .conversation-thread-member-list {
   display: flex;
   flex-wrap: wrap;
@@ -2666,6 +2721,15 @@ select {
 
   .conversation-comment-form {
     grid-template-columns: 1fr;
+  }
+
+  .conversation-push-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .conversation-push-actions {
+    justify-content: flex-start;
   }
 
   .conversation-relationship-toolbar,

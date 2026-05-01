@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireRouteSession } from "@/lib/auth/guards";
 import { createConversationComment } from "@/lib/conversations/store";
 import { actorFromSession, isRecord, jsonError, normalize } from "@/lib/conversations/route-helpers";
+import { dispatchPendingPushNotifications, queueConversationActivityNotifications } from "@/lib/notifications/store";
 
 type RouteContext = {
   params: Promise<{ circleId: string; conversationId: string; postId: string }>;
@@ -18,12 +19,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    const actor = actorFromSession(session);
     const comment = await createConversationComment({
-      actor: actorFromSession(session),
+      actor,
       circleId,
       conversationId,
       postId,
       commentText: normalize(payload.commentText),
+    });
+    after(async () => {
+      try {
+        await queueConversationActivityNotifications({
+          actor,
+          circleId,
+          conversationId,
+          eventType: "comment_posted",
+          entityType: "share_comment",
+          entityId: comment.commentId,
+          previewText: comment.commentText,
+        });
+        await dispatchPendingPushNotifications(25);
+      } catch {
+        // Best-effort background delivery only.
+      }
     });
     return NextResponse.json({ comment });
   } catch (error) {

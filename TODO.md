@@ -15,6 +15,7 @@ I will update this list as we add, complete, or remove work.
   - In progress 2026-04-24: shifting the user-facing surface from `Groups` to `Share`, keeping the group list compact with unread bubbles and an `Add Group` modal entry point, and making conversation open/scroll behavior jump to the unread boundary like a text thread.
   - In progress 2026-04-29: changing Share to single-level navigation so it shows only one layer at a time: Groups list, then conversations list for one Group, then the selected thread. Back behavior should step thread -> conversations -> groups.
   - In progress 2026-04-30: matching the EFL Shares thread identity treatment by showing Group members as colored chips at the top of the selected conversation and reusing those member colors for Famailink message/comment bubbles.
+  - Completed local implementation 2026-04-30: added installable mobile/PWA support and real web-push notifications for Famailink Share using the existing repo push-table concepts where possible.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -29,17 +30,26 @@ I will update this list as we add, complete, or remove work.
   - Keep Famailink profile visibility rules separate from conversation participation.
   - Surface conversation summaries under the person detail `Conversations` tab when the signed-in viewer is allowed to see that person's conversation profile scope.
   - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
+  - Add mobile-install and push-notification support to Famailink Share without changing conversation membership/access rules.
   Phases:
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
   - Phase 2: User-facing Share page with compact group-list-first UX, Add Group modal entry, relationship preset member selection, manual add/remove chips, conversation creation, message posting, comments, unread counts, and participant display.
   - Phase 2a: Share-first UX pass with `Share` labeling, compact group-list-first layout, `Add Group` modal entry, and conversation open behavior that scrolls to the unread boundary.
   - Phase 2b: Single-level Share navigation with one-pane behavior, explicit back controls, and browser/history state that steps from thread to conversations to groups instead of showing multiple levels simultaneously.
+  - Phase 2c: Installable mobile shell + web-push notifications for Famailink Share.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
   - API: new Famailink `/api/conversations/...` route handlers.
   - UI: new `/conversations` page surfaced to users as `Share` in the app header.
   - Data: no destructive migration; runtime compatibility creates/uses existing normalized share tables if needed.
+  - API/UI/Data for Phase 2c:
+    - Add Famailink manifest + service worker so the app can be installed on mobile and receive push while backgrounded.
+    - Add Famailink push-subscription API surface for register/list/delete using `push_subscriptions` rows.
+    - Add Famailink notification settings UI to enable/disable browser push on the current device.
+    - Add Famailink notification event writes for new conversation posts/comments, excluding the author and inactive subscriptions.
+    - Add actual web-push delivery using VAPID keys and mark subscription rows inactive when endpoints are gone.
+    - Keep delivery best-effort after the message/comment commit so conversation writes stay durable even if push delivery fails.
   Validation:
   - Famailink type/build check passes.
   - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
@@ -62,6 +72,10 @@ I will update this list as we add, complete, or remove work.
   - Opening a conversation scrolls the thread to the first unread point when unread content exists.
   - The selected conversation shows Group members as colored chips at the top of the thread.
   - Message/comment bubbles reuse stable per-member colors so participant identity is easier to scan.
+  - Famailink can be installed on a supported mobile browser home screen.
+  - Signed-in user can enable push notifications for the current device from Famailink.
+  - New Group posts/comments create push notifications for other subscribed Group members.
+  - Failed/expired push endpoints are deactivated instead of causing repeated send failures.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
   - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.

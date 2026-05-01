@@ -42,6 +42,12 @@ Optional for password reset email delivery:
 - `GMAIL_OAUTH_CLIENT_SECRET`
 - `GMAIL_REFRESH_TOKEN`
 
+Optional for Share push notifications:
+
+- `FAMAILINK_WEB_PUSH_PUBLIC_KEY`
+- `FAMAILINK_WEB_PUSH_PRIVATE_KEY`
+- `FAMAILINK_WEB_PUSH_SUBJECT`
+
 ## Run
 
 ```powershell

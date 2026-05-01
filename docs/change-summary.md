@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-30 (Famailink mobile install and Share push notifications)
+
+- `Date`: 2026-04-30
+- `Change`: Added Famailink mobile-install and push-notification support for Share. The app now exposes a PWA manifest and service worker, a device-level notification control in Share, push-subscription register/delete APIs, and best-effort web-push delivery for new Group conversations, posts, and comments.
+- `Type`: UI | API | Data | Infra
+- `Why`: Root cause was a code gap. Famailink could be opened on a phone, but it had no installable app shell, no service worker, no notification permission/subscription flow, no Famailink push APIs, and no actual delivery path for Share activity.
+- `Files`: `TODO.md`, `changeHistory.md`, `designchoices.md`, `docs/change-summary.md`, `docs/deploy-runbook.md`, `docs/project-definition.md`, `famailink/README.md`, `famailink/package.json`, `famailink/package-lock.json`, `famailink/web-push.d.ts`, `famailink/app/layout.tsx`, `famailink/app/manifest.ts`, `famailink/app/globals.css`, `famailink/public/sw.js`, `famailink/public/android-chrome-192x192.png`, `famailink/public/android-chrome-512x512.png`, `famailink/components/ConversationsClient.tsx`, `famailink/components/PushNotificationsControl.tsx`, `famailink/lib/notifications/webpush.ts`, `famailink/lib/notifications/store.ts`, `famailink/app/api/push/public-key/route.ts`, `famailink/app/api/push/subscriptions/route.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/route.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/route.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/[postId]/comments/route.ts`
+- `Data Changes`: Additive OCI compatibility only. Famailink now ensures and uses `push_subscriptions` and `notification_outbox` when missing, stores per-device push endpoints for signed-in people, and writes outbox rows for Share conversation activity. No destructive migration or reset.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert the PWA metadata/service-worker files, remove the Famailink push APIs and Share notification control, and remove the background notification writes from the conversation/post/comment routes.
+- `Design Decision Change`: Yes. Added the Famailink mobile install and Share push-notification decision to `designchoices.md`.
+
 ## 2026-04-30 (Famailink Share participant chips and color-coded thread identity)
 
 - `Date`: 2026-04-30

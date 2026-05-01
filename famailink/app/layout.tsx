@@ -11,10 +11,11 @@ export const metadata: Metadata = {
   title: "The Eternal Family Link",
   description: "Keep your family story alive.",
   applicationName: "The Eternal Family Link",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "EFL",
+    title: "Famailink",
   },
   formatDetection: {
     telephone: false,

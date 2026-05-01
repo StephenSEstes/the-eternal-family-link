@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireRouteSession } from "@/lib/auth/guards";
 import { createCircleConversation, listCircleConversations } from "@/lib/conversations/store";
 import { actorFromSession, isRecord, jsonError, normalize } from "@/lib/conversations/route-helpers";
+import { dispatchPendingPushNotifications, queueConversationActivityNotifications } from "@/lib/notifications/store";
 
 type RouteContext = {
   params: Promise<{ circleId: string }>;
@@ -34,11 +35,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    const actor = actorFromSession(session);
     const conversation = await createCircleConversation({
-      actor: actorFromSession(session),
+      actor,
       circleId,
       title: normalize(payload.title),
       initialMessage: normalize(payload.initialMessage),
+    });
+    after(async () => {
+      try {
+        await queueConversationActivityNotifications({
+          actor,
+          circleId,
+          conversationId: conversation.conversationId,
+          eventType: "conversation_created",
+          entityType: "share_conversation",
+          entityId: conversation.conversationId,
+          previewText: normalize(payload.initialMessage) || conversation.title,
+        });
+        await dispatchPendingPushNotifications(25);
+      } catch {
+        // Best-effort background delivery only.
+      }
     });
     return NextResponse.json({ conversation });
   } catch (error) {

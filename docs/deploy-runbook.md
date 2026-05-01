@@ -27,6 +27,12 @@ Optional for self-service password reset email delivery:
 - `GMAIL_OAUTH_CLIENT_SECRET`
 - `GMAIL_REFRESH_TOKEN`
 
+Optional for real Famailink Share push delivery:
+
+- `FAMAILINK_WEB_PUSH_PUBLIC_KEY`
+- `FAMAILINK_WEB_PUSH_PRIVATE_KEY`
+- `FAMAILINK_WEB_PUSH_SUBJECT`
+
 ### Pre-Deploy
 
 - From repo root:
@@ -61,6 +67,10 @@ Expected result:
 - if password-reset changes were part of the release:
   - `/forgot-password` loads
   - submitting a known local-account email returns the generic success message
+- if Share push-notification changes were part of the release:
+  - `/api/push/public-key` returns `supported: true` when VAPID env vars are configured
+  - a signed-in Famailink user can enable notifications for the current device from `Share`
+  - a new Group conversation/post/comment notifies another subscribed Group member on a real device
 - if access/default changes were part of the release:
   - save one preference
   - confirm `/tree` readback reflects the saved state

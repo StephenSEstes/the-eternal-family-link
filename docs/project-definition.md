@@ -153,6 +153,9 @@ The target product should support:
 - Show linked media/stories under the relevant person or household history.
 - Preserve the original conversation context for shared media when the viewer has permission to see it.
 - Notify participants about new posts/comments/media according to membership and subscription preferences.
+- Let Famailink be installed to a phone home screen as a web app on supported browsers.
+- Let each signed-in member enable or disable push notifications for the current device.
+- Deliver push notifications for new Group conversations, posts, and comments without blocking the underlying Share write.
 
 ## Product Direction
 

@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
+import { PushNotificationsControl } from "@/components/PushNotificationsControl";
 
 type SessionInfo = { username: string; personId: string };
 type PersonOption = { personId: string; displayName: string };
@@ -600,6 +601,7 @@ export function ConversationsClient({
 
           {currentView === "groups" ? (
             <div className="conversation-list" aria-label="Family groups">
+              <PushNotificationsControl />
               {sortedCircles.length === 0 ? <p className="empty-state">No Groups yet. Use Add Group to create one.</p> : null}
               {sortedCircles.map((circle) => (
                 <button
