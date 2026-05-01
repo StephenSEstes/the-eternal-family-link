@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-04-30 (Famailink Share participant chips and color-coded thread identity)
+
+- `Date`: 2026-04-30
+- `Change`: Added colored Group-member chips at the top of selected Famailink conversations and reused the same stable per-member colors for message and comment bubbles, following the existing EFL Shares participant styling pattern.
+- `Type`: UI
+- `Why`: Root cause was a UI/code issue. After Share moved to single-level navigation, participant identity inside the open thread became harder to scan. The existing EFL Shares UI already had a proven solution: stable participant chips and repeated author colors across the thread.
+- `Files`: `TODO.md`, `designchoices.md`, `famailink/components/ConversationsClient.tsx`, `famailink/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the member color palette/mapping, restore neutral thread/comment styling, and remove the participant chips from the selected conversation header.
+- `Design Decision Change`: Yes. Added the Famailink Share participant identity styling decision to `designchoices.md`.
+
 ## 2026-04-29 (Famailink Share single-level navigation)
 
 - `Date`: 2026-04-29

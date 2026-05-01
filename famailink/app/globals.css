@@ -1930,6 +1930,25 @@ select {
   margin: 0;
 }
 
+.conversation-thread-member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.conversation-thread-member-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--conversation-member-chip-border, color-mix(in oklab, var(--line) 78%, #fff 22%));
+  background: var(--conversation-member-chip-bg, rgba(255, 255, 255, 0.94));
+  color: var(--conversation-member-chip-text, var(--text));
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .conversation-posts {
   display: grid;
   align-content: start;
@@ -1953,9 +1972,9 @@ select {
   display: grid;
   gap: 7px;
   padding: 11px 12px;
-  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  border: 1px solid var(--conversation-bubble-border, color-mix(in oklab, var(--line) 76%, #fff 24%));
   border-radius: 12px;
-  background: #fff;
+  background: var(--conversation-bubble-bg, #fff);
   box-shadow: 0 8px 18px color-mix(in oklab, #124866 8%, transparent 92%);
 }
 
@@ -1973,7 +1992,7 @@ select {
 }
 
 .conversation-post-head strong {
-  color: var(--text);
+  color: var(--conversation-bubble-author-color, var(--text));
 }
 
 .conversation-post-bubble p {
@@ -1994,12 +2013,23 @@ select {
   justify-self: end;
 }
 
+.conversation-comment-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.conversation-comment-row.is-mine {
+  justify-content: flex-end;
+}
+
 .conversation-comment {
+  width: min(560px, 100%);
   display: grid;
   gap: 2px;
   padding: 7px 9px;
   border-radius: 8px;
-  background: color-mix(in oklab, var(--surface-soft) 72%, #fff 28%);
+  border: 1px solid var(--conversation-bubble-border, color-mix(in oklab, var(--line) 76%, #fff 24%));
+  background: var(--conversation-bubble-bg, color-mix(in oklab, var(--surface-soft) 72%, #fff 28%));
   color: var(--text);
   font-size: 13px;
   scroll-margin-top: 14px;
@@ -2011,7 +2041,7 @@ select {
 }
 
 .conversation-comment strong {
-  color: var(--accent-strong);
+  color: var(--conversation-bubble-author-color, var(--accent-strong));
   font-size: 12px;
 }
 

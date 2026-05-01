@@ -629,3 +629,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep the three-column simultaneous layout; hide panes responsively without changing selection behavior; keep only visual back buttons without URL/history state.
 - `Impact`: `ConversationsClient` now uses explicit `groups` / `conversations` / `thread` view state, no longer auto-opens the first Group or first conversation, and syncs `circleId` / `conversationId` into browser history so back navigation matches the visible level.
 - `Follow-up`: Continue tightening the Add Group modal and thread view once the single-level Share flow is validated in production.
+
+## 2026-04-30
+
+- `Area`: Famailink Share participant identity styling
+- `Decision`: Famailink selected conversations should show Group members as colored chips at the top of the thread, and the same stable per-member color mapping should be reused for message and comment bubbles. The palette and treatment should follow the existing EFL Shares pattern instead of introducing a different Famailink-only style.
+- `Reason`: Once Share moved to single-level navigation, participant identity became harder to scan inside the open thread. The older EFL Shares surface already solved this with durable member chips and repeated author colors across the thread.
+- `Alternatives Considered`: Keep plain text member names only; color only chips but not message/comment bubbles; invent a new Famailink-specific participant styling pattern.
+- `Impact`: Famailink thread headers now render colored participant chips, and post/comment bubbles use the same author color family for faster visual scanning without changing any share data or API shape.
+- `Follow-up`: Reuse the same member color treatment when canonical media/story sharing is added into Famailink conversations.

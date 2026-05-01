@@ -14,6 +14,7 @@ I will update this list as we add, complete, or remove work.
   - Completed local implementation: replaced the create-group form with a text-style `New Message` composer that uses recipient chips, removable preset-added members, side-aware relationship selection, optional advanced fields, and send-to-existing-group behavior.
   - In progress 2026-04-24: shifting the user-facing surface from `Groups` to `Share`, keeping the group list compact with unread bubbles and an `Add Group` modal entry point, and making conversation open/scroll behavior jump to the unread boundary like a text thread.
   - In progress 2026-04-29: changing Share to single-level navigation so it shows only one layer at a time: Groups list, then conversations list for one Group, then the selected thread. Back behavior should step thread -> conversations -> groups.
+  - In progress 2026-04-30: matching the EFL Shares thread identity treatment by showing Group members as colored chips at the top of the selected conversation and reusing those member colors for Famailink message/comment bubbles.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -59,6 +60,8 @@ I will update this list as we add, complete, or remove work.
   - Members can add text posts and comments.
   - Conversation unread counts clear through per-person read state.
   - Opening a conversation scrolls the thread to the first unread point when unread content exists.
+  - The selected conversation shows Group members as colored chips at the top of the thread.
+  - Message/comment bubbles reuse stable per-member colors so participant identity is easier to scan.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
   - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.

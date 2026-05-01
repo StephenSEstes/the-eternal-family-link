@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 
 type SessionInfo = { username: string; personId: string };
@@ -44,6 +44,25 @@ type ConversationsClientProps = {
 };
 type FamilySideFilter = "both" | "maternal" | "paternal";
 type StatusState = { tone: "error" | "info"; message: string } | null;
+type ThreadDisplayMember = { personId: string; displayName: string };
+type MemberColor = {
+  chipBg: string;
+  chipBorder: string;
+  chipText: string;
+  bubbleBg: string;
+  bubbleBorder: string;
+};
+
+const MEMBER_COLORS: MemberColor[] = [
+  { chipBg: "#FEF3C7", chipBorder: "#F59E0B", chipText: "#7C2D12", bubbleBg: "#FFFBEB", bubbleBorder: "#FCD34D" },
+  { chipBg: "#DBEAFE", chipBorder: "#3B82F6", chipText: "#1E3A8A", bubbleBg: "#EFF6FF", bubbleBorder: "#93C5FD" },
+  { chipBg: "#DCFCE7", chipBorder: "#22C55E", chipText: "#14532D", bubbleBg: "#F0FDF4", bubbleBorder: "#86EFAC" },
+  { chipBg: "#FCE7F3", chipBorder: "#EC4899", chipText: "#831843", bubbleBg: "#FDF2F8", bubbleBorder: "#F9A8D4" },
+  { chipBg: "#F3E8FF", chipBorder: "#A855F7", chipText: "#581C87", bubbleBg: "#FAF5FF", bubbleBorder: "#D8B4FE" },
+  { chipBg: "#E0F2FE", chipBorder: "#06B6D4", chipText: "#164E63", bubbleBg: "#ECFEFF", bubbleBorder: "#67E8F9" },
+  { chipBg: "#FEE2E2", chipBorder: "#EF4444", chipText: "#7F1D1D", bubbleBg: "#FEF2F2", bubbleBorder: "#FCA5A5" },
+  { chipBg: "#E5E7EB", chipBorder: "#6B7280", chipText: "#111827", bubbleBg: "#F9FAFB", bubbleBorder: "#D1D5DB" },
+];
 
 function normalize(value?: string) {
   return String(value ?? "").trim();
@@ -114,6 +133,22 @@ function buildShareUrl(circleId: string, conversationId: string) {
   return query ? `/conversations?${query}` : "/conversations";
 }
 
+function memberChipStyle(color: MemberColor): CSSProperties {
+  return {
+    "--conversation-member-chip-bg": color.chipBg,
+    "--conversation-member-chip-border": color.chipBorder,
+    "--conversation-member-chip-text": color.chipText,
+  } as CSSProperties;
+}
+
+function memberBubbleStyle(color: MemberColor): CSSProperties {
+  return {
+    "--conversation-bubble-bg": color.bubbleBg,
+    "--conversation-bubble-border": color.bubbleBorder,
+    "--conversation-bubble-author-color": color.chipText,
+  } as CSSProperties;
+}
+
 export function ConversationsClient({
   session,
   initialCircles,
@@ -149,6 +184,25 @@ export function ConversationsClient({
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
   const selectedConversation = useMemo(() => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null, [conversations, selectedConversationId]);
+  const threadMembers = useMemo(() => {
+    const next: ThreadDisplayMember[] = [];
+    const seen = new Set<string>();
+    const addMember = (personId?: string, displayName?: string) => {
+      const normalizedPersonId = normalize(personId);
+      if (!normalizedPersonId || seen.has(normalizedPersonId)) return;
+      seen.add(normalizedPersonId);
+      next.push({
+        personId: normalizedPersonId,
+        displayName: normalize(displayName) || peopleById.get(normalizedPersonId)?.displayName || normalizedPersonId,
+      });
+    };
+    selectedCircle?.members.forEach((member) => addMember(member.personId, member.displayName));
+    posts.forEach((post) => {
+      addMember(post.authorPersonId, post.authorDisplayName);
+      post.comments.forEach((comment) => addMember(comment.authorPersonId, comment.authorDisplayName));
+    });
+    return next;
+  }, [peopleById, posts, selectedCircle]);
   const currentView = selectedConversationId ? "thread" : selectedCircleId ? "conversations" : "groups";
   const sortedCircles = useMemo(
     () => [...circles].sort((left, right) => getTimeValue(right.lastActivityAt) - getTimeValue(left.lastActivityAt)),
@@ -177,6 +231,15 @@ export function ConversationsClient({
     applicablePersonIds: uniqueIds(optionPersonIds(option, composerSideFilter).filter((personId) => personId !== session.personId)),
   })), [composerSideFilter, relationshipOptions, session.personId]);
   const canCreateGroup = composerRecipientIds.length > 0;
+  const memberColorByPersonId = useMemo(() => {
+    const map = new Map<string, MemberColor>();
+    threadMembers.forEach((member, index) => map.set(member.personId, MEMBER_COLORS[index % MEMBER_COLORS.length]));
+    return map;
+  }, [threadMembers]);
+
+  function getMemberColor(personId: string) {
+    return memberColorByPersonId.get(normalize(personId)) ?? MEMBER_COLORS[MEMBER_COLORS.length - 1];
+  }
 
   async function loadCircles() {
     const body = await fetchJson<{ circles?: ConversationCircle[] }>("/api/conversations/circles");
@@ -608,6 +671,20 @@ export function ConversationsClient({
 
           {currentView === "thread" ? (
             <>
+              {threadMembers.length ? (
+                <div className="conversation-thread-member-list" aria-label="Group members">
+                  {threadMembers.map((member) => (
+                    <span
+                      key={`thread-member-${member.personId}`}
+                      className="conversation-thread-member-chip"
+                      style={memberChipStyle(getMemberColor(member.personId))}
+                    >
+                      {member.displayName}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="conversation-compose">
                 <textarea
                   className="input conversation-textarea"
@@ -626,13 +703,14 @@ export function ConversationsClient({
                 {selectedConversation && posts.length === 0 ? <p className="empty-state">No messages yet.</p> : null}
                 {posts.map((post) => {
                   const ownPost = post.authorPersonId === session.personId;
+                  const postColor = getMemberColor(post.authorPersonId);
                   return (
                     <article
                       key={post.postId}
                       ref={(node) => setItemRef(`post:${post.postId}`, node)}
                       className={`conversation-post${ownPost ? " is-mine" : ""}${unreadAnchorKey === `post:${post.postId}` ? " is-unread-anchor" : ""}`}
                     >
-                      <div className="conversation-post-bubble">
+                      <div className="conversation-post-bubble" style={memberBubbleStyle(postColor)}>
                         <div className="conversation-post-head">
                           <strong>{post.authorDisplayName || post.authorPersonId}</strong>
                           <span>{formatDate(post.createdAt)}</span>
@@ -641,13 +719,15 @@ export function ConversationsClient({
                       </div>
                       <div className="conversation-comments">
                         {post.comments.map((comment) => (
-                          <div
-                            key={comment.commentId}
-                            ref={(node) => setItemRef(`comment:${comment.commentId}`, node)}
-                            className={`conversation-comment${unreadAnchorKey === `comment:${comment.commentId}` ? " is-unread-anchor" : ""}`}
-                          >
-                            <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
-                            <span>{comment.commentText}</span>
+                          <div key={comment.commentId} className={`conversation-comment-row${comment.authorPersonId === session.personId ? " is-mine" : ""}`}>
+                            <div
+                              ref={(node) => setItemRef(`comment:${comment.commentId}`, node)}
+                              className={`conversation-comment${unreadAnchorKey === `comment:${comment.commentId}` ? " is-unread-anchor" : ""}`}
+                              style={memberBubbleStyle(getMemberColor(comment.authorPersonId))}
+                            >
+                              <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
+                              <span>{comment.commentText}</span>
+                            </div>
                           </div>
                         ))}
                         <div className="conversation-comment-form">
