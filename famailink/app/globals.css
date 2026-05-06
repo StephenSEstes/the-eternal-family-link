@@ -45,7 +45,8 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -632,6 +633,185 @@ select {
   background: rgba(253, 242, 242, 0.94);
 }
 
+.admin-option-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 18px;
+}
+
+.admin-option-card {
+  display: grid;
+  gap: 8px;
+  min-height: 172px;
+  padding: 18px;
+  text-decoration: none;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface) 93%, #eef8fb 7%);
+  border: 1px solid color-mix(in oklab, var(--line) 86%, #fff 14%);
+  box-shadow: 0 16px 34px color-mix(in oklab, #124866 10%, transparent 90%);
+}
+
+.admin-option-card strong {
+  font-size: 1.05rem;
+}
+
+.admin-option-card span:last-child {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.admin-option-kicker {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.invite-admin-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.2fr);
+  margin-top: 18px;
+}
+
+.invite-directory-panel,
+.invite-editor-panel {
+  margin-top: 0;
+}
+
+.invite-directory-list {
+  display: grid;
+  gap: 10px;
+  max-height: 640px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.invite-person-button {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 13px;
+  text-align: left;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.invite-person-button.is-active {
+  border-color: color-mix(in oklab, var(--accent) 54%, #fff 46%);
+  background: color-mix(in oklab, var(--accent-soft) 46%, #fff 54%);
+  box-shadow: 0 10px 22px color-mix(in oklab, #124866 10%, transparent 90%);
+}
+
+.invite-person-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.invite-person-copy strong,
+.invite-person-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-person-copy small {
+  color: var(--muted);
+}
+
+.invite-person-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invite-person-summary {
+  margin-bottom: 16px;
+}
+
+.invite-person-summary strong {
+  font-size: 1.08rem;
+}
+
+.invite-person-summary p {
+  margin: 6px 0 0;
+}
+
+.invite-form {
+  display: grid;
+  gap: 14px;
+}
+
+.invite-form-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.invite-checkbox {
+  margin-top: -2px;
+}
+
+.invite-status {
+  margin-top: 16px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+
+.invite-status-info {
+  color: var(--text);
+  background: color-mix(in oklab, var(--surface-soft) 72%, #fff 28%);
+  border-color: color-mix(in oklab, var(--line) 80%, #fff 20%);
+}
+
+.invite-status-success {
+  color: #166534;
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.invite-status-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.invite-result {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+}
+
+.invite-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.invite-result-head h3,
+.invite-access-list h2 {
+  margin: 0;
+}
+
+.invite-textarea {
+  min-height: 220px;
+  border-radius: 16px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
 .primary-button:hover,
 .secondary-button:hover {
   transform: translateY(-1px);
@@ -655,6 +835,50 @@ select {
 .login-card {
   width: min(460px, 100%);
   padding: 26px 24px;
+}
+
+.invite-accept-card {
+  width: min(680px, 100%);
+}
+
+.invite-summary-list,
+.invite-access-list {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface-soft) 74%, #fff 26%);
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+}
+
+.invite-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.invite-summary-row + .invite-summary-row {
+  margin-top: 10px;
+}
+
+.invite-summary-row span {
+  color: var(--muted);
+}
+
+.invite-accept-form {
+  margin-top: 18px;
+}
+
+.invite-access-list ul {
+  margin: 10px 0 0;
+  padding-left: 1.1rem;
+}
+
+.invite-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .login-brand {
@@ -2664,7 +2888,8 @@ select {
   .modal-grid,
   .vitals-grid,
   .person-media-grid,
-  .rules-scope-grid {
+  .rules-scope-grid,
+  .invite-form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2744,6 +2969,16 @@ select {
 
   .conversation-side-button {
     flex: 1;
+  }
+
+  .invite-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-result-head,
+  .invite-summary-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .rules-generation-note {

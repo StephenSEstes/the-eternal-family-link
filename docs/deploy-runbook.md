@@ -20,7 +20,7 @@ This section is the canonical deployment path for the isolated Famailink MVP. Do
 - `OCI_WALLET_FILES_JSON` or `TNS_ADMIN`
 - `FAMAILINK_SESSION_SECRET` or `UNIT1_SESSION_SECRET`
 
-Optional for self-service password reset email delivery:
+Optional for self-service password reset and invite email delivery:
 
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_OAUTH_CLIENT_ID`
@@ -67,6 +67,11 @@ Expected result:
 - if password-reset changes were part of the release:
   - `/forgot-password` loads
   - submitting a known local-account email returns the generic success message
+- if invite/onboarding changes were part of the release:
+  - an admin can open `/administration/invite`
+  - creating an invite returns a copyable Famailink invite link
+  - if Gmail env vars are configured, the send-email path completes without error
+  - `/invite/[token]` accepts local credentials and lands the invited user in Famailink
 - if Share push-notification changes were part of the release:
   - `/api/push/public-key` returns `supported: true` when VAPID env vars are configured
   - a signed-in Famailink user can enable notifications for the current device from `Share`

@@ -7914,3 +7914,32 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the stable compact person modal visual/layout behavior decision to `designchoices.md`.
+
+## 2026-05-05 (Famailink admin invite flow)
+
+- `Change`: Added a Famailink Administration `Invite User` surface, Famailink-side invite create/send APIs, a public Famailink invite-accept page, and direct signed-cookie login after local invite acceptance. The admin flow can create a copyable invite or send the email immediately when Gmail env vars are configured.
+- `Type`: Admin onboarding, Local auth, Email integration
+- `Why`: Root cause was a missing Famailink onboarding slice. Root EFL already had invite/email behavior, but Famailink had no equivalent admin UI or acceptance flow, which blocked second-user setup for Famailink Share and push-notification testing.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `docs/change-summary.md`
+  - `docs/deploy-runbook.md`
+  - `changeHistory.md`
+  - `famailink/README.md`
+  - `famailink/app/administration/page.tsx`
+  - `famailink/app/administration/invite/page.tsx`
+  - `famailink/app/api/invites/route.ts`
+  - `famailink/app/api/invite/[token]/route.ts`
+  - `famailink/app/invite/[token]/page.tsx`
+  - `famailink/components/InviteAdminClient.tsx`
+  - `famailink/components/InviteAcceptClient.tsx`
+  - `famailink/lib/invite/store.ts`
+  - `famailink/lib/invite/types.ts`
+  - `famailink/app/globals.css`
+- `Data Changes`: None. The flow reuses existing normalized invite and local-access tables (`invites`, `user_access`, `user_family_groups`, `person_family_groups`, and `family_config`) and does not add a separate onboarding schema.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert commit.
+- `Design Decision Change`: Yes. Added the Famailink admin-invite decision to `designchoices.md`.

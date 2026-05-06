@@ -35,7 +35,7 @@ This is the clean Famailink MVP app track.
 - `OCI_WALLET_FILES_JSON` or `TNS_ADMIN`
 - `FAMAILINK_SESSION_SECRET` or `UNIT1_SESSION_SECRET`
 
-Optional for password reset email delivery:
+Optional for password reset and invite email delivery:
 
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_OAUTH_CLIENT_ID`
@@ -95,10 +95,14 @@ Use [docs/deploy-runbook.md](C:/Users/steph/the-eternal-family-link/docs/deploy-
 - `/tree`
 - `/rules-tree`
 - `/preferences`
+- `/administration/invite`
 - `/forgot-password`
+- `/invite/[token]`
 - `/reset-password/[token]`
 - `/api/auth/login`
 - `/api/auth/logout`
+- `/api/invites`
+- `/api/invite/[token]`
 - `/api/password-reset/request`
 - `/api/password-reset/[token]`
 - `/api/access/catalog`

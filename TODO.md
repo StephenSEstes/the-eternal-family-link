@@ -16,6 +16,8 @@ I will update this list as we add, complete, or remove work.
   - In progress 2026-04-29: changing Share to single-level navigation so it shows only one layer at a time: Groups list, then conversations list for one Group, then the selected thread. Back behavior should step thread -> conversations -> groups.
   - In progress 2026-04-30: matching the EFL Shares thread identity treatment by showing Group members as colored chips at the top of the selected conversation and reusing those member colors for Famailink message/comment bubbles.
   - Completed local implementation 2026-04-30: added installable mobile/PWA support and real web-push notifications for Famailink Share using the existing repo push-table concepts where possible.
+  - In progress 2026-05-05: porting the root EFL invite/create-and-send-email capability into Famailink so a second user can be onboarded directly from Famailink administration and used for Share push-notification testing.
+  - Completed local implementation 2026-05-05: added a Famailink Administration `Invite User` tool, Famailink-domain invite acceptance, optional Gmail send, and direct signed-cookie login after local invite acceptance.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -31,12 +33,14 @@ I will update this list as we add, complete, or remove work.
   - Surface conversation summaries under the person detail `Conversations` tab when the signed-in viewer is allowed to see that person's conversation profile scope.
   - Keep media upload/linking as the next implementation slice so canonical `MediaAssets`/`MediaLinks` behavior is preserved rather than rebuilt hastily.
   - Add mobile-install and push-notification support to Famailink Share without changing conversation membership/access rules.
+  - Add Famailink admin-side user invite capability, reusing the existing normalized invite/user-access tables and local-credential onboarding model.
   Phases:
   - Phase 1: Conversation store and route handlers for groups, conversations, text posts, comments, and read-state.
   - Phase 2: User-facing Share page with compact group-list-first UX, Add Group modal entry, relationship preset member selection, manual add/remove chips, conversation creation, message posting, comments, unread counts, and participant display.
   - Phase 2a: Share-first UX pass with `Share` labeling, compact group-list-first layout, `Add Group` modal entry, and conversation open behavior that scrolls to the unread boundary.
   - Phase 2b: Single-level Share navigation with one-pane behavior, explicit back controls, and browser/history state that steps from thread to conversations to groups instead of showing multiple levels simultaneously.
   - Phase 2c: Installable mobile shell + web-push notifications for Famailink Share.
+  - Phase 2d: Famailink admin invite creation + local-account acceptance flow.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -50,6 +54,11 @@ I will update this list as we add, complete, or remove work.
     - Add Famailink notification event writes for new conversation posts/comments, excluding the author and inactive subscriptions.
     - Add actual web-push delivery using VAPID keys and mark subscription rows inactive when endpoints are gone.
     - Keep delivery best-effort after the message/comment commit so conversation writes stay durable even if push delivery fails.
+  - API/UI/Data for Phase 2d:
+    - Add a Famailink administration invite tool that lets an admin choose an existing person, confirm invite email/role/username/expiry, and either create a copyable invite or create and send email directly.
+    - Add Famailink invite APIs and acceptance pages that reuse the existing normalized `Invites` table plus `user_access`/family-membership provisioning behavior instead of inventing a separate onboarding model.
+    - Keep Famailink invite acceptance local-only from the user-facing perspective, matching the current product direction.
+    - After invite acceptance, allow the invited user to sign directly into Famailink with the confirmed username and chosen password.
   Validation:
   - Famailink type/build check passes.
   - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
@@ -76,6 +85,11 @@ I will update this list as we add, complete, or remove work.
   - Signed-in user can enable push notifications for the current device from Famailink.
   - New Group posts/comments create push notifications for other subscribed Group members.
   - Failed/expired push endpoints are deactivated instead of causing repeated send failures.
+  - Famailink administration shows an invite tool for admins only.
+  - Admin can create a copyable invite for an existing person from Famailink.
+  - If Gmail env is configured, admin can create and send the invite email from Famailink.
+  - Invite acceptance on the Famailink domain lets the invited user choose a password and activate local access.
+  - After acceptance, the invited user can sign into Famailink with the chosen credentials.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
   - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.

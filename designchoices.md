@@ -645,3 +645,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep Famailink browser-only without installability; defer all phone alerts to email or SMS; make conversation writes wait on notification delivery.
 - `Impact`: Famailink now exposes a device notification control in Share, uses `push_subscriptions` and `notification_outbox` for Famailink Share events, requires VAPID environment variables for real delivery, and deactivates expired endpoints instead of repeatedly retrying dead subscriptions.
 - `Follow-up`: Validate production VAPID configuration and real device delivery, then extend the same push model to canonical media/story sharing once Group-based media posting is added.
+
+## 2026-05-05
+
+- `Area`: Famailink admin invites
+- `Decision`: Famailink should expose its own admin-only invite tool under `Administration`, plus a Famailink-domain invite acceptance flow at `/invite/[token]`. The implementation should reuse the existing normalized `invites`, `user_access`, `user_family_groups`, and `person_family_groups` model instead of creating a separate Famailink-only onboarding schema. Invite acceptance remains local-credential only from the user perspective, and successful acceptance should set the Famailink signed-cookie session immediately so the invited user can land directly in the app.
+- `Reason`: Root EFL already had useful invite and email-delivery behavior, but Famailink had no onboarding surface of its own. That blocked second-user setup for Famailink Share and push-notification testing, even though the underlying access tables already existed.
+- `Alternatives Considered`: Keep all onboarding in the root EFL admin surface; create a new Famailink-only invite schema; send only copyable links and leave email delivery out of Famailink.
+- `Impact`: Famailink admins can invite existing people who share one of their enabled family groups, optionally send the invite email through the existing Gmail env path, and recipients can activate local access and sign directly into Famailink without a separate root-app handoff.
+- `Follow-up`: Add deployed-environment validation for the invite path and confirm Gmail env coverage in `famailink-mvp` if direct invite-email delivery is expected in production.

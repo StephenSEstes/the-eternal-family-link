@@ -2,12 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import { getSessionFromCookieStore } from "@/lib/auth/session";
+import { canAdministerInvites } from "@/lib/invite/store";
 
 export default async function AdministrationPage() {
   const session = await getSessionFromCookieStore();
   if (!session) {
     redirect("/login");
   }
+  const inviteAdmin = await canAdministerInvites(session.personId);
 
   return (
     <main className="shell">
@@ -34,6 +36,13 @@ export default async function AdministrationPage() {
           <strong>Full Preferences</strong>
           <span>Table fallback, preview, recompute status, and detailed exception tables.</span>
         </Link>
+        {inviteAdmin ? (
+          <Link className="admin-option-card" href="/administration/invite">
+            <span className="admin-option-kicker">Onboarding</span>
+            <strong>Invite User</strong>
+            <span>Create local Famailink invites and optionally send the invite email directly.</span>
+          </Link>
+        ) : null}
       </section>
     </main>
   );
