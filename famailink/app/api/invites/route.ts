@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         try {
           await sendPlainTextEmail({
             to: created.invite.inviteEmail,
-            subject: `Invitation to join Famailink for ${created.invite.familyGroupName}`,
+            subject: "Invitation to join Famailink",
             text: created.inviteMessage,
           });
           emailDelivery.sent = true;

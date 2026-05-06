@@ -2,12 +2,6 @@ export type AppRole = "ADMIN" | "USER";
 export type InviteAuthMode = "google" | "local" | "either";
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
 
-export type InviteFamilyGroupGrant = {
-  tenantKey: string;
-  tenantName: string;
-  role: AppRole;
-};
-
 export type InvitePresentation = {
   inviteId: string;
   personId: string;
@@ -18,7 +12,6 @@ export type InvitePresentation = {
   localUsername: string;
   familyGroupKey: string;
   familyGroupName: string;
-  familyGroups: InviteFamilyGroupGrant[];
   status: InviteStatus;
   expiresAt: string;
   acceptedAt: string;
@@ -47,5 +40,5 @@ export type InviteDirectoryPerson = {
   email: string;
   localUsername: string;
   localRole: AppRole | "";
-  familyGroupCount: number;
+  relationshipSummary: string;
 };

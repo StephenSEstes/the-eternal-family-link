@@ -654,3 +654,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep all onboarding in the root EFL admin surface; create a new Famailink-only invite schema; send only copyable links and leave email delivery out of Famailink.
 - `Impact`: Famailink admins can invite existing people who share one of their enabled family groups, optionally send the invite email through the existing Gmail env path, and recipients can activate local access and sign directly into Famailink without a separate root-app handoff.
 - `Follow-up`: Add deployed-environment validation for the invite path and confirm Gmail env coverage in `famailink-mvp` if direct invite-email delivery is expected in production.
+
+## 2026-05-06
+
+- `Area`: Famailink invite onboarding model
+- `Decision`: Tighten Famailink invites so they are person-onboarding only. The invite directory should be derived from the signed-in admin's Famailink relationship graph, not shared EFL `person_family_groups`. Invite acceptance should provision the local Famailink login for the invited `person_id` and immediate Famailink session only; it should not copy `user_family_groups` as a pseudo access model. `family_group_key` on the invite row remains app-scope metadata (`famailink`) rather than a user-facing access grant.
+- `Reason`: Famailink's intended access model is relationship-derived visibility plus inclusive subscription/sharing defaults with person exceptions. The prior invite implementation leaked old EFL family-group semantics into candidate selection, invite wording, and acceptance-time provisioning even though the current Famailink runtime already derives tree access from the invited person's relationship graph.
+- `Alternatives Considered`: Keep shared-family-group filtering and propagation in the invite flow; require manual family-scope selection during invite; invent a new Famailink-only invite table.
+- `Impact`: Admins invite related people based on Famailink relationships, invite copy no longer describes legacy family-group grants, accepted invites create/update only the invited person's local `user_access` row plus Famailink session, and invite email delivery in `famailink-mvp` depends on the deployment's `GMAIL_*` env vars rather than on the root EFL surface.
+- `Follow-up`: Deploy this tightened invite model, then run a real end-to-end Famailink invite plus second-user Share push-notification test.

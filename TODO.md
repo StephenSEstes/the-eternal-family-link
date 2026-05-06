@@ -18,6 +18,8 @@ I will update this list as we add, complete, or remove work.
   - Completed local implementation 2026-04-30: added installable mobile/PWA support and real web-push notifications for Famailink Share using the existing repo push-table concepts where possible.
   - In progress 2026-05-05: porting the root EFL invite/create-and-send-email capability into Famailink so a second user can be onboarded directly from Famailink administration and used for Share push-notification testing.
   - Completed local implementation 2026-05-05: added a Famailink Administration `Invite User` tool, Famailink-domain invite acceptance, optional Gmail send, and direct signed-cookie login after local invite acceptance.
+  - In progress 2026-05-06: tightening invites so they act as pure person-onboarding for Famailink, removing the remaining old family-group semantics from invite provisioning/copy, and enabling real invite email delivery in the Famailink deployment.
+  - Completed local implementation 2026-05-06: invite candidates now come from the Famailink relationship graph, invite acceptance provisions only the local Famailink login for that `person_id`, user-facing invite copy no longer describes old family-group grants, and the `famailink-mvp` Vercel project now has the required `GMAIL_*` env vars for invite email delivery after the next deploy.
   - Remaining for this task: canonical media attach/upload and deployed-environment validation.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
@@ -41,6 +43,7 @@ I will update this list as we add, complete, or remove work.
   - Phase 2b: Single-level Share navigation with one-pane behavior, explicit back controls, and browser/history state that steps from thread to conversations to groups instead of showing multiple levels simultaneously.
   - Phase 2c: Installable mobile shell + web-push notifications for Famailink Share.
   - Phase 2d: Famailink admin invite creation + local-account acceptance flow.
+  - Phase 2e: Invite-model tightening + production email enablement.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -59,6 +62,11 @@ I will update this list as we add, complete, or remove work.
     - Add Famailink invite APIs and acceptance pages that reuse the existing normalized `Invites` table plus `user_access`/family-membership provisioning behavior instead of inventing a separate onboarding model.
     - Keep Famailink invite acceptance local-only from the user-facing perspective, matching the current product direction.
     - After invite acceptance, allow the invited user to sign directly into Famailink with the confirmed username and chosen password.
+  - API/UI/Data for Phase 2e:
+    - Remove remaining user-facing old EFL family-group semantics from Famailink invite creation, invite messaging, acceptance copy, and provisioning logic where they are not needed for the Famailink runtime.
+    - Keep invites centered on person onboarding: identify the invited `person_id`, activate local login, and let the normal Famailink relationship-derived tree/subscription/sharing model determine access after sign-in.
+    - Verify whether Famailink runtime actually depends on `user_family_groups` for current tree/share behavior; if not, stop using invite-time family-group propagation as a pseudo-access model.
+    - Enable real invite email delivery for the `famailink-mvp` deployment by ensuring the required `GMAIL_*` environment variables exist in that Vercel project.
   Validation:
   - Famailink type/build check passes.
   - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
@@ -90,6 +98,9 @@ I will update this list as we add, complete, or remove work.
   - If Gmail env is configured, admin can create and send the invite email from Famailink.
   - Invite acceptance on the Famailink domain lets the invited user choose a password and activate local access.
   - After acceptance, the invited user can sign into Famailink with the chosen credentials.
+  - Invite creation/acceptance no longer implies or exposes old EFL family-group labels as the user-facing access model.
+  - Famailink invite provisioning aligns with the existing relationship-derived default access model after login.
+  - Famailink production invite email sending works when `send email` is chosen in Administration.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
   - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.

@@ -34,8 +34,8 @@ export function InviteAcceptClient({ token, initialInvite }: InviteAcceptClientP
     if (invite.status === "accepted") return "Invite Already Used";
     if (invite.status === "expired") return "Invite Expired";
     if (invite.status === "revoked") return "Invite Not Available";
-    return `Join ${invite.familyGroupName}`;
-  }, [invite.familyGroupName, invite.status]);
+    return "Activate Famailink Access";
+  }, [invite.status]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,13 +143,10 @@ export function InviteAcceptClient({ token, initialInvite }: InviteAcceptClientP
 
           <div className="invite-access-list">
             <h2>Included Access</h2>
-            <ul>
-              {invite.familyGroups.map((family) => (
-                <li key={family.tenantKey}>
-                  {family.tenantName} ({family.role})
-                </li>
-              ))}
-            </ul>
+            <p className="muted" style={{ margin: "8px 0 0" }}>
+              This invite activates your Famailink login. After sign-in, Famailink uses the relationships already linked
+              to your profile for tree, sharing, and subscription defaults.
+            </p>
           </div>
         </>
       ) : invite.status === "accepted" ? (

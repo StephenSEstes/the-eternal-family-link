@@ -63,6 +63,7 @@ export function InviteAdminClient({ people, canSendEmail }: InviteAdminClientPro
         person.email,
         person.localUsername,
         person.personId,
+        person.relationshipSummary,
       ]
         .map((value) => normalize(value).toLowerCase())
         .join(" ");
@@ -174,7 +175,7 @@ export function InviteAdminClient({ people, canSendEmail }: InviteAdminClientPro
           <div>
             <h2>Choose Person</h2>
             <p className="lead">
-              Only people who share one of your enabled family groups appear here.
+              Only people already connected to you through the Famailink relationship graph appear here.
             </p>
           </div>
         </div>
@@ -205,7 +206,7 @@ export function InviteAdminClient({ people, canSendEmail }: InviteAdminClientPro
                 </span>
                 <span className="invite-person-tags">
                   {person.localUsername ? <span className="badge subscribed">User: {person.localUsername}</span> : null}
-                  <span className="badge side">{person.familyGroupCount} groups</span>
+                  <span className="badge side">{person.relationshipSummary}</span>
                 </span>
               </button>
             ))
@@ -232,6 +233,7 @@ export function InviteAdminClient({ people, canSendEmail }: InviteAdminClientPro
                   ? `Existing local username: ${selectedPerson.localUsername}`
                   : "No local username is set yet. Famailink will suggest one if left blank."}
               </p>
+              <p className="muted">Relationship access: {selectedPerson.relationshipSummary}</p>
             </div>
 
             <form className="invite-form" onSubmit={onSubmit}>

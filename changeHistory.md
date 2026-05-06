@@ -357,3 +357,4 @@ This file is a quick release-log entry point.
 - 2026-04-18: Replaced Famailink person modal dropdowns with checkbox-first update/sharing controls and made scoped person sharing exceptions evaluate as exact per-scope outcomes. See `docs/change-summary.md`.
 - 2026-04-18: Tightened the Famailink person modal into a stable fixed-height blue-white dialog with compact Customize/Reset setting rows so tab changes no longer resize or move the window. See `docs/change-summary.md`.
 - 2026-05-05: Added a Famailink admin invite flow with optional email sending, Famailink-domain invite acceptance, and direct local sign-in after acceptance. See `docs/change-summary.md`.
+- 2026-05-06: Tightened Famailink invites to use relationship-derived person onboarding instead of family-group grant propagation, and synced the `GMAIL_*` vars into `famailink-mvp` so invite email can work after redeploy. See `docs/change-summary.md`.

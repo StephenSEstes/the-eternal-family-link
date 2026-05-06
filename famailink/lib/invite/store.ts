@@ -3,17 +3,20 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import oracledb from "oracledb";
 import { hashPassword, validatePasswordComplexity } from "@/lib/auth/password";
+import { listRelatedFamilyPeople, type RelatedFamilyPerson } from "@/lib/family/store";
+import { RELATIONSHIP_LABELS } from "@/lib/model/relationships";
 import { withConnection } from "@/lib/oci/client";
 import type {
   AppRole,
   CreatedInvitePayload,
   InviteDirectoryPerson,
-  InviteFamilyGroupGrant,
   InvitePresentation,
   InviteStatus,
 } from "@/lib/invite/types";
 
 const OUT_FORMAT = { outFormat: oracledb.OUT_FORMAT_OBJECT };
+const APP_SCOPE = "famailink";
+const APP_NAME = "Famailink";
 
 type InviteRecord = {
   inviteId: string;
@@ -23,7 +26,6 @@ type InviteRecord = {
   authMode: "google" | "local" | "either";
   role: AppRole;
   localUsername: string;
-  familyGroups: InviteFamilyGroupGrant[];
   status: "pending" | "accepted" | "revoked";
   tokenHash: string;
   expiresAt: string;
@@ -93,14 +95,6 @@ function parseIntSafe(value?: unknown, fallback = 0) {
   return Number.isFinite(out) ? out : fallback;
 }
 
-function safeJsonParse<T>(value: string, fallback: T): T {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 function buildInviteToken() {
   return randomBytes(24).toString("base64url");
 }
@@ -147,12 +141,13 @@ function buildInviteMessage(invite: InvitePresentation, inviteUrl: string) {
   return [
     `Hi ${invite.personDisplayName},`,
     "",
-    `You have been invited to join Famailink for ${invite.familyGroupName}.`,
+    "You have been invited to join Famailink.",
     "To get started:",
     "1. Open the link below.",
     `2. Confirm your username (${invite.localUsername}) or adjust it if needed.`,
     "3. Choose a password and enter it twice.",
     "4. After activation, sign in to Famailink with that username and your chosen password.",
+    "5. Famailink will show your family using the relationships already linked to your profile.",
     "",
     inviteUrl,
     "",
@@ -164,27 +159,19 @@ function buildInviteMessage(invite: InvitePresentation, inviteUrl: string) {
   ].join("\n");
 }
 
-function buildPrimaryFamilyName(families: InviteFamilyGroupGrant[]) {
-  return families[0]?.tenantName || "Famailink";
+function buildPrimaryFamilyName() {
+  return APP_NAME;
 }
 
 function mapInviteRecord(row: Record<string, unknown>): InviteRecord {
-  const familyGroups = safeJsonParse<InviteFamilyGroupGrant[]>(getCell(row, "FAMILY_GROUPS_JSON"), []);
   return {
     inviteId: getCell(row, "INVITE_ID"),
-    familyGroupKey: normalizeLower(getCell(row, "FAMILY_GROUP_KEY")),
+    familyGroupKey: normalizeLower(getCell(row, "FAMILY_GROUP_KEY")) || APP_SCOPE,
     personId: getCell(row, "PERSON_ID"),
     inviteEmail: normalizeEmail(getCell(row, "INVITE_EMAIL")),
     authMode: (normalizeLower(getCell(row, "AUTH_MODE")) as "google" | "local" | "either") || "local",
     role: normalizeRole(getCell(row, "ROLE")),
     localUsername: normalizeUsername(getCell(row, "LOCAL_USERNAME")),
-    familyGroups: familyGroups
-      .map((family) => ({
-        tenantKey: normalizeLower(family.tenantKey),
-        tenantName: normalize(family.tenantName),
-        role: normalizeRole(family.role),
-      }))
-      .filter((family) => family.tenantKey),
     status: normalizeLower(getCell(row, "STATUS")) === "accepted" ? "accepted" : normalizeLower(getCell(row, "STATUS")) === "revoked" ? "revoked" : "pending",
     tokenHash: getCell(row, "TOKEN_HASH"),
     expiresAt: getCell(row, "EXPIRES_AT"),
@@ -211,9 +198,8 @@ function toPresentation(record: InviteRecord): InvitePresentation {
     authMode: record.authMode,
     role: record.role,
     localUsername: record.localUsername,
-    familyGroupKey: record.familyGroupKey,
-    familyGroupName: buildPrimaryFamilyName(record.familyGroups),
-    familyGroups: record.familyGroups,
+    familyGroupKey: record.familyGroupKey || APP_SCOPE,
+    familyGroupName: buildPrimaryFamilyName(),
     status: effectiveStatus(record),
     expiresAt: record.expiresAt,
     acceptedAt: record.acceptedAt,
@@ -233,25 +219,6 @@ function bindList(prefix: string, values: string[], binds: Record<string, string
       return `:${key}`;
     })
     .join(", ");
-}
-
-async function listAdminFamilyKeys(personId: string) {
-  const normalized = normalize(personId);
-  if (!normalized) return [] as string[];
-
-  return withConnection(async (connection) => {
-    const result = await connection.execute(
-      `SELECT family_group_key
-         FROM person_family_groups
-        WHERE TRIM(person_id) = :personId
-          AND (LOWER(TRIM(NVL(is_enabled, 'TRUE'))) IN ('y','yes','true','1'))
-        ORDER BY family_group_key`,
-      { personId: normalized },
-      OUT_FORMAT,
-    );
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map((row) => normalizeLower(getCell(row, "FAMILY_GROUP_KEY"))).filter(Boolean);
-  });
 }
 
 async function getPerson(personId: string): Promise<PersonRow | null> {
@@ -330,60 +297,21 @@ async function listLocalUsersByUsername(username: string): Promise<LocalUserRow[
   });
 }
 
-async function buildFamilyGroupSnapshot(personId: string, role: AppRole) {
-  const normalized = normalize(personId);
-  if (!normalized) return [] as InviteFamilyGroupGrant[];
-
-  return withConnection(async (connection) => {
-    const result = await connection.execute(
-      `SELECT DISTINCT
-              LOWER(TRIM(pfg.family_group_key)) AS family_group_key,
-              COALESCE(NULLIF(TRIM(cfg.family_group_name), ''), LOWER(TRIM(pfg.family_group_key))) AS family_group_name
-         FROM person_family_groups pfg
-         LEFT JOIN family_config cfg
-           ON LOWER(TRIM(cfg.family_group_key)) = LOWER(TRIM(pfg.family_group_key))
-        WHERE TRIM(pfg.person_id) = :personId
-          AND (LOWER(TRIM(NVL(pfg.is_enabled, 'TRUE'))) IN ('y','yes','true','1'))
-        ORDER BY family_group_name`,
-      { personId: normalized },
-      OUT_FORMAT,
-    );
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows
-      .map((row) => ({
-        tenantKey: normalizeLower(getCell(row, "FAMILY_GROUP_KEY")),
-        tenantName: getCell(row, "FAMILY_GROUP_NAME"),
-        role,
-      }))
-      .filter((family) => family.tenantKey);
-  });
+function summarizeRelationshipHits(person: RelatedFamilyPerson) {
+  const labels = person.relationships.map((hit) => RELATIONSHIP_LABELS[hit.category]).filter(Boolean);
+  if (!labels.length) return "Family";
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
 }
 
 async function ensureAdminCanManagePerson(adminPersonId: string, targetPersonId: string) {
-  const adminFamilyKeys = await listAdminFamilyKeys(adminPersonId);
-  if (!adminFamilyKeys.length) {
-    throw new Error("Admin has no enabled family-group memberships.");
+  const target = normalize(targetPersonId);
+  const relatedPeople = await listRelatedFamilyPeople(adminPersonId);
+  const canManage = relatedPeople.some((person) => normalize(person.personId) === target);
+  if (!canManage) {
+    throw new Error("Selected person is not available through your Famailink relationship access.");
   }
-
-  return withConnection(async (connection) => {
-    const binds: Record<string, string> = {
-      personId: normalize(targetPersonId),
-    };
-    const inClause = bindList("familyKey", adminFamilyKeys, binds);
-    const result = await connection.execute(
-      `SELECT COUNT(*) AS match_count
-         FROM person_family_groups
-        WHERE TRIM(person_id) = :personId
-          AND (LOWER(TRIM(NVL(is_enabled, 'TRUE'))) IN ('y','yes','true','1'))
-          AND LOWER(TRIM(family_group_key)) IN (${inClause})`,
-      binds,
-      OUT_FORMAT,
-    );
-    const row = ((result.rows ?? []) as Record<string, unknown>[])[0];
-    if (parseIntSafe(row?.MATCH_COUNT, 0) <= 0) {
-      throw new Error("Selected person is not in one of your family groups.");
-    }
-  });
 }
 
 async function ensureInviteEmailAvailable(inviteEmail: string, personId: string) {
@@ -470,7 +398,7 @@ async function insertInviteRecord(record: InviteRecord) {
         authMode: record.authMode,
         role: record.role,
         localUsername: record.localUsername,
-        familyGroupsJson: JSON.stringify(record.familyGroups),
+        familyGroupsJson: "[]",
         status: record.status,
         tokenHash: record.tokenHash,
         expiresAt: record.expiresAt,
@@ -525,50 +453,50 @@ async function findInviteByToken(token: string): Promise<InviteRecord | null> {
   });
 }
 
-async function provisionLocalMemberships(invite: InviteRecord, localEmail: string) {
-  return withConnection(async (connection) => {
-    for (const family of invite.familyGroups) {
-      const updateResult = await connection.execute(
-        `UPDATE user_family_groups
-            SET user_email = :userEmail,
-                family_group_name = :tenantName,
-                role = :role,
-                person_id = :personId,
-                is_enabled = 'TRUE'
-          WHERE LOWER(TRIM(family_group_key)) = :tenantKey
-            AND (
-              LOWER(TRIM(user_email)) = :userEmail
-              OR TRIM(person_id) = :personId
-            )`,
-        {
-          userEmail: localEmail,
-          tenantName: family.tenantName,
-          role: family.role,
-          personId: invite.personId,
-          tenantKey: family.tenantKey,
-        },
-        { autoCommit: false },
-      );
+async function listInviteDirectoryMetadata(personIds: string[]) {
+  const normalizedIds = personIds.map((personId) => normalize(personId)).filter(Boolean);
+  if (!normalizedIds.length) return new Map<string, LocalUserRow & { email: string }>();
 
-      if (!(updateResult.rowsAffected ?? 0)) {
-        await connection.execute(
-          `INSERT INTO user_family_groups (
-             user_email, family_group_key, family_group_name, role, person_id, is_enabled
-           ) VALUES (
-             :userEmail, :tenantKey, :tenantName, :role, :personId, 'TRUE'
-           )`,
-          {
-            userEmail: localEmail,
-            tenantKey: family.tenantKey,
-            tenantName: family.tenantName,
-            role: family.role,
-            personId: invite.personId,
-          },
-          { autoCommit: false },
-        );
-      }
+  return withConnection(async (connection) => {
+    const binds: Record<string, string> = {};
+    const inClause = bindList("personId", normalizedIds, binds);
+    const result = await connection.execute(
+      `SELECT p.person_id,
+              TRIM(NVL(p.email, '')) AS email,
+              MAX(CASE
+                    WHEN LOWER(TRIM(NVL(u.local_access, 'TRUE'))) IN ('y','yes','true','1')
+                     AND LOWER(TRIM(NVL(u.is_enabled, 'TRUE'))) IN ('y','yes','true','1')
+                    THEN TRIM(NVL(u.username, ''))
+                    ELSE ''
+                  END) AS local_username,
+              MAX(CASE
+                    WHEN LOWER(TRIM(NVL(u.local_access, 'TRUE'))) IN ('y','yes','true','1')
+                     AND LOWER(TRIM(NVL(u.is_enabled, 'TRUE'))) IN ('y','yes','true','1')
+                    THEN UPPER(TRIM(NVL(u.role, 'USER')))
+                    ELSE ''
+                  END) AS local_role
+         FROM people p
+         LEFT JOIN user_access u
+           ON TRIM(u.person_id) = TRIM(p.person_id)
+        WHERE TRIM(p.person_id) IN (${inClause})
+        GROUP BY p.person_id, p.email`,
+      binds,
+      OUT_FORMAT,
+    );
+
+    const rows = (result.rows ?? []) as Record<string, unknown>[];
+    const out = new Map<string, LocalUserRow & { email: string }>();
+    for (const row of rows) {
+      const personId = getCell(row, "PERSON_ID");
+      out.set(personId, {
+        personId,
+        username: normalizeUsername(getCell(row, "LOCAL_USERNAME")),
+        userEmail: "",
+        role: getCell(row, "LOCAL_ROLE") ? normalizeRole(getCell(row, "LOCAL_ROLE")) : "USER",
+        email: normalizeEmail(getCell(row, "EMAIL")),
+      });
     }
-    await connection.commit();
+    return out;
   });
 }
 
@@ -647,55 +575,20 @@ export async function canAdministerInvites(personId: string) {
 }
 
 export async function listInviteDirectoryPeople(adminPersonId: string): Promise<InviteDirectoryPerson[]> {
-  const familyKeys = await listAdminFamilyKeys(adminPersonId);
-  if (!familyKeys.length) return [];
+  const relatedPeople = await listRelatedFamilyPeople(adminPersonId);
+  if (!relatedPeople.length) return [];
 
-  return withConnection(async (connection) => {
-    const binds: Record<string, string> = {
-      adminPersonId: normalize(adminPersonId),
+  const metadataByPersonId = await listInviteDirectoryMetadata(relatedPeople.map((person) => person.personId));
+  return relatedPeople.map((person) => {
+    const metadata = metadataByPersonId.get(person.personId);
+    return {
+      personId: person.personId,
+      displayName: person.displayName,
+      email: metadata?.email ?? "",
+      localUsername: metadata?.username ?? "",
+      localRole: metadata?.username ? metadata.role : "",
+      relationshipSummary: summarizeRelationshipHits(person),
     };
-    const inClause = bindList("familyKey", familyKeys, binds);
-    const result = await connection.execute(
-      `SELECT
-          p.person_id,
-          COALESCE(NULLIF(TRIM(p.display_name), ''), TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')), p.person_id) AS display_name,
-          TRIM(NVL(p.email, '')) AS email,
-          MAX(CASE
-                WHEN LOWER(TRIM(NVL(u.local_access, 'TRUE'))) IN ('y','yes','true','1')
-                 AND LOWER(TRIM(NVL(u.is_enabled, 'TRUE'))) IN ('y','yes','true','1')
-                THEN TRIM(NVL(u.username, ''))
-                ELSE ''
-              END) AS local_username,
-          MAX(CASE
-                WHEN LOWER(TRIM(NVL(u.local_access, 'TRUE'))) IN ('y','yes','true','1')
-                 AND LOWER(TRIM(NVL(u.is_enabled, 'TRUE'))) IN ('y','yes','true','1')
-                THEN UPPER(TRIM(NVL(u.role, 'USER')))
-                ELSE ''
-              END) AS local_role,
-          COUNT(DISTINCT LOWER(TRIM(pfg.family_group_key))) AS family_group_count
-         FROM people p
-         JOIN person_family_groups pfg
-           ON TRIM(pfg.person_id) = TRIM(p.person_id)
-          AND (LOWER(TRIM(NVL(pfg.is_enabled, 'TRUE'))) IN ('y','yes','true','1'))
-          AND LOWER(TRIM(pfg.family_group_key)) IN (${inClause})
-         LEFT JOIN user_access u
-           ON TRIM(u.person_id) = TRIM(p.person_id)
-         WHERE TRIM(p.person_id) <> :adminPersonId
-         GROUP BY p.person_id, p.display_name, p.first_name, p.last_name, p.email
-         ORDER BY display_name`,
-      binds,
-      OUT_FORMAT,
-    );
-
-    const rows = (result.rows ?? []) as Record<string, unknown>[];
-    return rows.map((row) => ({
-      personId: getCell(row, "PERSON_ID"),
-      displayName: getCell(row, "DISPLAY_NAME"),
-      email: normalizeEmail(getCell(row, "EMAIL")),
-      localUsername: normalizeUsername(getCell(row, "LOCAL_USERNAME")),
-      localRole: getCell(row, "LOCAL_ROLE") ? normalizeRole(getCell(row, "LOCAL_ROLE")) : "",
-      familyGroupCount: parseIntSafe(row.FAMILY_GROUP_COUNT, 0),
-    }));
   });
 }
 
@@ -731,22 +624,16 @@ export async function createInvite(input: CreateInviteInput): Promise<CreatedInv
 
   await ensureInviteEmailAvailable(inviteEmail, input.personId);
 
-  const familyGroups = await buildFamilyGroupSnapshot(input.personId, input.role);
-  if (!familyGroups.length) {
-    throw new Error("This person has no enabled family-group memberships to grant.");
-  }
-
   const localUsername = await resolveInviteLocalUsername(person, input.localUsername ?? "");
   const token = buildInviteToken();
   const inviteRecord: InviteRecord = {
     inviteId: buildInviteId(),
-    familyGroupKey: familyGroups[0]?.tenantKey ?? "",
+    familyGroupKey: APP_SCOPE,
     personId: person.personId,
     inviteEmail,
     authMode: "local",
     role: input.role,
     localUsername,
-    familyGroups,
     status: "pending",
     tokenHash: hashInviteToken(token),
     expiresAt: new Date(Date.now() + Math.max(1, Math.min(60, Math.trunc(input.expiresInDays))) * 24 * 60 * 60 * 1000).toISOString(),
@@ -787,9 +674,6 @@ export async function acceptInviteWithLocal(token: string, username: string, pas
   if (invite.status === "revoked") {
     throw new Error("This invite is no longer active.");
   }
-  if (!invite.familyGroups.length) {
-    throw new Error("Invite has no family-group access to grant.");
-  }
 
   const normalizedUsername = normalizeUsername(username);
   if (normalizedUsername.length < 3) {
@@ -806,7 +690,6 @@ export async function acceptInviteWithLocal(token: string, username: string, pas
     throw new Error(`Username "${normalizedUsername}" is already used by another person.`);
   }
 
-  await provisionLocalMemberships(invite, `${normalizedUsername}@local`);
   await upsertLocalUser({
     personId: invite.personId,
     username: normalizedUsername,

@@ -7943,3 +7943,27 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `npm run build --prefix famailink` passes.
 - `Rollback Notes`: Revert commit.
 - `Design Decision Change`: Yes. Added the Famailink admin-invite decision to `designchoices.md`.
+
+## 2026-05-06 (Famailink invite model tightening and email enablement)
+
+- `Change`: Tightened Famailink invites so they act as person-onboarding instead of old EFL family-group grants. The invite directory now comes from the admin's Famailink relationship graph, the UI shows relationship summaries instead of family-link counts, invite acceptance provisions only the invited person's local Famailink login and session, and invite copy no longer describes family-group access grants. Also synced the four `GMAIL_*` env vars into the `famailink-mvp` Vercel project so direct invite email can work after the next deploy.
+- `Type`: Onboarding model, Access behavior, Admin UX, Deployment config
+- `Why`: Root cause was mixed. The code still used old EFL family-group semantics in invite candidate filtering, invite wording, and acceptance-time provisioning even though current Famailink runtime access is relationship-derived. Separately, the deployed `famailink-mvp` project lacked the Gmail sender env vars, so the direct send-email path could not work in production.
+- `Files`:
+  - `TODO.md`
+  - `designchoices.md`
+  - `docs/change-summary.md`
+  - `changeHistory.md`
+  - `famailink/app/administration/invite/page.tsx`
+  - `famailink/app/api/invites/route.ts`
+  - `famailink/components/InviteAcceptClient.tsx`
+  - `famailink/components/InviteAdminClient.tsx`
+  - `famailink/lib/invite/store.ts`
+  - `famailink/lib/invite/types.ts`
+- `Data Changes`: None. Existing invite rows and normalized auth tables remain in place. Invite rows still use `family_group_key` as app-scope metadata, but Famailink invite acceptance no longer writes `user_family_groups` as part of onboarding.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run build --prefix famailink` passes.
+  - `vercel env add ... --force --sensitive` completed for `GMAIL_SENDER_EMAIL`, `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN` in project `famailink-mvp`.
+- `Rollback Notes`: Revert commit for the code changes. If needed, remove or replace the synced `GMAIL_*` vars in the `famailink-mvp` Vercel project separately.
+- `Design Decision Change`: Yes. Updated `designchoices.md` so Famailink invites are relationship-derived person onboarding instead of family-group grant propagation.

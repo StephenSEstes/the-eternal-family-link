@@ -24,7 +24,7 @@ export default async function InviteAdministrationPage() {
           <p className="eyebrow">Administration</p>
           <h1 className="title">Invite User</h1>
           <p className="lead">
-            Create a local Famailink invite for an existing person and optionally send the invite email directly.
+            Create a local Famailink invite for a related person and optionally send the invite email directly.
           </p>
         </div>
         <div className="masthead-actions">
