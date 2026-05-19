@@ -2010,6 +2010,62 @@ textarea {
   background: color-mix(in oklab, var(--surface-soft) 70%, #fff 30%);
 }
 
+.conversation-hidden-input {
+  display: none;
+}
+
+.conversation-pending-attachment {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.conversation-pending-image {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+}
+
+.conversation-pending-copy,
+.conversation-media-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.conversation-pending-copy strong,
+.conversation-media-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-pending-copy small,
+.conversation-media-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.conversation-attachment-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--accent) 24%, #fff 76%);
+  background: color-mix(in oklab, var(--accent-soft) 48%, #fff 52%);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .conversation-person-picker,
 .conversation-list,
 .conversation-posts {
@@ -2280,6 +2336,37 @@ textarea {
   line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.conversation-media-card {
+  display: grid;
+  gap: 8px;
+}
+
+.conversation-media-link {
+  display: block;
+}
+
+.conversation-media-image {
+  width: min(320px, 100%);
+  max-width: 100%;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.conversation-media-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  background: rgba(255, 255, 255, 0.82);
+  color: inherit;
+  text-decoration: none;
 }
 
 .conversation-comments {
@@ -2945,6 +3032,14 @@ textarea {
   }
 
   .conversation-comment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-pending-attachment {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-media-file {
     grid-template-columns: 1fr;
   }
 

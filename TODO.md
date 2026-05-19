@@ -20,7 +20,8 @@ I will update this list as we add, complete, or remove work.
   - Completed local implementation 2026-05-05: added a Famailink Administration `Invite User` tool, Famailink-domain invite acceptance, optional Gmail send, and direct signed-cookie login after local invite acceptance.
   - In progress 2026-05-06: tightening invites so they act as pure person-onboarding for Famailink, removing the remaining old family-group semantics from invite provisioning/copy, and enabling real invite email delivery in the Famailink deployment.
   - Completed local implementation 2026-05-06: invite candidates now come from the Famailink relationship graph, invite acceptance provisions only the local Famailink login for that `person_id`, user-facing invite copy no longer describes old family-group grants, and the `famailink-mvp` Vercel project now has the required `GMAIL_*` env vars for invite email delivery after the next deploy.
-  - Remaining for this task: canonical media attach/upload and deployed-environment validation.
+  - Completed local implementation 2026-05-18: added canonical Share media attach/upload so conversation posts can include images, videos, and documents from phone camera capture or file pickers, store canonical `MediaAssets` originals, create image thumbnails, render attachment posts in-thread, and preserve the existing post-comment workflow for media discussion.
+  - Remaining for this task: deployed-environment validation of the Share media slice.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
   - Add a Famailink `Share` surface for named family groups, optional group descriptions, durable conversations, posts, comments, and conversation read state.
@@ -44,6 +45,7 @@ I will update this list as we add, complete, or remove work.
   - Phase 2c: Installable mobile shell + web-push notifications for Famailink Share.
   - Phase 2d: Famailink admin invite creation + local-account acceptance flow.
   - Phase 2e: Invite-model tightening + production email enablement.
+  - Phase 2f: Canonical Share media attach/upload.
   - Phase 3: Person modal Conversations tab showing linked/participating conversation summaries.
   - Phase 4: Follow-up media attach flow using the existing canonical media storage/linking path.
   API/UI/data changes:
@@ -67,6 +69,30 @@ I will update this list as we add, complete, or remove work.
     - Keep invites centered on person onboarding: identify the invited `person_id`, activate local login, and let the normal Famailink relationship-derived tree/subscription/sharing model determine access after sign-in.
     - Verify whether Famailink runtime actually depends on `user_family_groups` for current tree/share behavior; if not, stop using invite-time family-group propagation as a pseudo-access model.
     - Enable real invite email delivery for the `famailink-mvp` deployment by ensuring the required `GMAIL_*` environment variables exist in that Vercel project.
+  - API/UI/Data for Phase 2f:
+    - API:
+      - Add a Famailink multipart upload route for conversation posts that accepts one attached file plus optional caption/comment text.
+      - Keep the existing text-post route for text-only sends; media-backed sends should create normal `share_posts` rows with `file_id` populated.
+      - Extend post-list reads so each returned post can include joined canonical media asset fields and direct preview/original URLs.
+    - Data:
+      - Reuse canonical `MediaAssets` rows for archived originals and image thumbnails; do not create a Famailink-only media table.
+      - Preserve `share_posts.file_id` as the conversation-media join and do not add people-tag or media-link writes yet.
+      - Save original uploads to OCI object storage for all supported media kinds.
+      - Generate a thumbnail only for image uploads in this slice; videos/documents remain original-only assets with attachment cards in the thread.
+      - Keep image thumbnails as the thread/distribution surface and reserve original image URLs for explicit open/download behavior.
+    - UI:
+      - Add thread-level attach controls that feel like texting: file picker plus camera-capable image/video picker on supported mobile browsers.
+      - Allow an optional caption/comment with the attached upload before send.
+      - Show uploaded media inline in the thread:
+        - images render from thumbnail preview with open-original action
+        - videos/documents render as attachment cards with metadata/open action
+      - Preserve the existing per-post comment workflow so other members can comment on uploaded media posts the same way they comment on text posts.
+    - Validation details for Phase 2f:
+      - Image upload from the Share thread stores a canonical `MediaAssets` row, populates `share_posts.file_id`, stores the original object key, and stores a thumbnail object key.
+      - Video/document upload from the Share thread stores a canonical `MediaAssets` row and populates `share_posts.file_id` without requiring image-thumbnail generation.
+      - Share thread GET returns enough media metadata for the UI to render attachment previews/cards without extra per-post fetches.
+      - The Share compose area can still send text-only messages when no file is selected.
+      - A media-backed post can be created with no caption, with caption, and still accept follow-up comments from other members.
   Validation:
   - Famailink type/build check passes.
   - Share navigation/tab labels use `Share` instead of `Groups` for the main user-facing surface.
@@ -101,9 +127,15 @@ I will update this list as we add, complete, or remove work.
   - Invite creation/acceptance no longer implies or exposes old EFL family-group labels as the user-facing access model.
   - Famailink invite provisioning aligns with the existing relationship-derived default access model after login.
   - Famailink production invite email sending works when `send email` is chosen in Administration.
+  - Signed-in member can attach an image, video, or document directly from the Share thread compose area.
+  - Supported mobile browsers can invoke camera capture or device file selection from the Share thread compose area.
+  - Image uploads create and use thumbnail previews in the thread while preserving the original object for later exports/features.
+  - Video/document uploads render as attachment posts in the thread without breaking text/comment flows.
+  - Other group members can comment on media-backed posts using the existing post-comment workflow.
+  - Famailink type/build checks pass after the Share media slice.
   - Person detail shows conversation summaries only when the viewer has conversation profile visibility or is viewing self.
   Completion criteria:
-  - Famailink has a usable group/conversation MVP that follows the project definition and does not depend on active family-group access.
+  - Famailink has a usable group/conversation MVP that follows the project definition, does not depend on active family-group access, and supports canonical media-backed Share posts with thumbnail-backed image previews.
 - [ ] Legacy media/share compatibility hard cutover + test-content reset
   Priority: High
   Status: In progress 2026-04-04

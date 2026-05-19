@@ -663,3 +663,12 @@ This is the canonical design decision log for product, data, and UX behavior in 
 - `Alternatives Considered`: Keep shared-family-group filtering and propagation in the invite flow; require manual family-scope selection during invite; invent a new Famailink-only invite table.
 - `Impact`: Admins invite related people based on Famailink relationships, invite copy no longer describes legacy family-group grants, accepted invites create/update only the invited person's local `user_access` row plus Famailink session, and invite email delivery in `famailink-mvp` depends on the deployment's `GMAIL_*` env vars rather than on the root EFL surface.
 - `Follow-up`: Deploy this tightened invite model, then run a real end-to-end Famailink invite plus second-user Share push-notification test.
+
+## 2026-05-18
+
+- `Area`: Famailink Share media posts
+- `Decision`: Famailink Share should add media to conversations by reusing canonical `MediaAssets` rows plus `share_posts.file_id`, while keeping tagging/linking out of this slice. Share media upload should feel like texting: one attached file per send from either device files or camera capture, optional caption text, image-thumbnail previews in-thread, and original objects preserved for later export/tagging/history work. Videos and documents are stored as canonical original assets and rendered as attachment cards until richer preview generation is added later.
+- `Reason`: The missing behavior was the remaining code gap in the Famailink Share MVP. Conversations were text-only even though the product definition requires everyday family sharing to grow the family archive naturally. Reusing the canonical asset registry solves archive/thumbnail storage at the right layer without prematurely mixing in person-tagging or history-link writes.
+- `Alternatives Considered`: Build a Famailink-only conversation-media table; defer media until tagging is ready; attach media by writing person/media links immediately even though tagging rules are not built yet.
+- `Impact`: Famailink Share now depends on the same OCI object-storage/media-asset environment as the canonical media system, `share_posts.file_id` becomes the conversation/media join, and future people-tagging can build on the stored original asset instead of re-uploading or remapping files.
+- `Follow-up`: Deploy with Famailink object-storage env coverage, validate live upload from phone/desktop, then add people-tagging/media-link writes as the next follow-up slice.

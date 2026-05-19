@@ -20,6 +20,8 @@ When root EFL behavior conflicts with Famailink's person-based data access rules
 
 Family members share thoughts, comments, photos, videos, audio, and other media inside family Groups. A Group defines who participates, such as immediate family, siblings, a family branch, or a custom set of family members.
 
+When a member shares media into a conversation, the action should feel like a texting app: attach from the phone camera when supported, or pick from device files on phone/computer, optionally add a caption/comment, send, and let other members reply/comment on that media post in the same thread.
+
 Within each Group, members can create multiple named conversations. A conversation is a durable topic inside that Group, not a temporary chat message. When a conversation is started:
 
 - It has a name or title.
@@ -147,6 +149,8 @@ The target product should support:
 - Create multiple conversations inside the same Group.
 - Show conversation-specific unread counts and new-media indicators.
 - Upload media into a conversation.
+- Allow Share media upload from either camera capture or device file selection where the browser/device supports it.
+- Allow an optional caption/comment on the initial media send and follow-up comments from other participants on that media-backed post.
 - Store an archived original and generated thumbnail/preview for uploaded media.
 - Tag people in uploaded media automatically when possible and manually when needed.
 - Manually link media to people, households, attributes, events, or stories.

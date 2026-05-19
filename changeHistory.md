@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-05-18: Added canonical media-backed Famailink Share posts with camera/file attach, archived originals, image thumbnails, attachment cards, and existing post-comment reuse. See `docs/change-summary.md`.
 - 2026-04-30: Added colored participant chips to selected Famailink Share conversations and reused those member colors for message/comment bubbles to match the EFL Shares thread identity treatment. See `docs/change-summary.md`.
 - 2026-04-29: Changed Famailink Share into a single-level texting-style navigator so it shows only Groups, then conversations, then the selected thread, with back navigation stepping thread -> conversations -> groups. See `docs/change-summary.md`.
 - 2026-04-24: Reworked the Famailink communication screen into a Share-first inbox with recent/unread Group ordering, an `Add Group` modal entry point, and conversation open behavior that jumps to the unread boundary. See `docs/change-summary.md`.

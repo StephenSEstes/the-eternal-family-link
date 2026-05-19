@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import { PushNotificationsControl } from "@/components/PushNotificationsControl";
 
@@ -25,8 +25,24 @@ type CircleConversation = {
   unreadCount: number;
   memberLastReadAt?: string;
 };
+type ConversationPostMedia = {
+  mediaId: string;
+  fileId: string;
+  mediaKind: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  sourceProvider: string;
+  mimeType: string;
+  fileName: string;
+  fileSizeBytes: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl: string;
+  originalUrl: string;
+};
 type ConversationComment = { commentId: string; postId: string; authorPersonId: string; authorDisplayName: string; commentText: string; createdAt: string };
-type ConversationPost = { postId: string; authorPersonId: string; authorDisplayName: string; caption: string; createdAt: string; comments: ConversationComment[] };
+type ConversationPost = { postId: string; authorPersonId: string; authorDisplayName: string; caption: string; createdAt: string; media: ConversationPostMedia | null; comments: ConversationComment[] };
 type RelationshipOption = {
   key: string;
   label: string;
@@ -46,6 +62,11 @@ type ConversationsClientProps = {
 type FamilySideFilter = "both" | "maternal" | "paternal";
 type StatusState = { tone: "error" | "info"; message: string } | null;
 type ThreadDisplayMember = { personId: string; displayName: string };
+type PendingAttachment = {
+  file: File;
+  origin: "camera" | "files";
+  previewUrl: string;
+};
 type MemberColor = {
   chipBg: string;
   chipBorder: string;
@@ -150,6 +171,20 @@ function memberBubbleStyle(color: MemberColor): CSSProperties {
   } as CSSProperties;
 }
 
+function formatFileSize(value?: string) {
+  const bytes = Number.parseInt(normalize(value), 10);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function attachmentSummary(media: ConversationPostMedia) {
+  const kind = normalize(media.mediaKind) || "file";
+  const size = formatFileSize(media.fileSizeBytes);
+  return [kind.charAt(0).toUpperCase() + kind.slice(1), size].filter(Boolean).join(" • ");
+}
+
 export function ConversationsClient({
   session,
   initialCircles,
@@ -171,6 +206,7 @@ export function ConversationsClient({
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [initialMessage, setInitialMessage] = useState("");
   const [postDraft, setPostDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerRecipientIds, setComposerRecipientIds] = useState<string[]>([]);
@@ -181,6 +217,8 @@ export function ConversationsClient({
   const [composerSideFilter, setComposerSideFilter] = useState<FamilySideFilter>("both");
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingUnreadJumpConversationIdRef = useRef("");
+  const filePickerRef = useRef<HTMLInputElement | null>(null);
+  const cameraPickerRef = useRef<HTMLInputElement | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
@@ -232,6 +270,7 @@ export function ConversationsClient({
     applicablePersonIds: uniqueIds(optionPersonIds(option, composerSideFilter).filter((personId) => personId !== session.personId)),
   })), [composerSideFilter, relationshipOptions, session.personId]);
   const canCreateGroup = composerRecipientIds.length > 0;
+  const canSendPost = Boolean(normalize(postDraft) || pendingAttachment);
   const memberColorByPersonId = useMemo(() => {
     const map = new Map<string, MemberColor>();
     threadMembers.forEach((member, index) => map.set(member.personId, MEMBER_COLORS[index % MEMBER_COLORS.length]));
@@ -392,7 +431,17 @@ export function ConversationsClient({
     return () => { cancelled = true; };
   }, [conversations, selectedCircleId, selectedConversationId]);
 
-  useEffect(() => { setPostDraft(""); }, [selectedConversationId]);
+  useEffect(() => {
+    setPostDraft("");
+    replacePendingAttachment(null);
+  }, [selectedConversationId]);
+  useEffect(() => {
+    return () => {
+      if (pendingAttachment?.previewUrl) {
+        URL.revokeObjectURL(pendingAttachment.previewUrl);
+      }
+    };
+  }, [pendingAttachment]);
   useEffect(() => { setNewTopicOpen(false); setNewConversationTitle(""); setInitialMessage(""); }, [selectedCircleId]);
   useEffect(() => {
     pendingUnreadJumpConversationIdRef.current = selectedConversationId;
@@ -419,6 +468,52 @@ export function ConversationsClient({
     target.scrollIntoView({ block: "start", behavior: "auto" });
     pendingUnreadJumpConversationIdRef.current = "";
   }, [posts, selectedConversationId, unreadAnchorKey]);
+
+  function replacePendingAttachment(nextAttachment: PendingAttachment | null) {
+    setPendingAttachment((current) => {
+      if (current?.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      return nextAttachment;
+    });
+  }
+
+  function setPendingFile(file: File | null, origin: PendingAttachment["origin"]) {
+    if (!file) return;
+    const normalizedType = normalize(file.type).toLowerCase();
+    const previewUrl = normalizedType.startsWith("image/") ? URL.createObjectURL(file) : "";
+    replacePendingAttachment({ file, origin, previewUrl });
+  }
+
+  function onFilePickerChange(event: ChangeEvent<HTMLInputElement>, origin: PendingAttachment["origin"]) {
+    const file = event.target.files?.[0] ?? null;
+    if (file) {
+      setPendingFile(file, origin);
+    }
+    event.target.value = "";
+  }
+
+  async function uploadMediaPost(circleId: string, conversationId: string, file: File, caption: string) {
+    const formData = new FormData();
+    formData.set("file", file);
+    if (caption) {
+      formData.set("caption", caption);
+    }
+    const response = await fetch(
+      `/api/conversations/circles/${encodeURIComponent(circleId)}/conversations/${encodeURIComponent(conversationId)}/posts/upload`,
+      {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+        cache: "no-store",
+      },
+    );
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) {
+      throw new Error(String(payload.error ?? `Upload failed (${response.status}).`));
+    }
+    return payload;
+  }
 
   function clearComposer() {
     setComposerRecipientIds([]);
@@ -511,15 +606,20 @@ export function ConversationsClient({
   async function createPost() {
     if (!selectedCircle || !selectedConversation) return;
     const caption = normalize(postDraft);
-    if (!caption) return;
+    if (!caption && !pendingAttachment) return;
     setBusy(true);
     setStatus(null);
     try {
-      await fetchJson<{ post?: ConversationPost }>(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts`, {
-        method: "POST",
-        body: JSON.stringify({ caption }),
-      });
+      if (pendingAttachment) {
+        await uploadMediaPost(selectedCircle.circleId, selectedConversation.conversationId, pendingAttachment.file, caption);
+      } else {
+        await fetchJson<{ post?: ConversationPost }>(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts`, {
+          method: "POST",
+          body: JSON.stringify({ caption }),
+        });
+      }
       setPostDraft("");
+      replacePendingAttachment(null);
       await syncCircleSelection(selectedCircle.circleId, selectedConversation.conversationId);
     } catch (error) {
       setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to send message." });
@@ -687,15 +787,63 @@ export function ConversationsClient({
                 </div>
               ) : null}
 
+              <input
+                ref={filePickerRef}
+                type="file"
+                className="conversation-hidden-input"
+                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf,.md,.odt,.ods"
+                onChange={(event) => onFilePickerChange(event, "files")}
+              />
+              <input
+                ref={cameraPickerRef}
+                type="file"
+                className="conversation-hidden-input"
+                accept="image/*,video/*"
+                capture="environment"
+                onChange={(event) => onFilePickerChange(event, "camera")}
+              />
+
               <div className="conversation-compose">
+                {pendingAttachment ? (
+                  <div className="conversation-pending-attachment">
+                    {pendingAttachment.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={pendingAttachment.previewUrl}
+                        alt={pendingAttachment.file.name || "Selected image"}
+                        className="conversation-pending-image"
+                      />
+                    ) : (
+                      <div className="conversation-attachment-icon" aria-hidden="true">
+                        {pendingAttachment.file.type.startsWith("video/") ? "VID" : "DOC"}
+                      </div>
+                    )}
+                    <div className="conversation-pending-copy">
+                      <strong>{pendingAttachment.file.name || "Selected file"}</strong>
+                      <small>
+                        {pendingAttachment.origin === "camera" ? "Captured from camera" : "Selected from files"}
+                        {pendingAttachment.file.size ? ` • ${formatFileSize(String(pendingAttachment.file.size))}` : ""}
+                      </small>
+                    </div>
+                    <button className="secondary-button" type="button" onClick={() => replacePendingAttachment(null)}>
+                      Remove
+                    </button>
+                  </div>
+                ) : null}
                 <textarea
                   className="input conversation-textarea"
                   value={postDraft}
                   onChange={(event) => setPostDraft(event.target.value)}
-                  placeholder="Send a message"
+                  placeholder={pendingAttachment ? "Add an optional comment" : "Send a message"}
                 />
                 <div className="conversation-toolbar">
-                  <button className="primary-button" type="button" disabled={busy || !normalize(postDraft)} onClick={() => void createPost()}>
+                  <button className="secondary-button" type="button" disabled={busy} onClick={() => filePickerRef.current?.click()}>
+                    Attach
+                  </button>
+                  <button className="secondary-button" type="button" disabled={busy} onClick={() => cameraPickerRef.current?.click()}>
+                    Camera
+                  </button>
+                  <button className="primary-button" type="button" disabled={busy || !canSendPost} onClick={() => void createPost()}>
                     Send
                   </button>
                 </div>
@@ -717,7 +865,59 @@ export function ConversationsClient({
                           <strong>{post.authorDisplayName || post.authorPersonId}</strong>
                           <span>{formatDate(post.createdAt)}</span>
                         </div>
-                        <p>{post.caption}</p>
+                        {post.media ? (
+                          <div className="conversation-media-card">
+                            {post.media.mediaKind === "image" && post.media.previewUrl ? (
+                              <a
+                                href={post.media.originalUrl || post.media.previewUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="conversation-media-link"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={post.media.previewUrl}
+                                  alt={post.media.label || post.media.fileName || "Shared image"}
+                                  className="conversation-media-image"
+                                />
+                              </a>
+                            ) : (
+                              post.media.originalUrl ? (
+                                <a
+                                  href={post.media.originalUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="conversation-media-file"
+                                >
+                                  <div className="conversation-attachment-icon" aria-hidden="true">
+                                    {post.media.mediaKind === "video" ? "VID" : "DOC"}
+                                  </div>
+                                  <div className="conversation-media-copy">
+                                    <strong>{post.media.label || post.media.fileName || "Attachment"}</strong>
+                                    <small>{attachmentSummary(post.media)}</small>
+                                  </div>
+                                </a>
+                              ) : (
+                                <div className="conversation-media-file">
+                                  <div className="conversation-attachment-icon" aria-hidden="true">
+                                    {post.media.mediaKind === "video" ? "VID" : "DOC"}
+                                  </div>
+                                  <div className="conversation-media-copy">
+                                    <strong>{post.media.label || post.media.fileName || "Attachment"}</strong>
+                                    <small>{attachmentSummary(post.media)}</small>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                            {post.media.mediaKind === "image" ? (
+                              <div className="conversation-media-copy">
+                                <strong>{post.media.label || post.media.fileName || "Shared image"}</strong>
+                                <small>{attachmentSummary(post.media)}</small>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {post.caption ? <p>{post.caption}</p> : null}
                       </div>
                       <div className="conversation-comments">
                         {post.comments.map((comment) => (

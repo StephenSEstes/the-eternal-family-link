@@ -1,0 +1,13 @@
+import { createHash, randomBytes } from "node:crypto";
+
+function shortHash(seed: string) {
+  return createHash("sha1").update(seed.trim().toLowerCase()).digest("hex").slice(0, 8);
+}
+
+export function buildMediaId(fileId: string) {
+  return `media-${shortHash(`file|${fileId}`)}`;
+}
+
+export function buildMediaFileId() {
+  return `mfile-${randomBytes(8).toString("hex")}`;
+}

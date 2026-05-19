@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-05-18 (Famailink Share media attach/upload)
+
+- `Date`: 2026-05-18
+- `Change`: Added canonical media-backed Share posts to Famailink. Share threads can now attach one image, video, or document per send from either device files or camera-capable pickers, add an optional caption, render image thumbnails inline in the thread, render video/document attachments as cards, and continue using the existing per-post comment flow for discussion.
+- `Type`: UI | API | Data | Infra
+- `Why`: Root cause was a code gap in the remaining Famailink Share MVP slice. Conversations already had durable groups, named topics, posts, comments, read state, and push plumbing, but the post path always hardcoded `share_posts.file_id` to blank and had no canonical upload/archive path. The fix reuses `MediaAssets` plus `share_posts.file_id` instead of inventing a separate Famailink media model.
+- `Files`: `TODO.md`, `designchoices.md`, `docs/change-summary.md`, `docs/project-definition.md`, `changeHistory.md`, `famailink/package.json`, `famailink/package-lock.json`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`, `famailink/lib/media/ids.ts`, `famailink/lib/media/thumbnail.server.ts`, `famailink/lib/media/upload.ts`, `famailink/lib/oci/auth.ts`, `famailink/lib/oci/object-storage.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/upload/route.ts`
+- `Data Changes`: No schema change. Famailink now writes canonical `MediaAssets` rows for uploaded Share attachments and stores the resulting `file_id` on `share_posts`. This slice intentionally does not create `MediaLinks` or people-tag rows yet; tagging/linking remains the follow-up feature.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `git diff --check` passes aside from CRLF warnings only.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert the Famailink media/object-storage helpers, remove the Share upload route and thread attachment UI, and restore text-only `share_posts` behavior.
+- `Design Decision Change`: Yes. Added the Famailink Share media-post decision to `designchoices.md`.
+
 ## 2026-04-30 (Famailink mobile install and Share push notifications)
 
 - `Date`: 2026-04-30

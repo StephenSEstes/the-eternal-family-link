@@ -2,7 +2,9 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import oracledb from "oracledb";
+import type { SupportedMediaKind } from "@/lib/media/upload";
 import { withConnection } from "@/lib/oci/client";
+import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
 
 const OUT_FORMAT = { outFormat: oracledb.OUT_FORMAT_OBJECT };
 const FAMAILINK_SHARE_KEY = "famailink-person";
@@ -81,7 +83,25 @@ export type ConversationPost = {
   authorEmail: string;
   createdAt: string;
   updatedAt: string;
+  media: ConversationPostMedia | null;
   comments: ConversationComment[];
+};
+
+export type ConversationPostMedia = {
+  mediaId: string;
+  fileId: string;
+  mediaKind: string;
+  label: string;
+  description: string;
+  photoDate: string;
+  sourceProvider: string;
+  mimeType: string;
+  fileName: string;
+  fileSizeBytes: string;
+  originalObjectKey: string;
+  thumbnailObjectKey: string;
+  previewUrl: string;
+  originalUrl: string;
 };
 
 export type PersonConversationSummary = {
@@ -99,6 +119,8 @@ type SessionActor = {
   username: string;
   userEmail: string;
 };
+
+type DirectObjectUrlFactory = ((objectKey: string) => string) | null;
 
 function normalize(value?: unknown) {
   return String(value ?? "").trim();
@@ -341,7 +363,30 @@ function mapConversation(row: Record<string, unknown>): CircleConversation {
   };
 }
 
-function mapPost(row: Record<string, unknown>): ConversationPost {
+function buildMediaObject(row: Record<string, unknown>, directObjectUrlFactory: DirectObjectUrlFactory): ConversationPostMedia | null {
+  const fileId = getCell(row, "FILE_ID");
+  if (!fileId) return null;
+  const originalObjectKey = getCell(row, "ORIGINAL_OBJECT_KEY");
+  const thumbnailObjectKey = getCell(row, "THUMBNAIL_OBJECT_KEY");
+  return {
+    mediaId: getCell(row, "MEDIA_ID"),
+    fileId,
+    mediaKind: getCell(row, "MEDIA_KIND"),
+    label: getCell(row, "MEDIA_LABEL") || getCell(row, "FILE_NAME"),
+    description: getCell(row, "MEDIA_DESCRIPTION"),
+    photoDate: getCell(row, "MEDIA_PHOTO_DATE"),
+    sourceProvider: getCell(row, "SOURCE_PROVIDER"),
+    mimeType: getCell(row, "MIME_TYPE"),
+    fileName: getCell(row, "FILE_NAME"),
+    fileSizeBytes: getCell(row, "FILE_SIZE_BYTES"),
+    originalObjectKey,
+    thumbnailObjectKey,
+    previewUrl: directObjectUrlFactory && thumbnailObjectKey ? directObjectUrlFactory(thumbnailObjectKey) : "",
+    originalUrl: directObjectUrlFactory && originalObjectKey ? directObjectUrlFactory(originalObjectKey) : "",
+  };
+}
+
+function mapPost(row: Record<string, unknown>, directObjectUrlFactory: DirectObjectUrlFactory): ConversationPost {
   return {
     postId: getCell(row, "POST_ID"),
     circleId: getCell(row, "THREAD_ID"),
@@ -353,6 +398,7 @@ function mapPost(row: Record<string, unknown>): ConversationPost {
     authorEmail: getCell(row, "AUTHOR_EMAIL"),
     createdAt: getCell(row, "CREATED_AT"),
     updatedAt: getCell(row, "UPDATED_AT"),
+    media: buildMediaObject(row, directObjectUrlFactory),
     comments: [],
   };
 }
@@ -860,6 +906,7 @@ async function insertPost(
     familyGroupKey: string;
     actor: SessionActor;
     caption: string;
+    fileId?: string;
     createdAt: string;
   },
 ) {
@@ -897,7 +944,7 @@ async function insertPost(
       circleId: input.circleId,
       conversationId: input.conversationId,
       familyGroupKey: input.familyGroupKey,
-      fileId: "",
+      fileId: normalize(input.fileId),
       captionText: input.caption,
       authorPersonId: input.actor.personId,
       authorDisplayName: input.actor.username,
@@ -909,6 +956,141 @@ async function insertPost(
     { autoCommit: false },
   );
   return postId;
+}
+
+export async function upsertConversationMediaAsset(input: {
+  mediaId: string;
+  fileId: string;
+  mediaKind: SupportedMediaKind;
+  label: string;
+  description: string;
+  photoDate?: string;
+  sourceProvider: string;
+  sourceFileId?: string;
+  originalObjectKey: string;
+  thumbnailObjectKey?: string;
+  checksumSha256?: string;
+  mimeType: string;
+  fileName: string;
+  fileSizeBytes: string;
+  mediaWidth?: string;
+  mediaHeight?: string;
+  mediaDurationSec?: string;
+  createdAt: string;
+}) {
+  const mediaId = normalize(input.mediaId);
+  const fileId = normalize(input.fileId);
+  if (!mediaId || !fileId) {
+    throw new Error("media_asset_requires_ids");
+  }
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    await connection.execute(
+      `MERGE INTO media_assets target
+       USING (
+         SELECT
+           :mediaId AS media_id,
+           :fileId AS file_id,
+           :mediaKind AS media_kind,
+           :label AS label,
+           :description AS description,
+           :photoDate AS photo_date,
+           :sourceProvider AS source_provider,
+           :sourceFileId AS source_file_id,
+           :originalObjectKey AS original_object_key,
+           :thumbnailObjectKey AS thumbnail_object_key,
+           :checksumSha256 AS checksum_sha256,
+           :mimeType AS mime_type,
+           :fileName AS file_name,
+           :fileSizeBytes AS file_size_bytes,
+           :mediaWidth AS media_width,
+           :mediaHeight AS media_height,
+           :mediaDurationSec AS media_duration_sec,
+           :createdAt AS created_at
+         FROM dual
+       ) src
+       ON (TRIM(target.file_id) = TRIM(src.file_id))
+       WHEN MATCHED THEN UPDATE SET
+         target.media_id = src.media_id,
+         target.media_kind = src.media_kind,
+         target.label = src.label,
+         target.description = src.description,
+         target.photo_date = src.photo_date,
+         target.source_provider = src.source_provider,
+         target.source_file_id = src.source_file_id,
+         target.original_object_key = src.original_object_key,
+         target.thumbnail_object_key = src.thumbnail_object_key,
+         target.checksum_sha256 = src.checksum_sha256,
+         target.mime_type = src.mime_type,
+         target.file_name = src.file_name,
+         target.file_size_bytes = src.file_size_bytes,
+         target.media_width = src.media_width,
+         target.media_height = src.media_height,
+         target.media_duration_sec = src.media_duration_sec
+       WHEN NOT MATCHED THEN INSERT (
+         media_id,
+         file_id,
+         media_kind,
+         label,
+         description,
+         photo_date,
+         source_provider,
+         source_file_id,
+         original_object_key,
+         thumbnail_object_key,
+         checksum_sha256,
+         mime_type,
+         file_name,
+         file_size_bytes,
+         media_width,
+         media_height,
+         media_duration_sec,
+         created_at
+       ) VALUES (
+         src.media_id,
+         src.file_id,
+         src.media_kind,
+         src.label,
+         src.description,
+         src.photo_date,
+         src.source_provider,
+         src.source_file_id,
+         src.original_object_key,
+         src.thumbnail_object_key,
+         src.checksum_sha256,
+         src.mime_type,
+         src.file_name,
+         src.file_size_bytes,
+         src.media_width,
+         src.media_height,
+         src.media_duration_sec,
+         src.created_at
+       )`,
+      {
+        mediaId,
+        fileId,
+        mediaKind: normalize(input.mediaKind),
+        label: normalize(input.label),
+        description: normalize(input.description),
+        photoDate: normalize(input.photoDate),
+        sourceProvider: normalize(input.sourceProvider),
+        sourceFileId: normalize(input.sourceFileId) || fileId,
+        originalObjectKey: normalize(input.originalObjectKey),
+        thumbnailObjectKey: normalize(input.thumbnailObjectKey),
+        checksumSha256: normalize(input.checksumSha256),
+        mimeType: normalize(input.mimeType),
+        fileName: normalize(input.fileName),
+        fileSizeBytes: normalize(input.fileSizeBytes),
+        mediaWidth: normalize(input.mediaWidth),
+        mediaHeight: normalize(input.mediaHeight),
+        mediaDurationSec: normalize(input.mediaDurationSec),
+        createdAt: normalize(input.createdAt),
+      },
+      { autoCommit: true },
+    );
+    return true;
+  });
 }
 
 export async function createCircleConversation(input: {
@@ -1103,28 +1285,42 @@ export async function listConversationPosts(input: {
       personId: viewerPersonId,
     });
     if (!conversation) return [];
+    const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
     const result = await connection.execute(
       `SELECT
-         post_id,
-         thread_id,
-         conversation_id,
-         family_group_key,
-         file_id,
-         caption_text,
-         author_person_id,
-         author_display_name,
-         author_email,
-         created_at,
-         updated_at
-       FROM share_posts
-       WHERE TRIM(thread_id) = :circleId
-         AND TRIM(conversation_id) = :conversationId
-         AND LOWER(TRIM(NVL(post_status, 'active'))) <> 'deleted'
-       ORDER BY created_at, post_id`,
+         p.post_id,
+         p.thread_id,
+         p.conversation_id,
+         p.family_group_key,
+         p.file_id,
+         p.caption_text,
+         p.author_person_id,
+         p.author_display_name,
+         p.author_email,
+         p.created_at,
+         p.updated_at,
+         a.media_id,
+         a.media_kind,
+         a.label AS media_label,
+         a.description AS media_description,
+         a.photo_date AS media_photo_date,
+         a.source_provider,
+         a.mime_type,
+         a.file_name,
+         a.file_size_bytes,
+         a.original_object_key,
+         a.thumbnail_object_key
+       FROM share_posts p
+       LEFT JOIN media_assets a
+         ON TRIM(a.file_id) = TRIM(p.file_id)
+       WHERE TRIM(p.thread_id) = :circleId
+         AND TRIM(p.conversation_id) = :conversationId
+         AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+       ORDER BY p.created_at, p.post_id`,
       { circleId: conversation.circleId, conversationId: conversation.conversationId },
       OUT_FORMAT,
     );
-    const posts = (result.rows ?? []).map(mapPost);
+    const posts = (result.rows ?? []).map((row) => mapPost(row, directObjectUrlFactory));
     const postIds = posts.map((post) => post.postId);
     if (!postIds.length) return posts;
     const binds: Record<string, unknown> = {};
@@ -1165,10 +1361,12 @@ export async function createConversationPost(input: {
   actor: SessionActor;
   circleId: string;
   conversationId: string;
-  caption: string;
+  caption?: string;
+  fileId?: string;
 }): Promise<ConversationPost> {
   const caption = normalize(input.caption);
-  if (!caption) throw new Error("post_text_required");
+  const fileId = normalize(input.fileId);
+  if (!caption && !fileId) throw new Error("post_text_or_media_required");
   return withConnection(async (rawConnection) => {
     const connection = rawConnection as DbConnection;
     await ensureShareTables(connection);
@@ -1187,6 +1385,7 @@ export async function createConversationPost(input: {
         familyGroupKey: conversation.familyGroupKey || FAMAILINK_SHARE_KEY,
         actor: input.actor,
         caption,
+        fileId,
         createdAt,
       });
       await connection.execute(
