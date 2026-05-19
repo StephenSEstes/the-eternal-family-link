@@ -2033,6 +2033,16 @@ textarea {
   border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
 }
 
+.conversation-pending-video {
+  width: 56px;
+  height: 56px;
+  display: block;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--line) 78%, #fff 22%);
+  background: #000;
+}
+
 .conversation-pending-copy,
 .conversation-media-copy {
   min-width: 0;
@@ -2354,6 +2364,15 @@ textarea {
   border-radius: 10px;
   border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
   background: rgba(255, 255, 255, 0.76);
+}
+
+.conversation-media-video {
+  width: min(320px, 100%);
+  max-width: 100%;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  background: #000;
 }
 
 .conversation-media-file {

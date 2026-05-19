@@ -7982,3 +7982,22 @@ Concise release notes for what changed, why it changed, and what to verify.
   - `vercel env add ... --force --sensitive` completed for `GMAIL_SENDER_EMAIL`, `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN` in project `famailink-mvp`.
 - `Rollback Notes`: Revert commit for the code changes. If needed, remove or replace the synced `GMAIL_*` vars in the `famailink-mvp` Vercel project separately.
 - `Design Decision Change`: Yes. Updated `designchoices.md` so Famailink invites are relationship-derived person onboarding instead of family-group grant propagation.
+
+## 2026-05-18 (Famailink Share search/media UX and OCI upload config)
+
+- `Change`: Refined Famailink Share so the Add Group individual-member picker stays empty until the user types a search string, split the thread attachment actions into distinct `Files` and `Camera` entry points, added pending-video preview plus inline video playback in Share threads, and synced the missing OCI object-storage env/auth vars into the `famailink-mvp` Vercel project for production media-upload readiness.
+- `Type`: Share UX, Media playback, Deployment config
+- `Why`: Root cause was mixed. The Add Group picker matched every person when the search query was blank, the attachment UI used a broad media picker that overlapped with the dedicated camera action on phones, videos already had canonical original URLs in the read model but the thread UI only rendered them as attachment cards, and live media uploads failed with `storage_not_configured` because `famailink-mvp` was missing required OCI object-storage location/auth configuration.
+- `Files`:
+  - `TODO.md`
+  - `docs/change-summary.md`
+  - `changeHistory.md`
+  - `famailink/app/globals.css`
+  - `famailink/components/ConversationsClient.tsx`
+- `Data Changes`: None. No schema or row changes. Production config only: synced `OCI_OBJECT_BUCKET`, `OCI_OBJECT_NAMESPACE`, `OCI_REGION`, `OCI_TENANCY_OCID`, `OCI_USER_OCID`, `OCI_FINGERPRINT`, and `OCI_PRIVATE_KEY_PEM` into Vercel project `famailink-mvp`.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run build --prefix famailink` passes.
+  - `vercel env add ... --force --sensitive` completed for the OCI object-storage location/auth vars in project `famailink-mvp`.
+- `Rollback Notes`: Revert commit for the Share UI/code changes. If needed, remove or replace the synced OCI env vars in the `famailink-mvp` Vercel project separately.
+- `Design Decision Change`: No design decision change.

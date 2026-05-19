@@ -179,6 +179,14 @@ function formatFileSize(value?: string) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isImageMimeType(value?: string) {
+  return normalize(value).toLowerCase().startsWith("image/");
+}
+
+function isVideoMimeType(value?: string) {
+  return normalize(value).toLowerCase().startsWith("video/");
+}
+
 function attachmentSummary(media: ConversationPostMedia) {
   const kind = normalize(media.mediaKind) || "file";
   const size = formatFileSize(media.fileSizeBytes);
@@ -258,11 +266,13 @@ export function ConversationsClient({
     const signature = personSignature([session.personId, ...composerRecipientIds]);
     return circles.find((circle) => personSignature(circle.members.map((member) => member.personId)) === signature) ?? null;
   }, [circles, composerRecipientIds, session.personId]);
+  const hasComposerSearch = Boolean(normalize(composerSearch));
   const filteredPeople = useMemo(() => {
     const query = normalize(composerSearch).toLowerCase();
+    if (!query) return [];
     return people
       .filter((person) => person.personId !== session.personId)
-      .filter((person) => !query || person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query))
+      .filter((person) => person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query))
       .slice(0, 48);
   }, [composerSearch, people, session.personId]);
   const relationshipPills = useMemo(() => relationshipOptions.map((option) => ({
@@ -481,7 +491,7 @@ export function ConversationsClient({
   function setPendingFile(file: File | null, origin: PendingAttachment["origin"]) {
     if (!file) return;
     const normalizedType = normalize(file.type).toLowerCase();
-    const previewUrl = normalizedType.startsWith("image/") ? URL.createObjectURL(file) : "";
+    const previewUrl = normalizedType.startsWith("image/") || normalizedType.startsWith("video/") ? URL.createObjectURL(file) : "";
     replacePendingAttachment({ file, origin, previewUrl });
   }
 
@@ -791,7 +801,6 @@ export function ConversationsClient({
                 ref={filePickerRef}
                 type="file"
                 className="conversation-hidden-input"
-                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf,.md,.odt,.ods"
                 onChange={(event) => onFilePickerChange(event, "files")}
               />
               <input
@@ -806,12 +815,20 @@ export function ConversationsClient({
               <div className="conversation-compose">
                 {pendingAttachment ? (
                   <div className="conversation-pending-attachment">
-                    {pendingAttachment.previewUrl ? (
+                    {pendingAttachment.previewUrl && isImageMimeType(pendingAttachment.file.type) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={pendingAttachment.previewUrl}
                         alt={pendingAttachment.file.name || "Selected image"}
                         className="conversation-pending-image"
+                      />
+                    ) : pendingAttachment.previewUrl && isVideoMimeType(pendingAttachment.file.type) ? (
+                      <video
+                        src={pendingAttachment.previewUrl}
+                        className="conversation-pending-video"
+                        muted
+                        playsInline
+                        preload="metadata"
                       />
                     ) : (
                       <div className="conversation-attachment-icon" aria-hidden="true">
@@ -838,7 +855,7 @@ export function ConversationsClient({
                 />
                 <div className="conversation-toolbar">
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => filePickerRef.current?.click()}>
-                    Attach
+                    Files
                   </button>
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => cameraPickerRef.current?.click()}>
                     Camera
@@ -881,6 +898,15 @@ export function ConversationsClient({
                                   className="conversation-media-image"
                                 />
                               </a>
+                            ) : post.media.mediaKind === "video" && post.media.originalUrl ? (
+                              <video
+                                className="conversation-media-video"
+                                controls
+                                playsInline
+                                preload="metadata"
+                              >
+                                <source src={post.media.originalUrl} type={post.media.mimeType || undefined} />
+                              </video>
                             ) : (
                               post.media.originalUrl ? (
                                 <a
@@ -909,9 +935,9 @@ export function ConversationsClient({
                                 </div>
                               )
                             )}
-                            {post.media.mediaKind === "image" ? (
+                            {post.media.mediaKind === "image" || post.media.mediaKind === "video" ? (
                               <div className="conversation-media-copy">
-                                <strong>{post.media.label || post.media.fileName || "Shared image"}</strong>
+                                <strong>{post.media.label || post.media.fileName || (post.media.mediaKind === "video" ? "Shared video" : "Shared image")}</strong>
                                 <small>{attachmentSummary(post.media)}</small>
                               </div>
                             ) : null}
@@ -1026,7 +1052,9 @@ export function ConversationsClient({
                 />
               </label>
               <div className="conversation-people-results">
-                {filteredPeople.map((person) => {
+                {!hasComposerSearch ? <p className="empty-state">Type a name to search relatives.</p> : null}
+                {hasComposerSearch && filteredPeople.length === 0 ? <p className="empty-state">No relatives match that search.</p> : null}
+                {hasComposerSearch ? filteredPeople.map((person) => {
                   const selected = composerRecipientIds.includes(person.personId);
                   return (
                     <div key={person.personId} className={`conversation-person-row${selected ? " is-selected" : ""}`}>
@@ -1036,7 +1064,7 @@ export function ConversationsClient({
                       </button>
                     </div>
                   );
-                })}
+                }) : null}
               </div>
             </div>
 
