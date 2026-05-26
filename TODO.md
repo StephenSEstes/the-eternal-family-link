@@ -4,32 +4,6 @@ This file tracks development tasks for this project.
 I will update this list as we add, complete, or remove work.
 
 ## Active
-- [ ] Estes family camp meal planner page
-  Priority: Med
-  Status: In progress 2026-05-25
-  Desc: Create a standalone HTML/Next.js page for the Estes Family Camp that turns the provided itinerary and meal plan into a practical meal-prep guide with shopping, equipment, and pre-prep details.
-  Scope:
-  - Add a dedicated page that summarizes the trip dates, day-by-day itinerary anchors, and the planned camp meals.
-  - Include a consolidated shopping list grouped by meal/use.
-  - Include a camp kitchen equipment checklist.
-  - Include pre-trip prep guidance covering make-ahead cooking, packing, and day-specific handoff steps.
-  - Keep the change self-contained and non-destructive to existing family-app routes and behavior.
-  Phases:
-  - Phase 1: Review design rules, inspect route structure, and extract the attached itinerary into usable page content.
-  - Phase 2: Build the standalone meal-planner page and scoped styling with a more distinctive camping-themed presentation than the default app tiles.
-  - Phase 3: Run lint/build checks and verify the page content matches the requested meals and itinerary timing.
-  API/UI/data changes:
-  - API: none.
-  - UI: add one new route for the camp meal-planning page plus its styling.
-  - Data: static page content only; no schema or persistence changes.
-  Validation:
-  - `npm run lint` passes.
-  - `npm run build` passes.
-  - The page includes the requested meals: Thursday chicken kabobs with peanut sauce, naan, rice, cucumber salad, and cake; Friday breakfast pancakes, eggs, sausage, berries and cream; Friday lunch grilled cheese and tomato soup; Friday dinner pork tenderloins with balsamic glaze, smashed potatoes, green beans, and s'mores; Saturday breakfast pancakes, eggs, sausage, and fruit; Saturday lunch Winger salad with ground beef tacos, watermelon, and donuts.
-  - The page includes shopping, equipment, and pre-prep sections.
-  - The page reflects the trip dates and general day structure from the attached itinerary.
-  Completion criteria:
-  - The repo contains a usable, visually polished camping meal-planner page that can be reviewed in the deployed app flow.
 - [ ] Famailink person-based Conversations MVP from EFL Shares
   Priority: High (#1)
   Status: In progress 2026-04-22
@@ -1369,6 +1343,14 @@ I will update this list as we add, complete, or remove work.
 - [ ] Add deployment and ops hardening tasks
 
 ## Completed
+- [x] Estes family camp meal planner page
+  Priority: Med
+  Status: Completed/deployed 2026-05-25
+  Desc: Created a standalone printable HTML/Next.js camp-planning page for the Estes Family Camp with the finalized menu, shopping checklist, prep timeline, packing inventory, recipe references, snack prep, and at-camp execution steps.
+  Verification:
+  - `npm run lint` passed.
+  - `NODE_OPTIONS=--max-old-space-size=4096 npm run build` passed.
+  - Production deploy succeeded and `/camp-meals` is live.
 - [x] Unit 1 greenfield lab app / Famailink MVP (isolated, no legacy feature imports)
   Priority: High (#0)
   Status: Completed/deployed 2026-04-21
