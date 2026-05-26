@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-05-25 (Printable Estes camp meal planner page)
+
+- `Date`: 2026-05-25
+- `Change`: Added a standalone printable camp meal-planning page at `/camp-meals` with the finalized Estes trip menu, shopping checklist, prep timeline, recipe reference cards, packing inventory, and at-camp execution checklists.
+- `Type`: UI
+- `Why`: Root cause was a planning/documentation gap. The family had a real trip itinerary and meal plan, but no usable single-page working document that translated those decisions into shopping, prep, packing, and execution steps. The fix adds a print-first static route rather than spreading the plan across chat notes.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `src/app/camp-meals/page.tsx`, `src/app/camp-meals/page.module.css`
+- `Data Changes`: None. Static page content only.
+- `Verify`:
+  - `npm run lint` passes.
+  - `NODE_OPTIONS=--max-old-space-size=4096 npm run build` passes.
+  - `/camp-meals` renders a printable checklist view with shopping, prep, packing, recipes, and camp execution sections.
+- `Rollback Notes`: Revert the `/camp-meals` route and stylesheet plus the related TODO/release-note entries.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-05-18 (Famailink Share media attach/upload)
 
 - `Date`: 2026-05-18
