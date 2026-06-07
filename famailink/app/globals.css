@@ -2137,6 +2137,44 @@ textarea {
   gap: 8px;
 }
 
+.conversation-group-member-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.conversation-group-member-tile {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid var(--conversation-member-chip-border, color-mix(in oklab, var(--line) 78%, #fff 22%));
+  border-radius: 8px;
+  background: var(--conversation-member-chip-bg, rgba(255, 255, 255, 0.94));
+  color: var(--conversation-member-chip-text, var(--text));
+}
+
+.conversation-group-member-tile strong,
+.conversation-group-member-tile small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-group-member-tile strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.conversation-group-member-tile small {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.82;
+}
+
 .conversation-list-item {
   width: 100%;
   display: flex;

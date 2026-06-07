@@ -115,6 +115,12 @@ function memberNames(members: ConversationMember[]) {
   return members.map((member) => member.displayName || member.personId).join(", ");
 }
 
+function memberRoleLabel(role: string) {
+  const normalizedRole = normalize(role).toLowerCase();
+  if (!normalizedRole || normalizedRole === "member") return "Member";
+  return normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1);
+}
+
 function buildAutoGroupTitle(recipientIds: string[], peopleById: Map<string, PersonOption>) {
   const names = recipientIds.map((personId) => peopleById.get(personId)?.displayName || personId).filter(Boolean);
   if (names.length === 0) return "Family Group";
@@ -733,6 +739,25 @@ export function ConversationsClient({
 
           {currentView === "conversations" ? (
             <>
+              {selectedCircle?.members.length ? (
+                <div className="conversation-group-member-tiles" aria-label="Group members">
+                  {selectedCircle.members.map((member) => {
+                    const displayName = member.displayName || member.personId;
+                    const groupName = normalize(member.groupDisplayName);
+                    return (
+                      <div
+                        key={`group-member-${member.personId}`}
+                        className="conversation-group-member-tile"
+                        style={memberChipStyle(getMemberColor(member.personId))}
+                      >
+                        <strong>{displayName}</strong>
+                        <small>{groupName && groupName !== displayName ? groupName : memberRoleLabel(member.role)}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               {selectedCircle && newTopicOpen ? (
                 <div className="conversation-create-panel">
                   <label className="field">
