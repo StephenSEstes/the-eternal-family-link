@@ -13,18 +13,18 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
-## 2026-06-07 (Famailink group member tiles on conversations screen)
+## 2026-06-07 (Famailink group member chips on conversations screen)
 
 - `Date`: 2026-06-07
-- `Change`: Added group member tiles to the Famailink Share group conversations screen, so the selected group shows its members before the topic list instead of only showing the member count in the header.
+- `Change`: Added compact group member chips to the Famailink Share group conversations screen, positioned beside the selected group name in the header instead of as large tiles above the topic list.
 - `Type`: UI
-- `Why`: Root cause was a code/UI issue. The selected group payload already included `selectedCircle.members`, but the conversations-list view rendered only the count while member identity chips/tiles were limited to the thread view. Rendering the existing member data at the group level addresses the missing display without changing data access or auth behavior.
+- `Why`: Root cause was a code/UI issue. The selected group payload already included `selectedCircle.members`, but the conversations-list view rendered only the count while compact member identity chips were limited to the thread view. Reusing the same chip treatment in the group header addresses the missing display without changing data access or auth behavior.
 - `Files`: `docs/change-summary.md`, `changeHistory.md`, `famailink/components/ConversationsClient.tsx`, `famailink/app/globals.css`
 - `Data Changes`: None.
 - `Verify`:
   - `npm run lint` passes in `famailink/`.
   - `npm run build` passes in `famailink/`.
-- `Rollback Notes`: Remove the group-member tile rendering from the conversations view and delete the `.conversation-group-member-*` styles.
+- `Rollback Notes`: Remove the group-header member chip rendering from the conversations view and delete the `.conversation-title-row` / `.conversation-header-member-list` styles.
 - `Design Decision Change`: No design decision change.
 
 ## 2026-05-18 (Famailink Share media attach/upload)

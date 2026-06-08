@@ -7,7 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
-- 2026-06-07: Added member tiles to the Famailink Share group conversations screen so selected groups show their members before the topic list. See `docs/change-summary.md`.
+- 2026-06-07: Added compact member chips beside the selected Famailink Share group name on the conversations screen. See `docs/change-summary.md`.
 - 2026-05-18: Added canonical media-backed Famailink Share posts with camera/file attach, archived originals, image thumbnails, attachment cards, and existing post-comment reuse. See `docs/change-summary.md`.
 - 2026-04-30: Added colored participant chips to selected Famailink Share conversations and reused those member colors for message/comment bubbles to match the EFL Shares thread identity treatment. See `docs/change-summary.md`.
 - 2026-04-29: Changed Famailink Share into a single-level texting-style navigator so it shows only Groups, then conversations, then the selected thread, with back navigation stepping thread -> conversations -> groups. See `docs/change-summary.md`.
