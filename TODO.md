@@ -29,6 +29,7 @@ I will update this list as we add, complete, or remove work.
     - Completion criteria: group/thread names can be changed without schema changes or auth behavior changes, and thread delete archives conversation history instead of hard-deleting posts/media.
   - Implementation plan 2026-06-14: refine Share thread rows so the full row opens the thread except edit/delete controls, and the list previews the oldest unread activity or latest read activity with the topic name and last-activity date in fine print.
   - Implementation plan 2026-06-14: condense Share thread rows to one line with activity preview, timestamp, and right-aligned thread name while preserving edit/delete buttons.
+  - Implementation plan 2026-06-14: refine Share thread posting so the compose box sits below existing posts, media attach uses a single `+` action, and signed-in authors can soft-delete their own text/media posts without removing media assets.
   - Remaining for this task: deployed-environment validation of the Share media slice.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:

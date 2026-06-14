@@ -2024,6 +2024,25 @@ textarea {
   background: color-mix(in oklab, var(--surface-soft) 70%, #fff 30%);
 }
 
+.thread-column .conversation-posts {
+  order: 10;
+}
+
+.thread-column .conversation-compose {
+  order: 20;
+}
+
+.conversation-add-media-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .conversation-hidden-input {
   display: none;
 }
@@ -2374,6 +2393,20 @@ textarea {
   border-radius: 12px;
   background: var(--conversation-bubble-bg, #fff);
   box-shadow: 0 8px 18px color-mix(in oklab, #124866 8%, transparent 92%);
+}
+
+.conversation-delete-post {
+  justify-self: end;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.conversation-delete-comment {
+  justify-self: end;
+  min-height: 24px;
+  padding: 3px 7px;
+  font-size: 11px;
 }
 
 .conversation-post.is-mine .conversation-post-bubble {

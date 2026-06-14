@@ -1652,6 +1652,58 @@ export async function createConversationPost(input: {
   });
 }
 
+export async function deleteConversationPost(input: {
+  actor: SessionActor;
+  circleId: string;
+  conversationId: string;
+  postId: string;
+}) {
+  const actorPersonId = normalize(input.actor.personId);
+  const postId = normalize(input.postId);
+  if (!actorPersonId || !postId) throw new Error("post_not_found");
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const conversation = await getConversationForPerson(connection, {
+      circleId: input.circleId,
+      conversationId: input.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversation) throw new Error("conversation_not_found_or_not_member");
+
+    const check = await connection.execute(
+      `SELECT post_id, author_person_id
+       FROM share_posts
+       WHERE TRIM(post_id) = :postId
+         AND TRIM(thread_id) = :circleId
+         AND TRIM(conversation_id) = :conversationId
+         AND LOWER(TRIM(NVL(post_status, 'active'))) <> 'deleted'
+       FETCH FIRST 1 ROWS ONLY`,
+      { postId, circleId: conversation.circleId, conversationId: conversation.conversationId },
+      OUT_FORMAT,
+    );
+    const row = check.rows?.[0] ?? null;
+    if (!row) throw new Error("post_not_found");
+    if (normalize(getCell(row, "AUTHOR_PERSON_ID")) !== actorPersonId) {
+      throw new Error("post_delete_requires_author");
+    }
+
+    const deletedAt = nowIso();
+    await connection.execute(
+      `UPDATE share_posts
+       SET post_status = 'deleted',
+           updated_at = :updatedAt
+       WHERE TRIM(post_id) = :postId
+         AND TRIM(thread_id) = :circleId
+         AND TRIM(conversation_id) = :conversationId`,
+      { updatedAt: deletedAt, postId, circleId: conversation.circleId, conversationId: conversation.conversationId },
+      { autoCommit: true },
+    );
+    return true;
+  });
+}
+
 export async function createConversationComment(input: {
   actor: SessionActor;
   circleId: string;
@@ -1762,6 +1814,61 @@ export async function createConversationComment(input: {
     const created = posts.flatMap((post) => post.comments).find((comment) => comment.commentId === commentId);
     if (!created) throw new Error("created_comment_not_found");
     return created;
+  });
+}
+
+export async function deleteConversationComment(input: {
+  actor: SessionActor;
+  circleId: string;
+  conversationId: string;
+  postId: string;
+  commentId: string;
+}) {
+  const actorPersonId = normalize(input.actor.personId);
+  const postId = normalize(input.postId);
+  const commentId = normalize(input.commentId);
+  if (!actorPersonId || !postId || !commentId) throw new Error("comment_not_found");
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const conversation = await getConversationForPerson(connection, {
+      circleId: input.circleId,
+      conversationId: input.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversation) throw new Error("conversation_not_found_or_not_member");
+
+    const check = await connection.execute(
+      `SELECT comment_id, author_person_id
+       FROM share_post_comments
+       WHERE TRIM(comment_id) = :commentId
+         AND TRIM(post_id) = :postId
+         AND TRIM(thread_id) = :circleId
+         AND LOWER(TRIM(NVL(comment_status, 'active'))) <> 'deleted'
+       FETCH FIRST 1 ROWS ONLY`,
+      { commentId, postId, circleId: conversation.circleId },
+      OUT_FORMAT,
+    );
+    const row = check.rows?.[0] ?? null;
+    if (!row) throw new Error("comment_not_found");
+    if (normalize(getCell(row, "AUTHOR_PERSON_ID")) !== actorPersonId) {
+      throw new Error("comment_delete_requires_author");
+    }
+
+    const deletedAt = nowIso();
+    await connection.execute(
+      `UPDATE share_post_comments
+       SET comment_status = 'deleted',
+           updated_at = :updatedAt,
+           deleted_at = :deletedAt
+       WHERE TRIM(comment_id) = :commentId
+         AND TRIM(post_id) = :postId
+         AND TRIM(thread_id) = :circleId`,
+      { updatedAt: deletedAt, deletedAt, commentId, postId, circleId: conversation.circleId },
+      { autoCommit: true },
+    );
+    return true;
   });
 }
 

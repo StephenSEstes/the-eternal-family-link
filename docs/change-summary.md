@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-14 (Famailink Share bottom composer and delete controls)
+
+- `Date`: 2026-06-14
+- `Change`: Moved the Famailink Share thread composer below the existing comments/posts, replaced separate media actions with a single `+` media button, and added author-only delete controls for posts and comments.
+- `Type`: UI | API
+- `Why`: Root cause was a mixed UI/API gap. The composer rendered above the message history, media attachment was split across separate file/camera actions, and the existing soft-delete status columns were not exposed through member-gated post/comment delete mutations or client controls.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/[postId]/route.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/[postId]/comments/[commentId]/route.ts`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`
+- `Data Changes`: No schema change and no data repair. New delete actions soft-delete existing rows by setting `share_posts.post_status = 'deleted'` or `share_post_comments.comment_status = 'deleted'`.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the post/comment DELETE routes and store mutations, restore the split media buttons, and remove the bottom-composer/delete-control styling.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-14 (Famailink Share one-line thread rows)
 
 - `Date`: 2026-06-14

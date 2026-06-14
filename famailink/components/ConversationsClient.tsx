@@ -239,7 +239,6 @@ export function ConversationsClient({
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingUnreadJumpConversationIdRef = useRef("");
   const filePickerRef = useRef<HTMLInputElement | null>(null);
-  const cameraPickerRef = useRef<HTMLInputElement | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
@@ -671,6 +670,44 @@ export function ConversationsClient({
     }
   }
 
+  async function deletePost(postId: string) {
+    if (!selectedCircle || !selectedConversation) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await fetchJson<{ ok?: boolean }>(
+        `/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts/${encodeURIComponent(postId)}`,
+        { method: "DELETE" },
+      );
+      setPosts((current) => current.filter((post) => post.postId !== postId));
+      await syncCircleSelection(selectedCircle.circleId, selectedConversation.conversationId);
+      setStatus({ tone: "info", message: "Post deleted." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to delete post." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteComment(postId: string, commentId: string) {
+    if (!selectedCircle || !selectedConversation) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await fetchJson<{ ok?: boolean }>(
+        `/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+        { method: "DELETE" },
+      );
+      setPosts((current) => current.map((post) => post.postId === postId ? { ...post, comments: post.comments.filter((comment) => comment.commentId !== commentId) } : post));
+      await syncCircleSelection(selectedCircle.circleId, selectedConversation.conversationId);
+      setStatus({ tone: "info", message: "Comment deleted." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to delete comment." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveGroupName() {
     if (!managementDialog || managementDialog.kind !== "group-name") return;
     const title = normalize(managementDialog.value);
@@ -979,17 +1016,9 @@ export function ConversationsClient({
                 ref={filePickerRef}
                 type="file"
                 className="conversation-hidden-input"
+                accept="image/*,video/*"
                 onChange={(event) => onFilePickerChange(event, "files")}
               />
-              <input
-                ref={cameraPickerRef}
-                type="file"
-                className="conversation-hidden-input"
-                accept="image/*,video/*"
-                capture="environment"
-                onChange={(event) => onFilePickerChange(event, "camera")}
-              />
-
               <div className="conversation-compose">
                 {pendingAttachment ? (
                   <div className="conversation-pending-attachment">
@@ -1032,11 +1061,14 @@ export function ConversationsClient({
                   placeholder={pendingAttachment ? "Add an optional comment" : "Send a message"}
                 />
                 <div className="conversation-toolbar">
-                  <button className="secondary-button" type="button" disabled={busy} onClick={() => filePickerRef.current?.click()}>
-                    Files
-                  </button>
-                  <button className="secondary-button" type="button" disabled={busy} onClick={() => cameraPickerRef.current?.click()}>
-                    Camera
+                  <button
+                    className="secondary-button conversation-add-media-button"
+                    type="button"
+                    aria-label="Add media"
+                    disabled={busy}
+                    onClick={() => filePickerRef.current?.click()}
+                  >
+                    +
                   </button>
                   <button className="primary-button" type="button" disabled={busy || !canSendPost} onClick={() => void createPost()}>
                     Send
@@ -1060,6 +1092,16 @@ export function ConversationsClient({
                           <strong>{post.authorDisplayName || post.authorPersonId}</strong>
                           <span>{formatDate(post.createdAt)}</span>
                         </div>
+                        {ownPost ? (
+                          <button
+                            className="danger-button conversation-delete-post"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void deletePost(post.postId)}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
                         {post.media ? (
                           <div className="conversation-media-card">
                             {post.media.mediaKind === "image" && post.media.previewUrl ? (
@@ -1133,6 +1175,16 @@ export function ConversationsClient({
                             >
                               <strong>{comment.authorDisplayName || comment.authorPersonId}</strong>
                               <span>{comment.commentText}</span>
+                              {comment.authorPersonId === session.personId ? (
+                                <button
+                                  className="danger-button conversation-delete-comment"
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void deleteComment(post.postId, comment.commentId)}
+                                >
+                                  Delete
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         ))}
