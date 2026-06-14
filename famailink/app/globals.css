@@ -2206,6 +2206,18 @@ textarea {
   gap: 3px;
 }
 
+.conversation-thread-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(90px, 0.34fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.conversation-thread-name {
+  justify-self: end;
+  max-width: 100%;
+}
+
 .conversation-list-main strong,
 .conversation-list-main small {
   overflow: hidden;

@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-14 (Famailink Share one-line thread rows)
+
+- `Date`: 2026-06-14
+- `Change`: Condensed Famailink Share thread rows into one line: activity preview, timestamp without a label, and the thread name aligned to the right before the row actions.
+- `Type`: UI
+- `Why`: Root cause was a UI layout mismatch. The previous row rendered the preview, topic name, and date as stacked text, but the desired thread list is a single scannable row.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`
+- `Data Changes`: None.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Restore the stacked preview/topic/date row rendering and remove `.conversation-thread-summary` / `.conversation-thread-name` styles.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-14 (Famailink Share thread row previews)
 
 - `Date`: 2026-06-14

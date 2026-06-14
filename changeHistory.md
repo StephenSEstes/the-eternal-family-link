@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-06-14: Condensed Famailink Share thread rows to one line with activity preview, timestamp, and right-aligned thread name. See `docs/change-summary.md`.
 - 2026-06-14: Updated Famailink Share thread rows so the full row opens the thread and rows show an unread/latest activity preview with topic and last-activity date in fine print. See `docs/change-summary.md`.
 - 2026-06-14: Added Famailink Share management controls to rename Groups, rename threads, and delete/archive threads from the active list. See `docs/change-summary.md`.
 - 2026-06-07: Added compact member chips beside the selected Famailink Share group name on the conversations screen. See `docs/change-summary.md`.

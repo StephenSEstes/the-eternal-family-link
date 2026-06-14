@@ -919,16 +919,16 @@ export function ConversationsClient({
                 {sortedConversations.map((conversation) => (
                   <div
                     key={conversation.conversationId}
-                    className="conversation-list-item"
+                    className="conversation-list-item conversation-thread-row"
                     role="button"
                     tabIndex={0}
                     onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
                     onKeyDown={(event) => handleRowKeyDown(event, () => openConversation(conversation.circleId, conversation.conversationId))}
                   >
-                    <span className="conversation-list-main">
+                    <span className="conversation-list-main conversation-thread-summary">
                       <strong>{normalize(conversation.previewText) || conversation.title}</strong>
-                      <small>{conversation.title}</small>
-                      <small>Last comment {formatDate(conversation.lastActivityAt)}</small>
+                      <small>{formatDate(conversation.previewCreatedAt || conversation.lastActivityAt)}</small>
+                      <small className="conversation-thread-name">{conversation.title}</small>
                     </span>
                     <span className="conversation-list-actions">
                       {unreadBadge(conversation.unreadCount)}
