@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-06-14: Updated Famailink Share thread bubbles so messages/comments from the signed-in user align right and other people's messages align left. See `docs/change-summary.md`.
 - 2026-06-14: Moved the Famailink Share thread composer below previous comments/posts, simplified media attach to a `+` button, and added author-only post/comment delete controls. See `docs/change-summary.md`.
 - 2026-06-14: Condensed Famailink Share thread rows to one line with activity preview, timestamp, and right-aligned thread name. See `docs/change-summary.md`.
 - 2026-06-14: Updated Famailink Share thread rows so the full row opens the thread and rows show an unread/latest activity preview with topic and last-activity date in fine print. See `docs/change-summary.md`.

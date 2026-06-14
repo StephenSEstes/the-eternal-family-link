@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-14 (Famailink Share message side alignment)
+
+- `Date`: 2026-06-14
+- `Change`: Updated Famailink Share thread alignment so each message/comment uses its own author: signed-in user's messages align right and other people's messages align left.
+- `Type`: UI
+- `Why`: Root cause was a CSS layout issue. Comment groups were positioned by the parent post side, so replies could inherit the original post's side instead of aligning by the reply author.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`
+- `Data Changes`: None.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Restore `.conversation-comments` to a narrow side-aligned container and re-add the `.conversation-post.is-mine .conversation-comments` rule.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-14 (Famailink Share bottom composer and delete controls)
 
 - `Date`: 2026-06-14

@@ -2475,13 +2475,10 @@ textarea {
 }
 
 .conversation-comments {
-  width: min(560px, 82%);
+  width: 100%;
   display: grid;
   gap: 6px;
-}
-
-.conversation-post.is-mine .conversation-comments {
-  justify-self: end;
+  justify-self: stretch;
 }
 
 .conversation-comment-row {
