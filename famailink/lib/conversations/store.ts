@@ -58,6 +58,8 @@ export type CircleConversation = {
   lastActivityAt: string;
   unreadCount: number;
   memberLastReadAt: string;
+  previewText: string;
+  previewCreatedAt: string;
 };
 
 export type ConversationComment = {
@@ -360,6 +362,8 @@ function mapConversation(row: Record<string, unknown>): CircleConversation {
     lastActivityAt: getCell(row, "LAST_ACTIVITY_AT") || getCell(row, "UPDATED_AT") || getCell(row, "CREATED_AT"),
     unreadCount: getNumber(row, "UNREAD_COUNT"),
     memberLastReadAt: getCell(row, "MEMBER_LAST_READ_AT"),
+    previewText: getCell(row, "PREVIEW_TEXT"),
+    previewCreatedAt: getCell(row, "PREVIEW_CREATED_AT"),
   };
 }
 
@@ -908,6 +912,121 @@ export async function listCircleConversations(input: {
                OR TRIM(sc.created_at) > TRIM(cm.last_read_at)
              )
          ) AS unread_count
+         ,
+         COALESCE(
+           (
+             SELECT activity_text
+             FROM (
+               SELECT
+                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 p.created_at AS activity_created_at,
+                 0 AS activity_order
+               FROM share_posts p
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+               UNION ALL
+               SELECT
+                 DBMS_LOB.SUBSTR(sc.comment_text, 220, 1) AS activity_text,
+                 sc.created_at AS activity_created_at,
+                 1 AS activity_order
+               FROM share_post_comments sc
+               INNER JOIN share_posts p
+                 ON TRIM(p.post_id) = TRIM(sc.post_id)
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
+             ) activity
+             WHERE NULLIF(TRIM(activity_text), '') IS NOT NULL
+               AND (
+                 NULLIF(TRIM(cm.last_read_at), '') IS NULL
+                 OR TRIM(activity_created_at) > TRIM(cm.last_read_at)
+               )
+             ORDER BY activity_created_at ASC, activity_order ASC
+             FETCH FIRST 1 ROWS ONLY
+           ),
+           (
+             SELECT activity_text
+             FROM (
+               SELECT
+                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 p.created_at AS activity_created_at,
+                 0 AS activity_order
+               FROM share_posts p
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+               UNION ALL
+               SELECT
+                 DBMS_LOB.SUBSTR(sc.comment_text, 220, 1) AS activity_text,
+                 sc.created_at AS activity_created_at,
+                 1 AS activity_order
+               FROM share_post_comments sc
+               INNER JOIN share_posts p
+                 ON TRIM(p.post_id) = TRIM(sc.post_id)
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
+             ) activity
+             WHERE NULLIF(TRIM(activity_text), '') IS NOT NULL
+             ORDER BY activity_created_at DESC, activity_order DESC
+             FETCH FIRST 1 ROWS ONLY
+           ),
+           ''
+         ) AS preview_text,
+         COALESCE(
+           (
+             SELECT activity_created_at
+             FROM (
+               SELECT
+                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 p.created_at AS activity_created_at,
+                 0 AS activity_order
+               FROM share_posts p
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+               UNION ALL
+               SELECT
+                 DBMS_LOB.SUBSTR(sc.comment_text, 220, 1) AS activity_text,
+                 sc.created_at AS activity_created_at,
+                 1 AS activity_order
+               FROM share_post_comments sc
+               INNER JOIN share_posts p
+                 ON TRIM(p.post_id) = TRIM(sc.post_id)
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
+             ) activity
+             WHERE NULLIF(TRIM(activity_text), '') IS NOT NULL
+               AND (
+                 NULLIF(TRIM(cm.last_read_at), '') IS NULL
+                 OR TRIM(activity_created_at) > TRIM(cm.last_read_at)
+               )
+             ORDER BY activity_created_at ASC, activity_order ASC
+             FETCH FIRST 1 ROWS ONLY
+           ),
+           (
+             SELECT activity_created_at
+             FROM (
+               SELECT
+                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 p.created_at AS activity_created_at,
+                 0 AS activity_order
+               FROM share_posts p
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+               UNION ALL
+               SELECT
+                 DBMS_LOB.SUBSTR(sc.comment_text, 220, 1) AS activity_text,
+                 sc.created_at AS activity_created_at,
+                 1 AS activity_order
+               FROM share_post_comments sc
+               INNER JOIN share_posts p
+                 ON TRIM(p.post_id) = TRIM(sc.post_id)
+               WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+                 AND LOWER(TRIM(NVL(sc.comment_status, 'active'))) <> 'deleted'
+             ) activity
+             WHERE NULLIF(TRIM(activity_text), '') IS NOT NULL
+             ORDER BY activity_created_at DESC, activity_order DESC
+             FETCH FIRST 1 ROWS ONLY
+           ),
+           ''
+         ) AS preview_created_at
        FROM share_conversation_members cm
        INNER JOIN share_conversations c
          ON TRIM(c.conversation_id) = TRIM(cm.conversation_id)

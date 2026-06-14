@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { FamailinkChrome } from "@/components/FamailinkChrome";
 import { PushNotificationsControl } from "@/components/PushNotificationsControl";
 
@@ -24,6 +24,8 @@ type CircleConversation = {
   lastActivityAt: string;
   unreadCount: number;
   memberLastReadAt?: string;
+  previewText: string;
+  previewCreatedAt: string;
 };
 type ConversationPostMedia = {
   mediaId: string;
@@ -195,6 +197,12 @@ function attachmentSummary(media: ConversationPostMedia) {
   const kind = normalize(media.mediaKind) || "file";
   const size = formatFileSize(media.fileSizeBytes);
   return [kind.charAt(0).toUpperCase() + kind.slice(1), size].filter(Boolean).join(" • ");
+}
+
+function handleRowKeyDown(event: KeyboardEvent, action: () => void) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  action();
 }
 
 export function ConversationsClient({
@@ -848,18 +856,25 @@ export function ConversationsClient({
                 <div
                   key={circle.circleId}
                   className="conversation-list-item"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openCircle(circle.circleId)}
+                  onKeyDown={(event) => handleRowKeyDown(event, () => openCircle(circle.circleId))}
                 >
-                  <button type="button" className="conversation-list-main conversation-list-open" onClick={() => openCircle(circle.circleId)}>
+                  <span className="conversation-list-main">
                     <strong>{circle.title}</strong>
                     <small>{memberNames(circle.members)}</small>
                     <small>{formatDate(circle.lastActivityAt)}</small>
-                  </button>
+                  </span>
                   <span className="conversation-list-actions">
                     {unreadBadge(circle.unreadCount)}
                     <button
                       className="secondary-button conversation-inline-action"
                       type="button"
-                      onClick={() => setManagementDialog({ kind: "group-name", circle, value: circle.title })}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setManagementDialog({ kind: "group-name", circle, value: circle.title });
+                      }}
                     >
                       Edit
                     </button>
@@ -905,24 +920,35 @@ export function ConversationsClient({
                   <div
                     key={conversation.conversationId}
                     className="conversation-list-item"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
+                    onKeyDown={(event) => handleRowKeyDown(event, () => openConversation(conversation.circleId, conversation.conversationId))}
                   >
-                    <button type="button" className="conversation-list-main conversation-list-open" onClick={() => openConversation(conversation.circleId, conversation.conversationId)}>
-                      <strong>{conversation.title}</strong>
-                      <small>{formatDate(conversation.lastActivityAt)}</small>
-                    </button>
+                    <span className="conversation-list-main">
+                      <strong>{normalize(conversation.previewText) || conversation.title}</strong>
+                      <small>{conversation.title}</small>
+                      <small>Last comment {formatDate(conversation.lastActivityAt)}</small>
+                    </span>
                     <span className="conversation-list-actions">
                       {unreadBadge(conversation.unreadCount)}
                       <button
                         className="secondary-button conversation-inline-action"
                         type="button"
-                        onClick={() => setManagementDialog({ kind: "conversation-name", conversation, value: conversation.title })}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setManagementDialog({ kind: "conversation-name", conversation, value: conversation.title });
+                        }}
                       >
                         Edit
                       </button>
                       <button
                         className="danger-button conversation-inline-action"
                         type="button"
-                        onClick={() => setManagementDialog({ kind: "delete-conversation", conversation })}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setManagementDialog({ kind: "delete-conversation", conversation });
+                        }}
                       >
                         Delete
                       </button>

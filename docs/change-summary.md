@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-14 (Famailink Share thread row previews)
+
+- `Date`: 2026-06-14
+- `Change`: Updated Famailink Share thread rows so clicking anywhere in the row opens the thread except for Edit/Delete actions, and each row previews the oldest unread activity or latest activity when read. The topic name and last comment/activity date now display in fine print under the preview.
+- `Type`: UI | API
+- `Why`: Root cause was a code/API/UI gap. The list row click target was limited to the inner text control after management actions were added, and `listCircleConversations` did not return enough activity context for the client to show an unread or latest-message preview. The fix keeps existing read-state semantics and adds server-selected preview fields to the conversation list payload.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`
+- `Data Changes`: No schema change and no data repair. The conversation list query now reads existing `share_posts.caption_text` and `share_post_comments.comment_text` rows to compute preview fields.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the preview fields from `CircleConversation`/`listCircleConversations`, restore the conversation list row to title/date-only rendering, and return row opening to the inner text control.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-14 (Famailink Share group/thread management)
 
 - `Date`: 2026-06-14
