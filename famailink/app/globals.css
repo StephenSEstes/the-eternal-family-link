@@ -2167,6 +2167,31 @@ textarea {
   text-align: left;
 }
 
+.conversation-list-open {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.conversation-list-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
+}
+
+.conversation-inline-action {
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
 .conversation-list-item.is-active {
   border-color: color-mix(in oklab, var(--accent) 60%, #fff 40%);
   background: color-mix(in oklab, var(--accent-soft) 46%, #fff 54%);
@@ -2499,6 +2524,13 @@ textarea {
 .conversation-modal-section {
   display: grid;
   gap: 10px;
+}
+
+.conversation-delete-copy {
+  margin: 0;
+  color: var(--text);
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .conversation-relationship-toolbar {

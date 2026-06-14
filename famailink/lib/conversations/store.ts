@@ -806,7 +806,7 @@ export async function deleteConversationCircle(input: {
   });
 }
 
-export async function updateConversationCircleMemberName(input: {
+export async function updateConversationCircleName(input: {
   actor: SessionActor;
   circleId: string;
   title: string;
@@ -823,15 +823,41 @@ export async function updateConversationCircleMemberName(input: {
     const circle = await getConversationCircleForPerson(circleId, actorPersonId);
     if (!circle) throw new Error("group_not_found_or_not_member");
 
-    await connection.execute(
-      `UPDATE share_thread_members
-       SET group_display_name = :title
-       WHERE TRIM(thread_id) = :circleId
-         AND TRIM(person_id) = :personId
-         AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'`,
-      { title, circleId: circle.circleId, personId: actorPersonId },
-      { autoCommit: true },
-    );
+    const updatedAt = nowIso();
+    try {
+      await connection.execute(
+        `UPDATE share_threads
+         SET audience_label = :title,
+             updated_at = :updatedAt
+         WHERE TRIM(thread_id) = :circleId
+           AND TRIM(family_group_key) = :familyGroupKey
+           AND LOWER(TRIM(NVL(thread_status, 'active'))) <> 'archived'`,
+        { title, updatedAt, circleId: circle.circleId, familyGroupKey: FAMAILINK_SHARE_KEY },
+        { autoCommit: false },
+      );
+      await connection.execute(
+        `UPDATE share_thread_members
+         SET group_display_name = :title
+         WHERE TRIM(thread_id) = :circleId
+           AND LOWER(TRIM(NVL(is_active, 'TRUE'))) <> 'false'
+           AND (
+             NULLIF(TRIM(group_display_name), '') IS NULL
+             OR TRIM(group_display_name) = :defaultTitle
+             OR TRIM(group_display_name) = :currentTitle
+           )`,
+        {
+          title,
+          circleId: circle.circleId,
+          defaultTitle: circle.defaultTitle,
+          currentTitle: circle.title,
+        },
+        { autoCommit: false },
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    }
 
     const updated = await getConversationCircleForPerson(circle.circleId, actorPersonId);
     if (!updated) throw new Error("updated_group_not_found");
@@ -1221,6 +1247,93 @@ export async function createCircleConversation(input: {
     const created = conversations.find((conversation) => conversation.conversationId === conversationId);
     if (!created) throw new Error("created_conversation_not_found");
     return created;
+  });
+}
+
+export async function updateCircleConversation(input: {
+  actor: SessionActor;
+  circleId: string;
+  conversationId: string;
+  title: string;
+}): Promise<CircleConversation> {
+  const actorPersonId = normalize(input.actor.personId);
+  const title = normalize(input.title);
+  if (!actorPersonId || !normalize(input.circleId) || !normalize(input.conversationId)) {
+    throw new Error("conversation_not_found");
+  }
+  if (!title) throw new Error("conversation_title_required");
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const conversation = await getConversationForPerson(connection, {
+      circleId: input.circleId,
+      conversationId: input.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversation) throw new Error("conversation_not_found_or_not_member");
+
+    const updatedAt = nowIso();
+    await connection.execute(
+      `UPDATE share_conversations
+       SET title = :title,
+           updated_at = :updatedAt
+       WHERE TRIM(conversation_id) = :conversationId
+         AND TRIM(thread_id) = :circleId
+         AND LOWER(TRIM(NVL(conversation_status, 'active'))) <> 'archived'`,
+      {
+        title,
+        updatedAt,
+        conversationId: conversation.conversationId,
+        circleId: conversation.circleId,
+      },
+      { autoCommit: true },
+    );
+
+    const conversations = await listCircleConversations({ circleId: conversation.circleId, personId: actorPersonId });
+    const updated = conversations.find((entry) => entry.conversationId === conversation.conversationId);
+    if (!updated) throw new Error("updated_conversation_not_found");
+    return updated;
+  });
+}
+
+export async function deleteCircleConversation(input: {
+  actor: SessionActor;
+  circleId: string;
+  conversationId: string;
+}) {
+  const actorPersonId = normalize(input.actor.personId);
+  if (!actorPersonId || !normalize(input.circleId) || !normalize(input.conversationId)) {
+    throw new Error("conversation_not_found");
+  }
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const conversation = await getConversationForPerson(connection, {
+      circleId: input.circleId,
+      conversationId: input.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversation) throw new Error("conversation_not_found_or_not_member");
+
+    const archivedAt = nowIso();
+    await connection.execute(
+      `UPDATE share_conversations
+       SET conversation_status = 'archived',
+           updated_at = :updatedAt,
+           last_activity_at = COALESCE(NULLIF(TRIM(last_activity_at), ''), :updatedAt)
+       WHERE TRIM(conversation_id) = :conversationId
+         AND TRIM(thread_id) = :circleId
+         AND LOWER(TRIM(NVL(conversation_status, 'active'))) <> 'archived'`,
+      {
+        updatedAt: archivedAt,
+        conversationId: conversation.conversationId,
+        circleId: conversation.circleId,
+      },
+      { autoCommit: true },
+    );
+    return true;
   });
 }
 

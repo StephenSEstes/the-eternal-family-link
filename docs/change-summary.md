@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-14 (Famailink Share group/thread management)
+
+- `Date`: 2026-06-14
+- `Change`: Added Famailink Share controls to rename Groups, rename threads, and delete/archive threads from the active thread list.
+- `Type`: UI | API
+- `Why`: Root cause was a code/API/UI gap. The existing Share data model already stored mutable Group labels on `share_threads` and thread titles/status on `share_conversations`, and active reads already filtered archived conversations. However, the client exposed no management controls, the Group PATCH path only updated the current member display name, and there was no individual thread PATCH/DELETE route. The fix updates the canonical Group label plus default member display names, adds member-gated conversation rename/archive mutations, and exposes those actions in the existing single-level Share UI.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/conversations/circles/[circleId]/route.ts`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/route.ts`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`
+- `Data Changes`: No schema change and no data repair. New writes update existing `share_threads.audience_label`, default `share_thread_members.group_display_name` values, `share_conversations.title`, and archive deleted threads by setting `share_conversations.conversation_status = 'archived'`.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the conversation item route, restore Group PATCH to its previous member-display-name-only behavior, and remove the Share management dialogs/actions from `ConversationsClient`.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-07 (Famailink group member chips on conversations screen)
 
 - `Date`: 2026-06-07

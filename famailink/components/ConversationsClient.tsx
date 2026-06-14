@@ -67,6 +67,10 @@ type PendingAttachment = {
   origin: "camera" | "files";
   previewUrl: string;
 };
+type ManagementDialog =
+  | { kind: "group-name"; circle: ConversationCircle; value: string }
+  | { kind: "conversation-name"; conversation: CircleConversation; value: string }
+  | { kind: "delete-conversation"; conversation: CircleConversation };
 type MemberColor = {
   chipBg: string;
   chipBorder: string;
@@ -223,6 +227,7 @@ export function ConversationsClient({
   const [composerDescription, setComposerDescription] = useState("");
   const [composerAdvancedOpen, setComposerAdvancedOpen] = useState(false);
   const [composerSideFilter, setComposerSideFilter] = useState<FamilySideFilter>("both");
+  const [managementDialog, setManagementDialog] = useState<ManagementDialog | null>(null);
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingUnreadJumpConversationIdRef = useRef("");
   const filePickerRef = useRef<HTMLInputElement | null>(null);
@@ -658,6 +663,86 @@ export function ConversationsClient({
     }
   }
 
+  async function saveGroupName() {
+    if (!managementDialog || managementDialog.kind !== "group-name") return;
+    const title = normalize(managementDialog.value);
+    if (!title) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const body = await fetchJson<{ circle?: ConversationCircle }>(`/api/conversations/circles/${encodeURIComponent(managementDialog.circle.circleId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      if (body.circle) {
+        setCircles((current) => current.map((circle) => circle.circleId === body.circle?.circleId ? body.circle : circle));
+      } else {
+        setCircles(await loadCircles());
+      }
+      setManagementDialog(null);
+      setStatus({ tone: "info", message: "Group name updated." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to update group name." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveConversationName() {
+    if (!managementDialog || managementDialog.kind !== "conversation-name") return;
+    const title = normalize(managementDialog.value);
+    if (!title) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const body = await fetchJson<{ conversation?: CircleConversation }>(
+        `/api/conversations/circles/${encodeURIComponent(managementDialog.conversation.circleId)}/conversations/${encodeURIComponent(managementDialog.conversation.conversationId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ title }),
+        },
+      );
+      if (body.conversation) {
+        setConversations((current) => current.map((conversation) => conversation.conversationId === body.conversation?.conversationId ? body.conversation : conversation));
+      } else if (selectedCircleId) {
+        setConversations(await loadCircleConversations(selectedCircleId));
+      }
+      setManagementDialog(null);
+      setStatus({ tone: "info", message: "Thread name updated." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to update thread name." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteConversation() {
+    if (!managementDialog || managementDialog.kind !== "delete-conversation") return;
+    const { conversation } = managementDialog;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await fetchJson<{ ok?: boolean }>(
+        `/api/conversations/circles/${encodeURIComponent(conversation.circleId)}/conversations/${encodeURIComponent(conversation.conversationId)}`,
+        { method: "DELETE", body: "{}" },
+      );
+      const nextConversations = await loadCircleConversations(conversation.circleId);
+      setConversations(nextConversations);
+      const nextCircles = await loadCircles();
+      setCircles(nextCircles);
+      if (selectedConversationId === conversation.conversationId) {
+        applySelection(conversation.circleId, "", { preserveConversations: true });
+        writeShareUrl(conversation.circleId, "", "replace");
+      }
+      setManagementDialog(null);
+      setStatus({ tone: "info", message: "Thread deleted." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to delete thread." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="shell">
       <FamailinkChrome active="conversations" username={session.username} personId={session.personId} />
@@ -715,9 +800,38 @@ export function ConversationsClient({
                 </button>
               ) : null}
               {currentView === "conversations" ? (
-                <button className="secondary-button" type="button" onClick={() => setNewTopicOpen((current) => !current)}>
-                  {newTopicOpen ? "Close Topic" : "New Topic"}
-                </button>
+                <>
+                  {selectedCircle ? (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setManagementDialog({ kind: "group-name", circle: selectedCircle, value: selectedCircle.title })}
+                    >
+                      Edit Group
+                    </button>
+                  ) : null}
+                  <button className="secondary-button" type="button" onClick={() => setNewTopicOpen((current) => !current)}>
+                    {newTopicOpen ? "Close Topic" : "New Topic"}
+                  </button>
+                </>
+              ) : null}
+              {currentView === "thread" && selectedConversation ? (
+                <>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setManagementDialog({ kind: "conversation-name", conversation: selectedConversation, value: selectedConversation.title })}
+                  >
+                    Edit Thread
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => setManagementDialog({ kind: "delete-conversation", conversation: selectedConversation })}
+                  >
+                    Delete Thread
+                  </button>
+                </>
               ) : null}
             </div>
           </div>
@@ -731,19 +845,26 @@ export function ConversationsClient({
               <PushNotificationsControl />
               {sortedCircles.length === 0 ? <p className="empty-state">No Groups yet. Use Add Group to create one.</p> : null}
               {sortedCircles.map((circle) => (
-                <button
+                <div
                   key={circle.circleId}
-                  type="button"
                   className="conversation-list-item"
-                  onClick={() => openCircle(circle.circleId)}
                 >
-                  <span className="conversation-list-main">
+                  <button type="button" className="conversation-list-main conversation-list-open" onClick={() => openCircle(circle.circleId)}>
                     <strong>{circle.title}</strong>
                     <small>{memberNames(circle.members)}</small>
                     <small>{formatDate(circle.lastActivityAt)}</small>
+                  </button>
+                  <span className="conversation-list-actions">
+                    {unreadBadge(circle.unreadCount)}
+                    <button
+                      className="secondary-button conversation-inline-action"
+                      type="button"
+                      onClick={() => setManagementDialog({ kind: "group-name", circle, value: circle.title })}
+                    >
+                      Edit
+                    </button>
                   </span>
-                  {unreadBadge(circle.unreadCount)}
-                </button>
+                </div>
               ))}
             </div>
           ) : null}
@@ -781,18 +902,32 @@ export function ConversationsClient({
               <div className="conversation-list" aria-label="Named conversations">
                 {selectedCircle && conversations.length === 0 ? <p className="empty-state">No named conversations yet. Use New Topic to start one.</p> : null}
                 {sortedConversations.map((conversation) => (
-                  <button
+                  <div
                     key={conversation.conversationId}
-                    type="button"
                     className="conversation-list-item"
-                    onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
                   >
-                    <span className="conversation-list-main">
+                    <button type="button" className="conversation-list-main conversation-list-open" onClick={() => openConversation(conversation.circleId, conversation.conversationId)}>
                       <strong>{conversation.title}</strong>
                       <small>{formatDate(conversation.lastActivityAt)}</small>
+                    </button>
+                    <span className="conversation-list-actions">
+                      {unreadBadge(conversation.unreadCount)}
+                      <button
+                        className="secondary-button conversation-inline-action"
+                        type="button"
+                        onClick={() => setManagementDialog({ kind: "conversation-name", conversation, value: conversation.title })}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="danger-button conversation-inline-action"
+                        type="button"
+                        onClick={() => setManagementDialog({ kind: "delete-conversation", conversation })}
+                      >
+                        Delete
+                      </button>
                     </span>
-                    {unreadBadge(conversation.unreadCount)}
-                  </button>
+                  </div>
                 ))}
               </div>
             </>
@@ -1110,6 +1245,67 @@ export function ConversationsClient({
               <button className="primary-button" type="button" disabled={busy || !canCreateGroup} onClick={() => void createGroupFromComposer()}>
                 Add Group
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {managementDialog ? (
+        <div className="conversation-modal-backdrop" role="presentation">
+          <div className="conversation-modal" role="dialog" aria-modal="true" aria-label="Manage Share item">
+            <div className="conversation-modal-head">
+              <div>
+                <h2>
+                  {managementDialog.kind === "group-name"
+                    ? "Edit Group"
+                    : managementDialog.kind === "conversation-name"
+                      ? "Edit Thread"
+                      : "Delete Thread"}
+                </h2>
+                <p className="conversation-meta">
+                  {managementDialog.kind === "delete-conversation"
+                    ? "This removes the thread from the active list and preserves its history."
+                    : "Change the name shown in Share."}
+                </p>
+              </div>
+              <button type="button" className="account-close" aria-label="Close management modal" onClick={() => setManagementDialog(null)}>
+                x
+              </button>
+            </div>
+
+            {managementDialog.kind === "group-name" || managementDialog.kind === "conversation-name" ? (
+              <label className="field">
+                <span className="field-label">{managementDialog.kind === "group-name" ? "Group name" : "Thread name"}</span>
+                <input
+                  className="input"
+                  value={managementDialog.value}
+                  onChange={(event) => setManagementDialog({ ...managementDialog, value: event.target.value })}
+                  autoFocus
+                />
+              </label>
+            ) : (
+              <p className="conversation-delete-copy">
+                Delete &quot;{managementDialog.conversation.title}&quot;?
+              </p>
+            )}
+
+            <div className="conversation-modal-actions">
+              <button className="secondary-button" type="button" disabled={busy} onClick={() => setManagementDialog(null)}>
+                Cancel
+              </button>
+              {managementDialog.kind === "group-name" ? (
+                <button className="primary-button" type="button" disabled={busy || !normalize(managementDialog.value)} onClick={() => void saveGroupName()}>
+                  Save
+                </button>
+              ) : managementDialog.kind === "conversation-name" ? (
+                <button className="primary-button" type="button" disabled={busy || !normalize(managementDialog.value)} onClick={() => void saveConversationName()}>
+                  Save
+                </button>
+              ) : (
+                <button className="danger-button" type="button" disabled={busy} onClick={() => void deleteConversation()}>
+                  Delete Thread
+                </button>
+              )}
             </div>
           </div>
         </div>

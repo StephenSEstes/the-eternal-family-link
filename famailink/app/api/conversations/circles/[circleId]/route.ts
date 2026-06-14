@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRouteSession } from "@/lib/auth/guards";
-import { deleteConversationCircle, getConversationCircleForPerson, updateConversationCircleMemberName } from "@/lib/conversations/store";
+import { deleteConversationCircle, getConversationCircleForPerson, updateConversationCircleName } from "@/lib/conversations/store";
 import { actorFromSession, isRecord, jsonError, normalize } from "@/lib/conversations/route-helpers";
 
 type RouteContext = {
@@ -48,7 +48,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const circle = await updateConversationCircleMemberName({
+    const circle = await updateConversationCircleName({
       actor: actorFromSession(session),
       circleId,
       title: normalize(payload.title),
