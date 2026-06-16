@@ -26,6 +26,11 @@ type CircleConversation = {
   memberLastReadAt?: string;
   previewText: string;
   previewCreatedAt: string;
+  previewMediaKind: string;
+  previewThumbnailObjectKey: string;
+  previewOriginalObjectKey: string;
+  previewImageUrl: string;
+  previewOriginalUrl: string;
 };
 type ConversationPostMedia = {
   mediaId: string;
@@ -197,6 +202,13 @@ function attachmentSummary(media: ConversationPostMedia) {
   const kind = normalize(media.mediaKind) || "file";
   const size = formatFileSize(media.fileSizeBytes);
   return [kind.charAt(0).toUpperCase() + kind.slice(1), size].filter(Boolean).join(" • ");
+}
+
+function mediaKindLabel(media: ConversationPostMedia) {
+  const kind = normalize(media.mediaKind).toLowerCase();
+  if (kind === "video") return "Video";
+  if (kind === "image") return "Image";
+  return "File";
 }
 
 function handleRowKeyDown(event: KeyboardEvent, action: () => void) {
@@ -953,45 +965,58 @@ export function ConversationsClient({
 
               <div className="conversation-list" aria-label="Named conversations">
                 {selectedCircle && conversations.length === 0 ? <p className="empty-state">No named conversations yet. Use New Topic to start one.</p> : null}
-                {sortedConversations.map((conversation) => (
-                  <div
-                    key={conversation.conversationId}
-                    className="conversation-list-item conversation-thread-row"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
-                    onKeyDown={(event) => handleRowKeyDown(event, () => openConversation(conversation.circleId, conversation.conversationId))}
-                  >
-                    <span className="conversation-list-main conversation-thread-summary">
-                      <strong>{normalize(conversation.previewText) || conversation.title}</strong>
-                      <small>{formatDate(conversation.previewCreatedAt || conversation.lastActivityAt)}</small>
-                      <small className="conversation-thread-name">{conversation.title}</small>
-                    </span>
-                    <span className="conversation-list-actions">
-                      {unreadBadge(conversation.unreadCount)}
-                      <button
-                        className="secondary-button conversation-inline-action"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setManagementDialog({ kind: "conversation-name", conversation, value: conversation.title });
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="danger-button conversation-inline-action"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setManagementDialog({ kind: "delete-conversation", conversation });
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </span>
-                  </div>
-                ))}
+                {sortedConversations.map((conversation) => {
+                  const previewText = normalize(conversation.previewText);
+                  const previewImageUrl = normalize(conversation.previewImageUrl);
+                  return (
+                    <div
+                      key={conversation.conversationId}
+                      className="conversation-list-item conversation-thread-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openConversation(conversation.circleId, conversation.conversationId)}
+                      onKeyDown={(event) => handleRowKeyDown(event, () => openConversation(conversation.circleId, conversation.conversationId))}
+                    >
+                      <span className={`conversation-list-main conversation-thread-summary${previewImageUrl ? " has-thumbnail" : ""}`}>
+                        {previewImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewImageUrl}
+                            alt=""
+                            aria-hidden="true"
+                            className="conversation-thread-thumbnail"
+                          />
+                        ) : null}
+                        <strong>{previewText || (previewImageUrl ? "" : conversation.title)}</strong>
+                        <small>{formatDate(conversation.previewCreatedAt || conversation.lastActivityAt)}</small>
+                        <small className="conversation-thread-name">{conversation.title}</small>
+                      </span>
+                      <span className="conversation-list-actions">
+                        {unreadBadge(conversation.unreadCount)}
+                        <button
+                          className="secondary-button conversation-inline-action"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setManagementDialog({ kind: "conversation-name", conversation, value: conversation.title });
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="danger-button conversation-inline-action"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setManagementDialog({ kind: "delete-conversation", conversation });
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </>
           ) : null}
@@ -1021,7 +1046,7 @@ export function ConversationsClient({
               />
               <div className="conversation-compose">
                 {pendingAttachment ? (
-                  <div className="conversation-pending-attachment">
+                  <div className={`conversation-pending-attachment${isImageMimeType(pendingAttachment.file.type) ? " is-image-only" : ""}`}>
                     {pendingAttachment.previewUrl && isImageMimeType(pendingAttachment.file.type) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -1042,13 +1067,15 @@ export function ConversationsClient({
                         {pendingAttachment.file.type.startsWith("video/") ? "VID" : "DOC"}
                       </div>
                     )}
-                    <div className="conversation-pending-copy">
-                      <strong>{pendingAttachment.file.name || "Selected file"}</strong>
-                      <small>
-                        {pendingAttachment.origin === "camera" ? "Captured from camera" : "Selected from files"}
-                        {pendingAttachment.file.size ? ` • ${formatFileSize(String(pendingAttachment.file.size))}` : ""}
-                      </small>
-                    </div>
+                    {!isImageMimeType(pendingAttachment.file.type) ? (
+                      <div className="conversation-pending-copy">
+                        <strong>{pendingAttachment.file.type.startsWith("video/") ? "Video" : "File"}</strong>
+                        <small>
+                          {pendingAttachment.origin === "camera" ? "Captured from camera" : "Selected from files"}
+                          {pendingAttachment.file.size ? ` • ${formatFileSize(String(pendingAttachment.file.size))}` : ""}
+                        </small>
+                      </div>
+                    ) : null}
                     <button className="secondary-button" type="button" onClick={() => replacePendingAttachment(null)}>
                       Remove
                     </button>
@@ -1114,7 +1141,7 @@ export function ConversationsClient({
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={post.media.previewUrl}
-                                  alt={post.media.label || post.media.fileName || "Shared image"}
+                                  alt="Shared image"
                                   className="conversation-media-image"
                                 />
                               </a>
@@ -1139,7 +1166,7 @@ export function ConversationsClient({
                                     {post.media.mediaKind === "video" ? "VID" : "DOC"}
                                   </div>
                                   <div className="conversation-media-copy">
-                                    <strong>{post.media.label || post.media.fileName || "Attachment"}</strong>
+                                    <strong>{mediaKindLabel(post.media)}</strong>
                                     <small>{attachmentSummary(post.media)}</small>
                                   </div>
                                 </a>
@@ -1149,15 +1176,15 @@ export function ConversationsClient({
                                     {post.media.mediaKind === "video" ? "VID" : "DOC"}
                                   </div>
                                   <div className="conversation-media-copy">
-                                    <strong>{post.media.label || post.media.fileName || "Attachment"}</strong>
+                                    <strong>{mediaKindLabel(post.media)}</strong>
                                     <small>{attachmentSummary(post.media)}</small>
                                   </div>
                                 </div>
                               )
                             )}
-                            {post.media.mediaKind === "image" || post.media.mediaKind === "video" ? (
+                            {post.media.mediaKind === "video" ? (
                               <div className="conversation-media-copy">
-                                <strong>{post.media.label || post.media.fileName || (post.media.mediaKind === "video" ? "Shared video" : "Shared image")}</strong>
+                                <strong>Video</strong>
                                 <small>{attachmentSummary(post.media)}</small>
                               </div>
                             ) : null}

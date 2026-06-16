@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-15 (Famailink Share image thumbnails)
+
+- `Date`: 2026-06-15
+- `Change`: Confirmed Famailink Share image uploads store both full-resolution original OCI objects and generated thumbnail OCI objects, removed visible image file-name/attachment copy from image posts, and added image thumbnails to the Share thread list row.
+- `Type`: UI | API
+- `Why`: Root cause was a read/display gap, not a storage gap. The upload route already writes the original object, generates an image thumbnail, stores both object keys on `MediaAssets`, and links the `share_posts.file_id`. The thread list query only returned text/date preview fields and used an `Attachment` text fallback, while the thread UI displayed media labels/file names below images.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`
+- `Data Changes`: No schema change and no data repair. Existing image uploads already persist `MediaAssets.original_object_key` and `MediaAssets.thumbnail_object_key`; the conversation list now reads those existing fields for image thumbnails.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the preview media fields from `CircleConversation`/`listCircleConversations`, restore the `Attachment` fallback in list previews, and restore media copy blocks below image posts.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-14 (Famailink Share message side alignment)
 
 - `Date`: 2026-06-14

@@ -60,6 +60,11 @@ export type CircleConversation = {
   memberLastReadAt: string;
   previewText: string;
   previewCreatedAt: string;
+  previewMediaKind: string;
+  previewThumbnailObjectKey: string;
+  previewOriginalObjectKey: string;
+  previewImageUrl: string;
+  previewOriginalUrl: string;
 };
 
 export type ConversationComment = {
@@ -349,7 +354,9 @@ function mapCircle(row: Record<string, unknown>): ConversationCircle {
   };
 }
 
-function mapConversation(row: Record<string, unknown>): CircleConversation {
+function mapConversation(row: Record<string, unknown>, directObjectUrlFactory?: DirectObjectUrlFactory | null): CircleConversation {
+  const previewThumbnailObjectKey = getCell(row, "PREVIEW_THUMBNAIL_OBJECT_KEY");
+  const previewOriginalObjectKey = getCell(row, "PREVIEW_ORIGINAL_OBJECT_KEY");
   return {
     conversationId: getCell(row, "CONVERSATION_ID"),
     circleId: getCell(row, "THREAD_ID"),
@@ -364,6 +371,11 @@ function mapConversation(row: Record<string, unknown>): CircleConversation {
     memberLastReadAt: getCell(row, "MEMBER_LAST_READ_AT"),
     previewText: getCell(row, "PREVIEW_TEXT"),
     previewCreatedAt: getCell(row, "PREVIEW_CREATED_AT"),
+    previewMediaKind: getCell(row, "PREVIEW_MEDIA_KIND"),
+    previewThumbnailObjectKey,
+    previewOriginalObjectKey,
+    previewImageUrl: directObjectUrlFactory && previewThumbnailObjectKey ? directObjectUrlFactory(previewThumbnailObjectKey) : "",
+    previewOriginalUrl: directObjectUrlFactory && previewOriginalObjectKey ? directObjectUrlFactory(previewOriginalObjectKey) : "",
   };
 }
 
@@ -878,6 +890,7 @@ export async function listCircleConversations(input: {
   return withConnection(async (rawConnection) => {
     const connection = rawConnection as DbConnection;
     await ensureShareTables(connection);
+    const directObjectUrlFactory = await getOciDirectObjectUrlFactory().catch(() => null);
     const result = await connection.execute(
       `SELECT
          c.conversation_id,
@@ -918,7 +931,7 @@ export async function listCircleConversations(input: {
              SELECT activity_text
              FROM (
                SELECT
-                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), '') AS activity_text,
                  p.created_at AS activity_created_at,
                  0 AS activity_order
                FROM share_posts p
@@ -947,7 +960,7 @@ export async function listCircleConversations(input: {
              SELECT activity_text
              FROM (
                SELECT
-                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), '') AS activity_text,
                  p.created_at AS activity_created_at,
                  0 AS activity_order
                FROM share_posts p
@@ -975,7 +988,7 @@ export async function listCircleConversations(input: {
              SELECT activity_created_at
              FROM (
                SELECT
-                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), '') AS activity_text,
                  p.created_at AS activity_created_at,
                  0 AS activity_order
                FROM share_posts p
@@ -1004,7 +1017,7 @@ export async function listCircleConversations(input: {
              SELECT activity_created_at
              FROM (
                SELECT
-                 COALESCE(NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), ''), CASE WHEN NULLIF(TRIM(p.file_id), '') IS NOT NULL THEN 'Attachment' ELSE '' END) AS activity_text,
+                 NULLIF(TRIM(DBMS_LOB.SUBSTR(p.caption_text, 220, 1)), '') AS activity_text,
                  p.created_at AS activity_created_at,
                  0 AS activity_order
                FROM share_posts p
@@ -1026,8 +1039,101 @@ export async function listCircleConversations(input: {
              FETCH FIRST 1 ROWS ONLY
            ),
            ''
-         ) AS preview_created_at
-       FROM share_conversation_members cm
+        ) AS preview_created_at,
+        COALESCE(
+          (
+            SELECT a.media_kind
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+              AND (
+                NULLIF(TRIM(cm.last_read_at), '') IS NULL
+                OR TRIM(p.created_at) > TRIM(cm.last_read_at)
+              )
+            ORDER BY p.created_at ASC, p.post_id ASC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          (
+            SELECT a.media_kind
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+            ORDER BY p.created_at DESC, p.post_id DESC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          ''
+        ) AS preview_media_kind,
+        COALESCE(
+          (
+            SELECT a.thumbnail_object_key
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+              AND (
+                NULLIF(TRIM(cm.last_read_at), '') IS NULL
+                OR TRIM(p.created_at) > TRIM(cm.last_read_at)
+              )
+            ORDER BY p.created_at ASC, p.post_id ASC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          (
+            SELECT a.thumbnail_object_key
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+            ORDER BY p.created_at DESC, p.post_id DESC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          ''
+        ) AS preview_thumbnail_object_key,
+        COALESCE(
+          (
+            SELECT a.original_object_key
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+              AND (
+                NULLIF(TRIM(cm.last_read_at), '') IS NULL
+                OR TRIM(p.created_at) > TRIM(cm.last_read_at)
+              )
+            ORDER BY p.created_at ASC, p.post_id ASC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          (
+            SELECT a.original_object_key
+            FROM share_posts p
+            INNER JOIN media_assets a
+              ON TRIM(a.file_id) = TRIM(p.file_id)
+            WHERE TRIM(p.conversation_id) = TRIM(c.conversation_id)
+              AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+              AND LOWER(TRIM(NVL(a.media_kind, ''))) = 'image'
+              AND NULLIF(TRIM(a.thumbnail_object_key), '') IS NOT NULL
+            ORDER BY p.created_at DESC, p.post_id DESC
+            FETCH FIRST 1 ROWS ONLY
+          ),
+          ''
+        ) AS preview_original_object_key
+      FROM share_conversation_members cm
        INNER JOIN share_conversations c
          ON TRIM(c.conversation_id) = TRIM(cm.conversation_id)
        WHERE TRIM(cm.thread_id) = :circleId
@@ -1039,7 +1145,7 @@ export async function listCircleConversations(input: {
       { circleId: circle.circleId, personId: normalize(input.personId) },
       OUT_FORMAT,
     );
-    return (result.rows ?? []).map(mapConversation);
+    return (result.rows ?? []).map((row) => mapConversation(row, directObjectUrlFactory));
   });
 }
 

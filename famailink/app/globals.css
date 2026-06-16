@@ -2058,6 +2058,11 @@ textarea {
   background: rgba(255, 255, 255, 0.92);
 }
 
+.conversation-pending-attachment.is-image-only {
+  grid-template-columns: auto auto;
+  justify-content: start;
+}
+
 .conversation-pending-image {
   width: 56px;
   height: 56px;
@@ -2230,6 +2235,21 @@ textarea {
   grid-template-columns: minmax(120px, 1fr) auto minmax(90px, 0.34fr);
   gap: 10px;
   align-items: baseline;
+}
+
+.conversation-thread-summary.has-thumbnail {
+  grid-template-columns: 42px minmax(90px, 1fr) auto minmax(90px, 0.34fr);
+  align-items: center;
+}
+
+.conversation-thread-thumbnail {
+  width: 42px;
+  height: 42px;
+  display: block;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--line) 76%, #fff 24%);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .conversation-thread-name {
