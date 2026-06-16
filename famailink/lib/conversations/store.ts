@@ -118,6 +118,11 @@ export type ConversationTaggedPerson = {
   displayName: string;
 };
 
+export type ConversationPostTagUpdate = {
+  taggedPeople: ConversationTaggedPerson[];
+  media: Pick<ConversationPostMedia, "label" | "description" | "photoDate">;
+};
+
 export type PersonConversationSummary = {
   targetPersonId: string;
   conversationId: string;
@@ -1776,10 +1781,16 @@ export async function replaceConversationPostTags(input: {
   conversationId: string;
   postId: string;
   personIds: string[];
-}): Promise<ConversationTaggedPerson[]> {
+  label?: string;
+  description?: string;
+  photoDate?: string;
+}): Promise<ConversationPostTagUpdate> {
   const actorPersonId = normalize(input.actor.personId);
   const postId = normalize(input.postId);
   const requestedPersonIds = uniquePersonIds(input.personIds);
+  const label = normalize(input.label);
+  const description = normalize(input.description);
+  const photoDate = normalize(input.photoDate);
   if (!actorPersonId || !postId) throw new Error("post_not_found");
 
   return withConnection(async (rawConnection) => {
@@ -1847,6 +1858,20 @@ export async function replaceConversationPostTags(input: {
 
     const createdAt = nowIso();
     await connection.execute(
+      `UPDATE media_assets
+       SET label = :label,
+           description = :description,
+           photo_date = :photoDate
+       WHERE TRIM(file_id) = :fileId`,
+      {
+        label: label || null,
+        description: description || null,
+        photoDate: photoDate || null,
+        fileId,
+      },
+    );
+
+    await connection.execute(
       `DELETE FROM media_links
        WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
          AND TRIM(media_id) = :mediaId
@@ -1872,9 +1897,6 @@ export async function replaceConversationPostTags(input: {
              'person' AS entity_type,
              :personId AS entity_id,
              'media' AS usage_type,
-             :label AS label,
-             :description AS description,
-             :photoDate AS photo_date,
              'false' AS is_primary,
              0 AS sort_order,
              :createdAt AS created_at
@@ -1887,9 +1909,6 @@ export async function replaceConversationPostTags(input: {
            target.entity_type = source.entity_type,
            target.entity_id = source.entity_id,
            target.usage_type = source.usage_type,
-           target.label = source.label,
-           target.description = source.description,
-           target.photo_date = source.photo_date,
            target.is_primary = source.is_primary,
            target.sort_order = source.sort_order,
            target.created_at = source.created_at
@@ -1900,9 +1919,6 @@ export async function replaceConversationPostTags(input: {
            entity_type,
            entity_id,
            usage_type,
-           label,
-           description,
-           photo_date,
            is_primary,
            sort_order,
            created_at
@@ -1913,9 +1929,6 @@ export async function replaceConversationPostTags(input: {
            source.entity_type,
            source.entity_id,
            source.usage_type,
-           source.label,
-           source.description,
-           source.photo_date,
            source.is_primary,
            source.sort_order,
            source.created_at
@@ -1925,16 +1938,20 @@ export async function replaceConversationPostTags(input: {
           linkId: buildMediaLinkId(FAMAILINK_SHARE_KEY, "person", person.personId, fileId, "media"),
           mediaId,
           personId: person.personId,
-          label: getCell(postRow, "MEDIA_LABEL"),
-          description: getCell(postRow, "MEDIA_DESCRIPTION"),
-          photoDate: getCell(postRow, "MEDIA_PHOTO_DATE"),
           createdAt,
         },
       );
     }
 
     await connection.commit();
-    return savedPeople;
+    return {
+      taggedPeople: savedPeople,
+      media: {
+        label,
+        description,
+        photoDate,
+      },
+    };
   });
 }
 

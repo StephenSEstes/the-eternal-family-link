@@ -2643,6 +2643,16 @@ textarea {
   align-items: center;
 }
 
+.conversation-tag-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.45fr);
+  gap: 10px;
+}
+
+.conversation-tag-description {
+  grid-column: 1 / -1;
+}
+
 .conversation-delete-copy {
   margin: 0;
   color: var(--text);

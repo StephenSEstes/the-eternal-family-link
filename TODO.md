@@ -37,6 +37,11 @@ I will update this list as we add, complete, or remove work.
     - API/UI/data changes: extend Share post reads with existing `MediaLinks(entity_type='person')` tags for the post `file_id`; add a member-gated post tags route that replaces person links for that file within the Famailink share scope; write canonical `MediaLinks` person rows using the existing `MediaAssets.media_id`; render image tag badges and a modal editor without adding face boxes or bulky in-thread controls.
     - Validation checks: Famailink type/lint/build pass; an image post with no tags shows a minimal tag action; saving tags updates the badge/chips without reloading the page; person-linked media remains driven by canonical `MediaLinks`.
     - Completion criteria: tagged Share images link to database people through canonical media links, are discoverable from person media surfaces using existing `MediaLinks` joins, and thread real estate remains thumbnail-first.
+  - Implementation plan 2026-06-16: complete Share image tagging metadata and person profile visibility.
+    - Scope: make Share-tagged image links render through existing person media views, including the root nonmodal person profile media tab, and let the tag editor save image title, date, and description.
+    - API/UI/data changes: keep person associations in `MediaLinks`, persist title/date/description on canonical `MediaAssets`, return updated media metadata from the tags route, and update the Share post state after saving tags. Do not introduce face boxes, a separate tag table, or link-level canonical metadata.
+    - Validation checks: Famailink type/lint/build pass; root type check still accepts the person-profile media payload; tagged images remain available through `MediaLinks -> MediaAssets` joins used by person profile media surfaces.
+    - Completion criteria: a tagged image has person links plus asset metadata in one save flow, and existing person media renderers can show the thumbnail, title, date, and description without a new profile-specific query path.
   - Remaining for this task: deployed-environment validation of the Share media slice.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:

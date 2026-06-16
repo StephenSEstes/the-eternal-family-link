@@ -80,7 +80,7 @@ type ManagementDialog =
   | { kind: "group-name"; circle: ConversationCircle; value: string }
   | { kind: "conversation-name"; conversation: CircleConversation; value: string }
   | { kind: "delete-conversation"; conversation: CircleConversation };
-type TagDialog = { postId: string; selectedPersonIds: string[]; search: string };
+type TagDialog = { postId: string; selectedPersonIds: string[]; search: string; label: string; photoDate: string; description: string };
 type MemberColor = {
   chipBg: string;
   chipBorder: string;
@@ -745,6 +745,9 @@ export function ConversationsClient({
       postId: post.postId,
       selectedPersonIds: post.media.taggedPeople.map((person) => person.personId),
       search: "",
+      label: post.media.label,
+      photoDate: post.media.photoDate,
+      description: post.media.description,
     });
   }
 
@@ -766,13 +769,33 @@ export function ConversationsClient({
     setBusy(true);
     setStatus(null);
     try {
-      const body = await fetchJson<{ taggedPeople?: TaggedPerson[] }>(
+      const body = await fetchJson<{
+        taggedPeople?: TaggedPerson[];
+        media?: Pick<ConversationPostMedia, "label" | "description" | "photoDate">;
+      }>(
         `/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts/${encodeURIComponent(postId)}/tags`,
-        { method: "PATCH", body: JSON.stringify({ personIds: tagDialog.selectedPersonIds }) },
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            personIds: tagDialog.selectedPersonIds,
+            label: tagDialog.label,
+            photoDate: tagDialog.photoDate,
+            description: tagDialog.description,
+          }),
+        },
       );
       const taggedPeople = Array.isArray(body.taggedPeople) ? body.taggedPeople : [];
       setPosts((current) => current.map((post) => post.postId === postId && post.media
-        ? { ...post, media: { ...post.media, taggedPeople } }
+        ? {
+          ...post,
+          media: {
+            ...post.media,
+            taggedPeople,
+            label: body.media?.label ?? post.media.label,
+            description: body.media?.description ?? post.media.description,
+            photoDate: body.media?.photoDate ?? post.media.photoDate,
+          },
+        }
         : post));
       setTagDialog(null);
       setStatus({ tone: "info", message: taggedPeople.length ? "Photo tags saved." : "Photo tags cleared." });
@@ -1459,6 +1482,36 @@ export function ConversationsClient({
                 </div>
               </div>
             ) : null}
+
+            <div className="conversation-tag-fields">
+              <label className="field">
+                <span className="field-label">Title</span>
+                <input
+                  className="input"
+                  value={tagDialog.label}
+                  onChange={(event) => setTagDialog({ ...tagDialog, label: event.target.value })}
+                  placeholder="Photo title"
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Date</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={tagDialog.photoDate}
+                  onChange={(event) => setTagDialog({ ...tagDialog, photoDate: event.target.value })}
+                />
+              </label>
+              <label className="field conversation-tag-description">
+                <span className="field-label">Description</span>
+                <textarea
+                  className="input conversation-description-input"
+                  value={tagDialog.description}
+                  onChange={(event) => setTagDialog({ ...tagDialog, description: event.target.value })}
+                  placeholder="Optional context"
+                />
+              </label>
+            </div>
 
             <label className="field">
               <span className="field-label">Search people</span>

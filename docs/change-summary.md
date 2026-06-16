@@ -13,6 +13,22 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-16 (Famailink Share tag metadata and person media visibility)
+
+- `Date`: 2026-06-16
+- `Change`: Extended the Famailink Share image tag editor so it saves image title, date, and description while tagging people. The metadata is saved on canonical `MediaAssets`, so existing person media views, including the root nonmodal person profile media tab, can render the tagged image thumbnail and display metadata through their existing `MediaLinks -> MediaAssets` joins.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a mixed UI/API metadata gap, not a new schema need. Share tagging created person `MediaLinks`, and person media views already read media through person links joined to `MediaAssets`; however the tag dialog did not collect asset metadata and the tag save route was still treating link rows as the metadata write surface.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/[postId]/tags/route.ts`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`
+- `Data Changes`: No schema migration and no data repair. Saving Share image tags now updates `media_assets.label`, `media_assets.photo_date`, and `media_assets.description` for the image `file_id`; `media_links` remains the person association map.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+  - `npx tsc --noEmit` passes.
+- `Rollback Notes`: Remove the tag metadata fields from the modal and route payload, stop updating `media_assets` in `replaceConversationPostTags`, and keep the person-link tagging behavior intact if only metadata editing needs rollback.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-16 (Famailink Share image people tags)
 
 - `Date`: 2026-06-16
