@@ -47,9 +47,11 @@ type ConversationPostMedia = {
   thumbnailObjectKey: string;
   previewUrl: string;
   originalUrl: string;
+  taggedPeople: TaggedPerson[];
 };
 type ConversationComment = { commentId: string; postId: string; authorPersonId: string; authorDisplayName: string; commentText: string; createdAt: string };
 type ConversationPost = { postId: string; authorPersonId: string; authorDisplayName: string; caption: string; createdAt: string; media: ConversationPostMedia | null; comments: ConversationComment[] };
+type TaggedPerson = { personId: string; displayName: string };
 type RelationshipOption = {
   key: string;
   label: string;
@@ -78,6 +80,7 @@ type ManagementDialog =
   | { kind: "group-name"; circle: ConversationCircle; value: string }
   | { kind: "conversation-name"; conversation: CircleConversation; value: string }
   | { kind: "delete-conversation"; conversation: CircleConversation };
+type TagDialog = { postId: string; selectedPersonIds: string[]; search: string };
 type MemberColor = {
   chipBg: string;
   chipBorder: string;
@@ -248,6 +251,7 @@ export function ConversationsClient({
   const [composerAdvancedOpen, setComposerAdvancedOpen] = useState(false);
   const [composerSideFilter, setComposerSideFilter] = useState<FamilySideFilter>("both");
   const [managementDialog, setManagementDialog] = useState<ManagementDialog | null>(null);
+  const [tagDialog, setTagDialog] = useState<TagDialog | null>(null);
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingUnreadJumpConversationIdRef = useRef("");
   const filePickerRef = useRef<HTMLInputElement | null>(null);
@@ -305,6 +309,21 @@ export function ConversationsClient({
   })), [composerSideFilter, relationshipOptions, session.personId]);
   const canCreateGroup = composerRecipientIds.length > 0;
   const canSendPost = Boolean(normalize(postDraft) || pendingAttachment);
+  const activeTagPost = useMemo(() => posts.find((post) => post.postId === tagDialog?.postId) ?? null, [posts, tagDialog?.postId]);
+  const selectedTagPeople = useMemo(
+    () => (tagDialog?.selectedPersonIds ?? []).map((personId) => peopleById.get(personId)).filter((person): person is PersonOption => Boolean(person)),
+    [peopleById, tagDialog?.selectedPersonIds],
+  );
+  const filteredTagPeople = useMemo(() => {
+    if (!tagDialog) return [];
+    const query = normalize(tagDialog.search).toLowerCase();
+    if (!query) return [];
+    const selected = new Set(tagDialog.selectedPersonIds);
+    return people
+      .filter((person) => !selected.has(person.personId))
+      .filter((person) => person.displayName.toLowerCase().includes(query) || person.personId.toLowerCase().includes(query))
+      .slice(0, 24);
+  }, [people, tagDialog]);
   const memberColorByPersonId = useMemo(() => {
     const map = new Map<string, MemberColor>();
     threadMembers.forEach((member, index) => map.set(member.personId, MEMBER_COLORS[index % MEMBER_COLORS.length]));
@@ -715,6 +734,50 @@ export function ConversationsClient({
       setStatus({ tone: "info", message: "Comment deleted." });
     } catch (error) {
       setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to delete comment." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openTagDialog(post: ConversationPost) {
+    if (!post.media || post.media.mediaKind !== "image") return;
+    setTagDialog({
+      postId: post.postId,
+      selectedPersonIds: post.media.taggedPeople.map((person) => person.personId),
+      search: "",
+    });
+  }
+
+  function addTagPerson(personId: string) {
+    setTagDialog((current) => current && !current.selectedPersonIds.includes(personId)
+      ? { ...current, selectedPersonIds: [...current.selectedPersonIds, personId], search: "" }
+      : current);
+  }
+
+  function removeTagPerson(personId: string) {
+    setTagDialog((current) => current
+      ? { ...current, selectedPersonIds: current.selectedPersonIds.filter((id) => id !== personId) }
+      : current);
+  }
+
+  async function savePostTags() {
+    if (!selectedCircle || !selectedConversation || !tagDialog) return;
+    const postId = tagDialog.postId;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const body = await fetchJson<{ taggedPeople?: TaggedPerson[] }>(
+        `/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts/${encodeURIComponent(postId)}/tags`,
+        { method: "PATCH", body: JSON.stringify({ personIds: tagDialog.selectedPersonIds }) },
+      );
+      const taggedPeople = Array.isArray(body.taggedPeople) ? body.taggedPeople : [];
+      setPosts((current) => current.map((post) => post.postId === postId && post.media
+        ? { ...post, media: { ...post.media, taggedPeople } }
+        : post));
+      setTagDialog(null);
+      setStatus({ tone: "info", message: taggedPeople.length ? "Photo tags saved." : "Photo tags cleared." });
+    } catch (error) {
+      setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to save photo tags." });
     } finally {
       setBusy(false);
     }
@@ -1132,19 +1195,30 @@ export function ConversationsClient({
                         {post.media ? (
                           <div className="conversation-media-card">
                             {post.media.mediaKind === "image" && post.media.previewUrl ? (
-                              <a
-                                href={post.media.originalUrl || post.media.previewUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="conversation-media-link"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={post.media.previewUrl}
-                                  alt="Shared image"
-                                  className="conversation-media-image"
-                                />
-                              </a>
+                              <div className="conversation-image-frame">
+                                <a
+                                  href={post.media.originalUrl || post.media.previewUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="conversation-media-link"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={post.media.previewUrl}
+                                    alt="Shared image"
+                                    className="conversation-media-image"
+                                  />
+                                </a>
+                                <button
+                                  className={`conversation-tag-button${post.media.taggedPeople.length ? " has-tags" : ""}`}
+                                  type="button"
+                                  disabled={busy}
+                                  aria-label={post.media.taggedPeople.length ? `Edit ${post.media.taggedPeople.length} photo tags` : "Tag people in photo"}
+                                  onClick={() => openTagDialog(post)}
+                                >
+                                  {post.media.taggedPeople.length || "+"}
+                                </button>
+                              </div>
                             ) : post.media.mediaKind === "video" && post.media.originalUrl ? (
                               <video
                                 className="conversation-media-video"
@@ -1349,6 +1423,74 @@ export function ConversationsClient({
               </button>
               <button className="primary-button" type="button" disabled={busy || !canCreateGroup} onClick={() => void createGroupFromComposer()}>
                 Add Group
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tagDialog ? (
+        <div className="conversation-modal-backdrop" role="presentation">
+          <div className="conversation-modal" role="dialog" aria-modal="true" aria-label="Tag people in photo">
+            <div className="conversation-modal-head">
+              <div>
+                <h2>Tag People</h2>
+                <p className="conversation-meta">Link this photo to people in the family database.</p>
+              </div>
+              <button type="button" className="account-close" aria-label="Close tag modal" onClick={() => setTagDialog(null)}>
+                x
+              </button>
+            </div>
+
+            {activeTagPost?.media?.previewUrl ? (
+              <div className="conversation-tag-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={activeTagPost.media.previewUrl} alt="Photo being tagged" />
+                <div className="conversation-tag-chip-list">
+                  {selectedTagPeople.map((person) => (
+                    <span key={person.personId} className="conversation-chip">
+                      <span>{person.displayName}</span>
+                      <button type="button" aria-label={`Remove ${person.displayName}`} onClick={() => removeTagPerson(person.personId)}>
+                        x
+                      </button>
+                    </span>
+                  ))}
+                  {selectedTagPeople.length === 0 ? <p className="empty-state">No people tagged yet.</p> : null}
+                </div>
+              </div>
+            ) : null}
+
+            <label className="field">
+              <span className="field-label">Search people</span>
+              <input
+                className="input"
+                type="search"
+                value={tagDialog.search}
+                onChange={(event) => setTagDialog({ ...tagDialog, search: event.target.value })}
+                placeholder="Type a name"
+                autoFocus
+              />
+            </label>
+
+            <div className="conversation-people-results">
+              {!normalize(tagDialog.search) ? <p className="empty-state">Type a name to add tags.</p> : null}
+              {normalize(tagDialog.search) && filteredTagPeople.length === 0 ? <p className="empty-state">No untagged people match that search.</p> : null}
+              {filteredTagPeople.map((person) => (
+                <div key={person.personId} className="conversation-person-row">
+                  <span>{person.displayName}</span>
+                  <button className="secondary-button" type="button" onClick={() => addTagPerson(person.personId)}>
+                    Add
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="conversation-modal-actions">
+              <button className="secondary-button" type="button" disabled={busy} onClick={() => setTagDialog(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" disabled={busy} onClick={() => void savePostTags()}>
+                Save Tags
               </button>
             </div>
           </div>

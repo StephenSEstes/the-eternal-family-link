@@ -32,6 +32,11 @@ I will update this list as we add, complete, or remove work.
   - Implementation plan 2026-06-14: refine Share thread posting so the compose box sits below existing posts, media attach uses a single `+` action, and signed-in authors can soft-delete their own text/media posts without removing media assets.
   - Implementation plan 2026-06-14: align Share thread bubbles by author so messages from the signed-in person sit on the right and messages from everyone else sit on the left.
   - Implementation plan 2026-06-15: confirm Share image uploads store both OCI original and generated thumbnail object keys, render uploaded images as thumbnail-only in threads, and include image thumbnails in the conversation/thread list row.
+  - Implementation plan 2026-06-16: add low-distraction people tagging for Famailink Share image posts.
+    - Scope: allow a signed-in conversation member to open a compact tag editor from an image post, search/select database people already available to Famailink Share, save tagged people, and show only a small tag badge/count in the thread.
+    - API/UI/data changes: extend Share post reads with existing `MediaLinks(entity_type='person')` tags for the post `file_id`; add a member-gated post tags route that replaces person links for that file within the Famailink share scope; write canonical `MediaLinks` person rows using the existing `MediaAssets.media_id`; render image tag badges and a modal editor without adding face boxes or bulky in-thread controls.
+    - Validation checks: Famailink type/lint/build pass; an image post with no tags shows a minimal tag action; saving tags updates the badge/chips without reloading the page; person-linked media remains driven by canonical `MediaLinks`.
+    - Completion criteria: tagged Share images link to database people through canonical media links, are discoverable from person media surfaces using existing `MediaLinks` joins, and thread real estate remains thumbnail-first.
   - Remaining for this task: deployed-environment validation of the Share media slice.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:

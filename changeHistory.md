@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-06-16: Added low-distraction people tagging for Famailink Share image posts, saving database-person links through canonical `media_links` rows. See `docs/change-summary.md`.
 - 2026-06-15: Confirmed Famailink Share image uploads store full-resolution originals plus generated thumbnails, removed visible file-name/attachment copy from image posts, and added thumbnails to thread-list rows. See `docs/change-summary.md`.
 - 2026-06-14: Updated Famailink Share thread bubbles so messages/comments from the signed-in user align right and other people's messages align left. See `docs/change-summary.md`.
 - 2026-06-14: Moved the Famailink Share thread composer below previous comments/posts, simplified media attach to a `+` button, and added author-only post/comment delete controls. See `docs/change-summary.md`.

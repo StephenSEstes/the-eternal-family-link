@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-16 (Famailink Share image people tags)
+
+- `Date`: 2026-06-16
+- `Change`: Added low-distraction people tagging for Famailink Share image posts. Image posts now show a small tag badge/action, signed-in conversation members can search and save tagged database people in a compact modal, and saved tags are returned with post media.
+- `Type`: UI | API | Data
+- `Why`: Root cause was a UI/API gap over the existing canonical media model, not a schema gap. Share image uploads already create `MediaAssets` rows, and the app already uses `MediaLinks` for person-linked media, but Famailink Share had no member-gated way to create or read person links for images uploaded inside a conversation.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/api/conversations/circles/[circleId]/conversations/[conversationId]/posts/[postId]/tags/route.ts`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`, `famailink/lib/conversations/store.ts`, `famailink/lib/media/ids.ts`
+- `Data Changes`: No schema migration and no data repair. Saving tags replaces `media_links` rows for the selected image `media_id` scoped to `family_group_key = 'famailink-person'`, `entity_type = 'person'`, and `usage_type = 'media'`; the compatibility table creation path now includes `media_links` for fresh environments.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the post tags route and `replaceConversationPostTags`, stop reading media-link tags in `listConversationPosts`, remove the tag modal/badge UI, and leave existing `media_links` rows intact unless a data cleanup is explicitly requested.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-15 (Famailink Share image thumbnails)
 
 - `Date`: 2026-06-15

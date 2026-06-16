@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import oracledb from "oracledb";
+import { buildMediaLinkId } from "@/lib/media/ids";
 import type { SupportedMediaKind } from "@/lib/media/upload";
 import { withConnection } from "@/lib/oci/client";
 import { getOciDirectObjectUrlFactory } from "@/lib/oci/object-storage";
@@ -109,6 +110,12 @@ export type ConversationPostMedia = {
   thumbnailObjectKey: string;
   previewUrl: string;
   originalUrl: string;
+  taggedPeople: ConversationTaggedPerson[];
+};
+
+export type ConversationTaggedPerson = {
+  personId: string;
+  displayName: string;
 };
 
 export type PersonConversationSummary = {
@@ -311,6 +318,24 @@ async function ensureShareTables(connection: DbConnection) {
        deleted_at VARCHAR2(64)
      )`,
   );
+  await tryExecuteDdl(
+    connection,
+    `CREATE TABLE media_links (
+       family_group_key VARCHAR2(128),
+       link_id VARCHAR2(128) PRIMARY KEY,
+       media_id VARCHAR2(128),
+       entity_type VARCHAR2(64),
+       entity_id VARCHAR2(128),
+       usage_type VARCHAR2(64),
+       label VARCHAR2(512),
+       description CLOB,
+       photo_date VARCHAR2(64),
+       is_primary VARCHAR2(8),
+       sort_order NUMBER,
+       media_metadata CLOB,
+       created_at VARCHAR2(64)
+     )`,
+  );
 
   const indexStatements = [
     "CREATE UNIQUE INDEX ux_share_threads_scope ON share_threads(family_group_key, audience_type, audience_key)",
@@ -321,6 +346,8 @@ async function ensureShareTables(connection: DbConnection) {
     "CREATE INDEX ix_share_conversation_members_lookup ON share_conversation_members(thread_id, person_id, is_active)",
     "CREATE INDEX ix_share_posts_conversation ON share_posts(conversation_id, thread_id, created_at)",
     "CREATE INDEX ix_share_post_comments_post ON share_post_comments(post_id, created_at)",
+    "CREATE INDEX ix_media_links_entity ON media_links(family_group_key, entity_type, entity_id)",
+    "CREATE INDEX ix_media_links_media ON media_links(media_id, family_group_key)",
   ];
   for (const sql of indexStatements) {
     await tryExecuteDdl(connection, sql);
@@ -399,6 +426,7 @@ function buildMediaObject(row: Record<string, unknown>, directObjectUrlFactory: 
     thumbnailObjectKey,
     previewUrl: directObjectUrlFactory && thumbnailObjectKey ? directObjectUrlFactory(thumbnailObjectKey) : "",
     originalUrl: directObjectUrlFactory && originalObjectKey ? directObjectUrlFactory(originalObjectKey) : "",
+    taggedPeople: [],
   };
 }
 
@@ -417,6 +445,44 @@ function mapPost(row: Record<string, unknown>, directObjectUrlFactory: DirectObj
     media: buildMediaObject(row, directObjectUrlFactory),
     comments: [],
   };
+}
+
+async function listTaggedPeopleByFileId(connection: DbConnection, fileIds: string[]) {
+  const normalizedFileIds = uniquePersonIds(fileIds);
+  const out = new Map<string, ConversationTaggedPerson[]>();
+  if (!normalizedFileIds.length) return out;
+
+  const binds: Record<string, unknown> = { familyGroupKey: FAMAILINK_SHARE_KEY };
+  const inList = bindList("file", normalizedFileIds, binds);
+  const result = await connection.execute(
+    `SELECT
+       a.file_id,
+       l.entity_id AS person_id,
+       COALESCE(NULLIF(TRIM(p.display_name), ''), TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')), l.entity_id) AS display_name
+     FROM media_links l
+     INNER JOIN media_assets a
+       ON TRIM(a.media_id) = TRIM(l.media_id)
+     LEFT JOIN people p
+       ON TRIM(p.person_id) = TRIM(l.entity_id)
+     WHERE LOWER(TRIM(l.family_group_key)) = :familyGroupKey
+       AND LOWER(TRIM(l.entity_type)) = 'person'
+       AND TRIM(a.file_id) IN (${inList})
+     ORDER BY display_name, person_id`,
+    binds,
+    OUT_FORMAT,
+  );
+  for (const row of result.rows ?? []) {
+    const fileId = getCell(row, "FILE_ID");
+    const personId = getCell(row, "PERSON_ID");
+    if (!fileId || !personId) continue;
+    const current = out.get(fileId) ?? [];
+    current.push({
+      personId,
+      displayName: getCell(row, "DISPLAY_NAME") || personId,
+    });
+    out.set(fileId, current);
+  }
+  return out;
 }
 
 function mapComment(row: Record<string, unknown>): ConversationComment {
@@ -1659,6 +1725,15 @@ export async function listConversationPosts(input: {
       OUT_FORMAT,
     );
     const posts = (result.rows ?? []).map((row) => mapPost(row, directObjectUrlFactory));
+    const taggedPeopleByFileId = await listTaggedPeopleByFileId(
+      connection,
+      posts.map((post) => post.media?.fileId ?? "").filter(Boolean),
+    );
+    for (const post of posts) {
+      if (post.media) {
+        post.media.taggedPeople = taggedPeopleByFileId.get(post.media.fileId) ?? [];
+      }
+    }
     const postIds = posts.map((post) => post.postId);
     if (!postIds.length) return posts;
     const binds: Record<string, unknown> = {};
@@ -1692,6 +1767,174 @@ export async function listConversationPosts(input: {
       ...post,
       comments: commentsByPost.get(post.postId) ?? [],
     }));
+  });
+}
+
+export async function replaceConversationPostTags(input: {
+  actor: SessionActor;
+  circleId: string;
+  conversationId: string;
+  postId: string;
+  personIds: string[];
+}): Promise<ConversationTaggedPerson[]> {
+  const actorPersonId = normalize(input.actor.personId);
+  const postId = normalize(input.postId);
+  const requestedPersonIds = uniquePersonIds(input.personIds);
+  if (!actorPersonId || !postId) throw new Error("post_not_found");
+
+  return withConnection(async (rawConnection) => {
+    const connection = rawConnection as DbConnection;
+    await ensureShareTables(connection);
+    const conversation = await getConversationForPerson(connection, {
+      circleId: input.circleId,
+      conversationId: input.conversationId,
+      personId: actorPersonId,
+    });
+    if (!conversation) throw new Error("conversation_not_found_or_not_member");
+
+    const postResult = await connection.execute(
+      `SELECT
+         p.post_id,
+         p.file_id,
+         a.media_id,
+         a.media_kind,
+         a.label AS media_label,
+         a.description AS media_description,
+         a.photo_date AS media_photo_date
+       FROM share_posts p
+       INNER JOIN media_assets a
+         ON TRIM(a.file_id) = TRIM(p.file_id)
+       WHERE TRIM(p.post_id) = :postId
+         AND TRIM(p.thread_id) = :circleId
+         AND TRIM(p.conversation_id) = :conversationId
+         AND LOWER(TRIM(NVL(p.post_status, 'active'))) <> 'deleted'
+       FETCH FIRST 1 ROWS ONLY`,
+      { postId, circleId: conversation.circleId, conversationId: conversation.conversationId },
+      OUT_FORMAT,
+    );
+    const postRow = postResult.rows?.[0] ?? null;
+    if (!postRow) throw new Error("post_not_found");
+    const mediaId = getCell(postRow, "MEDIA_ID");
+    const fileId = getCell(postRow, "FILE_ID");
+    if (!mediaId || !fileId || normalizeLower(getCell(postRow, "MEDIA_KIND")) !== "image") {
+      throw new Error("image_post_required");
+    }
+
+    const savedPeople: ConversationTaggedPerson[] = [];
+    if (requestedPersonIds.length) {
+      const peopleBinds: Record<string, unknown> = {};
+      const peopleInList = bindList("person", requestedPersonIds, peopleBinds);
+      const peopleResult = await connection.execute(
+        `SELECT
+           person_id,
+           COALESCE(NULLIF(TRIM(display_name), ''), TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), person_id) AS display_name
+         FROM people
+         WHERE TRIM(person_id) IN (${peopleInList})
+         ORDER BY display_name, person_id`,
+        peopleBinds,
+        OUT_FORMAT,
+      );
+      for (const row of peopleResult.rows ?? []) {
+        savedPeople.push({
+          personId: getCell(row, "PERSON_ID"),
+          displayName: getCell(row, "DISPLAY_NAME") || getCell(row, "PERSON_ID"),
+        });
+      }
+      const validPersonIds = new Set(savedPeople.map((person) => person.personId));
+      const missingPersonIds = requestedPersonIds.filter((personId) => !validPersonIds.has(personId));
+      if (missingPersonIds.length) throw new Error("tagged_person_not_found");
+    }
+
+    const createdAt = nowIso();
+    await connection.execute(
+      `DELETE FROM media_links
+       WHERE LOWER(TRIM(family_group_key)) = :familyGroupKey
+         AND TRIM(media_id) = :mediaId
+         AND LOWER(TRIM(entity_type)) = 'person'
+         AND LOWER(TRIM(NVL(usage_type, 'media'))) = 'media'
+         AND EXISTS (
+           SELECT 1
+           FROM media_assets a
+           WHERE TRIM(a.media_id) = TRIM(media_links.media_id)
+             AND TRIM(a.file_id) = :fileId
+         )`,
+      { familyGroupKey: FAMAILINK_SHARE_KEY, mediaId, fileId },
+    );
+
+    for (const person of savedPeople) {
+      await connection.execute(
+        `MERGE INTO media_links target
+         USING (
+           SELECT
+             :familyGroupKey AS family_group_key,
+             :linkId AS link_id,
+             :mediaId AS media_id,
+             'person' AS entity_type,
+             :personId AS entity_id,
+             'media' AS usage_type,
+             :label AS label,
+             :description AS description,
+             :photoDate AS photo_date,
+             'false' AS is_primary,
+             0 AS sort_order,
+             :createdAt AS created_at
+           FROM dual
+         ) source
+         ON (TRIM(target.link_id) = TRIM(source.link_id))
+         WHEN MATCHED THEN UPDATE SET
+           target.family_group_key = source.family_group_key,
+           target.media_id = source.media_id,
+           target.entity_type = source.entity_type,
+           target.entity_id = source.entity_id,
+           target.usage_type = source.usage_type,
+           target.label = source.label,
+           target.description = source.description,
+           target.photo_date = source.photo_date,
+           target.is_primary = source.is_primary,
+           target.sort_order = source.sort_order,
+           target.created_at = source.created_at
+         WHEN NOT MATCHED THEN INSERT (
+           family_group_key,
+           link_id,
+           media_id,
+           entity_type,
+           entity_id,
+           usage_type,
+           label,
+           description,
+           photo_date,
+           is_primary,
+           sort_order,
+           created_at
+         ) VALUES (
+           source.family_group_key,
+           source.link_id,
+           source.media_id,
+           source.entity_type,
+           source.entity_id,
+           source.usage_type,
+           source.label,
+           source.description,
+           source.photo_date,
+           source.is_primary,
+           source.sort_order,
+           source.created_at
+         )`,
+        {
+          familyGroupKey: FAMAILINK_SHARE_KEY,
+          linkId: buildMediaLinkId(FAMAILINK_SHARE_KEY, "person", person.personId, fileId, "media"),
+          mediaId,
+          personId: person.personId,
+          label: getCell(postRow, "MEDIA_LABEL"),
+          description: getCell(postRow, "MEDIA_DESCRIPTION"),
+          photoDate: getCell(postRow, "MEDIA_PHOTO_DATE"),
+          createdAt,
+        },
+      );
+    }
+
+    await connection.commit();
+    return savedPeople;
   });
 }
 

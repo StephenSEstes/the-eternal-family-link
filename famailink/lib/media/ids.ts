@@ -11,3 +11,13 @@ export function buildMediaId(fileId: string) {
 export function buildMediaFileId() {
   return `mfile-${randomBytes(8).toString("hex")}`;
 }
+
+export function buildMediaLinkId(
+  familyGroupKey: string,
+  entityType: "person" | "household" | "attribute",
+  entityId: string,
+  fileId: string,
+  usageType: string,
+) {
+  return `mlink-${shortHash(`${familyGroupKey}|${entityType}|${entityId}|${fileId}|${usageType}`)}`;
+}
