@@ -7,6 +7,7 @@ This file is a quick release-log entry point.
 
 ## Latest
 
+- 2026-06-17: Made the Famailink Share `+` composer control mobile-aware with Camera, Photo Library, and Files choices while preserving the existing media upload path. See `docs/change-summary.md`.
 - 2026-06-16: Extended Famailink Share image tagging to save title, date, and description on canonical `MediaAssets` so tagged images render with metadata in person media views. See `docs/change-summary.md`.
 - 2026-06-16: Added low-distraction people tagging for Famailink Share image posts, saving database-person links through canonical `media_links` rows. See `docs/change-summary.md`.
 - 2026-06-15: Confirmed Famailink Share image uploads store full-resolution originals plus generated thumbnails, removed visible file-name/attachment copy from image posts, and added thumbnails to thread-list rows. See `docs/change-summary.md`.

@@ -73,7 +73,7 @@ type StatusState = { tone: "error" | "info"; message: string } | null;
 type ThreadDisplayMember = { personId: string; displayName: string };
 type PendingAttachment = {
   file: File;
-  origin: "camera" | "files";
+  origin: "camera" | "library" | "files";
   previewUrl: string;
 };
 type ManagementDialog =
@@ -99,6 +99,23 @@ const MEMBER_COLORS: MemberColor[] = [
   { chipBg: "#FEE2E2", chipBorder: "#EF4444", chipText: "#7F1D1D", bubbleBg: "#FEF2F2", bubbleBorder: "#FCA5A5" },
   { chipBg: "#E5E7EB", chipBorder: "#6B7280", chipText: "#111827", bubbleBg: "#F9FAFB", bubbleBorder: "#D1D5DB" },
 ];
+
+const SUPPORTED_MEDIA_ACCEPT = "image/*,video/*,audio/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.rtf,.odt,.ods";
+
+function detectMobileDevice() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const userAgent = navigator.userAgent.toLowerCase();
+  const mobileUserAgent = /android|iphone|ipad|ipod|iemobile|mobile/.test(userAgent);
+  const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  const narrowViewport = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 820px)").matches;
+  return mobileUserAgent || (coarsePointer && narrowViewport);
+}
+
+function pendingAttachmentSourceLabel(origin: PendingAttachment["origin"]) {
+  if (origin === "camera") return "Captured from camera";
+  if (origin === "library") return "Selected from photo library";
+  return "Selected from files";
+}
 
 function normalize(value?: string) {
   return String(value ?? "").trim();
@@ -252,9 +269,13 @@ export function ConversationsClient({
   const [composerSideFilter, setComposerSideFilter] = useState<FamilySideFilter>("both");
   const [managementDialog, setManagementDialog] = useState<ManagementDialog | null>(null);
   const [tagDialog, setTagDialog] = useState<TagDialog | null>(null);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [mediaSourceMenuOpen, setMediaSourceMenuOpen] = useState(false);
   const itemRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingUnreadJumpConversationIdRef = useRef("");
   const filePickerRef = useRef<HTMLInputElement | null>(null);
+  const libraryPickerRef = useRef<HTMLInputElement | null>(null);
+  const cameraPickerRef = useRef<HTMLInputElement | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
@@ -487,6 +508,7 @@ export function ConversationsClient({
   useEffect(() => {
     setPostDraft("");
     replacePendingAttachment(null);
+    setMediaSourceMenuOpen(false);
   }, [selectedConversationId]);
   useEffect(() => {
     return () => {
@@ -496,6 +518,16 @@ export function ConversationsClient({
     };
   }, [pendingAttachment]);
   useEffect(() => { setNewTopicOpen(false); setNewConversationTitle(""); setInitialMessage(""); }, [selectedCircleId]);
+  useEffect(() => {
+    const update = () => setIsMobileDevice(detectMobileDevice());
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
   useEffect(() => {
     pendingUnreadJumpConversationIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
@@ -544,6 +576,28 @@ export function ConversationsClient({
       setPendingFile(file, origin);
     }
     event.target.value = "";
+    setMediaSourceMenuOpen(false);
+  }
+
+  function openMediaPicker(source: PendingAttachment["origin"]) {
+    setMediaSourceMenuOpen(false);
+    if (source === "camera") {
+      cameraPickerRef.current?.click();
+      return;
+    }
+    if (source === "library") {
+      libraryPickerRef.current?.click();
+      return;
+    }
+    filePickerRef.current?.click();
+  }
+
+  function handleAddMediaClick() {
+    if (isMobileDevice) {
+      setMediaSourceMenuOpen((current) => !current);
+      return;
+    }
+    openMediaPicker("files");
   }
 
   async function uploadMediaPost(circleId: string, conversationId: string, file: File, caption: string) {
@@ -1127,8 +1181,23 @@ export function ConversationsClient({
                 ref={filePickerRef}
                 type="file"
                 className="conversation-hidden-input"
-                accept="image/*,video/*"
+                accept={SUPPORTED_MEDIA_ACCEPT}
                 onChange={(event) => onFilePickerChange(event, "files")}
+              />
+              <input
+                ref={libraryPickerRef}
+                type="file"
+                className="conversation-hidden-input"
+                accept="image/*,video/*"
+                onChange={(event) => onFilePickerChange(event, "library")}
+              />
+              <input
+                ref={cameraPickerRef}
+                type="file"
+                className="conversation-hidden-input"
+                accept="image/*,video/*"
+                capture="environment"
+                onChange={(event) => onFilePickerChange(event, "camera")}
               />
               <div className="conversation-compose">
                 {pendingAttachment ? (
@@ -1157,7 +1226,7 @@ export function ConversationsClient({
                       <div className="conversation-pending-copy">
                         <strong>{pendingAttachment.file.type.startsWith("video/") ? "Video" : "File"}</strong>
                         <small>
-                          {pendingAttachment.origin === "camera" ? "Captured from camera" : "Selected from files"}
+                          {pendingAttachmentSourceLabel(pendingAttachment.origin)}
                           {pendingAttachment.file.size ? ` • ${formatFileSize(String(pendingAttachment.file.size))}` : ""}
                         </small>
                       </div>
@@ -1174,15 +1243,31 @@ export function ConversationsClient({
                   placeholder={pendingAttachment ? "Add an optional comment" : "Send a message"}
                 />
                 <div className="conversation-toolbar">
-                  <button
-                    className="secondary-button conversation-add-media-button"
-                    type="button"
-                    aria-label="Add media"
-                    disabled={busy}
-                    onClick={() => filePickerRef.current?.click()}
-                  >
-                    +
-                  </button>
+                  <div className="conversation-media-picker">
+                    <button
+                      className="secondary-button conversation-add-media-button"
+                      type="button"
+                      aria-label={isMobileDevice ? "Choose media source" : "Add media"}
+                      aria-expanded={isMobileDevice ? mediaSourceMenuOpen : undefined}
+                      disabled={busy}
+                      onClick={handleAddMediaClick}
+                    >
+                      +
+                    </button>
+                    {mediaSourceMenuOpen && isMobileDevice ? (
+                      <div className="conversation-media-source-menu" role="menu" aria-label="Media source">
+                        <button type="button" role="menuitem" onClick={() => openMediaPicker("camera")}>
+                          Camera
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => openMediaPicker("library")}>
+                          Photo Library
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => openMediaPicker("files")}>
+                          Files
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <button className="primary-button" type="button" disabled={busy || !canSendPost} onClick={() => void createPost()}>
                     Send
                   </button>

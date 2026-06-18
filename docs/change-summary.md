@@ -13,6 +13,21 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-06-17 (Famailink Share mobile camera/library picker)
+
+- `Date`: 2026-06-17
+- `Change`: Made the Famailink Share composer `+` control mobile-aware. On mobile/touch devices it now opens a compact source menu with Camera, Photo Library, and Files choices; desktop keeps direct file-picker behavior. Camera uses device capture, while library/files pickers avoid capture so users can choose existing photos and media.
+- `Type`: UI
+- `Why`: Root cause was a client-side picker gap. The upload API already accepts supported media and stores originals/thumbnails, but the composer had only one hidden file input and the `+` button always opened that same picker. There was no mobile-device detection and no separate capture versus library picker path.
+- `Files`: `TODO.md`, `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`
+- `Data Changes`: None. Uploads continue through the existing Famailink Share media upload route and canonical `MediaAssets` storage.
+- `Verify`:
+  - `npx tsc --noEmit -p famailink\tsconfig.json` passes.
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Remove the mobile source menu, mobile detector, extra hidden camera/library inputs, and restore the `+` button to opening the single file picker.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-16 (Famailink Share tag metadata and person media visibility)
 
 - `Date`: 2026-06-16

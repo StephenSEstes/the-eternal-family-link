@@ -42,6 +42,11 @@ I will update this list as we add, complete, or remove work.
     - API/UI/data changes: keep person associations in `MediaLinks`, persist title/date/description on canonical `MediaAssets`, return updated media metadata from the tags route, and update the Share post state after saving tags. Do not introduce face boxes, a separate tag table, or link-level canonical metadata.
     - Validation checks: Famailink type/lint/build pass; root type check still accepts the person-profile media payload; tagged images remain available through `MediaLinks -> MediaAssets` joins used by person profile media surfaces.
     - Completion criteria: a tagged image has person links plus asset metadata in one save flow, and existing person media renderers can show the thumbnail, title, date, and description without a new profile-specific query path.
+  - Implementation plan 2026-06-17: make the Share composer `+` mobile-aware for camera and library uploads.
+    - Scope: detect mobile/touch devices in the Famailink Share client, keep desktop `+` behavior direct, and show a compact mobile source menu from `+` with camera capture and photo/media library choices.
+    - API/UI/data changes: add separate hidden file inputs for camera capture, photo/video library, and supported media files; preserve the existing upload API and canonical media storage path; keep one pending attachment and one send action.
+    - Validation checks: Famailink type/lint/build pass; mobile source buttons use `capture="environment"` only for camera and no `capture` for library/files; pending attachment origin copy reflects camera, library, or files.
+    - Completion criteria: on mobile the `+` button intentionally opens camera/library choices, and selected photos/media continue through the existing thumbnail/original upload flow.
   - Remaining for this task: deployed-environment validation of the Share media slice.
   Desc: Port the useful root EFL Family Shares concepts into Famailink as a person/member-based conversation system, without making family groups the access gate.
   Scope:
