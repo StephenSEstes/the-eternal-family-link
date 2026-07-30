@@ -13,6 +13,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-07-29 (Famailink Share media tag names and details prompt)
+
+- `Date`: 2026-07-29
+- `Change`: Updated Famailink Share image posts so the media card shows tagged people's names below the photo instead of only a small count badge. Untagged images now show an `Add media details` prompt that opens the existing tag/details modal for people tags, title, date, and description.
+- `Type`: UI
+- `Why`: Root cause was a presentation gap. The Share post API already returned `taggedPeople` for image media, but the thread UI only rendered the number of tags in a small overlay button. That hid the value of tagging and gave untagged media no clear prompt for adding context.
+- `Files`: `docs/change-summary.md`, `changeHistory.md`, `famailink/app/globals.css`, `famailink/components/ConversationsClient.tsx`
+- `Data Changes`: None. Existing `MediaAssets` and `media_links` behavior is unchanged.
+- `Verify`:
+  - `npm run lint --prefix famailink` passes.
+  - `npm run build --prefix famailink` passes.
+- `Rollback Notes`: Revert the media details button rendering and related CSS to restore the previous count/plus overlay.
+- `Design Decision Change`: No design decision change.
+
 ## 2026-06-17 (Famailink Share mobile camera/library picker)
 
 - `Date`: 2026-06-17

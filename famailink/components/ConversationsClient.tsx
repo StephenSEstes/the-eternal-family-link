@@ -231,6 +231,10 @@ function mediaKindLabel(media: ConversationPostMedia) {
   return "File";
 }
 
+function taggedPeopleNames(people: TaggedPerson[]) {
+  return people.map((person) => normalize(person.displayName) || person.personId).filter(Boolean).join(", ");
+}
+
 function handleRowKeyDown(event: KeyboardEvent, action: () => void) {
   if (event.key !== "Enter" && event.key !== " ") return;
   event.preventDefault();
@@ -1279,6 +1283,8 @@ export function ConversationsClient({
                 {posts.map((post) => {
                   const ownPost = post.authorPersonId === session.personId;
                   const postColor = getMemberColor(post.authorPersonId);
+                  const postTaggedPeople = post.media?.taggedPeople ?? [];
+                  const postTaggedNames = taggedPeopleNames(postTaggedPeople);
                   return (
                     <article
                       key={post.postId}
@@ -1318,13 +1324,23 @@ export function ConversationsClient({
                                   />
                                 </a>
                                 <button
-                                  className={`conversation-tag-button${post.media.taggedPeople.length ? " has-tags" : ""}`}
+                                  className={`conversation-media-details-button${postTaggedPeople.length ? " has-tags" : ""}`}
                                   type="button"
                                   disabled={busy}
-                                  aria-label={post.media.taggedPeople.length ? `Edit ${post.media.taggedPeople.length} photo tags` : "Tag people in photo"}
+                                  aria-label={postTaggedPeople.length ? `Edit tagged people: ${postTaggedNames}` : "Add media details and tag people"}
                                   onClick={() => openTagDialog(post)}
                                 >
-                                  {post.media.taggedPeople.length || "+"}
+                                  {postTaggedPeople.length ? (
+                                    <>
+                                      <span className="conversation-media-details-label">Tagged</span>
+                                      <span className="conversation-media-tag-names">{postTaggedNames}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="conversation-media-details-label">Add media details</span>
+                                      <span className="conversation-media-tag-names">Tag people, title, date</span>
+                                    </>
+                                  )}
                                 </button>
                               </div>
                             ) : post.media.mediaKind === "video" && post.media.originalUrl ? (
