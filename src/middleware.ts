@@ -72,7 +72,12 @@ export default async function middleware(request: NextRequest) {
 
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   if (!token?.email) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("tenantKey", tenantPath.tenantKey);
+    loginUrl.searchParams.set("callbackUrl", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
   const multiTenantEnabled = process.env.ENABLE_MULTI_TENANT_SESSION === "true";

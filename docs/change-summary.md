@@ -13,6 +13,20 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-07-30 (Tenant-aware local login redirect)
+
+- `Date`: 2026-07-30
+- `Change`: Fixed unauthenticated tenant routes so `/t/[tenantKey]` redirects to `/login` with the requested tenant key and callback URL. The login and forgot-password pages now accept the tenant key from the URL before falling back to cookies or the default family group.
+- `Type`: UI | Infra
+- `Why`: Root cause was a code/UX context mismatch. Ezra Thompson Clark's local user row was enabled for `meldrumclark`, but failed login attempts were posted under the default `snowestes` context when the login page was opened without a Meldrum-Clark active-family cookie.
+- `Files`: `src/middleware.ts`, `src/app/login/page.tsx`, `src/components/LoginPageClient.tsx`, `src/app/forgot-password/page.tsx`, `docs/change-summary.md`, `changeHistory.md`
+- `Data Changes`: None. Ezra's access data was already valid.
+- `Verify`:
+  - `npm run lint` passes.
+  - `npm run build` passes.
+  - Requesting `/t/meldrumclark` while unauthenticated redirects to `/login?tenantKey=meldrumclark&callbackUrl=%2Ft%2Fmeldrumclark`.
+- `Rollback Notes`: Revert the tenant query handling in login/forgot-password and the middleware login redirect.
+- `Design Decision Change`: No design decision change.
 ## 2026-07-29 (Famailink Share media tag names and details prompt)
 
 - `Date`: 2026-07-29

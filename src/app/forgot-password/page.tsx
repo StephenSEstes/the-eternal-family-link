@@ -7,10 +7,20 @@ import {
 } from "@/lib/family-group/constants";
 import { normalizeFamilyGroupRouteKey } from "@/lib/tenant/context";
 
-export default async function ForgotPasswordPage() {
+type ForgotPasswordPageProps = {
+  searchParams?: Promise<{
+    tenantKey?: string;
+    familyGroupKey?: string;
+  }>;
+};
+
+export default async function ForgotPasswordPage({ searchParams }: ForgotPasswordPageProps) {
+  const params = (await searchParams) ?? {};
   const cookieStore = await cookies();
   const requestedTenantKey = normalizeFamilyGroupRouteKey(
-    cookieStore.get(ACTIVE_FAMILY_GROUP_COOKIE)?.value ??
+    params.tenantKey ??
+      params.familyGroupKey ??
+      cookieStore.get(ACTIVE_FAMILY_GROUP_COOKIE)?.value ??
       cookieStore.get(ACTIVE_TENANT_COOKIE)?.value ??
       DEFAULT_FAMILY_GROUP_KEY,
   );

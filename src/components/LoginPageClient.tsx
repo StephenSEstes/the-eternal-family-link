@@ -105,7 +105,11 @@ export function LoginPageClient({ defaultTenantKey, callbackUrl }: LoginPageClie
           </div>
         ) : null}
         <p className="page-subtitle" style={{ marginTop: "0.85rem" }}>
-          <Link href="/forgot-password" className="button secondary tap-button" style={{ textDecoration: "none" }}>
+          <Link
+            href={`/forgot-password?tenantKey=${encodeURIComponent(defaultTenantKey)}`}
+            className="button secondary tap-button"
+            style={{ textDecoration: "none" }}
+          >
             Forgot Password?
           </Link>
         </p>
