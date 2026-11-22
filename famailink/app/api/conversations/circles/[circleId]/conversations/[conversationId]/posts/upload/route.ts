@@ -73,15 +73,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
           const thumbName = sanitizeObjectNameSegment(
             safeFileName.replace(/\.[^.]+$/, "") + `-thumb.${thumbVariant.extension}`,
           );
-          thumbnailObjectKey = `${objectStorage.objectPrefix}/famailink/share/thumb/${sanitizeObjectNameSegment(circleId)}/${sanitizeObjectNameSegment(conversationId)}/${sanitizeObjectNameSegment(fileId)}/${thumbName}`;
-          await putOciObjectByKey({
-            objectKey: thumbnailObjectKey,
+          const thumbnail = {
+            objectKey: `${objectStorage.objectPrefix}/famailink/share/thumb/${sanitizeObjectNameSegment(circleId)}/${sanitizeObjectNameSegment(conversationId)}/${sanitizeObjectNameSegment(fileId)}/${thumbName}`,
             data: thumbVariant.buffer,
             mimeType: thumbVariant.mimeType,
-          });
+          };
+          // A second PUT of the same bytes and key is safe; never retry the original or publish a failed key.
+          await putOciObjectByKey(thumbnail).catch(() => putOciObjectByKey(thumbnail));
+          thumbnailObjectKey = thumbnail.objectKey;
         }
       } catch (error) {
-        console.warn("[famailink-share-upload] thumbnail generation skipped", error);
+        console.warn("[famailink-share-upload] thumbnail unavailable", fileId, error);
       }
     }
 
@@ -130,6 +132,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       post,
+      ...(validated.mediaKind === "image" && !thumbnailObjectKey ? { warning: "thumbnail_unavailable" } : {}),
       media: {
         mediaId,
         fileId,

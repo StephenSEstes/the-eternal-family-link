@@ -255,6 +255,7 @@ export function ConversationsClient({
   const [selectedCircleId, setSelectedCircleId] = useState(startCircleId);
   const [conversations, setConversations] = useState<CircleConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState(startConversationId);
+  const [threadRefresh, setThreadRefresh] = useState(0);
   const [posts, setPosts] = useState<ConversationPost[]>([]);
   const [status, setStatus] = useState<StatusState>(null);
   const [busy, setBusy] = useState(false);
@@ -284,6 +285,8 @@ export function ConversationsClient({
   const peopleById = useMemo(() => new Map(people.map((person) => [person.personId, person])), [people]);
   const selectedCircle = useMemo(() => circles.find((circle) => circle.circleId === selectedCircleId) ?? null, [circles, selectedCircleId]);
   const selectedConversation = useMemo(() => conversations.find((conversation) => conversation.conversationId === selectedConversationId) ?? null, [conversations, selectedConversationId]);
+  const activeThreadId = selectedConversation?.circleId === selectedCircleId ? selectedConversation.conversationId : "";
+  const activeGroupUnread = activeThreadId ? conversations.reduce((sum, thread) => sum + thread.unreadCount, 0) : null;
   const threadMembers = useMemo(() => {
     const next: ThreadDisplayMember[] = [];
     const seen = new Set<string>();
@@ -424,6 +427,9 @@ export function ConversationsClient({
         ? normalize(preferredConversationId)
         : "";
     setConversations(nextCircleId ? nextConversations : []);
+    if (nextConversationId && nextCircleId === selectedCircleId && nextConversationId === selectedConversationId) {
+      setThreadRefresh((version) => version + 1);
+    }
     applySelection(nextCircleId, nextConversationId, { preserveConversations: true });
     if (mode !== "none") {
       writeShareUrl(nextCircleId, nextConversationId, mode);
@@ -486,28 +492,34 @@ export function ConversationsClient({
 
   useEffect(() => {
     let cancelled = false;
-    if (!selectedCircleId || !selectedConversationId || !conversations.some((conversation) => conversation.conversationId === selectedConversationId)) {
+    if (!activeThreadId) {
       setPosts([]);
       return;
     }
     void (async () => {
       try {
-        const body = await fetchJson<{ posts?: ConversationPost[] }>(`/api/conversations/circles/${encodeURIComponent(selectedCircleId)}/conversations/${encodeURIComponent(selectedConversationId)}/posts`);
+        const threadUrl = `/api/conversations/circles/${encodeURIComponent(selectedCircleId)}/conversations/${encodeURIComponent(activeThreadId)}`;
+        const body = await fetchJson<{ posts?: ConversationPost[] }>(`${threadUrl}/posts`);
         if (cancelled) return;
         setPosts(Array.isArray(body.posts) ? body.posts : []);
-        await fetchJson<{ ok?: boolean }>(`/api/conversations/circles/${encodeURIComponent(selectedCircleId)}/conversations/${encodeURIComponent(selectedConversationId)}/read`, { method: "POST", body: "{}" }).catch(() => null);
-        setConversations((current) => {
-          const next = current.map((conversation) => conversation.conversationId === selectedConversationId ? { ...conversation, unreadCount: 0 } : conversation);
-          const nextUnread = next.reduce((total, conversation) => total + conversation.unreadCount, 0);
-          setCircles((currentCircles) => currentCircles.map((circle) => circle.circleId === selectedCircleId ? { ...circle, unreadCount: nextUnread } : circle));
-          return next;
-        });
+        const receipt = await fetchJson<{ ok?: boolean }>(`${threadUrl}/read`, { method: "POST", body: "{}" });
+        if (cancelled || !receipt.ok) return;
+        setConversations((current) => current.some((thread) => thread.conversationId === activeThreadId && thread.unreadCount > 0)
+          ? current.map((thread) => thread.conversationId === activeThreadId ? { ...thread, unreadCount: 0 } : thread)
+          : current);
       } catch (error) {
         if (!cancelled) setStatus({ tone: "error", message: error instanceof Error ? error.message : "Failed to load messages." });
       }
     })();
     return () => { cancelled = true; };
-  }, [conversations, selectedCircleId, selectedConversationId]);
+  }, [activeThreadId, selectedCircleId, threadRefresh]);
+
+  useEffect(() => {
+    if (activeGroupUnread === null) return;
+    setCircles((current) => current.some((circle) => circle.circleId === selectedCircleId && circle.unreadCount !== activeGroupUnread)
+      ? current.map((circle) => circle.circleId === selectedCircleId ? { ...circle, unreadCount: activeGroupUnread } : circle)
+      : current);
+  }, [activeGroupUnread, selectedCircleId]);
 
   useEffect(() => {
     setPostDraft("");
@@ -722,7 +734,10 @@ export function ConversationsClient({
     setStatus(null);
     try {
       if (pendingAttachment) {
-        await uploadMediaPost(selectedCircle.circleId, selectedConversation.conversationId, pendingAttachment.file, caption);
+        const result = await uploadMediaPost(selectedCircle.circleId, selectedConversation.conversationId, pendingAttachment.file, caption);
+        if (result.warning === "thumbnail_unavailable") {
+          setStatus({ tone: "info", message: "Photo sent. The original was saved, but its thumbnail is unavailable." });
+        }
       } else {
         await fetchJson<{ post?: ConversationPost }>(`/api/conversations/circles/${encodeURIComponent(selectedCircle.circleId)}/conversations/${encodeURIComponent(selectedConversation.conversationId)}/posts`, {
           method: "POST",
@@ -1308,7 +1323,7 @@ export function ConversationsClient({
                         ) : null}
                         {post.media ? (
                           <div className="conversation-media-card">
-                            {post.media.mediaKind === "image" && post.media.previewUrl ? (
+                            {post.media.mediaKind === "image" && (post.media.previewUrl || post.media.originalUrl) ? (
                               <div className="conversation-image-frame">
                                 <a
                                   href={post.media.originalUrl || post.media.previewUrl}
@@ -1318,7 +1333,7 @@ export function ConversationsClient({
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={post.media.previewUrl}
+                                    src={post.media.previewUrl || post.media.originalUrl}
                                     alt="Shared image"
                                     className="conversation-media-image"
                                   />
@@ -1566,10 +1581,10 @@ export function ConversationsClient({
               </button>
             </div>
 
-            {activeTagPost?.media?.previewUrl ? (
+            {activeTagPost?.media && (activeTagPost.media.previewUrl || activeTagPost.media.originalUrl) ? (
               <div className="conversation-tag-preview">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={activeTagPost.media.previewUrl} alt="Photo being tagged" />
+                <img src={activeTagPost.media.previewUrl || activeTagPost.media.originalUrl} alt="Photo being tagged" />
                 <div className="conversation-tag-chip-list">
                   {selectedTagPeople.map((person) => (
                     <span key={person.personId} className="conversation-chip">

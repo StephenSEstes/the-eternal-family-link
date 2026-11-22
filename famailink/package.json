@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "googleapis": "^171.4.0",
@@ -24,7 +25,9 @@
     "@types/react-dom": "^19",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.5.12",
+    "jsdom": "^26.1.0",
     "sharp": "^0.34.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.6"
   }
 }

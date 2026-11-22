@@ -7,6 +7,11 @@ I will update this list as we add, complete, or remove work.
 - [ ] Famailink person-based Conversations MVP from EFL Shares
   Priority: High (#1)
   Status: In progress 2026-04-22
+  - Implementation plan 2026-11-22: address the three Share review findings in Famailink only.
+    - Reproduce on disposable fixtures: open an idle thread and count requests, submit incomplete photo details, and simulate a failed thumbnail write. Do not change live family data.
+    - UI: key thread loading to a valid selection and explicit refresh after a mutation. Preserve deep links, unread badges, scrolling, and post/comment refresh.
+    - API/data: reject malformed or incomplete full-form tag replacements before calling the store; allow intentional clears. Publish only confirmed thumbnail keys, retry a transient thumbnail write without resending the original, and preserve the original on persistent failure. No schema, permissions, or data migration changes.
+    - Completion: run the same regression tests before and after, cover valid and failure cases, pass Famailink lint, type check, and production build. Record results and run deployed health checks; validate the changed Share flows on a deployment with disposable data after deployment approval.
   Progress 2026-04-22:
   - Completed initial store/API/UI slice for person-based groups (initially labeled circles), named conversations, text posts, comments, read state, and person-modal conversation summaries.
   - In progress: renamed the user-facing circle concept to `Groups`, added group descriptions, duplicate member-set prevention/feedback, owner soft-delete, and Famailink group namespace filtering.

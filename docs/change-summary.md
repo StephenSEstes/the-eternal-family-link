@@ -13,6 +13,15 @@ Concise release notes for what changed, why it changed, and what to verify.
 - `Verify`:
 - `Rollback Notes`:
 
+## 2026-11-22 (Famailink Share reliability)
+
+- Type: UI and API code fixes. No schema or stored-data changes. No design decision change.
+- Idle threads: updating unread counts retriggered the effect that fetched posts and sent read receipts. In a mounted fixture this issued five loads before the test stopped it. Load on selection or explicit post/comment refresh; update badges only on an acknowledged receipt.
+- Photo detail replacement: malformed, missing, or ill-typed fields reached the replacement store as blank metadata or links. Reject incomplete forms before calling the store; explicit empty values still clear the corresponding details.
+- Image previews: a failed thumbnail PUT left a nonempty object key pointing to an absent object. Retry the same thumbnail once and record its key only after success. If decoding or both storage attempts fail, retain the original, show a warning to the sender, and display the original in the thread; the inbox continues to request thumbnails only.
+- Verification: 10 of 15 original fixture cases failed before the fixes; the final 19 tests pass (`npm test --prefix famailink`), including real image resizing, failed storage writes, invalid forms, mutation refresh, and read badges. Famailink lint, type check, and production build pass. Existing production read-only validation passed. OCI had one image under the Famailink Share upload prefix, with nonempty original and thumbnail confirmed via metadata only.
+- Deployment follow-up: validate idle request counts, explicit tag edits, and camera/library uploads in a disposable deployed thread. No historical records, objects, or tags were repaired.
+
 ## 2026-07-30 (Tenant-aware local login redirect)
 
 - `Date`: 2026-07-30

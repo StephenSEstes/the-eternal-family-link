@@ -11,11 +11,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const { session, unauthorized } = requireRouteSession(request);
   if (!session) return unauthorized;
 
-  const payload = await request.json().catch(() => ({}));
-  const personIds = isRecord(payload) ? readStringArray(payload.personIds) : [];
-  const label = isRecord(payload) ? normalize(payload.label) : "";
-  const description = isRecord(payload) ? normalize(payload.description) : "";
-  const photoDate = isRecord(payload) ? normalize(payload.photoDate) : "";
+  const payload: unknown = await request.json().catch(() => null);
+  // The store replaces the entire form, including person links. Only explicit empties may clear it.
+  if (!isRecord(payload) || !Array.isArray(payload.personIds)
+    || !payload.personIds.every((id) => typeof id === "string" && id.trim())
+    || typeof payload.label !== "string" || typeof payload.description !== "string" || typeof payload.photoDate !== "string") {
+    return NextResponse.json({ error: "A complete photo details form is required. Reopen the photo and try again." }, { status: 400 });
+  }
   const { circleId, conversationId, postId } = await context.params;
   try {
     const result = await replaceConversationPostTags({
@@ -23,10 +25,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       circleId,
       conversationId,
       postId,
-      personIds,
-      label,
-      description,
-      photoDate,
+      personIds: readStringArray(payload.personIds),
+      label: normalize(payload.label),
+      description: normalize(payload.description),
+      photoDate: normalize(payload.photoDate),
     });
     return NextResponse.json(result);
   } catch (error) {
